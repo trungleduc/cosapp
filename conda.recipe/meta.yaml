@@ -65,5 +65,6 @@ about:
     ensure the robustness of the design. CoSApp handles natively uncertain variables.
   keywords: cosapp
   dev_url: https://gitlab.com/cosapp/cosapp
-  license: Apache-2.0, Copyright Safran SA
+  license: Apache-2.0
+  copyright: Copyright Safran SA
   license_file: LICENSE.rst
