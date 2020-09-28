@@ -1,6 +1,12 @@
 History
 =======
 
+0.11.2 (2020-09-28)
+---------------------
+
+First open-source version.
+No major code change; mostly updates of license files, URLs in docs, and CI scripts.
+
 0.11.1 (2020-07-22)
 ---------------------
 
