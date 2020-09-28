@@ -1,0 +1,72 @@
+@import "font-awesome.min.css";
+
+/* Custom styles */
+.homepage {
+  text-align: center;
+}
+
+/* Overwritten styles */
+a {
+  color: #f4950f;
+  text-decoration: none;  
+}
+
+a:hover {
+  color: #f4950f;
+  text-decoration: underline;
+}
+
+
+button, 
+.button {
+    background-color: #f4950f;
+}
+
+button:hover,
+.button:hover {
+  background-color: #f2c382; }
+
+.button.outline {
+  border-color: #f4950f;
+  color: #f4950f; }
+.button.outline:hover {
+  color: #f2c382;
+  border-color: #f2c382; }
+.button.outline:disabled, .button.outline.disabled {
+  color: #f2c382;
+  border-color: #f2c382; }
+
+#hero p:before {
+  background: #f39e28; }
+
+#kube-features {
+    margin-top: 0px;
+}
+
+#posts h2 a {
+  color: #f39e28; }
+
+cite {
+    opacity: 1;
+}
+
+input {
+    display: inline;
+    height: 32px;
+    width: auto;
+    padding: 0 4px;
+}
+
+input:focus, select:focus, textarea:focus {
+  border-color: #f4950f;
+  box-shadow: 0 0 1px #f4950f inset;
+}
+
+/* Fix for display in SharePoint IE11 */  
+a > img {
+  border-style: none;
+}
+
+a > img:hover {
+  border-style: none;
+}

@@ -1,0 +1,38 @@
+{
+  "$schema": "0-3-0/system.schema.json",
+  "p": {
+    "class": "pressurelossvarious.PressureLossSys",
+    "connections": [
+      ["p1.flnum_in", "flnum_in"],
+      ["p2.flnum_in", "p1.flnum_out"],
+      ["p3.flnum_in", "p2.flnum_out"],
+      ["flnum_out", "p3.flnum_out"]
+    ],
+    "subsystems": {
+      "p1": {
+        "class": "pressurelossvarious.PressureLoss0D"
+      },
+      "p2": {
+        "class": "pressurelossvarious.PressureLossSys",
+        "connections": [
+          ["p21.flnum_in", "flnum_in"],
+          ["flnum_out", "p21.flnum_out"]
+        ],
+        "subsystems": {
+          "p21": {
+            "class": "pressurelossvarious.PressureLoss0D"
+          }
+        },
+        "exec_order": ["p21"]
+      },
+      "p3": {
+        "class": "pressurelossvarious.PressureLoss0D"
+      }
+    },
+    "exec_order": ["p1", "p2", "p3"],
+    "inputs": {
+      "flnum_in.Pt": 100000.0,
+      "flnum_in.W": 10.0
+    }
+  }
+}

@@ -1,0 +1,164 @@
+stages:
+  - test
+  - test_docs
+  - test_build
+  - deployment
+
+variables:
+  COSAPP_DEP:  jsonschema ipython jinja2 watchdog xlrd ipykernel nbconvert ipywidgets plotly pytest pyfmi scipy pandas packaging
+  USER: "cosapp_test"
+# default windows job parameters
+.windows_env:
+  stage: "test"
+  tags:
+    - shared-windows
+    - windows
+    - windows-1809
+  before_script:
+    - Import-Module "$env:ChocolateyInstall\helpers\chocolateyProfile.psm1"
+    - choco install -y miniconda3 --params="'/AddToPath:1'"
+    - RefreshEnv
+    - conda config --add channels conda-forge
+    - conda init powershell
+    - "if (test-path $PROFILE.CurrentUserAllHosts) { & $PROFILE.CurrentUserAllHosts}"
+    - md -Path $env:USERPROFILE\.cosapp.d
+
+# default linux job parameters
+.linux_env:
+  stage: "test"
+  image: "continuumio/miniconda3:latest"
+  before_script:
+    - conda config --add channels conda-forge
+    - conda init bash
+    - source $HOME/.bashrc
+    - mkdir -p $HOME/.cosapp.d
+
+# Test script for all OS
+.test_script:
+  script:  
+    - conda create -y -n cosapp python=$PYTHON_VERSION 
+    - conda activate cosapp
+    - conda install -y jsonschema ipython jinja2 watchdog xlrd ipykernel nbconvert ipywidgets plotly pytest pyfmi scipy pandas packaging
+    - pip install .
+    - python -m pytest 
+
+
+linux_py36:
+    extends: 
+     - ".linux_env"
+     - ".test_script"
+    variables:
+      PYTHON_VERSION: "3.6" 
+
+linux_py37:
+    extends: 
+     - ".linux_env"
+     - ".test_script"
+    variables:
+      PYTHON_VERSION: "3.7" 
+
+linux_py38:
+  extends: 
+    - ".linux_env"
+  variables:
+    PYTHON_VERSION: "3.8" 
+  script:
+    - conda create -y -n cosapp python=$PYTHON_VERSION 
+    - conda activate cosapp
+    - conda install -y jsonschema ipython jinja2 watchdog xlrd ipykernel nbconvert ipywidgets plotly pytest pyfmi scipy pandas packaging coverage
+    - pip install .
+    - coverage erase
+    - coverage run -m pytest -ra
+    - coverage report
+    - coverage html -d coverage/    
+  artifacts:
+    paths:
+      - coverage/  
+    expire_in: 2 weeks  
+
+windows_py36:
+    extends: 
+     - ".windows_env"
+     - ".test_script"
+    variables:
+      PYTHON_VERSION: "3.6"
+
+windows_py37:
+    extends: 
+     - ".windows_env"
+     - ".test_script"
+    variables:
+      PYTHON_VERSION: "3.7"
+
+windows_py38:
+    extends: 
+     - ".windows_env"
+     - ".test_script"
+    variables:
+      PYTHON_VERSION: "3.8"
+
+#Deployment jobs
+build_doc:
+  stage: test_docs
+  extends: 
+    - ".linux_env"
+  variables:
+    JOB_DEP: $COSAPP_DEP jupyter_client "conda-forge::sphinx>=1.5" "nbsphinx>=0.6.0" sphinx-copybutton requests_ntlm pythonfmu
+    BUILDDIR: _build
+    PYTHON_VERSION : "3.8"
+  script:
+    - conda create -y -n cosapp python=$PYTHON_VERSION 
+    - conda activate cosapp
+    - conda install -y $JOB_DEP
+    - pip install .
+    # Build the documentation
+    - cd docs/
+    - sphinx-build -b html -d $BUILDDIR/doctrees . $BUILDDIR
+    
+  artifacts:
+    paths:
+      - docs/$BUILDDIR
+  only:
+      - tags
+      - master
+
+
+build_pkg:
+  stage: test_build
+  extends: 
+    - ".linux_env"
+  variables:
+    JOB_DEP: conda-build conda-verify
+    PYTHON_VERSION : "3.8"
+  script:
+    - conda create -y -n cosapp python=$PYTHON_VERSION 
+    - conda activate cosapp
+    - conda install -y $JOB_DEP
+    - python setup.py sdist bdist_wheel
+    - conda build -c conda-forge --no-test --output-folder ./dist conda.recipe
+  artifacts:
+    paths:
+      - dist/
+  only:
+      - tags
+      - master
+
+
+deploy:
+  stage: deployment
+  extends: 
+    - ".linux_env"
+  variables:
+    JOB_DEP: setuptools wheel twine packaging
+    TWINE_USERNAME: __token__
+    TWINE_PASSWORD: $PYPI
+  script:
+    - python -m pip install --upgrade pip
+    - pip install $JOB_DEP
+    - python setup.py sdist bdist_wheel
+    - twine upload dist/*.whl
+  artifacts:
+    paths:
+      - dist/
+  only:
+    - tags

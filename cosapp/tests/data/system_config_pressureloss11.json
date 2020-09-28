@@ -1,0 +1,20 @@
+{
+  "$schema": "0-3-0/system.schema.json",
+  "system0": {
+    "class": "pressurelossvarious.PressureLossSys",
+    "subsystems": {
+      "p1": {
+        "class": "pressurelossvarious.PressureLossSys",
+        "subsystems": {
+          "p11": {
+            "class": "pressurelossvarious.PressureLoss0D",
+            "inputs": {
+              "flnum_in.Pt": 100000.0,
+              "flnum_in.W": 10.0
+            }
+          }
+        }
+      }
+    }
+  }
+}

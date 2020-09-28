@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>MyComplexTurbofan</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/vis/4.20.1/vis.min.js"></script>
+    <link type="text/css" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/vis/4.20.1/vis-network.min.css">
+
+    <style type="text/css">
+    #mynetwork {
+      width: 800px;
+      height: 800px;
+      border: 1px solid lightgray;
+    }
+
+    </style>
+</head>
+<body>
+
+<input type="button" class="btn btn-primary" onclick="clusterBySystem()" value="Cluster by system">
+<!--<input type="button" class="btn btn-info" onclick="hierarchicalLayout()" value="Hierarchical view">-->
+<input type="button" class="btn btn-default" onclick="resetAllClusters()" value="Reset network">
+<br/>
+
+<div id="mynetwork"></div>
+
+<script type="text/javascript">
+    // create an array with nodes
+    var nodes = new vis.DataSet([
+            { label: "MyComplexTurbofan", title: "MyComplexTurbofan - ComplexTurbofan", id: 36, hidden: true, physics: false, group: ".MyComplexTurbofan",  },
+            { label: "merger", title: "MyComplexTurbofan.merger - Merger", id: 1, group: "MyComplexTurbofan",  },
+            { title: "fanC.fl_out - FluidPort", id: 2, group: "MyComplexTurbofan.fanC",  },
+            { label: "bleed_fl2_out_to_merger_fl2_in", title: "MyComplexTurbofan.bleed_fl2_out_to_merger_fl2_in - IterativeConnector", id: 3, group: "MyComplexTurbofan",  },
+            { label: "bleed", title: "MyComplexTurbofan.bleed - Splitter", id: 4, group: "MyComplexTurbofan",  },
+            { title: "duct.fl_out - FluidPort", id: 5, group: "MyComplexTurbofan.duct",  },
+            { label: "atm", title: "MyComplexTurbofan.atm - Atm", id: 6, group: "MyComplexTurbofan",  },
+            { label: "inlet", title: "MyComplexTurbofan.inlet - Inlet", id: 7, group: "MyComplexTurbofan",  },
+            { title: "MyComplexTurbofan.inlet_W_in - Port", id: 8, group: "MyComplexTurbofan",  },
+            { label: "noz", title: "MyComplexTurbofan.noz - Nozzle", id: 9, group: "MyComplexTurbofan",  },
+            { label: "fanC", title: "MyComplexTurbofan.fanC - FanComplex", id: 10, hidden: true, physics: false, group: "MyComplexTurbofan",  },
+            { label: "ductC", title: "fanC.ductC - ComplexDuct", id: 11, hidden: true, physics: false, group: "MyComplexTurbofan.fanC",  },
+            { label: "duct", title: "ductC.duct - Duct", id: 12, group: "MyComplexTurbofan.fanC.ductC",  },
+            { label: "merger", title: "ductC.merger - Merger", id: 13, group: "MyComplexTurbofan.fanC.ductC",  },
+            { title: "ductC.fl_in - FluidPort", id: 14, group: "MyComplexTurbofan.fanC.ductC",  },
+            { label: "bleed_fl2_out_to_merger_fl2_in", title: "ductC.bleed_fl2_out_to_merger_fl2_in - IterativeConnector", id: 15, group: "MyComplexTurbofan.fanC.ductC",  },
+            { label: "bleed", title: "ductC.bleed - Splitter", id: 16, group: "MyComplexTurbofan.fanC.ductC",  },
+            { title: "ductC.fl_out - FluidPort", id: 17, group: "MyComplexTurbofan.fanC.ductC",  },
+            { title: "ductC.bleed_fl2_out_to_merger_fl2_in_iterative - Port", id: 18, group: "MyComplexTurbofan.fanC.ductC",  },
+            { title: "fanC.fl_in - FluidPort", id: 19, group: "MyComplexTurbofan.fanC",  },
+            { title: "fanC.ductC_bleed_fl2_out_to_merger_fl2_in_iterative - Port", id: 20, group: "MyComplexTurbofan.fanC",  },
+            { label: "fan", title: "fanC.fan - Fan", id: 21, group: "MyComplexTurbofan.fanC",  },
+            { title: "fanC.mech_in - MechPort", id: 22, group: "MyComplexTurbofan.fanC",  },
+            { title: "fanC.gh_in - CustomPort", id: 23, group: "MyComplexTurbofan.fanC",  },
+            { title: "MyComplexTurbofan.fanC_mech_in - Port", id: 24, group: "MyComplexTurbofan",  },
+            { title: "MyComplexTurbofan.fanC_gh_in - Port", id: 25, group: "MyComplexTurbofan",  },
+            { title: "MyComplexTurbofan.fanC_ductC_bleed_fl2_out_to_merger_fl2_in_iterative - Port", id: 26, group: "MyComplexTurbofan",  },
+            { title: "MyComplexTurbofan.bleed_fl2_out_to_merger_fl2_in_iterative - Port", id: 27, group: "MyComplexTurbofan",  },
+            { label: "duct", title: "MyComplexTurbofan.duct - ComplexDuct", id: 28, hidden: true, physics: false, group: "MyComplexTurbofan",  },
+            { label: "duct", title: "duct.duct - Duct", id: 29, group: "MyComplexTurbofan.duct",  },
+            { label: "merger", title: "duct.merger - Merger", id: 30, group: "MyComplexTurbofan.duct",  },
+            { title: "duct.fl_in - FluidPort", id: 31, group: "MyComplexTurbofan.duct",  },
+            { label: "bleed_fl2_out_to_merger_fl2_in", title: "duct.bleed_fl2_out_to_merger_fl2_in - IterativeConnector", id: 32, group: "MyComplexTurbofan.duct",  },
+            { label: "bleed", title: "duct.bleed - Splitter", id: 33, group: "MyComplexTurbofan.duct",  },
+            { title: "duct.bleed_fl2_out_to_merger_fl2_in_iterative - Port", id: 34, group: "MyComplexTurbofan.duct",  },
+            { title: "MyComplexTurbofan.duct_bleed_fl2_out_to_merger_fl2_in_iterative - Port", id: 35, group: "MyComplexTurbofan",  },
+    ]);
+
+    // create an array with edges
+    var edges = new vis.DataSet([
+            { from: 2, to: 1, arrows: "to",  },
+            { from: 3, to: 1, arrows: "to",  },
+            { from: 5, to: 4, arrows: "to",  },
+            { from: 6, to: 7, arrows: "to",  },
+            { from: 8, to: 7, arrows: "to", length: 0,  },
+            { from: 4, to: 9, arrows: "to",  },
+            { from: 13, to: 12, arrows: "to",  },
+            { from: 14, to: 13, arrows: "to", length: 0,  },
+            { from: 15, to: 13, arrows: "to",  },
+            { from: 16, to: 17, arrows: "to", length: 0,  },
+            { from: 12, to: 16, arrows: "to",  },
+            { from: 16, to: 15, arrows: "to",  },
+            { from: 18, to: 15, arrows: "to", length: 0,  },
+            { from: 19, to: 14, arrows: "to", length: 0,  },
+            { from: 20, to: 18, arrows: "to", length: 0,  },
+            { from: 22, to: 21, arrows: "to", length: 0,  },
+            { from: 23, to: 21, arrows: "to", length: 0,  },
+            { from: 17, to: 21, arrows: "to",  },
+            { from: 21, to: 2, arrows: "to", length: 0,  },
+            { from: 7, to: 19, arrows: "to",  },
+            { from: 24, to: 22, arrows: "to", length: 0,  },
+            { from: 25, to: 23, arrows: "to", length: 0,  },
+            { from: 26, to: 20, arrows: "to", length: 0,  },
+            { from: 4, to: 3, arrows: "to",  },
+            { from: 27, to: 3, arrows: "to", length: 0,  },
+            { from: 30, to: 29, arrows: "to",  },
+            { from: 31, to: 30, arrows: "to", length: 0,  },
+            { from: 32, to: 30, arrows: "to",  },
+            { from: 33, to: 5, arrows: "to", length: 0,  },
+            { from: 29, to: 33, arrows: "to",  },
+            { from: 33, to: 32, arrows: "to",  },
+            { from: 34, to: 32, arrows: "to", length: 0,  },
+            { from: 1, to: 31, arrows: "to",  },
+            { from: 35, to: 34, arrows: "to", length: 0,  },
+    ]);
+
+    // create a network
+    var container = document.getElementById('mynetwork');
+
+    // provide the data in the vis format
+    var data = {
+        nodes: nodes,
+        edges: edges
+    };
+    var options = {layout:{randomSeed:8}};
+
+    // initialize your network!
+    var network = new vis.Network(container, data, options);
+
+    // Suppress cluster when click on
+    network.on("selectNode", function(params) {
+        if (params.nodes.length == 1) {
+            if (network.isCluster(params.nodes[0]) == true) {
+                network.openCluster(params.nodes[0]);
+            }
+        }
+    });
+
+    function clusterBySystem() {
+        network.setData(data);
+        network.setOptions({
+            layout: {
+                hierarchical: false
+            }
+        });
+
+        var systems = ["MyComplexTurbofan.fanC.ductC", "MyComplexTurbofan.fanC", "MyComplexTurbofan.duct", "MyComplexTurbofan", ];
+        var clusterOptionsByData;
+        for (var i = 0; i < systems.length; i++) {
+            var system = systems[i];
+            var hierarchy = system.split(".");
+            var system_name = hierarchy.pop();
+
+            clusterOptionsByData = {
+                joinCondition: function (childOptions) {
+                    return childOptions.group == system; // the system is fully defined in the node.
+                },
+                processProperties: function (clusterOptions, childNodes, childEdges) {
+                    var totalMass = 0;
+                    for (var i = 0; i < childNodes.length; i++) {
+                        totalMass += childNodes[i].mass;
+                    }
+                    clusterOptions.mass = totalMass;
+                    var hidden_node = data.nodes.get({
+                        filter: function(node){
+                            return node.label == system_name;
+                        }
+                    });
+                    clusterOptions.title = hidden_node[0].title;
+                    return clusterOptions;
+                },
+                clusterNodeProperties: {
+                    id: 'cluster:' + system,
+                    borderWidth: 3,
+                    shape: 'database',
+                    label: system_name,
+                    group: hierarchy.join("."),
+                    allowSingleNodeCluster : true
+                }
+            };
+            network.cluster(clusterOptionsByData);
+        }
+    }
+
+    function resetAllClusters() {
+        network.setData(data);
+        network.setOptions({
+            layout: {
+                hierarchical: false
+            }
+        });
+    }
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   height="60"
+   viewBox="0 0 31.220833 31.220831"
+   version="1.1"
+   preserveAspectRatio="xMinYMax meet">
+  <title>CoSApp</title>
+  <g
+     id="layer1"
+     transform="translate(-88.582641,-81.139024)">
+    <g
+       id="g4643">
+      <circle
+         style="fill:none;stroke:#f4950f;stroke-width:1;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+         r="3.5435269"
+         cy="97.097839"
+         cx="102.00633" />
+      <circle
+         style="fill:none;stroke:#f4950f;stroke-width:1;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+         r="3.83336"
+         cy="85.569565"
+         cx="93.974335" />
+      <circle
+         style="fill:none;stroke:#f4950f;stroke-width:1;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+         r="3.9575741"
+         cy="107.82291"
+         cx="96.005959" />
+      <circle
+         style="fill:none;stroke:#f4950f;stroke-width:1;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+         r="2.8810513"
+         cy="105.8858"
+         cx="112.40068" />
+      <circle
+         style="fill:none;stroke:#f4950f;stroke-width:1;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+         r="5.9035959"
+         cy="91.664436"
+         cx="112.44789" />
+      <path
+         d="m 112.31017,87.605558 a 3.827009,3.7325149 0 0 1 2.90437,1.101876 3.827009,3.7325149 0 0 1 1.10115,2.843363"
+         style="fill:none;stroke:#f4950f;stroke-width:1;stroke-linecap:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
+      <path
+         d="m 94.210563,89.302082 1.228425,14.174108"
+         style="fill:none;fill-rule:evenodd;stroke:#f4950f;stroke-width:1;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
+      <path
+         d="m 97.61235,86.656249 9.63839,3.307292"
+         style="fill:none;fill-rule:evenodd;stroke:#f4950f;stroke-width:1;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
+      <path
+         d="m 104.7939,99.271205 5.38616,4.913685"
+         style="fill:none;fill-rule:evenodd;stroke:#f4950f;stroke-width:1;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
+      <path
+         d="m 112.63691,97.853791 -0.0945,5.008189"
+         style="fill:none;fill-rule:evenodd;stroke:#f4950f;stroke-width:1;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
+      <path
+         d="m 97.612353,104.27939 2.267849,-4.441216"
+         style="fill:none;fill-rule:evenodd;stroke:#f4950f;stroke-width:1;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
+      <path
+         d="m 105.17188,95.491446 1.98437,-1.13393"
+         style="fill:none;fill-rule:evenodd;stroke:#f4950f;stroke-width:1;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
+    </g>
+  </g>
+</svg>

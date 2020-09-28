@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" 
+    xmlns:xlink="http://www.w3.org/1999/xlink" width="105" height="20">
+    <linearGradient id="s" x2="0" y2="100%">
+        <stop offset="0" stop-color="#bbb" stop-opacity=".1"/>
+        <stop offset="1" stop-opacity=".1"/>
+    </linearGradient>
+    <clipPath id="r">
+        <rect width="105" height="20" rx="3" fill="#fff"/>
+    </clipPath>
+    <g clip-path="url(#r)">
+        <rect width="70" height="20" fill="#555"/>
+        <rect x="70" width="35" height="20" fill="#007ec6"/>
+        <rect width="105" height="20" fill="url(#s)"/>
+    </g>
+    <g fill="#fff" text-anchor="middle" font-family="DejaVu Sans,Verdana,Geneva,sans-serif" font-size="110">
+        <image x="5" y="3" width="14" height="14" xlink:href="data:image/svg+xml;base64,PHN2ZyBmaWxsPSJ3aGl0ZXNtb2tlIiByb2xlPSJpbWciIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgdmlld0JveD0iMCAwIDI0IDI0Ij48dGl0bGU+TWljcm9zb2Z0IFNoYXJlUG9pbnQgaWNvbjwvdGl0bGU+PHBhdGggZD0iTTI0IDEzLjVxMCAxLjI0Mi0uNDc1IDIuMzMyLS40NzQgMS4wOS0xLjI4OSAxLjkwNC0uODE0LjgxNS0xLjkwNCAxLjI5LTEuMDkuNDc0LTIuMzMyLjQ3NC0uNzYyIDAtMS41MjMtLjItLjEwNi45OTctLjU1NyAxLjg1OC0uNDUxLjg2Mi0xLjE1NCAxLjQ5NC0uNzA0LjYzMy0xLjYwNi45OS0uOTAyLjM1OC0xLjkxLjM1OC0xLjA5IDAtMi4wNDUtLjQxNi0uOTU1LS40MTYtMS42NjQtMS4xMjUtLjcwOS0uNzA5LTEuMTI1LTEuNjY0UTYgMTkuODQgNiAxOC43NXEwLS4xODguMDE4LS4zNzUuMDE3LS4xODguMDQtLjM3NUguOTk3cS0uNDEgMC0uNzAzLS4yOTNUMCAxNy4wMDRWNi45OTZxMC0uNDEuMjkzLS43MDNULjk5NiA2aDMuNTRxLjE0LTEuMjc3LjcyNi0yLjM3My41ODYtMS4wOTYgMS40ODgtMS45MDRRNy42NTIuOTE0IDguODA3LjQ1NyA5Ljk2IDAgMTEuMjUgMHExLjM5NSAwIDIuNjI1LjUzM1QxNi4wMiAxLjk4cS45MTQuOTE1IDEuNDQ3IDIuMTQ1VDE4IDYuNzVxMCAuMTg4LS4wMTIuMzc1LS4wMTEuMTg4LS4wMzUuMzc1IDEuMjQyIDAgMi4zNDQuNDY5IDEuMTAxLjQ2OCAxLjkyOCAxLjI3Ny44MjYuODA5IDEuMyAxLjkwNFEyNCAxMi4yNDYgMjQgMTMuNXptLTEyLjc1LTEycS0uOTczIDAtMS44NTcuMzQtLjg4NS4zNC0xLjU3Ny45NDMtLjY5MS42MDQtMS4xNTQgMS40M1E2LjIgNS4wMzkgNi4wNiA2aDQuOTQ1cS40MSAwIC43MDMuMjkzdC4yOTMuNzAzdjQuOTQ1bC4yMS0uMDM1cS4yMTItLjc1LjYxLTEuNDI0LjM5OS0uNjczLjk0NC0xLjIxOC41NDUtLjU0NSAxLjIxMy0uOTQ0LjY2OC0uMzk4IDEuNDMtLjYxLjA5My0uNTAzLjA5My0uOTYgMC0xLjA5LS40MTYtMi4wNDUtLjQxNi0uOTU1LTEuMTI1LTEuNjY0LS43MDktLjcwOS0xLjY2NC0xLjEyNVExMi4zNCAxLjUgMTEuMjUgMS41ek02LjExNyAxNS45MDJxLjU0IDAgMS4wNi0uMTExLjUyMi0uMTExLjkzMi0uMzcuNDEtLjI1Ny42NjItLjY3OS4yNTItLjQyMi4yNTItMS4wNTUgMC0uNjMyLS4yNjMtMS4wNTQtLjI2NC0uNDIyLS42NjItLjcwMy0uMzk5LS4yODItLjg1Ni0uNDYzbC0uODU1LS4zNHEtLjM5OS0uMTU4LS42NjItLjMzNC0uMjY0LS4xNzYtLjI2NC0uNDQ1IDAtLjIuMTQtLjMyMy4xNDEtLjEyMy4zMzUtLjE5My4xOTMtLjA3LjQwNC0uMDk0LjIxLS4wMjMuMzUxLS4wMjMuNTk4IDAgMS4wNTUuMTUyLjQ1Ny4xNTMuOTUuNDU3VjguNTQzcS0uMjgyLS4wODItLjUyMi0uMTQtLjI0LS4wNi0uNDc1LS4xLS4yMzQtLjA0MS0uNDg2LS4wNTktLjI1Mi0uMDE3LS41NTctLjAxNy0uNTE1IDAtMS4wNTQuMTE3LS41NC4xMTctLjk3OS4zNzUtLjQ0LjI1OC0uNzE1LjY4LS4yNzUuNDIxLS4yNzUgMS4wMyAwIC41OTguMjYzLjk5Ny4yNjQuMzk4LjY2My42OC4zOTguMjguODU1LjQ3NGwuODU2LjM2M3EuMzk4LjE3LjY2Mi4zNTguMjYzLjE4Ny4yNjMuNDU3IDAgLjIyMi0uMTIzLjM1MS0uMTIzLjEzLS4zMS4yLS4xODguMDctLjM5My4wODctLjIwNS4wMTgtLjM2OS4wMTgtLjcwMyAwLTEuMjQ4LS4yMzQtLjU0NS0uMjM1LTEuMTA3LS42MjF2MS44NzVxMS4xOTUuNDY4IDIuNDcyLjQ2OHpNMTEuMjUgMjIuNXEuNzczIDAgMS40NTMtLjI5M3QxLjE5LS44MDNxLjUxLS41MS44MDgtMS4xOTUuMjk5LS42ODYuMjk5LTEuNDU5IDAtLjY2OC0uMjIzLTEuMjc3LS4yMjItLjYxLS42Mi0xLjA5Ni0uNC0uNDg2LS45NS0uODI2LS41NS0uMzQtMS4yMDctLjQ4djEuOTMzcTAgLjQxLS4yOTMuNzAzdC0uNzAzLjI5M0g3LjU3cS0uMDcuMzc1LS4wNy43NSAwIC43NzMuMjkzIDEuNDU5dC44MDMgMS4xOTVxLjUxLjUxIDEuMTk1LjgwMy42ODYuMjkzIDEuNDU5LjI5M3pNMTggMThxLjkyNiAwIDEuNzQ2LS4zNTIuODItLjM1MSAxLjQzNi0uOTY2LjYxNS0uNjE2Ljk2Ni0xLjQzLjM1Mi0uODE1LjM1Mi0xLjc1MiAwLS45MjYtLjM1Mi0xLjc0Ni0uMzUxLS44Mi0uOTY2LTEuNDM2LS42MTYtLjYxNS0xLjQzNi0uOTY2UTE4LjkyNiA5IDE4IDl0LTEuNzQuMzU3cS0uODE1LjM1OC0xLjQzLjk3M3QtLjk3MyAxLjQzcS0uMzU3LjgxNC0uMzU3IDEuNzQgMCAuMTI5LjAwNi4yNTh0LjAxNy4yNThxLjU1MS4yNyAxLjAyLjY1dC44MzguODU1cS4zNjkuNDc1LjYyNyAxLjAyNi4yNTguNTUuMzg3IDEuMTQ4UTE3LjE4IDE4IDE4IDE4WiIvPjwvc3ZnPg=="/>
+        <text x="445" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="430">website</text>
+        <text x="445" y="140" transform="scale(.1)" textLength="430">website</text>
+        <text x="865" y="150" fill="#010101" fill-opacity=".3" transform="scale(.1)" textLength="250">docs</text>
+        <text x="865" y="140" transform="scale(.1)" textLength="250">docs</text>
+    </g>
+    <a target="_blank" xlink:href="https://cosapp.readthedocs.io/">
+        <rect x="70" width="35" height="20" fill="rgba(0,0,0,0)"/>
+    </a>
+</svg>

@@ -1,0 +1,134 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "$id": "0-1-0/mathematicalproblem.schema.json",
+  "description": "Validation schema for CoSApp mathematical problem.",
+  "type": "object",
+  "definitions": {
+    "unknown_schema": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "max_abs_step": {
+          "type": "number"
+        },
+        "max_rel_step": {
+          "type": "number"
+        },
+        "lower_bound": {
+          "type": "number"
+        },
+        "upper_bound": {
+          "type": "number"
+        },
+        "mask": {
+          "type": "string"
+        }
+      },
+      "required": ["name"]
+    },
+    "equation_schema": {
+      "type": "object",
+      "properties": {
+        "equation": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "reference": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "array",
+              "minItems": 1,
+              "items": { "type": "number" }
+            }
+          ]
+        }
+      },
+      "required":["equation"]
+    },
+    "transient_schema": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[A-Za-z][\\w\\.]*$"
+        },
+        "der": {
+          "type": "string"
+        },
+        "max_time_step": {
+          "type": "string"
+        }
+      },
+      "required": ["name", "der"]
+    },
+    "rate_schema": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[A-Za-z][\\w\\.]*$"
+        },
+        "source": {
+          "type": "string"
+        },
+        "initial_value": {
+          "type": "string"
+        }
+      },
+      "required": ["name", "source"]
+    }
+  },
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "pattern": "^\\d+-\\d+-\\d/mathematicalproblem.schema.json"
+    },
+    "unknowns": {
+      "type": "object",
+      "patternProperties": {
+        "^[A-Za-z][\\w\\.\\[\\]]*$": {
+          "$ref": "#/definitions/unknown_schema"
+        }
+      },
+      "additionalProperties": false
+    },
+    "equations": {
+      "type": "object",
+      "patternProperties": {
+        "^.*$": {
+          "$ref": "#/definitions/equation_schema"
+        }
+      }
+    },
+    "transients": {
+      "type": "object",
+      "patternProperties": {
+        "^[A-Za-z][\\w\\.]*$": {
+          "$ref": "#/definitions/transient_schema"
+        }
+      },
+      "additionalProperties": false
+    },
+    "rates": {
+      "type": "object",
+      "patternProperties": {
+        "^[A-Za-z][\\w\\.]*$": {
+          "$ref": "#/definitions/rate_schema"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,35 @@
+{
+  "$schema": "0-3-0/system.schema.json",
+  "B01": {
+    "class": "System",
+    "connections": [
+      ["S011.fl_in", "M014.fl_out"],
+      ["M012.fl2_in", "S011.fl1_out"],
+      ["M013.fl1_in", "M012.fl_out"],
+      ["M013.fl2_in", "S011.fl2_out"],
+      ["M014.fl2_in", "B015.fl_out"],
+      ["B015.fl_in", "S016.fl2_out"],
+      ["S016.fl_in", "M013.fl_out"]
+    ],
+    "subsystems": {
+      "S011": {
+        "class": "test.Splitter"
+      },
+      "M012": {
+        "class": "test.Merger"
+      },
+      "M013": {
+        "class": "test.Merger"
+      },
+      "M014": {
+        "class": "test.Merger"
+      },
+      "B015": {
+        "class": "test.Duct"
+      },
+      "S016": {
+        "class": "test.Splitter"
+      }
+    }
+  }
+}

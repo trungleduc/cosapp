@@ -1,0 +1,301 @@
+<style type="text/css">
+* {
+    margin: 0;
+    outline: 0;
+}
+
+*, :after, :before {
+    box-sizing: inherit;
+}
+
+.button, button, select {
+    -webkit-appearance: none;
+}
+
+.button, .desc, .message, button {
+    line-height: 20px;
+}
+
+.button, .label, button {
+    display: inline-block;
+    font-weight: 500;
+    text-decoration: none;
+    vertical-align: middle;
+}
+
+.button, button {
+    font-size: 15px;
+    color: #fff;
+    border-radius: 3px;
+    min-height: 0px;
+    /* min-height: 40px; */
+    padding: 12px 20px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    font-family: Lato, sans-serif;
+    background-color: #f4950f;
+    border-color: #f4950f;
+}
+
+.button:hover, button:hover{
+    outline: 0;
+    text-decoration: none;
+    color: #fff;
+    background-color: #f2c382;
+}
+
+.button.big {
+    font-size: 17px;
+    min-height: 0px;
+    /* min-height: 48px; */
+    padding: 16px 24px;
+    border-radius: 3px;
+}
+
+.button.small {
+    font-size: 13px;
+    min-height: 0px;
+    /* min-height: 36px; */
+    padding: 10px 20px;
+    border-radius: 3px;
+}
+
+.button.outline {
+    background: 0 0;
+    border-width: 2px;
+    border-color: #f4950f;
+    color: #f4950f;
+}
+
+.button.outline:hover {
+    color: #f2c382;
+    border-color: #f2c382;
+    background: 0 0;
+}
+
+.button.secondary {
+    color: #fff;
+    background-color: #efaa49;
+    border-color: #efaa49;
+}
+
+.button.secondary:hover {
+    outline: 0;
+    text-decoration: none;
+    color: #fff;
+    background-color: #f2c382;
+}
+
+#mynetwork {
+  width: 800px;
+  height: 600px;
+  border: 1px solid lightgray;
+}
+
+</style>
+
+<p>
+<a class="button primary small" onclick="clusterBySystem()" href="#">Cluster by system</a>
+<a class="button secondary small" onclick="SetHierarchicalLayout()" href="#">View by system level</a>
+<a class="button outline small" onclick="resetAllClusters()" href="#">Reset network</a>
+</p>
+
+<div id="mynetwork"></div>
+
+<script type="text/javascript">{{visJS}}</script>
+<style>{{visCSS}}</style>
+
+<script type="text/javascript">
+    // create an array with nodes
+    var nodes = new vis.DataSet([
+        {% for node in nodes %}
+            { {% for key, value in node.items() %}{{key}}: {% if value is string %}"{{value}}"{% else %}{{value|lower}}{% endif %}, {% endfor %} },
+        {% endfor %}
+    ]);
+
+    // create an array with edges
+    var edges = new vis.DataSet([
+        {% for edge in edges %}
+            { {% for key, value in edge.items() %}{{key}}: {% if value is string %}"{{value}}"{% else %}{{value|lower}}{% endif %}, {% endfor %} },
+        {% endfor %}
+    ]);
+
+    var systems = [{% for group in groups %}"{{group}}", {% endfor %}];
+
+    var centerId = {{ center_id|default(-1) }};
+    var centerGroup = null;
+    if(centerId >= 0){
+        centerGroup = nodes.get(centerId).group;
+    }
+
+    // create a network
+    var container = document.getElementById('mynetwork');
+
+    // provide the data in the vis format
+    var data = {
+        nodes: nodes,
+        edges: edges
+    };
+    var options = {
+    //    clickToUse: true,
+        nodes: {
+            shape: 'circle',
+        },
+        layout:{
+            hierarchical: false,
+            randomSeed: 8},
+    //    physics: true
+    };
+
+    // initialize your network!
+    var network = undefined;
+    resetAllClusters();
+
+    function generateNetwork(data_, options_, hierarchicalLayout){
+      if(network !== undefined) network.destroy();
+
+      var network_ = new vis.Network(container, data_, options_);
+
+      /* Events */
+      if(!hierarchicalLayout) {
+        // Cluster from double-clicked node
+        network_.on("doubleClick", function (params) {
+            if (params.nodes.length === 1) {
+                if (network_.isCluster(params.nodes[0]) === false) {
+                    clusterFromSelection(params.nodes[0])
+                }
+            }
+        });
+
+        // Suppress cluster when click on
+        network_.on("selectNode", function(params) {
+            if (params.nodes.length === 1) {
+                if (network_.isCluster(params.nodes[0]) === true) {
+                    network_.openCluster(params.nodes[0]);
+                }
+            }
+        });
+
+        // Force fit once the system is stabilized
+        network_.on("stabilized", function (params) {
+            network_.fit({animation: true});
+        });
+      }
+
+      return network_;
+    }
+
+    /* Functions handlers */
+    function clusterSystem(system, system_name, group_name){
+        var clusterOptionsByData = {
+            joinCondition: function (childOptions) {
+                return childOptions.group === system; // the system is fully defined in the node.
+            },
+            processProperties: function (clusterOptions, childNodes, childEdges) {
+                var hidden_node = data.nodes.get({
+                    filter: function(node){
+                        return node.label === system_name;
+                    }
+                });
+                clusterOptions.title = hidden_node[0].title;
+                return clusterOptions;
+            },
+            clusterNodeProperties: {
+                id: 'cluster:' + system,
+                borderWidth: 3,
+                shape: 'database',
+                label: system_name,
+                group: group_name,
+                allowSingleNodeCluster : true
+            }
+        };
+        network.cluster(clusterOptionsByData);
+    }
+
+    function clusterFromSelection(node_idx) {
+        var selected_node = nodes.get(node_idx);
+
+        // Extract list of groups at selected_node level or below
+        var subsystems = [];
+        for(var i = systems.length - 1; i >= 0; i--){
+            // Cluster all nodes at selected_node or below + keep all existing cluster
+            if(systems[i].startsWith(selected_node.group)
+              || network.isCluster('cluster:' + systems[i])) {
+                subsystems.unshift(systems[i]);
+            }
+        }
+
+        // Reset the network - i.e. remove existing cluster
+        network.setData(data);
+
+        for (var i = 0; i < subsystems.length; i++) {
+            var system = subsystems[i];
+            var hierarchy = system.split(".");
+            var system_name = hierarchy.pop();
+
+            clusterSystem(system, system_name, hierarchy.join("."));
+        }
+    }
+
+    function clusterBySystem() {
+        network = generateNetwork(data, options, false);
+
+        for (var i = 0; i < systems.length; i++) {
+            var system = systems[i];
+            var hierarchy = system.split(".");
+            var system_name = hierarchy.pop();
+
+            if(hierarchy.length === 0) continue;  // Don't group last level
+
+            clusterSystem(system, system_name, hierarchy.join("."));
+        }
+    }
+
+    function SetHierarchicalLayout() {
+        // First create new connection and filter nodes (keep only System)
+        var hierarchy_view  = new vis.DataView(data.nodes, {
+            filter: function (item) {
+                return (item.label !== undefined && item.label.length > 0);  // Keep only system
+            },
+            fields: ['id', 'label', 'title', 'group', 'shape', 'level']
+        });
+        var hierarchy_edges = new vis.DataView(data.edges, {
+            filter: function (item) {
+                return (item.hidden !== undefined && item.hidden);
+            },
+            fields: ['id', 'from', 'to', 'arrows', 'dashes']
+        });
+
+        data_ = {
+            nodes: hierarchy_view,
+            edges: hierarchy_edges
+        };
+        options_ = {
+            layout: {
+                hierarchical : {
+                    enabled: true,
+        //            direction: 'LR',
+        //            sortMethod: 'directed'
+                },
+            },
+            physics: false
+        };
+        network = generateNetwork(data_, options_, true);
+    }
+
+    function resetAllClusters() {
+        network = generateNetwork(data, options, false);
+
+        if(centerGroup !== null){
+            for (var i = 0; i < systems.length; i++) {
+                var system = systems[i];
+                if(systems[i] == centerGroup) continue;
+                var hierarchy = system.split(".");
+                var system_name = hierarchy.pop();
+
+                clusterSystem(system, system_name, hierarchy.join("."));
+            }
+        }
+    }
+
+</script>

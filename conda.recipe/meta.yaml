@@ -1,0 +1,69 @@
+{% set name = "cosapp" %}
+# This needs to be updated manually => otherwise the source file won't be found
+{% set version = "0.11.1" %}
+
+package:
+  name: {{ name }}
+  version: {{ version }}
+
+source:
+  # You need to generate the source archive with `python setup.py sdist`
+  # before running this recipe
+  url: ../dist/{{ name }}-{{ version }}.tar.gz
+  
+build:
+  noarch: python
+  script: python -m pip install . --no-deps --ignore-installed --no-cache-dir -vvv
+
+requirements:
+  host:
+    - python>=3.6
+  run:
+    - python>=3.6
+    - pandas
+    - jsonschema
+    - numpy>=1.12
+    - scipy
+
+test:
+  requires:
+    - coverage
+    - jinja2
+    - pytest
+    - pythonfmu~=0.6.0
+    - watchdog
+    - xlrd
+    - xlsxwriter
+  commands:
+    - python -m cosapp.tests.all_tests
+
+about:
+  home: https://cosapp.readthedocs.io
+  summary: "CoSApp, the Collaborative System Approach."
+  description: |
+    The primary goal of **CoSApp** is to help technical department in the design of complex systems.
+    To do so, the framework allows the simulation of various systems representing the different
+    parts of the final product in a common environment. The consequences are the ability for each
+    subsystem team to carry out design study with a direct feedback of the impact of parameters at
+    the product level.
+
+    The main features are :
+
+    - Butterfly effect
+
+    Coupled your preferred simulation software with CoSApp to get immediate impact on main product
+    variables and iterates to converge on a better design.
+
+    - Design guidance
+
+    All systems can share design parameters associated with an acceptable range. You can take advantage
+    of those limited degrees of freedom without fear of breaking your neighbors' work.
+
+    - Margins & Uncertainties
+
+    All design parameters have an intrinsic dispersion. Knowing the range of fluctuations is crucial to
+    ensure the robustness of the design. CoSApp handles natively uncertain variables.
+  keywords: cosapp
+  dev_url: https://gitlab.com/cosapp/cosapp
+  license: Apache-2.0, Copyright Safran SA
+  license_file: LICENSE.rst

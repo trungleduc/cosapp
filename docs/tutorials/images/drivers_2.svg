@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   version="1.0"
+   width="300"
+   viewBox="0 0 400 360"
+   id="svg990"
+   sodipodi:docname="drivers_2.svg"
+   inkscape:version="0.92.2 (5c3e80d, 2017-08-06)">
+  <metadata
+     id="metadata994">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+        <dc:title></dc:title>
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+  <sodipodi:namedview
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1"
+     objecttolerance="10"
+     gridtolerance="10"
+     guidetolerance="10"
+     inkscape:pageopacity="0"
+     inkscape:pageshadow="2"
+     inkscape:window-width="1680"
+     inkscape:window-height="1028"
+     id="namedview992"
+     showgrid="false"
+     fit-margin-top="0"
+     fit-margin-left="0"
+     fit-margin-right="0"
+     fit-margin-bottom="0"
+     inkscape:zoom="0.65950218"
+     inkscape:cx="206.22449"
+     inkscape:cy="188.24184"
+     inkscape:window-x="-8"
+     inkscape:window-y="-8"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="svg990" />
+  <defs
+     id="defs944">
+    <pattern
+       id="EMFhbasepattern"
+       patternUnits="userSpaceOnUse"
+       width="6"
+       height="6"
+       x="0"
+       y="0" />
+  </defs>
+  <path
+     style="fill:none;stroke:#4472c4;stroke-width:2.65475559px;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:8;stroke-dasharray:none;stroke-opacity:1"
+     d="M 33.491232,178.23789 106.10779,1.3273778 h 217.8696 L 396.59394,178.23789 323.97739,355.12845 h -217.8696 z"
+     id="path946"
+     inkscape:connector-curvature="0" />
+  <text
+     xml:space="preserve"
+     style="font-style:normal;font-variant:normal;font-weight:400;font-size:23.9375px;line-height:125%;font-family:Calibri;text-align:start;letter-spacing:0px;word-spacing:0px;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none"
+     x="-1.1220703"
+     y="40.339802"
+     id="text952"><tspan
+       sodipodi:role="line"
+       x="-1.1220703"
+       y="40.339802"
+       id="tspan950"><tspan
+         dx="0"
+         dy="0"
+         style="font-style:normal;font-variant:normal;font-weight:400;font-size:23.9375px;font-family:Calibri;fill:#4472c4"
+         id="tspan948">drivers</tspan></tspan></text>
+  <path
+     style="fill:none;stroke:#4472c4;stroke-width:2.65475559px;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:8;stroke-dasharray:none;stroke-opacity:1"
+     d="M 89.879839,202.11073 144.69156,73.025741 H 309.16665 L 363.99833,202.11073 309.16665,331.17577 H 144.69156 Z"
+     id="path954"
+     inkscape:connector-curvature="0" />
+  <text
+     xml:space="preserve"
+     style="font-style:normal;font-variant:normal;font-weight:400;font-size:23.9375px;line-height:125%;font-family:Calibri;text-align:start;letter-spacing:0px;word-spacing:0px;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none"
+     x="120.8435"
+     y="43.153461"
+     id="text960"><tspan
+       sodipodi:role="line"
+       x="120.8435"
+       y="43.153461"
+       id="tspan958"><tspan
+         dx="0"
+         dy="0"
+         style="font-style:normal;font-variant:normal;font-weight:400;font-size:23.9375px;font-family:Calibri;fill:#4472c4"
+         id="tspan956">driver1</tspan></tspan></text>
+  <path
+     style="fill:none;stroke:#4472c4;stroke-width:2.65475559px;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:8;stroke-dasharray:none;stroke-opacity:1"
+     d="m 159.74183,161.51094 11.29768,-28.26417 h 33.93297 l 11.31764,28.26417 -11.31764,28.28412 h -33.93297 z"
+     id="path962"
+     inkscape:connector-curvature="0" />
+  <text
+     xml:space="preserve"
+     style="font-style:normal;font-variant:normal;font-weight:400;font-size:37.1875px;line-height:125%;font-family:Calibri;text-align:start;letter-spacing:0px;word-spacing:0px;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none"
+     x="178.66539"
+     y="174.07866"
+     id="text968"><tspan
+       sodipodi:role="line"
+       x="178.66539"
+       y="174.07866"
+       id="tspan966"><tspan
+         dx="0"
+         dy="0"
+         style="font-style:normal;font-variant:normal;font-weight:400;font-size:37.1875px;font-family:Calibri;fill:#4a76c6"
+         id="tspan964">1</tspan></tspan></text>
+  <text
+     xml:space="preserve"
+     style="font-style:normal;font-variant:normal;font-weight:400;font-size:18.6875px;line-height:125%;font-family:Calibri;text-align:start;letter-spacing:0px;word-spacing:0px;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none"
+     x="155.52838"
+     y="110.85248"
+     id="text974"><tspan
+       sodipodi:role="line"
+       x="155.52838"
+       y="110.85248"
+       id="tspan972"><tspan
+         dx="0"
+         dy="0"
+         style="font-style:normal;font-variant:normal;font-weight:400;font-size:18.6875px;font-family:Calibri;fill:#4472c4"
+         id="tspan970">driver11</tspan></tspan></text>
+  <path
+     style="fill:none;stroke:#4472c4;stroke-width:2.65475559px;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:8;stroke-dasharray:none;stroke-opacity:1"
+     d="m 249.88376,230.55454 11.31764,-28.28412 h 33.93297 l 11.31764,28.28412 -11.31764,28.26417 H 261.2014 Z"
+     id="path976"
+     inkscape:connector-curvature="0" />
+  <text
+     xml:space="preserve"
+     style="font-style:normal;font-variant:normal;font-weight:400;font-size:37.1875px;line-height:125%;font-family:Calibri;text-align:start;letter-spacing:0px;word-spacing:0px;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none"
+     x="268.75882"
+     y="243.13341"
+     id="text982"><tspan
+       sodipodi:role="line"
+       x="268.75882"
+       y="243.13341"
+       id="tspan980"><tspan
+         dx="0"
+         dy="0"
+         style="font-style:normal;font-variant:normal;font-weight:400;font-size:37.1875px;font-family:Calibri;fill:#4a76c6"
+         id="tspan978">2</tspan></tspan></text>
+  <text
+     xml:space="preserve"
+     style="font-style:normal;font-variant:normal;font-weight:400;font-size:18.6875px;line-height:125%;font-family:Calibri;text-align:start;letter-spacing:0px;word-spacing:0px;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none"
+     x="245.9884"
+     y="296.54822"
+     id="text988"><tspan
+       sodipodi:role="line"
+       x="245.9884"
+       y="296.54822"
+       id="tspan986"><tspan
+         dx="0"
+         dy="0"
+         style="font-style:normal;font-variant:normal;font-weight:400;font-size:18.6875px;font-family:Calibri;fill:#4472c4"
+         id="tspan984">driver12</tspan></tspan></text>
+</svg>

@@ -1,0 +1,73 @@
+{
+  "$schema": "0-3-0/system.schema.json",
+  "turbo1": {
+    "class": "Turbofan",
+    "connections": [
+      ["duct.fl_in", "merger.fl_out"],
+      ["noz.fl_in", "bleed.fl1_out"],
+      ["inlet.fl_in", "atm.fl_out"],
+      ["bleed.fl_in", "duct.fl_out"],
+      ["merger.fl1_in", "fanC.fl_out"],
+      ["merger.fl2_in", "bleed.fl_out"]
+    ],
+    "subsystems": {
+      "duct": {
+        "class": "Duct"
+      },
+      "noz": {
+        "class": "Nozzle"
+      },
+      "fanC": {
+        "class": "FanComplex",
+        "connections": [
+          ["fan.fl_in", "duct.fl_out"],
+          ["fl_out", "fan.fl_out"]
+        ],
+        "subsystems": {
+          "fan": {
+            "class": "Fan"
+          },
+          "duct": {
+            "class": "DuctComplex",
+            "connections": [
+              ["duct.fl_in", "merger.fl_out"],
+              ["merger.fl1_in", "inlet.fl_out"],
+              ["merger.fl2_in", "bleed.fl2_out"],
+              ["bleed.fl_in", "duct.fl_out"],
+              ["fl_out", "bleed.fl1_out"]
+            ],
+            "inputs": {
+              "cst_loss": 1.0
+            },
+            "subsystems": {
+              "duct": {
+                "class": "Duct",
+                "inputs": {
+                  "cst_loss": 1.0
+                }
+              },
+              "merger": {
+                "class": "Merger"
+              },
+              "bleed": {
+                "class": "Splitter"
+              }
+            }
+          }
+        }
+      },
+      "inlet": {
+        "class": "Inlet"
+      },
+      "atm": {
+        "class": "Atm"
+      },
+      "bleed": {
+        "class": "Splitter"
+      },
+      "merger": {
+        "class": "Merger"
+      }
+    }
+  }
+}

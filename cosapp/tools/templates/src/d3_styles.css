@@ -1,0 +1,34 @@
+.node {
+  cursor: pointer;
+}
+
+.node:hover {
+  stroke: #000;
+  stroke-width: 1.5px;
+}
+
+.node--leaf {
+  fill: white;
+}
+
+.flexdiv{
+  display: flex;
+  justify-content: center;
+}
+
+.flexdiv svg{
+  min-width:400px;
+}
+
+text {
+  font: 16px 'Open Sans', sans-serif;
+  fill: black;
+  fill-opacity: 0.75;
+  text-anchor: middle;
+  pointer-events: none;
+}
+
+.label {
+  text-shadow: 0 2px 0 #fff, 2px 0 0 #fff, -2px 0 0 #fff, 0 -2px 0 #fff;
+  pointer-events: none;
+}

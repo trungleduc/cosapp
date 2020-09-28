@@ -1,0 +1,85 @@
+{
+  "$schema": "0-3-0/system.schema.json",
+  "p": {
+    "class": "pressurelossvarious.PressureLossSys",
+    "connections": [
+      ["p1.flnum_in", "flnum_in"],
+      ["m1.flnum_in1", "p1.flnum_out"],
+      ["m1.flnum_in2", "p3.flnum_out"],
+      ["p2.flnum_in", "m1.flnum_out"],
+      ["s1.flnum_in", "p2.flnum_out"],
+      ["p3.flnum_in", "s1.flnum_out2"],
+      ["p4.flnum_in", "s1.flnum_out1"]
+    ],
+    "exec_order": ["p1", "m1", "p2", "s1", "p3", "p4"],
+    "subsystems": {
+      "p1": {
+        "class": "pressurelossvarious.PressureLoss0D",
+        "inputs": {
+          "flnum_in.Pt": 1000000.0,
+          "flnum_in.W": 10.0
+        }
+      },
+      "m1": {
+        "class": "pressurelossvarious.Mixer21"
+      },
+      "p2": {
+        "class": "pressurelossvarious.PressureLossSys",
+        "connections": [
+          ["p21.flnum_in", "flnum_in"],
+          ["m21.flnum_in1", "p21.flnum_out"],
+          ["m21.flnum_in2", "p23.flnum_out"],
+          ["p22.flnum_in", "m21.flnum_out"],
+          ["s21.flnum_in", "p22.flnum_out"],
+          ["p23.flnum_in", "s21.flnum_out2"],
+          ["p24.flnum_in", "s21.flnum_out1"],
+          ["flnum_out", "p24.flnum_out"]
+        ],
+        "exec_order": ["p21", "m21", "p22", "s21", "p23", "p24"],
+        "subsystems": {
+          "p21": {
+            "class": "pressurelossvarious.PressureLoss0D"
+          },
+          "m21": {
+            "class": "pressurelossvarious.Mixer21"
+          },
+          "p22": {
+            "class": "pressurelossvarious.PressureLossSys",
+            "connections": [
+              ["p221.flnum_in", "flnum_in"],
+              ["p222.flnum_in", "p221.flnum_out"],
+              ["flnum_out", "p222.flnum_out"]
+            ],
+            "exec_order": ["p221", "p222"],
+            "subsystems": {
+              "p221": {
+                "class": "pressurelossvarious.PressureLoss0D"
+              },
+              "p222": {
+                "class": "pressurelossvarious.PressureLoss0D"
+              }
+            }
+          },
+          "s21": {
+            "class": "pressurelossvarious.Splitter12"
+          },
+          "p23": {
+            "class": "pressurelossvarious.PressureLoss0D"
+          },
+          "p24": {
+            "class": "pressurelossvarious.PressureLoss0D"
+          }
+        }
+      },
+      "s1": {
+        "class": "pressurelossvarious.Splitter12"
+      },
+      "p3": {
+        "class": "pressurelossvarious.PressureLoss0D"
+      },
+      "p4": {
+        "class": "pressurelossvarious.PressureLoss0D"
+      }
+    }
+  }
+}

@@ -1,0 +1,87 @@
+{#
+    cosapp-theme
+    ~~~~~~~~~~~~
+
+    Sphinx layout template for CoSApp documentation.
+	This theme is a merge between the Hugo Theme Kube and the classic Sphinx theme (available under BSD license).
+
+    :copyright: Copyright Safran.
+    :license: Apache-2.0
+#}
+{%- extends "basic/layout.html" %}
+
+{# Those are loaded at the end of the page#}
+{% set end_script_files = ['_static/js/kube.min.js', ] %}
+
+
+{# Define header menu #}
+{% set menu_headers = [] %}
+
+{# Define footer menu #}
+{% set menu_footers = [] %}
+
+{%- block scripts %}
+{{ super() }}
+{% if theme_collapsiblesidebar|tobool %}
+<script type="text/javascript" src="{{ pathto('_static/sidebar.js', 1) }}"></script>
+{% endif %}
+{%- endblock %}
+
+{%- block header %}
+<header>
+
+    <div class="show-sm">
+    <div id="nav-toggle-box">
+      <div id="nav-toggle-brand">
+        <a href="/"><img alt="CoSApp" height="48" src="{{ pathto('_static/img/cosapp.svg', 1) }}" width="48"></a>
+      </div><a data-component="toggleme" data-target="#top" href="#" id="nav-toggle"><i class="kube-menu"></i></a>
+    </div>
+  </div>
+  <div class="hide-sm" id="top">
+    <div id="top-brand">
+      <a href="/" title="home"><img alt="CoSApp" height="48" src="{{ pathto('_static/img/cosapp.svg', 1) }}" width="48"></a>
+    </div>
+    <nav id="top-nav-main">
+      <ul>
+    {% for entry in menu_headers %}
+    <li><a href="{{ entry.url }}" {% if (entry.url|truncate(4, True, '', 0)) == "http" %}target="_blank"{% endif %} >{{ entry.name }}</a></li>
+    {% endfor %}
+      </ul>
+    </nav>
+    <nav id="top-nav-extra">
+      <ul>
+
+      </ul>
+    </nav>
+  </div>
+</header>
+{% endblock %}
+
+
+{%- block content %}
+<main>
+  {{ super() }}
+</main>
+{%- endblock %}
+
+{%- block footer %}
+  <footer id="footer">
+    <nav>
+      <ul>
+        <li><span>CoSApp</span></li>
+        {% for entry in menu_footers %}
+        <li>
+          <a href="{{ entry.url }}" {% if (entry.url|truncate(4, True, '', 0)) == "http" %}target="_blank"{% endif %}>
+          {{ entry.name }}</a>
+        </li>
+        {% endfor %}
+      </ul>
+    </nav>
+    <p>&copy; Safran using <a href="https://themes.gohugo.io/kube/">Kube Hugo Theme</a>
+      by jeblister - Licence MIT. Code documentation built with <a href="http://sphinx-doc.org/">Sphinx</a>.</p>
+  </footer>
+
+  {%- for scriptfile in end_script_files %}
+  <script type="text/javascript" src="{{ pathto(scriptfile, 1) }}"></script>
+  {%- endfor %}
+{%- endblock %}

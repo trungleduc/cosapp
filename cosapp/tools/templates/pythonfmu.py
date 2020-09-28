@@ -1,0 +1,101 @@
+import logging
+import pathlib
+
+from cosapp.core.eval_str import EvalString
+from cosapp.drivers import {{ driver }}, NonLinearSolver
+from cosapp.ports.port import ExtensiblePort
+from cosapp.systems.system import System
+from cosapp.tools.fmu.logging import FMUForwardHandler
+from numpy import inf
+from pythonfmu import (
+    Fmi2Causality, Fmi2Slave, Fmi2Variability, Boolean, Integer, Real, String)
+from pythonfmu.enums import Fmi2Status
+
+
+class {{ class_name }}FMU(Fmi2Slave):
+
+    modelName = "{{ class_name }}"
+    {% for name, value in class_attrs.items() %}
+    {{ name }} = "{{ value }}"
+    {% endfor %}
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # Change the log level in the next line to increase verbosity
+        FMUForwardHandler.add_handler(self, level=logging.WARNING)
+
+        self.__master = System.load(pathlib.Path(__file__).parent / "{{ system_file }}")
+        self.__driver = {{ driver }}({% for key, value in time_options.items() %}{{key}}={{value}},{% endfor %})
+        self.__driver.owner = self.__master
+        self.__start_time = 0.
+        
+        {% for var in variables %}
+        self.register_variable(
+            {{ var.fmutype }}(
+                "{{ var.name }}", 
+                causality=Fmi2Causality.{{ var.causality }},
+                getter=EvalString("{{ var.name }}", self.__master).eval,
+                setter=lambda v: exec(f"this.{{ var.name }} = {v!s}", {"this": self.__master}),
+{% if var.variability is not none %}                variability=Fmi2Variability.{{ var.variability }},{% endif %}
+            ),
+            nested=False,
+        )
+        {% endfor %}
+
+    def setup_experiment(self, start_time):
+        self.__start_time = start_time
+        self.__driver.time_interval = (start_time, start_time + 1e300)
+        self.__master.drivers.clear()
+        self.__master.add_driver(self.__driver)
+
+        System._System__master_set = True
+        ExtensiblePort.set_type_checking(False)
+        self.__master.open_loops()
+
+        # Add the drivers
+        has_iterative = {% if offdesign %}True{% else %}self.__master.get_unsolved_problem().shape != (0, 0){% endif %}
+
+        self.__driver.children.clear()
+        if has_iterative:
+            self.__driver.add_child(NonLinearSolver('solver'))  {# TODO, {% for key, value in nl_options.items() %}{{key}}={{option}},{% endfor %})) #}
+
+{% if problem %}            runner = self.__driver.solver.runner
+            runner.offdesign \
+{% for name, unknown in problem.unknowns.items() %}                .add_unknown("{{ unknown.name }}", {{ unknown.max_abs_step }}, {{ unknown.max_rel_step }}, {{ unknown.lower_bound }}, {{ unknown.upper_bound }}{% if unknown.mask is not none %}, {{ unknown.mask }}{% endif %}) \
+            {% endfor %}
+{% for name, equation in problem.equations.items() %}                .add_equation("{{ equation.equation }}", "{{ name }}", {{ equation.reference }}) \
+            {% endfor %}
+            
+            {% endif %}
+
+    def exit_initialization_mode(self):
+        # Set variables can be done before exit_initialization_mode call
+        self.__master.call_setup_run()
+        self.__master._set_execution_order()
+
+        # Initialize the problem
+        self.__driver._precompute()
+        self.__driver.compute_before()
+        for child in self.__driver.exec_order:
+            self.__driver.children[child].run_once()
+
+        self.__driver._initialize()
+        for rate in self.__driver._rates.values():
+            rate.reset()
+
+    def __restore(self):
+        self.__driver._postcompute()
+        self.__master.call_clean_run()
+        self.__master.close_loops()
+        System._System__master_set = False
+        ExtensiblePort.set_type_checking(True)
+        self.__master.drivers.clear()
+
+    def terminate(self):
+        self.__driver._postcompute()
+        self.__restore()
+
+    def do_step(self, current_time, step_size):
+        self.__driver._update_transients(step_size)
+        self.__driver._set_time(current_time + step_size)
+        return True

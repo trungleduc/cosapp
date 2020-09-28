@@ -1,0 +1,650 @@
+import pytest
+import os, sys
+import numpy as np
+
+from io import StringIO
+from pathlib import Path
+
+from cosapp.utils.testing import assert_keys, assert_all_type
+from cosapp.core.config import CoSAppConfiguration
+from cosapp.tests.library.systems import AllTypesSystem
+from cosapp.tests.library.ports import NumPort, V1dPort
+from cosapp.ports.port import ExtensiblePort
+from cosapp.systems import System
+
+
+def test_System_load(test_library):
+    # Load super simple module
+    config = StringIO(
+        """{
+            "$schema": "0-2-0/system.schema.json",
+            "p1": {
+            "class": "pressurelossvarious.PressureLoss0D"
+            }
+        }"""
+    )
+    s = System.load(config)
+
+    assert s.__module__ == "pressurelossvarious"
+    assert s.__class__.__qualname__ == "PressureLoss0D"
+    assert s.name == "p1"
+    assert s.parent is None
+    assert len(s.children) == 0
+
+    assert_keys(s.inputs, "inwards", "flnum_in")
+    assert isinstance(s.inputs["inwards"], ExtensiblePort)
+    assert isinstance(s.inputs["flnum_in"], NumPort)
+
+    assert_keys(s.outputs, "outwards", "flnum_out")
+    assert isinstance(s.outputs["outwards"], ExtensiblePort)
+    assert isinstance(s.outputs["flnum_out"], NumPort)
+
+    # Load simple module with boundaries
+    config = StringIO(
+        """{
+            "$schema": "0-2-0/system.schema.json",
+            "p1": {
+            "class": "pressurelossvarious.PressureLoss0D",
+            "inputs": {
+                "flnum_in.Pt": 1000000.0,
+                "flnum_in.W": 10.0
+            }
+            }}"""
+    )
+    s = System.load(config)
+
+    assert s.__module__ == "pressurelossvarious"
+    assert s.__class__.__qualname__ == "PressureLoss0D"
+    assert s.name == "p1"
+    assert s.parent is None
+    assert len(s.children) == 0
+
+    assert_keys(s.inputs, "inwards", "flnum_in")
+    assert isinstance(s.inputs["inwards"], ExtensiblePort)
+    port = s.inputs["flnum_in"]
+    assert isinstance(port, NumPort)
+    assert port.Pt == 1e6
+    assert port.W == 10
+
+    assert_keys(s.outputs, "outwards", "flnum_out")
+    assert isinstance(s.outputs["outwards"], ExtensiblePort)
+    assert isinstance(s.outputs["flnum_out"], NumPort)
+
+    # Load simple module with properties
+    config = StringIO(
+        """{
+            "$schema": "0-2-0/system.schema.json",
+            "alltype": {
+            "class": "vectors.AllTypesSystem",
+            "properties": {
+                "dimension": 3
+            }
+            }}"""
+    )
+    s = System.load(config)
+
+    assert s.__module__ == "vectors"
+    assert s.__class__.__qualname__ == "AllTypesSystem"
+    assert s.name == "alltype"
+    assert s.parent is None
+    assert len(s.children) == 0
+
+    assert s.properties ==  {"dimension": 3}
+    assert s.dimension == 3
+
+    assert_keys(s.inputs, "inwards", "in_")
+    assert isinstance(s.inputs["inwards"], ExtensiblePort)
+    port = s.inputs["in_"]
+    assert isinstance(port, V1dPort)
+
+    assert_keys(s.outputs, "outwards", "out")
+    assert isinstance(s.outputs["outwards"], ExtensiblePort)
+    assert isinstance(s.outputs["out"], V1dPort)
+
+    # Load module in module - test for connector from submodule to top system
+    #   Pushing port is the only possibility - pulling port is forbidden
+    config = StringIO(
+        """{
+        "$schema": "0-2-0/system.schema.json",
+        "p1": {
+            "class": "pressurelossvarious.PressureLossSys",
+            "subsystems": {
+            "p11": {
+                "class": "pressurelossvarious.PressureLoss0D"
+            }
+            },
+            "connections": [
+            ["flnum_in", "p11.flnum_in"],
+            ["p11.flnum_out", "flnum_out"]
+            ],
+            "exec_order": ["p11"]
+        }}"""
+    )
+    s = System.load(config)
+
+    # check parent
+    assert s.__module__ == "pressurelossvarious"
+    assert s.__class__.__qualname__ == "PressureLossSys"
+    assert s.name == "p1"
+    assert s.parent is None
+    assert_keys(s.children, "p11")
+    for child in s.children.values():
+        assert isinstance(child, System)
+        assert child.parent is s
+    assert list(s.exec_order) == ["p11"]
+
+    assert_keys(s.inputs, "inwards", "flnum_in")
+    assert isinstance(s.inputs["inwards"], ExtensiblePort)
+    assert isinstance(s.inputs["flnum_in"], NumPort)
+
+    assert_keys(s.outputs, "outwards", "flnum_out")
+    assert isinstance(s.outputs["outwards"], ExtensiblePort)
+    assert isinstance(s.outputs["flnum_out"], NumPort)
+
+    # check child
+    child = s.p11
+    assert child.__module__ == "pressurelossvarious"
+    assert child.__class__.__qualname__ == "PressureLoss0D"
+    assert child.name == "p11"
+    assert child.parent is s
+    assert len(child.children) == 0  # too young, presumably
+
+    assert_keys(child.inputs, "inwards", "flnum_in")
+    assert isinstance(child.inputs["inwards"], ExtensiblePort)
+    assert isinstance(child.inputs["flnum_in"], NumPort)
+
+    assert_keys(child.outputs, "outwards", "flnum_out")
+    assert isinstance(child.outputs["outwards"], ExtensiblePort)
+    assert isinstance(child.outputs["flnum_out"], NumPort)
+
+    assert len(s.connectors) == 2
+    for connector in s.connectors.values():
+        try:
+            assert connector.source is s.flnum_in
+            assert connector.sink is child.flnum_in
+        except:
+            assert connector.source is child.flnum_out
+            assert connector.sink is s.flnum_out
+
+    # Load 2 modules in module - test for connector from submodule to top system
+    #   Pushing port is the only possibility - pulling port is forbidden
+    config = StringIO(
+        """{
+        "$schema": "0-2-0/system.schema.json",
+        "p1": {
+            "class": "pressurelossvarious.PressureLossSys",
+            "subsystems": {
+            "p11": {
+                "class": "pressurelossvarious.PressureLoss0D"
+            },
+            "p12": {
+                "class": "pressurelossvarious.PressureLoss0D"
+            }
+            },
+            "connections": [
+                ["flnum_in", "p11.flnum_in"],
+                ["p11.flnum_out", "p12.flnum_in"],
+                ["p12.flnum_out", "flnum_out"]
+            ],
+            "exec_order": ["p11", "p12"]
+        }}"""
+    )
+    s = System.load(config)
+
+    # check parent
+    assert s.__module__ == "pressurelossvarious"
+    assert s.__class__.__qualname__ == "PressureLossSys"
+    assert s.name == "p1"
+    assert s.parent is None
+    assert_keys(s.children, "p11", "p12")
+    assert list(s.exec_order) == ["p11", "p12"]
+    for child in s.children.values():
+        assert isinstance(child, System)
+        assert child.parent is s
+
+    assert_keys(s.inputs, "inwards", "flnum_in")
+    assert isinstance(s.inputs["inwards"], ExtensiblePort)
+    assert isinstance(s.inputs["flnum_in"], NumPort)
+
+    assert_keys(s.outputs, "outwards", "flnum_out")
+    assert isinstance(s.outputs["outwards"], ExtensiblePort)
+    assert isinstance(s.outputs["flnum_out"], NumPort)
+
+    # check children
+    child = s.p11
+    assert child.__module__ == "pressurelossvarious"
+    assert child.__class__.__qualname__ == "PressureLoss0D"
+    assert child.name == "p11"
+    assert child.parent is s
+    assert len(child.children) == 0
+
+    assert_keys(child.inputs, "inwards", "flnum_in")
+    assert isinstance(child.inputs["inwards"], ExtensiblePort)
+    assert isinstance(child.inputs["flnum_in"], NumPort)
+
+    assert_keys(child.outputs, "outwards", "flnum_out")
+    assert isinstance(child.outputs["outwards"], ExtensiblePort)
+    assert isinstance(child.outputs["flnum_out"], NumPort)
+
+    child = s.p12
+    assert child.__module__ == "pressurelossvarious"
+    assert child.__class__.__qualname__ == "PressureLoss0D"
+    assert child.name == "p12"
+    assert child.parent is s
+    assert len(child.children) == 0
+
+    assert_keys(child.inputs, "inwards", "flnum_in")
+    assert isinstance(child.inputs["inwards"], ExtensiblePort)
+    assert isinstance(child.inputs["flnum_in"], NumPort)
+
+    assert_keys(child.outputs, "outwards", "flnum_out")
+    assert isinstance(child.outputs["outwards"], ExtensiblePort)
+    assert isinstance(child.outputs["flnum_out"], NumPort)
+
+    # check connectors
+    connectors = s.connectors
+    assert len(connectors) == 3
+
+    connector = connectors["p1_flnum_in_to_p11_flnum_in"]
+    assert connector.source is s.flnum_in
+    assert connector.sink is s.p11.flnum_in
+
+    connector = connectors["p11_flnum_out_to_p12_flnum_in"]
+    assert connector.source is s.p11.flnum_out
+    assert connector.sink is s.p12.flnum_in
+
+    connector = connectors["p12_flnum_out_to_p1_flnum_out"]
+    assert connector.source is s.p12.flnum_out
+    assert connector.sink is s.flnum_out
+
+
+def test_System_load_from_dict(test_library):
+    # Load super simple module
+    d = {"p1": {"class": "pressurelossvarious.PressureLoss0D"}}
+    name, param = d.popitem()
+    s = System.load_from_dict(name, param)
+
+    assert s.__module__ == "pressurelossvarious"
+    assert s.__class__.__qualname__ == "PressureLoss0D"
+    assert s.name == "p1"
+    assert s.parent is None
+    assert len(s.children) == 0
+    assert len(s.exec_order) == 0
+
+    assert_keys(s.inputs, "inwards", "flnum_in")
+    assert isinstance(s.inputs["inwards"], ExtensiblePort)
+    assert isinstance(s.inputs["flnum_in"], NumPort)
+
+    assert_keys(s.outputs, "outwards", "flnum_out")
+    assert isinstance(s.outputs["outwards"], ExtensiblePort)
+    assert isinstance(s.outputs["flnum_out"], NumPort)
+
+    # Load simple module with boundaries
+    d = {
+        "p1": {
+            "class": "pressurelossvarious.PressureLoss0D",
+            "inputs": {"flnum_in.Pt": 1000000.0, "flnum_in.W": 10.0},
+        }
+    }
+    name, param = d.popitem()
+    s = System.load_from_dict(name, param)
+
+    assert s.__module__ == "pressurelossvarious"
+    assert s.__class__.__qualname__ == "PressureLoss0D"
+    assert s.name == "p1"
+    assert s.parent is None
+    assert len(s.children) == 0
+    assert len(s.exec_order) == 0
+
+    assert_keys(s.inputs, "inwards", "flnum_in")
+    assert isinstance(s.inputs["inwards"], ExtensiblePort)
+    assert isinstance(s.inputs["flnum_in"], NumPort)
+    assert s.flnum_in.Pt == 1e6
+    assert s.flnum_in.W == 10
+
+    assert_keys(s.outputs, "outwards", "flnum_out")
+    assert isinstance(s.outputs["outwards"], ExtensiblePort)
+    assert isinstance(s.outputs["flnum_out"], NumPort)
+
+    # Load module in module - test for connector from submodule to top system
+    #   Pushing port is the only possibility - pulling port is forbidden
+    d = {
+        "p1": {
+            "class": "pressurelossvarious.PressureLossSys",
+            "subsystems": {"p11": {"class": "pressurelossvarious.PressureLoss0D"}},
+            "connections": [
+                ["flnum_in", "p11.flnum_in"],
+                ["p11.flnum_out", "flnum_out"],
+            ],
+            "exec_order": ["p11"],
+        }
+    }
+    name, param = d.popitem()
+    s = System.load_from_dict(name, param)
+
+    # check parent
+    assert s.__module__ == "pressurelossvarious"
+    assert s.__class__.__qualname__ == "PressureLossSys"
+    assert s.name == "p1"
+    assert s.parent is None
+    assert_keys(s.children, "p11")
+    assert list(s.exec_order) == ["p11"]
+    for child in s.children.values():
+        assert isinstance(child, System)
+        assert child.parent is s
+
+    assert_keys(s.inputs, "inwards", "flnum_in")
+    assert isinstance(s.inputs["inwards"], ExtensiblePort)
+    assert isinstance(s.inputs["flnum_in"], NumPort)
+
+    assert_keys(s.outputs, "outwards", "flnum_out")
+    assert isinstance(s.outputs["outwards"], ExtensiblePort)
+    assert isinstance(s.outputs["flnum_out"], NumPort)
+
+    # check child
+    child = s.p11
+    assert child.__module__ == "pressurelossvarious"
+    assert child.__class__.__qualname__ == "PressureLoss0D"
+    assert child.name == "p11"
+    assert child.parent is s
+    assert len(child.children) == 0
+
+    assert_keys(child.inputs, "inwards", "flnum_in")
+    assert isinstance(child.inputs["inwards"], ExtensiblePort)
+    assert isinstance(child.inputs["flnum_in"], NumPort)
+
+    assert_keys(child.outputs, "outwards", "flnum_out")
+    assert isinstance(child.outputs["outwards"], ExtensiblePort)
+    assert isinstance(child.outputs["flnum_out"], NumPort)
+
+    # check connectors
+    connectors = s.connectors
+    assert len(connectors) == 2
+
+    connector = connectors["p1_flnum_in_to_p11_flnum_in"]
+    assert connector.source is s.flnum_in
+    assert connector.sink is s.p11.flnum_in
+
+    connector = connectors["p11_flnum_out_to_p1_flnum_out"]
+    assert connector.source is s.p11.flnum_out
+    assert connector.sink is s.flnum_out
+
+    # Load 2 modules in module - test for connector from submodule to top system
+    #   Pushing port is the only possibility - pulling port is forbidden
+    d = {
+        "p1": {
+            "class": "pressurelossvarious.PressureLossSys",
+            "subsystems": {
+                "p11": {"class": "pressurelossvarious.PressureLoss0D"},
+                "p12": {"class": "pressurelossvarious.PressureLoss0D"},
+            },
+            "connections": [
+                ["flnum_in", "p11.flnum_in"],
+                ["p11.flnum_out", "p12.flnum_in"],
+                ["p12.flnum_out", "flnum_out"],
+            ],
+            "exec_order": ["p11", "p12"],
+        }
+    }
+    name, param = d.popitem()
+    s = System.load_from_dict(name, param)
+
+    # check parent
+    assert s.__module__ == "pressurelossvarious"
+    assert s.__class__.__qualname__ == "PressureLossSys"
+    assert s.name == "p1"
+    assert s.parent is None
+    assert_keys(s.children, "p11", "p12")
+    assert list(s.exec_order) == ["p11", "p12"]
+    for child in s.children.values():
+        assert isinstance(child, System)
+        assert child.parent is s
+
+    assert_keys(s.inputs, "inwards", "flnum_in")
+    assert isinstance(s.inputs["inwards"], ExtensiblePort)
+    assert isinstance(s.inputs["flnum_in"], NumPort)
+
+    assert_keys(s.outputs, "outwards", "flnum_out")
+    assert isinstance(s.outputs["outwards"], ExtensiblePort)
+    assert isinstance(s.outputs["flnum_out"], NumPort)
+
+    # check children
+    child = s.p11
+    assert child.__module__ == "pressurelossvarious"
+    assert child.__class__.__qualname__ == "PressureLoss0D"
+    assert child.name == "p11"
+    assert child.parent is s
+    assert len(child.children) == 0
+
+    assert_keys(child.inputs, "inwards", "flnum_in")
+    assert isinstance(child.inputs["inwards"], ExtensiblePort)
+    assert isinstance(child.inputs["flnum_in"], NumPort)
+
+    assert_keys(child.outputs, "outwards", "flnum_out")
+    assert isinstance(child.outputs["outwards"], ExtensiblePort)
+    assert isinstance(child.outputs["flnum_out"], NumPort)
+
+    child = s.p12
+    assert child.__module__ == "pressurelossvarious"
+    assert child.__class__.__qualname__ == "PressureLoss0D"
+    assert child.name == "p12"
+    assert child.parent is s
+    assert len(child.children) == 0
+
+    assert_keys(child.inputs, "inwards", "flnum_in")
+    assert isinstance(child.inputs["inwards"], ExtensiblePort)
+    assert isinstance(child.inputs["flnum_in"], NumPort)
+
+    assert_keys(child.outputs, "outwards", "flnum_out")
+    assert isinstance(child.outputs["outwards"], ExtensiblePort)
+    assert isinstance(child.outputs["flnum_out"], NumPort)
+
+    # check connectors
+    connectors = s.connectors
+    assert len(connectors) == 3
+
+    connector = connectors["p1_flnum_in_to_p11_flnum_in"]
+    assert connector.source is s.flnum_in
+    assert connector.sink is s.p11.flnum_in
+
+    connector = connectors["p11_flnum_out_to_p12_flnum_in"]
+    assert connector.source is s.p11.flnum_out
+    assert connector.sink is s.p12.flnum_in
+
+    connector = connectors["p12_flnum_out_to_p1_flnum_out"]
+    assert connector.source is s.p12.flnum_out
+    assert connector.sink is s.flnum_out
+
+    # Erroneous cases
+    d = {"p1": {"class": "pressurelossvarious"}}
+    name, param = d.popitem()
+    with pytest.raises(AttributeError):
+        s = System.load_from_dict(name, param)
+
+    d = {"p1": {"class": 1.0}}
+    name, param = d.popitem()
+    with pytest.raises(TypeError):
+        s = System.load_from_dict(name, param)
+
+    d = {"p1": {"class": "pressurelossvarious.xx"}}
+    name, param = d.popitem()
+    with pytest.raises(AttributeError):
+        s = System.load_from_dict(name, param)
+
+    d = {"p1": {"class": "pressurelossvarious.FalseSystem"}}
+    name, param = d.popitem()
+    with pytest.raises(AttributeError):
+        s = System.load_from_dict(name, param)
+
+
+def test_System_to_dict(test_library):
+    config = StringIO(
+        """{
+        "$schema": "0-3-0/system.schema.json",
+        "p1": {
+            "class": "pressurelossvarious.PressureLossSys",
+            "subsystems": {
+            "p11": {
+                "class": "pressurelossvarious.PressureLoss0D"
+            },
+            "p12": {
+                "class": "pressurelossvarious.PressureLoss0D"
+            }
+            },
+            "connections": [
+                ["flnum_in", "p11.flnum_in"],
+                ["p11.flnum_out", "p12.flnum_in"],
+                ["p12.flnum_out", "flnum_out"]
+            ],
+            "exec_order": ["p11", "p12"]
+        }}"""
+    )
+    s = System.load(config)
+
+    d = s.to_dict()
+    assert_keys(d, "p1")
+    entry = d["p1"]
+    assert isinstance(entry, dict)
+    assert set(entry.keys()) == set([
+        "class", "inputs", "subsystems", "connections", "exec_order"
+    ])
+    assert entry["class"] == "pressurelossvarious.PressureLossSys"
+    assert entry["subsystems"]["p11"]["class"] == "pressurelossvarious.PressureLoss0D"
+    assert entry["subsystems"]["p12"]["class"] == "pressurelossvarious.PressureLoss0D"
+    assert set(entry["connections"]) == set([
+        ("p11.flnum_in", "flnum_in"),
+        ("p12.flnum_in", "p11.flnum_out"),
+        ("flnum_out", "p12.flnum_out"),
+    ])
+    assert entry["exec_order"] == ["p11", "p12"]
+
+    # Test partial connection
+    config = StringIO(
+        """{
+        "$schema": "0-3-0/system.schema.json",
+        "p1": {
+            "class": "pressurelossvarious.PressureLossSys",
+            "subsystems": {
+            "p11": {
+                "class": "pressurelossvarious.PressureLoss0D"
+            },
+            "p12": {
+                "class": "pressurelossvarious.PressureLoss0D"
+            }
+            },
+            "connections": [
+                ["p11.flnum_in", "flnum_in"],
+                ["p11.inwards", "inwards", {"K": "K11"}],
+                ["p12.flnum_in", "p11.flnum_out"],
+                ["flnum_out", "p12.flnum_out"],
+                ["outwards", "p12.outwards", {"delta_p12": "delta_p"}]
+            ],
+            "exec_order": ["p11", "p12"]
+        }}"""
+    )
+    s = System.load(config)
+    assert "delta_p12" in s.outwards
+
+    d = s.to_dict()
+    entry = d["p1"]["connections"]
+    assert entry == [
+        ('p11.flnum_in', 'flnum_in'),
+        ('p11.inwards', 'inwards', {'K': 'K11'}),
+        ('p12.flnum_in', 'p11.flnum_out'),
+        ('flnum_out', 'p12.flnum_out'),
+        ('outwards', 'p12.outwards', {'delta_p12': 'delta_p'}),
+    ]
+
+
+def test_System_tojson(test_library):
+    config = StringIO(
+            """{
+  "$schema": "0-3-0/system.schema.json",
+  "p1": {
+    "class": "pressurelossvarious.PressureLossSys",
+    "connections": [
+      [
+        "p11.flnum_in",
+        "flnum_in"
+      ],
+      [
+        "p12.flnum_in",
+        "p11.flnum_out"
+      ],
+      [
+        "flnum_out",
+        "p12.flnum_out"
+      ]
+    ],
+    "exec_order": [
+      "p11",
+      "p12"
+    ],
+    "inputs": {
+      "flnum_in.Pt": 101325.0,
+      "flnum_in.W": 1.0,
+      "inwards.K11": 100.0
+    },
+    "subsystems": {
+      "p11": {
+        "class": "pressurelossvarious.PressureLoss0D",
+        "inputs": {
+          "flnum_in.Pt": 101325.0,
+          "flnum_in.W": 1.0,
+          "inwards.K": 100.0
+        }
+      },
+      "p12": {
+        "class": "pressurelossvarious.PressureLoss0D",
+        "inputs": {
+          "flnum_in.Pt": 101325.0,
+          "flnum_in.W": 1.0,
+          "inwards.K": 100.0
+        }
+      }
+    }
+  }
+}"""
+    )
+    s = System.load(config)
+    config.seek(0)
+
+    j = s.to_json(sort_keys=True)
+
+    assert j == config.read()
+
+
+def test_System_AllTypesSystem_serialization():
+    original = AllTypesSystem("original")
+    original.in_.x = np.r_[0.1, 0.2, 0.3]
+    original.a = np.r_[0.3, 0.2, 0.1]
+    original.b = np.r_[1.1, 2.2, 3.3]
+    original.c = 2.5
+    original.e = "John"
+
+    data = original.to_dict()
+    print(data)
+    s = System.load_from_dict('loaded', data['original'])
+
+    assert s.__module__ == "cosapp.tests.library.systems.vectors"
+    assert s.__class__.__qualname__ == "AllTypesSystem"
+    assert s.name == "loaded"
+    assert s.parent is None
+    assert len(s.children) == 0
+
+    assert s.properties == {"dimension": 3}
+    assert s.dimension == 3
+
+    assert_keys(s.inputs, "inwards", "in_")
+    assert isinstance(s.inputs["inwards"], ExtensiblePort)
+    port = s.inputs["in_"]
+    assert isinstance(port, V1dPort)
+    assert port.x == pytest.approx(original.in_.x, abs=0)
+    assert s.a == pytest.approx(original.a, abs=0)
+    assert s.b == pytest.approx(original.b, abs=0)
+    assert s.c == original.c
+    assert s.e == original.e
+
+    assert_keys(s.outputs, "outwards", "out")
+    assert isinstance(s.outputs["outwards"], ExtensiblePort)
+    assert isinstance(s.outputs["out"], V1dPort)
