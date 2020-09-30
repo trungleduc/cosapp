@@ -24,6 +24,6 @@ of those limited degrees of freedom without fear of breaking your neighbors' wor
 All design parameters have an intrinsic dispersion. Knowing the range of fluctuations is crucial to
 ensure the robustness of the design. CoSApp handles natively uncertain variables.
 
-Have a look a the `introduction <https://cosapp.readthedocs.io/en/stable/tutorials/00-Introduction.html#>`_.
+Have a look at the `introduction <https://cosapp.readthedocs.io/en/stable/tutorials/00-Introduction.html#>`_.
 
 This code is the property of Safran SA. It uses code coming from various open-source projects. See `LICENSE <https://gitlab.com/cosapp/cosapp/blob/master/LICENSE.rst>`_ file.
