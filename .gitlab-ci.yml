@@ -42,6 +42,12 @@ variables:
     - conda install -y jsonschema ipython jinja2 watchdog xlrd ipykernel nbconvert ipywidgets plotly pytest pyfmi scipy pandas packaging
     - pip install .
     - python -m pytest 
+  
+  only:
+   - pushes
+   - tags
+   - merge_requests
+
 
 linux_py36:
     extends: 
@@ -76,6 +82,10 @@ linux_py38:
       - coverage/  
     expire_in: 2 weeks  
 
+  only:
+   - pushes
+   - tags
+   - merge_requests
 # windows_py36:
 #     extends: 
 #      - ".windows_env"
@@ -121,6 +131,7 @@ build_doc:
   only:
       - tags
       - master
+      - merge_requests
 
 
 build_pkg:
@@ -142,6 +153,7 @@ build_pkg:
   only:
       - tags
       - master
+      - merge_requests
 
 
 deploy:
