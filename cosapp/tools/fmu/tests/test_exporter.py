@@ -267,6 +267,7 @@ def test_FMU_handle_vector_variable(tmp_path, vector_syst):
     assert model.get_real([variables["vr[1]"].value_reference])[0] == 42.0
 
 
+
 @pytest.mark.parametrize("integrator", TimeIntegrator)
 def test_FMU_export_time_integrator(tmp_path, ode, integrator):
     pyfmi = pytest.importorskip("pyfmi")
@@ -288,6 +289,7 @@ def test_FMU_export_time_integrator(tmp_path, ode, integrator):
     end_time = results["time"][-1]
     ref = ode(end_time)
     assert results["f"][-1] == pytest.approx(ref, rel=1e-3)
+
 
 
 def test_FMU_integration_simple(tmp_path, ode):

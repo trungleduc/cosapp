@@ -13,181 +13,60 @@ from cosapp.core.numerics.distributions.distribution import Distribution
 from cosapp.core.numerics.distributions.uniform import Uniform
 from cosapp.ports.enum import Scope, Validity
 from cosapp.ports.units import UnitError
+from cosapp.utils.testing import  get_args
 
+@pytest.mark.parametrize("value, expected", [
+    (True, None),
+    (1, (-np.inf, np.inf)),
+    (1.0e-5, (-np.inf, np.inf)),
+    (np.asarray(1.0e-5), (-np.inf, np.inf)),
+    ("string", None),
+    ("", None),
+    ([1, 2, 3], (-np.inf, np.inf)),
+     (["a", "b", "c"], None),
+    ([1, 2, "c"], None),
+    ([], None),
+    ([[]], None),
+    ((1, 2, 3), (-np.inf, np.inf)), 
+    (("a", "b", "c"), None),
+    ((1, 2, "c"), None),    
+    ((), None),  
+    ({1, 2, 3}, (-np.inf, np.inf)), 
+    ({"a", "b", "c"}, None),
+    ({1, 2, "c"}, None),    
+    ({}, None), 
+    (frozenset([1, 2, 3]), (-np.inf, np.inf)),
+    (frozenset(["a", "b", "c"]), None),
+    (frozenset([1, 2, "c"]), None),
+    (frozenset([]), None),
+    ({"a": 1, "b": 2, "c": 3}, None),
+    (np.ones(4), (-np.inf, np.inf)),
+    (np.asarray(["a", "b", "c"]), None),
+    (np.asarray([], dtype=np.float), (-np.inf, np.inf)),
+    (np.asarray([], dtype=np.int), (-np.inf, np.inf)),
+    (np.asarray([], dtype=np.unicode), None),
+    ])
+def test_Variable__get_limits_from_type(value, expected):
+    assert Variable._get_limits_from_type(value) == expected
 
-def test_Variable__get_limits_from_type():
-    value = True
-    assert Variable._get_limits_from_type(value) is None
-
-    value = 1
-    assert Variable._get_limits_from_type(value) == (-np.inf, np.inf)
-
-    value = 1.0e-5
-    assert Variable._get_limits_from_type(value) == (-np.inf, np.inf)
-
-    value = np.asarray(1.0e-5)
-    assert Variable._get_limits_from_type(value) == (-np.inf, np.inf)
-
-    value = "string"
-    assert Variable._get_limits_from_type(value) is None
-
-    value = ""
-    assert Variable._get_limits_from_type(value) is None
-
-    # List
-    value = [1, 2, 3]
-    assert Variable._get_limits_from_type(value) == (-np.inf, np.inf)
-
-    value = ["a", "b", "c"]
-    assert Variable._get_limits_from_type(value) is None
-
-    value = [1, 2, "b"]
-    assert Variable._get_limits_from_type(value) is None
-
-    value = []
-    assert Variable._get_limits_from_type(value) is None
-
-    value = [[]]
-    assert Variable._get_limits_from_type(value) is None
-
-    # Tuple
-    value = (1, 2, 3)
-    assert Variable._get_limits_from_type(value) == (-np.inf, np.inf)
-
-    value = ("a", "b", "c")
-    assert Variable._get_limits_from_type(value) is None
-
-    value = (1, 2, "b")
-    assert Variable._get_limits_from_type(value) is None
-
-    value = ()
-    assert Variable._get_limits_from_type(value) is None
-
-    # Set
-    value = {1, 2, 3}
-    assert Variable._get_limits_from_type(value) == (-np.inf, np.inf)
-
-    value = {"a", "b", "c"}
-    assert Variable._get_limits_from_type(value) is None
-
-    value = {1, 2, "b"}
-    assert Variable._get_limits_from_type(value) is None
-
-    value = {}
-    assert Variable._get_limits_from_type(value) is None
-
-    # Frozenset
-    value = frozenset([1, 2, 3])
-    assert Variable._get_limits_from_type(value) == (-np.inf, np.inf)
-
-    value = frozenset(["a", "b", "c"])
-    assert Variable._get_limits_from_type(value) is None
-
-    value = frozenset([1, 2, "b"])
-    assert Variable._get_limits_from_type(value) is None
-
-    value = frozenset([])
-    assert Variable._get_limits_from_type(value) is None
-
-    # Dict
-    value = {"a": 1, "b": 2, "c": 3}
-    assert Variable._get_limits_from_type(value) is None
-
-    value = np.ones(4)
-    assert Variable._get_limits_from_type(value) == (-np.inf, np.inf)
-
-    value = np.asarray(["a", "b", "c"])
-    assert Variable._get_limits_from_type(value) is None
-
-    value = np.asarray([], dtype=np.float)
-    assert Variable._get_limits_from_type(value) == (-np.inf, np.inf)
-
-    value = np.asarray([], dtype=np.int)
-    assert Variable._get_limits_from_type(value) == (-np.inf, np.inf)
-
-    value = np.asarray([], dtype=np.unicode)
-    assert Variable._get_limits_from_type(value) is None
-
-
-def test_Variable__check_range():
+@pytest.mark.parametrize("limits, valid, value, expected", [
+    (None,(0.0, 5.0), 0.0, ((-np.inf, np.inf), (0.0, 5.0))),
+    (None,(5.0, 0.0), 0.0, ((-np.inf, np.inf), (0.0, 5.0))),
+    (None,(0.0, None), 0.0, ((-np.inf, np.inf), (0.0, np.inf))),
+    (None,(None, 5.0), 0.0, ((-np.inf, np.inf), (-np.inf, 5.0))),
+    (None,(0.0, 5.0), "dummy string", (None, None)),
+    ((0.0, 5.0),None, 0.0, ((0.0, 5.0), (0.0, 5.0))),
+    ((-5.0, 10.0),(0.0, 5.0), 0.0, ((-5.0, 10.0), (0.0, 5.0))),
+    ((1.0, 10.0),(0.0, 5.0), 0.0, ((0.0, 10.0), (0.0, 5.0))),
+    ((-5.0, 4.0),(0.0, 5.0), 0.0, ((-5.0, 5.0), (0.0, 5.0))),
+    ((1.0, 4.0),(0.0, 5.0), 0.0, ((0.0, 5.0), (0.0, 5.0))),
+    ((-5, None),(0.0, 5.0), 0.0, ((-5, np.inf), (0.0, 5.0))),
+    ((None, 10.0),(0.0, 5.0), 0.0, ((-np.inf, 10.0), (0.0, 5.0))),
+    ((0.0, 5.0),(0.0, 5.0), "dummy string",  (None, None)),
+])
+def test_Variable__check_range(limits, valid, value, expected):
     # Test validity range
-    limits = None
-    valid = (0.0, 5.0)
-    value = 0.0
-    assert Variable._check_range(limits, valid, value) == (
-        (-np.inf, np.inf),
-        (0.0, 5.0),
-    )
-
-    limits = None
-    valid = (5.0, 0.0)
-    value = 0.0
-    assert Variable._check_range(limits, valid, value) == (
-        (-np.inf, np.inf),
-        (0.0, 5.0),
-    )
-
-    limits = None
-    valid = (0.0, None)
-    value = 0.0
-    assert Variable._check_range(limits, valid, value) == (
-        (-np.inf, np.inf),
-        (0.0, np.inf),
-    )
-    limits = None
-    valid = (None, 5.0)
-    value = 0.0
-    assert Variable._check_range(limits, valid, value) == (
-        (-np.inf, np.inf),
-        (-np.inf, 5.0),
-    )
-
-    limits = None
-    valid = (0.0, 5.0)
-    value = "dummy string"
-    assert Variable._check_range(limits, valid, value) == (None, None)
-
-    # Test limits
-    limits = (0.0, 5.0)
-    valid = None
-    value = 0.0
-    assert Variable._check_range(limits, valid, value) == ((0.0, 5.0), (0.0, 5.0))
-
-    limits = (-5.0, 10.0)
-    valid = (0.0, 5.0)
-    value = 0.0
-    assert Variable._check_range(limits, valid, value) == ((-5.0, 10.0), (0.0, 5.0))
-
-    limits = (1.0, 10.0)
-    valid = (0.0, 5.0)
-    value = 0.0
-    assert Variable._check_range(limits, valid, value) == ((0.0, 10.0), (0.0, 5.0))
-
-    limits = (-5.0, 4.0)
-    valid = (0.0, 5.0)
-    value = 0.0
-    assert Variable._check_range(limits, valid, value) == ((-5.0, 5.0), (0.0, 5.0))
-
-    limits = (1.0, 4.0)
-    valid = (0.0, 5.0)
-    value = 0.0
-    assert Variable._check_range(limits, valid, value) == ((0.0, 5.0), (0.0, 5.0))
-
-    limits = (-5, None)
-    valid = (0.0, 5.0)
-    value = 0.0
-    assert Variable._check_range(limits, valid, value) == ((-5, np.inf), (0.0, 5.0))
-
-    limits = (None, 10.0)
-    valid = (0.0, 5.0)
-    value = 0.0
-    assert Variable._check_range(limits, valid, value) == ((-np.inf, 10.0), (0.0, 5.0))
-
-    limits = (0.0, 5.0)
-    valid = (0.0, 5.0)
-    value = "dummy string"
-    assert Variable._check_range(limits, valid, value) == (None, None)
-
+    assert Variable._check_range(limits, valid, value) == expected 
 
 def test_Variable___init__(caplog):
     port = mock.Mock(spec=ExtensiblePort)
@@ -629,21 +508,11 @@ def test_Variable___str__():
     v = Variable(name, port, value)
     assert str(v) == name
 
-
-def test_Variable___repr__():
-    port = mock.Mock(spec=ExtensiblePort)
-    name = "var1"
-    value = 2.0
-    setattr(port, name, value)
-
-    v = Variable(name, port, value)
-    assert repr(v) == "var1 &#128274;&#128274; : 2"
-
-    w = Variable(
-        name,
-        port,
-        value,
-        unit="kg",
+@pytest.mark.parametrize("data, expected", [
+    (
+        get_args(), "var1 &#128274;&#128274; : 2"
+    ),(
+        get_args (unit="kg",
         dtype=float,
         valid_range=(-2, 0),
         invalid_comment="No valid",
@@ -651,35 +520,31 @@ def test_Variable___repr__():
         out_of_limits_comment="No so far!",
         desc="I'm a dummy donkey.",
         scope=Scope.PROTECTED,
-        distribution=Uniform(1.0, 4.0, 0.2),
+        distribution=Uniform(1.0, 4.0, 0.2)),
+        "var1 &#128274; : 2 kg;  &#10647; -4 &#10205; -2 &#10205;  value  &#10206; 0 &#10206; 1 &#10648;  # I'm a dummy donkey."
     )
-    assert (
-        repr(w)
-        == "var1 &#128274; : 2 kg;  &#10647; -4 &#10205; -2 &#10205;  value  &#10206; 0 &#10206; 1 &#10648;  # I'm a dummy donkey."
-    )
-
-
-def test_Variable___json__():
+])
+def test_Variable___repr__(data, expected):
     port = mock.Mock(spec=ExtensiblePort)
     name = "var1"
     value = 2.0
     setattr(port, name, value)
+    v = Variable(name, port, value, **data[1])
+    assert repr(v) == expected 
 
-    v = Variable(name, port, value)
-    assert v.__json__() == {
-        "value": 2.0,
-        "valid_range": (-np.inf, np.inf),
-        "invalid_comment": "",
-        "limits": (-np.inf, np.inf),
-        "out_of_limits_comment": "",
-        "distribution": None,
-    }
-
-    w = Variable(
-        name,
-        port,
-        value,
-        unit="kg",
+@pytest.mark.parametrize("data, expected", [
+    (
+        get_args(),
+        {
+            "value": 2.0,
+            "valid_range": (-np.inf, np.inf),
+            "invalid_comment": "",
+            "limits": (-np.inf, np.inf),
+            "out_of_limits_comment": "",
+            "distribution": None,
+        }
+    ),(
+        get_args (unit="kg",
         dtype=float,
         valid_range=(-2, 0),
         invalid_comment="No valid",
@@ -687,18 +552,61 @@ def test_Variable___json__():
         out_of_limits_comment="No so far!",
         desc="I'm a dummy donkey.",
         scope=Scope.PROTECTED,
-        distribution=Uniform(1.0, 4.0, 0.2),
+        distribution=Uniform(1.0, 4.0, 0.2)),
+        {
+            "value": 2.0,
+            "valid_range": (-2, 0),
+            "invalid_comment": "No valid",
+            "limits": (-4, 1),
+            "out_of_limits_comment": "No so far!",
+            "distribution":{ "worst": 1.0, "pworst": 0.2, "best": 4.0, "pbest": 0.15 },
+        }
+        
     )
+])
+def test_Variable___json__(data, expected):
+    port = mock.Mock(spec=ExtensiblePort)
+    name = "var1"
+    value = 2.0
+    setattr(port, name, value)
 
-    assert w.__json__() == {
-        "value": 2.0,
-        "valid_range": (-2, 0),
-        "invalid_comment": "No valid",
-        "limits": (-4, 1),
-        "out_of_limits_comment": "No so far!",
-        "distribution": w.distribution.__json__(),
-    }
+    v = Variable(name, port, value,**data[1])
+    assert v.__json__() == expected
 
+@pytest.mark.parametrize("data, expected", [
+    (
+        get_args(),
+        {"value": 2.0}
+    ),(
+        get_args (unit="kg",
+        dtype=float,
+        valid_range=(-2, 0),
+        invalid_comment="No valid",
+        limits=(-4, 1),
+        out_of_limits_comment="No so far!",
+        desc="I'm a dummy donkey.",
+        scope=Scope.PROTECTED,
+        distribution=Uniform(1.0, 4.0, 0.2)),
+        {
+            "value": 2.0,
+            "unit": "kg",
+            "invalid_comment": "No valid",
+            "out_of_limits_comment": "No so far!",
+            "desc": "I'm a dummy donkey.",
+            "distribution": { "worst": 1.0, "pworst": 0.2, "best": 4.0, "pbest": 0.15 },
+            "valid_range": [-2, 0],
+            'limits': [-4, 1]
+        }
+    )
+])
+def test_Variable_to_dict(data, expected):
+    
+    port = mock.Mock(spec=ExtensiblePort)
+    name = "var1"
+    value = 2.0  
+    setattr(port, name, value)
+    w1 = Variable(name, port, value, **data[1])    
+    assert w1.to_dict() == expected
 
 def test_Variable_name():
     port = mock.Mock(spec=ExtensiblePort)

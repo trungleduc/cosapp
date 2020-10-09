@@ -8,7 +8,6 @@ import weakref
 from collections import OrderedDict
 from collections.abc import MutableSequence
 from typing import Any, Dict, Iterator, NoReturn, Optional, Tuple, Union
-
 import numpy
 
 from cosapp.core.numerics.distributions.distribution import Distribution
@@ -537,8 +536,13 @@ class ExtensiblePort:
             if variable not in self:
                 port.remove_variable(variable)
 
-    def to_dict(self) -> Dict[str, Union[str, Tuple[Dict[str, str], str]]]:
+    def to_dict(self, with_def: bool = False) -> Dict[str, Union[str, Tuple[Dict[str, str], str]]]:
         """Convert this port in a dictionary.
+   
+        Parameters
+        ----------
+        with_def : bool
+            Flag to export also output ports and its class name (default: False).
 
         Returns
         -------
@@ -548,12 +552,26 @@ class ExtensiblePort:
         # TODO this is uncomplete as validation ranges and distribution could be changed
         new_dict = dict()
 
-        if self.direction == PortType.IN:
-            for variable in self:
-                fullname = ".".join((self.name, variable))
-                value = getattr(self, variable)
-                new_dict[fullname] = value
+        if with_def:
+            tmp =  dict()
+            if self.name not in ["inwards", "outwards"]:
+                tmp["__class__"] = self.__class__.__qualname__
+                for variable in self:
+                    tmp[variable] = getattr(self, variable)
+            else:
+                for v_name, variable in self._variables.items():
+                    tmp[v_name]= variable.to_dict() 
 
+            new_dict[self.name] = tmp
+        
+        else:
+            if self.direction == PortType.IN:
+                for variable in self:
+                    fullname = ".".join((self.name, variable))
+                    value = getattr(self, variable)
+                    new_dict[fullname] = value
+
+        
         return new_dict
 
 

@@ -662,6 +662,15 @@ def test_ExtensiblePort_to_dict(direction, expected):
     port.add_variable("y", 0.2)
     assert port.to_dict() == expected
 
+@pytest.mark.parametrize("direction, expected", [
+    (PortType.IN, {'dummy': {'__class__': 'ExtensiblePort', 'x': 1.5, 'y': 0.2}}),
+    (PortType.OUT, {'dummy': {'__class__': 'ExtensiblePort', 'x': 1.5, 'y': 0.2}}),
+])
+def test_ExtensiblePort_to_dict_with_def(direction, expected):
+    port = ExtensiblePort("dummy", direction)
+    port.add_variable("x", 1.5)
+    port.add_variable("y", 0.2)
+    assert port.to_dict(True) == expected
 
 @pytest.mark.skip(reason="TODO")
 def test_ExtensiblePort___json__():
