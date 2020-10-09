@@ -1,0 +1,212 @@
+{
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "description": "Validation schema for exported CoSApp structure file.",
+    "type": "object",
+    "definitions": {
+      "variable_definition_schema": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "oneOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "array"
+              },
+              {
+                "type": "object"
+              }
+            ]
+          },
+          "valid_range": {
+            "type": "array"
+          },
+          "invalid_comment": {
+            "type": "string"
+          },
+          "limits": {
+            "type": "array"
+          },
+          "out_of_limits_comment": {
+            "type": "string"
+          },
+          "distribution": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "system_schema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[A-Za-z]\\w*$"
+          },
+          "class": {
+            "type": "string",
+            "pattern": "^[A-Za-z_-][\\w]*(\\.[A-Za-z][\\w]*)*$"
+          },
+          "properties": {
+            "$ref": "#/definitions/variable_schema"
+          },
+          "inputs": {
+            "$ref": "#/definitions/variable_schema"
+          },
+          "outputs": {
+            "$ref": "#/definitions/variable_schema"
+          },
+          "connections": {
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/connection_schema"
+            },
+            "additionalItems": false,
+            "minLength": 1
+          },
+          "subsystems": {
+            "type": "object",
+            "patternProperties": {
+              "^[A-Za-z]\\w*$": {
+                "$ref": "#/definitions/system_schema"
+              }
+            },
+            "additionalProperties": false
+          },
+          "exec_order": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Za-z]\\w*$",
+              "minLength": 1
+            }
+          }
+        },
+        "required": ["class"],
+        "dependencies": {
+          "connections": ["subsystems"],
+          "exec_order": ["subsystems"]
+        },
+        "additionalProperties": false
+      },
+      "connection_schema": {
+        "type": "array",
+        "minItems": 2,
+        "maxItems": 3,
+        "items": [
+          {
+            "type": "string",
+            "pattern": "^([A-Za-z]\\w*)(\\.[A-Za-z]\\w*)?$"
+          },
+          {
+            "type": "string",
+            "pattern": "^([A-Za-z]\\w*)(\\.[A-Za-z]\\w*)?$"
+          },
+          {
+            "type": "object",
+            "patternProperties": {
+              "^[A-Za-z]\\w*$": {
+                "type": "string",
+                "pattern": "^[A-Za-z]\\w*$"
+              }
+            },
+            "additionalProperties": false
+          }
+        ],
+        "additionalItems": false
+      },
+      "variable_schema": {
+        "type": "object",
+        "patternProperties": {
+          "^[A-Za-z]\\w*(\\.[A-Za-z]\\w*)?$": {
+            "oneOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "array"
+              },
+              {
+                "type": "object"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "properties": {
+      "Ports": {
+        "type": "object",
+        "patternProperties": {
+          "^[A-Za-z]\\w*$": {
+            "type": "object",
+            "patternProperties": {
+              "^[A-Za-z]\\w*$": {
+                "$ref": "#/definitions/variable_definition_schema"
+              }
+            }
+          }
+        }
+      },
+      "Systems": {
+        "type": "object",
+        "patternProperties": {
+          "^[A-Za-z]\\w*$": {
+            "$ref": "#/definitions/system_schema"
+          }
+        },
+        "additionalProperties": false
+      },
+      "metadata" : {
+          "type" : "object",
+          "patternProperties": {
+            "^[A-Za-z]\\w*$": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "array"
+                },
+                {
+                  "type": "object"
+                }
+              ]
+            }
+          }
+      }
+    },
+    "required": ["Ports", "Systems"],
+    "additionalProperties": false
+  }
+  

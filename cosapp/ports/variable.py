@@ -756,3 +756,32 @@ class Variable:
             return " - ".join((range2str(self.valid_range), self.invalid_comment))
         else:  # Variable is ok
             return ""
+
+    def to_dict(self) -> Dict:
+        """Convert this variable into a dictionary.
+   
+        Returns
+        -------
+        dict
+            The dictionary representing this variable.
+        """
+
+        ret = { "value" : getattr(self._port, self._name),
+                "unit": self.unit if self.unit != "" else None,
+                "invalid_comment": self.invalid_comment if self.invalid_comment != "" else None,
+                "out_of_limits_comment": self.out_of_limits_comment if self.out_of_limits_comment != "" else None,
+                "desc" : self.description if self.description != "" else None,
+                "distribution": self.distribution.__json__() if self.distribution else None
+
+            } 
+        
+        for key in ["valid_range", "limits"]:
+            tmp_val = list(getattr(self, key))
+            for idx, val in enumerate(tmp_val):
+                if np.isinf(val):
+                    tmp_val[idx] = str(val) 
+            if  tmp_val == ["-inf", "inf"]:
+                tmp_val = None
+            ret[key] =  tmp_val 
+                 
+        return {key : value for (key,value) in ret.items() if value is not None } 

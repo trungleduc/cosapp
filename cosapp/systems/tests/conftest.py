@@ -9,6 +9,7 @@ from cosapp.systems import System
 
 import cosapp.tests as test
 
+from io import StringIO
 
 @pytest.fixture
 def test_library():
@@ -110,3 +111,27 @@ class JazzySystem(GroovySystem):
 @pytest.fixture(scope="function")
 def jazzy():
     return JazzySystem('jazzy')
+
+@pytest.fixture()
+def config():
+    return StringIO(
+        """{
+        "$schema": "0-3-0/system.schema.json",
+        "p1": {
+            "class": "pressurelossvarious.PressureLossSys",
+            "subsystems": {
+            "p11": {
+                "class": "pressurelossvarious.PressureLoss0D"
+            },
+            "p12": {
+                "class": "pressurelossvarious.PressureLoss0D"
+            }
+            },
+            "connections": [
+                ["flnum_in", "p11.flnum_in"],
+                ["p11.flnum_out", "p12.flnum_in"],
+                ["p12.flnum_out", "flnum_out"]
+            ],
+            "exec_order": ["p11", "p12"]
+        }}"""
+    )

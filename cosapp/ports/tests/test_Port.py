@@ -214,3 +214,22 @@ def test_Port_copy(DummyPort, direction, copy_dir):
 @pytest.mark.skip(reason="TODO")
 def test_Port_morph():
     pytest.fail()
+
+
+@pytest.mark.parametrize("direction", PortType)
+@pytest.mark.parametrize("copy_dir", PortType)
+def test_Port_to_dict_with_def(DummyPort, direction, copy_dir):
+    p = DummyPort("dummy", direction,
+        variables = [
+            get_args("Pt", 101325.0, unit="Pa"),
+            get_args("W", 1.0,
+                unit="kg/s",
+                valid_range=(0.0, 2.0),
+                limits=(-5, 3.0),
+                desc="my lovely W",
+            ),
+        ],
+    )
+    port_dict = p.to_dict(True)
+    assert_keys(port_dict, "dummy")
+    assert  port_dict["dummy"] ==  {'__class__': 'DummyPort.<locals>.Factory.<locals>.PrototypePort', 'Pt': 101325.0, 'W': 1.0}

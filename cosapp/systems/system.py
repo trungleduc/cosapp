@@ -2343,8 +2343,41 @@ class System(Module, TimeObserver):
         else:
             fp.write(self.to_json(indent, sort_keys))
 
+
+    def export_structure(self) -> Dict:
+        """
+        Export current system structure to a dictionary, which contains
+        the definition of all ports, the structure of sub-system and the 
+        connections between ports.
+        """
+        
+        port_cls_data = {}
+        sys_data = self.__to_dict(True, port_cls_data)
+        return {"Ports":port_cls_data, "Systems": sys_data }
+
     def to_dict(self) -> Dict:
+        """
+        Public API to export system to a dictionary
+        """
+        return self.__to_dict(False)
+
+    def __to_dict(self, with_struct: bool, port_cls_data: Dict = None) -> Dict:
         """Convert the `System` to a dictionary.
+        In default mode, `with_struct` flag is `False`, only export input ports
+        and its variable values.
+
+        In other case where `with_struct` flag is `True`, export all ports with
+        values and class name. `port_cls_data` can be provided to recover the
+        definitions of all ports inside system.
+        
+        
+        Parameters
+        ----------
+        with_struct : bool, optional
+            Flag to export output ports and the class name of ports (default: False).
+
+        port_cls_data : Dict, optional
+            A dictionary to hold the definition of all ports inside system.
 
         Returns
         -------
@@ -2365,12 +2398,30 @@ class System(Module, TimeObserver):
         if len(properties) > 0:
             tmp['properties'] = properties
 
-        inputs = {}
-        for name, port in self.inputs.items():
-            port_dict = port.to_dict()
-            inputs.update(port_dict)
-        if len(inputs) > 0:
-            tmp['inputs'] = inputs
+        if with_struct:            
+            for direction in ["inputs", "outputs"]:
+                temp_dict = {}
+                for name, port in getattr(self,direction ).items():
+                    if name not in ["inwards", "outwards"]:
+                        port_cls_name = port.__class__.__qualname__
+                        if port_cls_data is not None and isinstance(port_cls_data, Dict) and port_cls_name not in port_cls_data :
+                            port_cls_data[port_cls_name] = {}
+                            for var_name, var_data in port._variables.items():
+                                var_dict =  var_data.to_dict()
+                                port_cls_data[port_cls_name][var_name] = var_dict
+
+
+                    port_dict = port.to_dict(with_struct)
+                    temp_dict.update(port_dict)
+                if len(temp_dict) > 0:
+                    tmp[direction] = temp_dict           
+        else:
+            inputs = {}
+            for name, port in self.inputs.items():
+                port_dict = port.to_dict()
+                inputs.update(port_dict)
+            if len(inputs) > 0:
+                tmp['inputs'] = inputs
 
         connections = []
         for connectors in self._connectors.values():
@@ -2382,7 +2433,7 @@ class System(Module, TimeObserver):
         if len(self.children) > 0:
             tmp['subsystems'] = dict()
             for name, component in self.children.items():
-                tmp['subsystems'][name] = component.to_dict()[name]
+                tmp['subsystems'][name] = component._System__to_dict(with_struct, port_cls_data)[name]
 
             if self.exec_order:
                 tmp['exec_order'] = list(self.exec_order)

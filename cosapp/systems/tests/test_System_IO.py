@@ -477,28 +477,8 @@ def test_System_load_from_dict(test_library):
         s = System.load_from_dict(name, param)
 
 
-def test_System_to_dict(test_library):
-    config = StringIO(
-        """{
-        "$schema": "0-3-0/system.schema.json",
-        "p1": {
-            "class": "pressurelossvarious.PressureLossSys",
-            "subsystems": {
-            "p11": {
-                "class": "pressurelossvarious.PressureLoss0D"
-            },
-            "p12": {
-                "class": "pressurelossvarious.PressureLoss0D"
-            }
-            },
-            "connections": [
-                ["flnum_in", "p11.flnum_in"],
-                ["p11.flnum_out", "p12.flnum_in"],
-                ["p12.flnum_out", "flnum_out"]
-            ],
-            "exec_order": ["p11", "p12"]
-        }}"""
-    )
+def test_System_to_dict(test_library, config):
+
     s = System.load(config)
 
     d = s.to_dict()
@@ -519,7 +499,7 @@ def test_System_to_dict(test_library):
     assert entry["exec_order"] == ["p11", "p12"]
 
     # Test partial connection
-    config = StringIO(
+    config2 = StringIO(
         """{
         "$schema": "0-3-0/system.schema.json",
         "p1": {
@@ -542,7 +522,7 @@ def test_System_to_dict(test_library):
             "exec_order": ["p11", "p12"]
         }}"""
     )
-    s = System.load(config)
+    s = System.load(config2)
     assert "delta_p12" in s.outwards
 
     d = s.to_dict()
@@ -554,6 +534,45 @@ def test_System_to_dict(test_library):
         ('flnum_out', 'p12.flnum_out'),
         ('outwards', 'p12.outwards', {'delta_p12': 'delta_p'}),
     ]
+
+
+def test_System_to_dict_with_def(test_library, config):
+
+    s = System.load(config)   
+    d  = s._System__to_dict(True)
+    assert_keys(d, "p1")
+    entry = d["p1"]
+    assert set(entry["inputs"].keys()) == set([
+        "flnum_in", "inwards"
+    ])
+    assert entry["inputs"]["inwards"] == {'K11': {'value': 100.0}}
+    assert entry["inputs"]["flnum_in"]["__class__"] == 'NumPort'
+
+    assert set(entry["outputs"].keys()) == set([
+        "flnum_out", "outwards"
+    ])
+    assert entry["outputs"]["outwards"] == {'delta_p12': {'value': 0.}}
+    assert entry["outputs"]["flnum_out"]["__class__"] == 'NumPort'
+
+def test_System_to_dict_with_port_def(test_library, config):
+
+    s = System.load(config) 
+    port_cls_data = {}  
+    d  = s._System__to_dict(True, port_cls_data)
+    assert_keys(port_cls_data, "NumPort")
+    entry = port_cls_data["NumPort"]
+    assert set(entry.keys()) == set(["Pt", "W"])
+    assert entry["Pt"] == {
+            "value": 101325.0,
+            "unit" : "Pa"
+            }
+
+
+def test_System_export_system(test_library, config):
+
+    s = System.load(config) 
+    d  = s.export_structure()
+    assert set(d.keys()) == set(["Ports", "Systems"])
 
 
 def test_System_tojson(test_library):
@@ -623,7 +642,6 @@ def test_System_AllTypesSystem_serialization():
     original.e = "John"
 
     data = original.to_dict()
-    print(data)
     s = System.load_from_dict('loaded', data['original'])
 
     assert s.__module__ == "cosapp.tests.library.systems.vectors"
