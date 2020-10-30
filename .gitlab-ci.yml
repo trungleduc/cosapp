@@ -5,7 +5,7 @@ stages:
   - deployment
 
 variables:
-  COSAPP_DEP:  jsonschema ipython jinja2 watchdog xlrd ipykernel nbconvert ipywidgets plotly pytest pyfmi scipy pandas packaging
+  COSAPP_DEP:  jsonschema ipython jinja2 watchdog xlrd ipykernel nbconvert ipywidgets plotly pytest pyfmi scipy pandas packaging typing
   USER: "cosapp_test"
 
 # # default windows job parameters
@@ -26,6 +26,8 @@ variables:
 
 # default linux job parameters
 .linux_env:
+  tags: 
+    - cosapp_docker
   stage: "test"
   image: "continuumio/miniconda3:latest"
   before_script:
@@ -39,8 +41,8 @@ variables:
   script:  
     - conda create -y -n cosapp python=$PYTHON_VERSION 
     - conda activate cosapp
-    - conda install -y jsonschema ipython jinja2 watchdog xlrd ipykernel nbconvert ipywidgets plotly pytest pyfmi scipy pandas packaging
-    - pip install .
+    - conda install -y $COSAPP_DEP
+    - pip install . --trusted-host=files.pythonhosted.org
     - python -m pytest 
   
   only:
@@ -71,7 +73,7 @@ linux_py38:
   script:
     - conda create -y -n cosapp python=$PYTHON_VERSION 
     - conda activate cosapp
-    - conda install -y jsonschema ipython jinja2 watchdog xlrd ipykernel nbconvert ipywidgets plotly pytest pyfmi scipy pandas packaging coverage
+    - conda install -y $COSAPP_DEP coverage
     - pip install .
     - coverage erase
     - coverage run -m pytest -ra
