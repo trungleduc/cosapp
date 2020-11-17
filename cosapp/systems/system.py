@@ -7,6 +7,7 @@ import importlib
 import json
 import logging
 import os
+import warnings
 import weakref
 from contextlib import contextmanager
 from copy import deepcopy
@@ -22,6 +23,7 @@ from types import MappingProxyType
 
 import jsonschema
 import numpy
+import pandas as pd
 
 from cosapp.core.connectors import Connector, ConnectorError
 from cosapp.core.eval_str import EvalString
@@ -40,6 +42,7 @@ from cosapp.utils.helpers import check_arg, is_number, is_numerical
 from cosapp.utils.json import JSONEncoder, decode_cosapp_dict
 from cosapp.utils.logging import LogFormat, LogLevel, rollover_logfile
 from cosapp.utils.pull_variables import pull_variables
+from cosapp.systems.surrogateclass import SurrogateClass, SurrogateClassState
 
 logger = logging.getLogger(__name__)
 
@@ -148,7 +151,7 @@ class System(Module, TimeObserver):
     __slots__ = (
         '_context_lock', '_connectors', '_is_clean', '_locked', '_math',
         'design_methods', 'drivers', 'inputs', 'name2variable', 'outputs',
-        '__readonly',
+        '__readonly', '_meta','_meta_active_status',
     )
 
     INWARDS = CommonPorts.INWARDS.value  # type: ClassVar[str]
@@ -214,7 +217,8 @@ class System(Module, TimeObserver):
         
         self._locked = False  # type: bool
         self._is_clean = { PortType.IN: False, PortType.OUT: False }  # type: Dict[bool]
-        
+        self._meta = None
+        self._meta_active_status = False
         # For efficiency purpose, link to object are stored as reference
         # !! Must be the latest attribute set 
         # => KeyError will be raised instead of AttributeError in __setattr__ 
@@ -1010,6 +1014,7 @@ class System(Module, TimeObserver):
                 desc = f"Transient variable defined as {str_der(name)} = {der}"
 
             # Need to copy the value to avoid vector linked by reference between variable and its derivative
+            #  See https://gitlab.safrantech.safran/cosapp/cosapp/issues/179
             self.add_inward(name, value=deepcopy(value), desc=desc, dtype=dtype)
 
         self._math.add_transient(name, der, max_time_step, max_abs_step)
@@ -1690,7 +1695,10 @@ class System(Module, TimeObserver):
                         logger.debug(f"Call {self.name}.compute")
                         self._compute_calls += 1
                         with self._context_lock:
-                            self.compute()
+                            if self._meta is not None and self._meta_active_status:
+                                self._meta.compute()
+                            else :
+                                self.compute()
                     else:
                         logger.debug(f"Skip {self.name}.compute - Clean inputs")
 
@@ -1703,6 +1711,10 @@ class System(Module, TimeObserver):
                 logger.debug("Start clean_run recursive calls.")
                 self.call_clean_run(skip_driver=True)
 
+    @property
+    def any_active_driver(self) -> bool:
+        return any(driver.is_active() for driver in self.drivers.values())
+
     def run_drivers(self) -> NoReturn:
         """Run the drivers defined on this `System`.
         """
@@ -1712,7 +1724,7 @@ class System(Module, TimeObserver):
                 logger.debug("Start setup_run recursive calls.")
                 self.call_setup_run()
 
-            if self.drivers:
+            if self.drivers and self.any_active_driver:
                 if self.is_standalone():  # System not standalone can't set the mathematical problem
                     self._set_execution_order()
                     logger.debug(f"Exec order for {self.name}: {self.exec_order}")
@@ -1762,10 +1774,14 @@ class System(Module, TimeObserver):
                         logger.debug(f"Skip {self.name} children execution - Clean interfaces")
 
                     if not self.is_clean(PortType.IN):
-                        logger.debug(f"Call {self.name}.compute")
                         self._compute_calls += 1
                         with self._context_lock:
-                            self.compute()
+                            if self._meta is not None and self._meta_active_status:
+                                self._meta.compute()
+                                logger.debug(f"Call {self.name}.meta.compute")
+                            else :
+                                self.compute()
+                                logger.debug(f"Call {self.name}.compute")
                     else:
                         logger.debug(f"Skip {self.name}.compute - Clean inputs")
 
@@ -2509,6 +2525,78 @@ class System(Module, TimeObserver):
         from cosapp.tools.views.markdown import system_to_md
         return system_to_md(self)
 
+    def make_surrogate(self, data_in: pd.DataFrame, model: Any, activate=True, *args, **kwargs) -> "SurrogateClass":
+        """
+        The role of this class method is to transform the system
+        into a surrogate model, thanks to a model and input datas
+        which are the training points for the model.
+        """
+        if self._meta is not None:
+            warnings.warn(f"{self.name} already had a surrogate model. It has been overwritten by new one.")
+        self._meta = SurrogateClass(self, data_in, model, *args, **kwargs)
+        self.active_surrogate = activate
+        return self._meta
+    
+    def load_surrogate(self, filename: str, activate=True) -> NoReturn:
+        """
+        This method loads a surrogate model that has been saved previously.
+        """
+        self._meta = SurrogateClass.load(self, filename)
+        self.active_surrogate = activate
+
+    def dump_surrogate(self, filename: str) -> NoReturn:
+        """
+        This method is useful to save the meta/surrogate model of your system.
+        The idea beyond that is to avoid a new training of your meta model between two sessions of using.
+        The saved file can then be  loaded in a system which has the same structure than the original system you metamodelized and saved.
+        """
+        self._meta.dump(filename)
+    
+    @property
+    def active_surrogate(self) -> bool:
+        return self._meta is not None and self._meta_active_status
+
+    @active_surrogate.setter
+    def active_surrogate(self, boolean: bool) -> NoReturn:
+        """
+        This method is used :
+        - if you want to deactivate your metamodelized system and turn back to your original system.
+        - if you want to activate your metamodelized system.
+        """
+        check_arg(boolean, "boolean", bool)
+        if self._meta is None:
+            raise RuntimeError("\n\
+                Can't use '.active_surrogate = ...' if there is no surrogate model created.\n\
+                To do so, please use '.make_surrogate(...)' or '.load_surrogate(...)' before using '.active_surrogate = ...'\n"
+            )
+
+        if boolean:
+            if self._meta_active_status: return
+            # self._meta_active_status = True
+            self._set_recursive_active_status(False) #deactivate owner, drivers, children and children drivers
+            self._active = True #reactivate the owner after upper recursion
+            self._meta_active_status = True
+        
+        else:
+            if not self._meta_active_status: return
+            self._set_recursive_active_status(True)
+            self._meta_active_status = False
+
+    @property
+    def has_surrogate(self):
+        return self._meta is not None
+
+    def _set_recursive_active_status(self, active_status : bool) -> NoReturn:
+        #TODO save and recover drivers original status
+        logger.debug(f"Starting recursive active status modifying of {self.name}, status to be set is {active_status}")
+        self._active = active_status
+        for driver in self.drivers.values():
+            logger.debug(f"Targeted driver for driver recursive deactivate is {driver}")
+            driver._set_children_active_status(active_status)
+        for child in self.children.values():
+            logger.debug(f"Targeted child for system recursive deactivate is {child}")
+            child._set_recursive_active_status(active_status)
+            
 
 class IterativeConnector(System):
     """Generate residues on close loop connector to mathematical close the equations set.

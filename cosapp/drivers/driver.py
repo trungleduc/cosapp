@@ -152,6 +152,11 @@ class Driver(Module):
 
         return False
 
+    def _set_children_active_status(self, active_status : bool) -> NoReturn:
+        self._active = active_status
+        for child in self.children.values():
+            child._set_children_active_status(active_status)
+
     def _precompute(self) -> NoReturn:
         """Set execution order and start the recorder."""
         if self.owner is None:
