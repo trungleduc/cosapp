@@ -7,7 +7,7 @@ from cosapp.drivers.abstractsetofcases import AbstractSetOfCases
 from cosapp.drivers.optionaldriver import OptionalDriver
 from cosapp.recorders.dataframe_recorder import DataFrameRecorder
 from cosapp.utils.helpers import check_arg, is_number
-from cosapp.utils.search_for_variables import search_for_variables
+from cosapp.utils.find_variables import find_variables
 
 
 # TODO This does not support multipoints cases
@@ -129,13 +129,12 @@ class Influence(AbstractSetOfCases):
                     self.response_vars.append(name)
                 else:
                     raise TypeError(
-                        "string expected; got {}.".format(type(name).__qualname__)
+                        f"string expected; got {type(name).__qualname__}."
                     )
 
     def _build_cases(self) -> NoReturn:
         """Build the list of cases to run during execution
         """
-
         self.add_recorder(
             DataFrameRecorder(
                 includes=self.input_vars + self.response_vars,
@@ -144,14 +143,14 @@ class Influence(AbstractSetOfCases):
             )
         )
 
-        self.found_input_vars = search_for_variables(
+        self.found_input_vars = find_variables(
             self.owner,
             includes=self.input_vars,
             excludes=[],
             advanced_filter=lambda x: is_number(x),
             outputs=False,
         )
-        self.found_response_vars = search_for_variables(
+        self.found_response_vars = find_variables(
             self.owner,
             includes=self.response_vars,
             excludes=[],
@@ -163,7 +162,7 @@ class Influence(AbstractSetOfCases):
         # TODO('Support sequences')
         def f(ref, idx) -> numpy.array:
             case = ref.copy()
-            case[idx] = (1 + self.delta) * case[idx]
+            case[idx] *= 1 + self.delta
             return case
 
         case_ref = [self.owner[var] for var in self.found_input_vars]
@@ -193,7 +192,8 @@ class Influence(AbstractSetOfCases):
             self._postcase(0, case)
         self.cases.pop(0)
 
-        self.reference = self.recorder.data.iloc[
+        data = self.recorder.export_data()
+        self.reference = data.iloc[
             :, len(DataFrameRecorder.SPECIALS) :
         ]  # Skip the information
         self.recorder.start()
@@ -203,7 +203,8 @@ class Influence(AbstractSetOfCases):
         OptionalDriver.set_inhibited(False)
         super()._postcompute()
 
-        results = self.recorder.data.iloc[
+        data = self.recorder.export_data()
+        results = data.iloc[
             :, len(DataFrameRecorder.SPECIALS) :
         ]  # Skip the information
 

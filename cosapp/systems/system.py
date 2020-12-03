@@ -16,8 +16,10 @@ from io import StringIO
 from numbers import Number
 from pathlib import Path
 from typing import (
-    Any, Callable, ClassVar, Dict, FrozenSet, Iterable, List, NamedTuple, NoReturn,
-    Optional, Tuple, Union)
+    Any, Callable, ClassVar, Dict, FrozenSet,
+    Iterable, List, NoReturn,
+    Optional, Tuple, Union,
+)
 import weakref
 from types import MappingProxyType
 
@@ -43,6 +45,7 @@ from cosapp.utils.json import JSONEncoder, decode_cosapp_dict
 from cosapp.utils.logging import LogFormat, LogLevel, rollover_logfile
 from cosapp.utils.pull_variables import pull_variables
 from cosapp.systems.surrogateclass import SurrogateClass, SurrogateClassState
+from cosapp.utils.find_variables import get_attributes
 
 logger = logging.getLogger(__name__)
 
@@ -463,17 +466,18 @@ class System(Module, TimeObserver):
 
     def __getitem__(self, name: str) -> Any:
         try:
-            variable_ref = self.name2variable[name]
-        except KeyError:
+            return getattr(self, name)
+        except AttributeError:
             raise KeyError(
                 f"Variable {name!r} not found in the context of System {self.name!r}"
             )
-        return variable_ref.mapping[variable_ref.key]
 
     def __setitem__(self, name: str, value: Any) -> NoReturn:
         try:
             variable_ref = self.name2variable[name]
         except KeyError:
+            if name in self.__readonly:
+                raise AttributeError(f"Can't set read-only attribute {self.name}.{name}")
             raise KeyError(
                 f"Variable {name!r} not found in the context of System {self.name!r}"
             )
@@ -499,7 +503,8 @@ class System(Module, TimeObserver):
         self.name2variable.update(additional_mapping)
 
         if self.parent is not None:
-            rel2absname = lambda item: (".".join((self.name, item[0])), item[1])
+            name = self.name
+            rel2absname = lambda item: (f"{name}.{item[0]}", item[1])
             self.parent.append_name2variable(map(rel2absname, iter(additional_mapping)))
 
     def pop_name2variable(self, keys: Iterable[str]) -> NoReturn:
@@ -516,10 +521,10 @@ class System(Module, TimeObserver):
         keys = list(keys)
         name_mapping = self.name2variable
         for key in keys:
-            _ = name_mapping.pop(key)
+            name_mapping.pop(key)
 
         if self.parent is not None:
-            rel2absname = lambda relname: ".".join((self.name, relname))
+            rel2absname = lambda relname: f"{self.name}.{relname}"
             self.parent.pop_name2variable(map(rel2absname, keys))
 
     def add_property(self, name: str, value: Any) -> NoReturn:
@@ -533,7 +538,7 @@ class System(Module, TimeObserver):
             try:
                 return self.__readonly[name]
             except KeyError:
-                raise AttributeError(f"{cls.__name__!r} object has no attribute {name!r}")
+                raise AttributeError(f"{cls.__name__} object {self.name!r} has no attribute {name!r}")
         setattr(cls, name, property(getter))
 
     @property
@@ -665,10 +670,14 @@ class System(Module, TimeObserver):
 
         keys = [port_key]
         rel2absname = lambda relname: (
-            ".".join((port.name, relname)),
+            f"{port.name}.{relname}",
             VariableReference(context=self, mapping=port, key=relname),
         )
         keys.extend(map(rel2absname, iter(port)))
+        if isinstance(port, Port):
+            attributes = get_attributes(port) - get_attributes(Port) - set(port._variables)
+            for attr in attributes:
+                keys.append((f"{port.name}.{attr}", VariableReference(context=self, mapping=port, key=attr)))
         self.append_name2variable(keys)
 
     def __lock_check(self, method: str) -> NoReturn:
@@ -787,7 +796,7 @@ class System(Module, TimeObserver):
 
             reference = VariableReference(context=self, mapping=inputs[System.INWARDS], key=name)
             self.append_name2variable(
-                [(".".join((System.INWARDS, name)), reference), (name, reference)]
+                [(f"{System.INWARDS}.{name}", reference), (name, reference)]
             )
 
         if isinstance(definition, dict):
@@ -909,7 +918,7 @@ class System(Module, TimeObserver):
 
             reference = VariableReference(context=self, mapping=outputs[System.OUTWARDS], key=name)
             self.append_name2variable(
-                [(".".join((System.OUTWARDS, name)), reference), (name, reference)]
+                [(f"{System.OUTWARDS}.{name}", reference), (name, reference)]
             )
 
         if isinstance(definition, dict):
@@ -1282,7 +1291,7 @@ class System(Module, TimeObserver):
                             if connector.source.owner is self:
                                 # Transfer unknown to parent level
                                 src = connector.variable_mapping[unknown.variable]
-                                transfer(unknown, ".".join((connector.source.name, src)))
+                                transfer(unknown, f"{connector.source.name}.{src}")
 
             new.extend(child_problem, copy=False)
 
@@ -1332,7 +1341,7 @@ class System(Module, TimeObserver):
 
         keys = [(child.name, VariableReference(context=self, mapping=self.children, key=child.name))]
         # Append child system name mapping to current mapping
-        rel2absname = lambda item: (".".join((child.name, item[0])), item[1])
+        rel2absname = lambda item: (f"{child.name}.{item[0]}", item[1])
         mapping_generator = map(rel2absname, child.name2variable.items())
         keys.extend(mapping_generator)
         self.append_name2variable(keys)
@@ -1370,7 +1379,7 @@ class System(Module, TimeObserver):
 
         # Remove the System from the name mapping
         keys = [name]
-        rel2absname = lambda relname: (".".join((name, relname)))
+        rel2absname = lambda relname: f"{name}.{relname}"
         mapping_generator = map(rel2absname, iter(child.name2variable))
         keys.extend(mapping_generator)
         self.pop_name2variable(keys)
@@ -1897,8 +1906,8 @@ class System(Module, TimeObserver):
 
             if isinstance(sink, Port):
                 if not (len(sink) == len(source) == len(mapping)):
-                    absent = [".".join((sink.name, v)) for v in sink if v not in mapping]
-                    absent.extend([".".join((source.name, v)) for v in source if v not in list(mapping.values())])
+                    absent = [f"{sink.name}.{v}" for v in sink if v not in mapping]
+                    absent.extend([f"{source.name}.{v}" for v in source if v not in list(mapping.values())])
                     logger.debug(
                         "Partial connection between {!r} and {!r}. "
                         "Variables ({}) are not part of the mapping.".format(
@@ -2114,13 +2123,13 @@ class System(Module, TimeObserver):
             # We need to remove the pulled port or variables.
             if sink.name == System.INWARDS:
                 _src_port = self.inputs[System.INWARDS]
-                src_names = ["_".join((sink.owner.name, v)) for v in mapping]
+                src_names = [f"{sink.owner.name}_{v}" for v in mapping]
             else:
-                _src_port = self.inputs['_'.join((sink.owner.name, sink.name))]
+                _src_port = self.inputs[f"{sink.owner.name}_{sink.name}"]
                 src_names = None
 
             keys = []
-            rel2absname = lambda relname: '.'.join((_src_port.name, relname))
+            rel2absname = lambda relname: f"{_src_port.name}.{relname}"
             keys.extend(map(rel2absname, src_names or mapping))
             if sink.name == System.INWARDS:
                 keys.extend(src_names)
@@ -2408,7 +2417,7 @@ class System(Module, TimeObserver):
         if self.__class__.__qualname__ == 'System':
             tmp['class'] = 'System'  # Trick to allow container `System` without special type
         else:
-            tmp['class'] = '.'.join((self.__module__, self.__class__.__qualname__))
+            tmp['class'] = f"{self.__module__}.{self.__class__.__qualname__}"
 
         properties = self.properties
         if len(properties) > 0:
@@ -2426,9 +2435,9 @@ class System(Module, TimeObserver):
                                 var_dict =  var_data.to_dict()
                                 port_cls_data[port_cls_name][var_name] = var_dict
 
-
                     port_dict = port.to_dict(with_struct)
                     temp_dict.update(port_dict)
+
                 if len(temp_dict) > 0:
                     tmp[direction] = temp_dict           
         else:
@@ -2509,7 +2518,7 @@ class System(Module, TimeObserver):
             HTML formatted representation
         """
         # TODO unit tests
-        temp_name = '.'.join((self.name, 'html'))
+        temp_name = f"{self.name}.html"
         self.to_html(temp_name)
         from IPython.display import IFrame
         return IFrame(temp_name, "810px", "650px")._repr_html_()
@@ -2671,8 +2680,8 @@ class IterativeConnector(System):
         sink_unknowns = sink.owner.unknowns
         self._locked = False  # add_unknown and add_equation not allow outside `setup`
         for to_, from_ in self._mapping.items():
-            sink_name = '.'.join((sink.name, to_))
-            unknown = '.'.join((IterativeConnector.GUESS, to_))
+            sink_name = f"{sink.name}.{to_}"
+            unknown = f"{IterativeConnector.GUESS}.{to_}"
             if sink_name in sink_unknowns:  # Copy numerical feature from user specifications
                 self.add_unknown(
                     unknown, 
@@ -2683,10 +2692,10 @@ class IterativeConnector(System):
                 )
             else:
                 self.add_unknown(unknown)
-            rhs = ".".join((IterativeConnector.RESULT, from_))
+            rhs = f"{IterativeConnector.RESULT}.{from_}"
             self.add_equation(
                 f"{unknown} == {rhs}",
-                name="iterative_" + to_,
+                name=f"iterative_{to_}",
                 reference=1.,
             )
         self._locked = True

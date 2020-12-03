@@ -55,7 +55,7 @@ class MetaSystemBuilder(Driver):
 
         self._metasystem = MyMeta(
             "meta",
-            self.doe.recorder.data,
+            self.doe.recorder.export_data(),
             model_type=self.model_type,
             ref_model=self.owner,
         )

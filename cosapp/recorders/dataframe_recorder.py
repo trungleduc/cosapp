@@ -1,10 +1,8 @@
 """Recorder in `pandas.DataFrame`."""
 import copy
-from numbers import Number
-from typing import Any, List, Optional, Tuple, Union
-
-import numpy as np
-import pandas as pd
+import numpy
+import pandas
+from typing import Any, List, Optional, Union
 
 from cosapp.recorders.recorder import BaseRecorder
 
@@ -53,21 +51,20 @@ class DataFrameRecorder(BaseRecorder):
         includes: Union[str, List[str]] = "*",
         excludes: Optional[Union[str, List[str]]] = None,
         # metadata: Optional[Union[str, List[str]]] = None,
-        numerical_only: bool = False,
-        section: str = "",
-        precision: int = 9,
-        hold: bool = False,
-        raw_output: bool = True,
+        numerical_only = False,
+        section = "",
+        precision = 9,
+        hold = False,
+        raw_output = True,
     ):
         super().__init__(
-            includes, excludes, numerical_only, section, precision, hold, raw_output)
-
+            includes, excludes, numerical_only, section, precision, hold, raw_output
+        )
         # Temporary storage
-        self.__tmp = list()  # type: List[List[Any]]
+        self.__buffer = list()  # type: List[List[Any]]
 
-    @property
-    def data(self) -> pd.DataFrame:
-        """pandas.DataFrame : DataFrame storing the results."""
+    def export_data(self) -> pandas.DataFrame:
+        """Export recorded results into a pandas.DataFrame object."""
         # According to DataFrame documentation, it is more efficient to store in a list then create the DataFrame
         headers = [
             self.SPECIALS.section,
@@ -75,20 +72,18 @@ class DataFrameRecorder(BaseRecorder):
             self.SPECIALS.code,
             self.SPECIALS.reference,
         ]
+        varlist = self.get_variables_list()
         if self._raw_output:
-            headers.extend(self.get_variables_list())
+            headers.extend(varlist)
         else:
+            # Add units in column headers
             headers.extend(
                 map(
-                    lambda v: "{} [{}]".format(v[0], v[1]),
-                    zip(
-                        self.get_variables_list(),
-                        self._get_units(self.get_variables_list()),
-                    ),
+                    lambda v: f"{v[0]} [{v[1]}]",
+                    zip(varlist, self._get_units(varlist)),
                 )
             )
-
-        return pd.DataFrame(self.__tmp, columns=headers)
+        return pandas.DataFrame(self.__buffer, columns=headers)
 
     @property
     def _raw_data(self) -> List[List[Any]]:
@@ -99,44 +94,35 @@ class DataFrameRecorder(BaseRecorder):
         List[List[Any]]
             The records of the `watched_object` for the variables given by the `get_variables_list` method
         """
-        return self.__tmp
+        return self.__buffer
 
     def start(self):
         """Initialize recording support."""
         super().start()
         if not self.hold:
-            self.__tmp.clear()
+            self.__buffer.clear()
 
-    def record_state(self,
-        time_ref: Union[float, str],
-        status: str = "",
-        error_code: str = "0"
-    ):
-        """Record the watched object at the provided status.
-
-        Parameters
-        ----------
-        time_ref : float or str
-            Current simulation time (float) or point reference (str)
-        status : str, optional
-            Status of the simulation; default `''`.
-        error_code : str, optional
-            Error code; default `'0'`.
-        """
-        if self.paused:
-            return
-
-        line = [self.section, status, error_code, str(time_ref)]
+    def collect_data(self) -> List[Any]:
+        """Collect recorded data from watched object into a list."""
+        line = []
         for name in self.get_variables_list():
-            if name in self.watched_object:
-                line.append(copy.deepcopy(self.watched_object[name]))
-            else:
-                line.append(np.nan)
+            try:
+                value = copy.deepcopy(self.watched_object[name])
+            except KeyError:
+                value = numpy.nan
+            except copy.Error:
+                varname = f"{self.watched_object.name}.{name}"
+                raise TypeError(
+                    f"Cannot record {varname}: DataFrameRecorder objects can only capture deep-copyable variables"
+                )
+            except:
+                raise
+            line.append(value)
 
-        self.__tmp.append(line)
+        return line
 
-        super().record_state(
-            time_ref=time_ref, status=status, error_code=error_code)
+    def _record(self, line: List[Any]) -> None:
+        self.__buffer.append(line)
 
     def exit(self):
         """Close recording session."""
@@ -144,5 +130,5 @@ class DataFrameRecorder(BaseRecorder):
 
     def clear(self):
         """Clear all previously stored data."""
-        self.__tmp.clear()
+        self.__buffer.clear()
         super().clear()

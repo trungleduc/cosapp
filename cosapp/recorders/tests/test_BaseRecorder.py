@@ -5,15 +5,17 @@ from cosapp.core.signal import Slot
 from cosapp.recorders.recorder import BaseRecorder
 
 
-class MockupRecorder(BaseRecorder):
-    """Mock-up class to test BaseRecorder"""
-
-    @property
-    def _raw_data(self):
-        return list()
-
-    def exit(self):
-        pass
+@pytest.fixture(autouse=True)
+def PatchBaseRecorder():
+    """Patch BaseRecorder to make it instanciable for tests"""
+    patcher = mock.patch.multiple(
+        BaseRecorder,
+        __abstractmethods__ = set(),
+        collect_data = lambda self: list(),
+    )
+    patcher.start()
+    yield
+    patcher.stop()
 
 
 @pytest.mark.parametrize("kwargs, expected", [
@@ -30,9 +32,12 @@ class MockupRecorder(BaseRecorder):
         raw_output=True,
         ), 
         dict()),
+    (
+        dict(excludes=dict(cool=True), includes=set('abracadabra')),
+        dict(includes=['a', 'b', 'c', 'd', 'r'], excludes=['cool'])
+    ),
     # Erroneous cases:
     (dict(includes=('q', 2)), dict(error=TypeError, match="'includes' must be a string, or a sequence of strings")),
-    (dict(excludes={'q': 'e'}), dict(error=TypeError, match="'excludes' must be a string, or a sequence of strings")),
     (dict(includes=23), dict(error=TypeError, match="'includes' must be a string, or a sequence of strings")),
     (dict(excludes=23), dict(error=TypeError, match="'excludes' must be a string, or a sequence of strings")),
     (dict(section=23), dict(error=TypeError, match="'section' should be str")),
@@ -48,7 +53,7 @@ def test_BaseRecorder__init__(kwargs, expected):
     if error is None:
         if len(expected) == 0:
             expected = kwargs.copy()
-        recorder = MockupRecorder(**kwargs)
+        recorder = BaseRecorder(**kwargs)
         assert set(recorder.includes) == set(expected['includes'])
         assert set(recorder.excludes) == set(expected['excludes'])
         assert recorder.hold == expected.get('hold', False)
@@ -60,7 +65,7 @@ def test_BaseRecorder__init__(kwargs, expected):
     else:
         pattern = expected.get('match', None)
         with pytest.raises(error, match=pattern):
-            MockupRecorder(**kwargs)
+            BaseRecorder(**kwargs)
 
 
 @pytest.mark.parametrize("value, expected", [
@@ -70,7 +75,7 @@ def test_BaseRecorder__init__(kwargs, expected):
     (True, dict(error=TypeError, match="'section' should be str")),
 ])
 def test_BaseRecorder_section(value, expected):
-    recorder = MockupRecorder()
+    recorder = BaseRecorder()
     assert recorder.section == ""
 
     error = expected.get('error', None)
@@ -91,7 +96,7 @@ def test_BaseRecorder_section(value, expected):
     ("True", dict(error=TypeError, match="'hold' should be bool")),
 ])
 def test_BaseRecorder_hold(value, expected):
-    recorder = MockupRecorder()
+    recorder = BaseRecorder()
     assert recorder.hold is False
 
     error = expected.get('error', None)
@@ -113,7 +118,7 @@ def test_BaseRecorder_hold(value, expected):
     ("5", dict(error=TypeError, match="'precision' should be int")),
 ])
 def test_BaseRecorder_precision(value, expected):
-    recorder = MockupRecorder()
+    recorder = BaseRecorder()
     assert recorder.precision == 9
 
     error = expected.get('error', None)
@@ -127,19 +132,19 @@ def test_BaseRecorder_precision(value, expected):
 
 
 def test_BaseRecorder_watched_object(AllTypesSystem):
-    recorder = MockupRecorder()
+    recorder = BaseRecorder()
     assert recorder.watched_object is None
 
     s = AllTypesSystem('test')
     recorder.watched_object = s
     assert recorder.watched_object is s
 
-    with pytest.raises(TypeError, match="Record must be attached to a Driver"):
+    with pytest.raises(TypeError, match="Record must be attached to a System or a Driver"):
         recorder.watched_object = 'dummy'
 
 
 def test_BaseRecorder_includes():
-    recorder = MockupRecorder()
+    recorder = BaseRecorder()
     assert recorder.includes == ["*"]
     # Other values tested in test_BaseRecorder___init__
     with pytest.raises(AttributeError):
@@ -147,7 +152,7 @@ def test_BaseRecorder_includes():
 
 
 def test_BaseRecorder_excludes():
-    recorder = MockupRecorder()
+    recorder = BaseRecorder()
     assert recorder.excludes == list()
     # Other values tested in test_BaseRecorder___init__
     with pytest.raises(AttributeError):
@@ -155,7 +160,7 @@ def test_BaseRecorder_excludes():
 
 
 def test_BaseRecorder_get_variables_list(AllTypesSystem):
-    recorder = MockupRecorder()
+    recorder = BaseRecorder()
     assert recorder.get_variables_list() == list()
 
     # Single system
@@ -164,7 +169,7 @@ def test_BaseRecorder_get_variables_list(AllTypesSystem):
     assert set(recorder.get_variables_list()) == set(('a', 'b', 'c', 'e', 'd', 'in_.x', 'out.x'))
 
     # Two levels system
-    recorder = MockupRecorder()
+    recorder = BaseRecorder()
     t = AllTypesSystem('top')
     t.add_child(s)
     recorder.watched_object = t
@@ -189,7 +194,7 @@ def test_BaseRecorder_get_variables_list__includes(AllTypesSystem, includes, exp
     s = AllTypesSystem('sub')
     t = AllTypesSystem('top')
     t.add_child(s)
-    recorder = MockupRecorder(includes=includes)
+    recorder = BaseRecorder(includes=includes)
     recorder.watched_object = t
     assert recorder.watched_object is t
     assert set(recorder.get_variables_list()) == set(expected)  # test lists regardless of order
@@ -226,14 +231,14 @@ def test_BaseRecorder_get_variables_list__excludes(AllTypesSystem, excludes, exp
     s = AllTypesSystem('sub')
     t = AllTypesSystem('top')
     t.add_child(s)
-    recorder = MockupRecorder(excludes=excludes)
+    recorder = BaseRecorder(excludes=excludes)
     recorder.watched_object = t
     assert recorder.watched_object is t
     assert set(recorder.get_variables_list()) == set(expected)  # test lists regardless of order
 
 
 def test_BaseRecorder__get_units(AllTypesSystem):
-    recorder = MockupRecorder()
+    recorder = BaseRecorder()
     assert recorder._get_units() == list()
 
     # Single system
@@ -243,7 +248,7 @@ def test_BaseRecorder__get_units(AllTypesSystem):
     assert isinstance(recorder._get_units()[0], str)
 
     # Two levels system
-    recorder = MockupRecorder()
+    recorder = BaseRecorder()
     t = AllTypesSystem('top')
     t.add_child(s)
     recorder.watched_object = t
@@ -251,33 +256,33 @@ def test_BaseRecorder__get_units(AllTypesSystem):
     assert isinstance(recorder._get_units()[0], str)
 
     # Test includes
-    recorder = MockupRecorder(includes='test.*')
+    recorder = BaseRecorder(includes='test.*')
     recorder.watched_object = t
     assert len(recorder._get_units()) == len(recorder.get_variables_list())
     assert isinstance(recorder._get_units()[0], str)
 
-    recorder = MockupRecorder(includes='banana')
+    recorder = BaseRecorder(includes='banana')
     recorder.watched_object = t
     assert len(recorder._get_units()) == 0
 
     # Test excludes
-    recorder = MockupRecorder(excludes='test.*')
+    recorder = BaseRecorder(excludes='test.*')
     recorder.watched_object = t
     assert len(recorder._get_units()) == len(recorder.get_variables_list())
     assert isinstance(recorder._get_units()[0], str)
 
-    recorder = MockupRecorder(excludes='*')
+    recorder = BaseRecorder(excludes='*')
     recorder.watched_object = t
     assert len(recorder._get_units()) == 0
 
-    recorder = MockupRecorder(excludes='banana')
+    recorder = BaseRecorder(excludes='banana')
     recorder.watched_object = t
     assert len(recorder._get_units()) == len(recorder.get_variables_list())
     assert isinstance(recorder._get_units()[0], str)
 
 
 def test_BaseRecorder_start():
-    recorder = MockupRecorder()
+    recorder = BaseRecorder()
     with pytest.raises(RuntimeError, match='A recorder should be watching a Driver'):
         recorder.start()
 
@@ -287,7 +292,7 @@ def test_BaseRecorder_record_state():
         fake_callback = mock.Mock(spec=lambda **kwargs: None)
         fake_callback.return_value = None
 
-        recorder = MockupRecorder()
+        recorder = BaseRecorder()
         recorder.state_recorded.connect(Slot(fake_callback))
         recorder.record_state(time_ref='time', status='OK', error_code='000')
 
@@ -299,8 +304,14 @@ def test_BaseRecorder_clear():
         fake_callback = mock.Mock(spec=lambda **kwargs: None)
         fake_callback.return_value = None
 
-        recorder = MockupRecorder()
+        recorder = BaseRecorder()
         recorder.cleared.connect(Slot(fake_callback))
         recorder.record_state(time_ref='time', status='OK', error_code='000')
         recorder.clear()
         fake_callback.assert_called_once_with()
+
+
+def test_BaseRecorder_data_warning():
+    recorder = BaseRecorder()
+    with pytest.warns(DeprecationWarning, match="use export_data()"):
+        recorder.data

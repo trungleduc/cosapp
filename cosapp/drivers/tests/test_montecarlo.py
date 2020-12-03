@@ -284,7 +284,7 @@ def test_MonteCarlo_cases_centered():
 
     mc.draws = 100
     s.run_drivers()
-    df = rec.data
+    df = rec.export_data()
     assert df["K1"].mean() == pytest.approx(s.K1, abs=1.0e-3)
     # Trick to get std from scipy object
     assert df["K1"].std() == pytest.approx(distribution._rv.kwds["scale"], abs=1.0e-2)
@@ -303,7 +303,7 @@ def test_MonteCarlo_cases_uncentered():
 
     mc.draws = 100
     s.run_drivers()
-    df = rec.data
+    df = rec.export_data()
     # Trick to get mean and std from scipy object
     assert df["K1"].mean() == pytest.approx(s.K1 + distribution._rv.kwds["loc"], abs=1.0e-3)
     assert df["K1"].std() == pytest.approx(distribution._rv.kwds["scale"], abs=1.0e-2)
@@ -326,7 +326,7 @@ def test_MonteCarlo_run_driver_perturbation_internal():
 
     mc.draws = 1000
     s.run_drivers()
-    df = rec.data
+    df = rec.export_data()
     assert df["mult2.p_in.x"].mean() == pytest.approx(initial_value, abs=1.0e-3)
     assert df["mult2.p_in.x"].std() == pytest.approx(std, abs=2.0e-3)
 
@@ -347,7 +347,7 @@ def test_MonteCarlo_run_driver_perturbation_input():
     mc.draws = 1000
 
     s.run_drivers()
-    df = mc.recorder.data
+    df = mc.recorder.export_data()
     assert df["mult1.p_in.x"].mean() == pytest.approx(s.mult1.p_in.x, abs=1e-3)
     assert df["mult1.p_in.x"].std() == pytest.approx(std, abs=1e-3)
     assert df["mult2.p_out.x"].std() != pytest.approx(0.0, abs=1e-2)
@@ -377,7 +377,7 @@ def test_MonteCarlo_run_driver_perturbation_combined():
     mc.draws = 1000
 
     s.run_drivers()
-    df = mc.recorder.data
+    df = mc.recorder.export_data()
 
     assert df["mult1.p_in.x"].mean() == pytest.approx(s.mult1.p_in.x, abs=1e-3)
     assert df["mult1.p_in.x"].std() == pytest.approx(std1, abs=1e-2)
@@ -436,7 +436,7 @@ def test_MonteCarlo_multipts_iterative_non_linear():
 
     snl.run_drivers()
 
-    df = rec.data
+    df = rec.export_data()
     # Skip the initial execution
     stat = df.iloc[4:].groupby("Reference").describe()
     run1 = stat.loc["run 1"]
@@ -510,7 +510,7 @@ def test_MonteCarlo_multipts_iterative_non_linear_linearized():
 
     snl.run_drivers()
 
-    df = rec.data
+    df = rec.export_data()
     # Skip the initial execution
     stat = df.iloc[4:].groupby("Reference").describe()
     run1 = stat.loc["run 1"]

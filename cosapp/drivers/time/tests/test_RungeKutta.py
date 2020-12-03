@@ -146,12 +146,13 @@ def test_RungeKutta_twoTanks(two_tank_case, two_tank_solution, dt):
     assert system.tank2.height > 1
     assert system.tank1.height == pytest.approx(system.tank2.height, rel=1e-3)
 
-    assert len(recorder.data) == 51
-    heights = recorder.data.values[:, -2:]
+    data = recorder.export_data()
+    assert len(data) == 51
+    heights = data.values[:, -2:]
     solution = two_tank_solution(system, init)
     assert solution.characteristic_time == pytest.approx(0.5766040318109212)
     assert driver.dt < solution.characteristic_time
-    time = np.array(recorder.data['Reference'], dtype=float)
+    time = np.array(data['Reference'], dtype=float)
     error = 0
     for i, h1 in enumerate(heights[1:, 0]):
         t = time[i + 1]
@@ -195,7 +196,7 @@ def test_RungeKutta_scalar_ode(scalar_ode_case, case, settings, tol):
     )
     ode.run_drivers()
     # Retrieve recorded data and check accuracy
-    data = recorder.data
+    data = recorder.export_data()
     time = np.asarray(data['Reference'], dtype=float)
     result = np.asarray(data['f'], dtype=float)
     solution = case['solution']
@@ -232,7 +233,7 @@ def test_RungeKutta_scalar_ode_limited_dt(settings, expected):
     )
     ode.run_drivers()
     # Retrieve recorded data and check accuracy
-    data = recorder.data
+    data = recorder.export_data()
     times = np.asarray(data['Reference'], dtype=float)
     ys = np.asarray(data['y'], dtype=float)
     zs = np.asarray(data['z'], dtype=float)
@@ -265,7 +266,7 @@ def test_RungeKutta_vector_ode(vector_ode_case, settings, tol):
 
     ode.run_drivers()
     # Retrieve recorded data and check accuracy
-    data = recorder.data
+    data = recorder.export_data()
     time = np.asarray(data['Reference'], dtype=float)
     solution = lambda t, x0: np.array([t**2, np.log(1 + t), 1 - np.exp(-t)]) + x0
     result = np.asarray([value for value in data['v']])
@@ -296,7 +297,7 @@ def test_RungeKutta_point_mass(point_mass_case, point_mass_solution, order, dt, 
 
     system.run_drivers()
 
-    data = recorder.data
+    data = recorder.export_data()
     time = np.array(data['Reference'], dtype=float)
     traj = np.asarray([value for value in data.values[:, -1]])
     solution = point_mass_solution(system, v0, x0)
@@ -400,7 +401,7 @@ def test_RungeKutta_pointMassWithPorts(pointMassWithPorts_case, point_mass_solut
 
     system.run_drivers()
 
-    data = recorder.data
+    data = recorder.export_data()
     time = np.asarray(data['Reference'], dtype=float)
     traj = np.asarray([value for value in data.values[:, -1]])
     solution = point_mass_solution(system, v0, x0)
@@ -446,7 +447,7 @@ def test_RungeKutta_pointMassWithPorts_pulling(point_mass_solution, order, dt, t
 
     system.run_drivers()
 
-    data = recorder.data
+    data = recorder.export_data()
     time = np.asarray(data['Reference'], dtype=float)
     traj = np.asarray([value for value in data.values[:, -1]])
     solution = point_mass_solution(system.point, v0, x0)
@@ -492,7 +493,7 @@ def test_RungeKutta_rate(rate_case_1, dt, tol):
 
     system.run_drivers()
 
-    data = recorder.data
+    data = recorder.export_data()
     time = np.asarray(data['Reference'], dtype=float)
     result = np.asarray(data['dU_dt'], dtype=float)
     solution = lambda t: system.k * np.exp(system.k * t)
@@ -534,8 +535,9 @@ def test_RungeKutta_oscillator(oscillator_case, oscillator_solution, parameters,
         assert driver.dt == settings['dt']
 
     solution = oscillator_solution(system, x0, v0)
-    time = np.array(recorder.data['Reference'], dtype=float)
-    x = np.asarray(recorder.data["x"])
+    data = recorder.export_data()
+    time = np.array(data['Reference'], dtype=float)
+    x = np.asarray(data['x'])
     error = 0
     for i, t in enumerate(time):
         error = max(error, abs(x[i] - solution.x(t)))
@@ -572,7 +574,7 @@ def test_RungeKutta_gaussian(gaussian_ode, parameters, settings, expected):
 
     ode.run_drivers()
     # Retrieve recorded data and check accuracy
-    data = recorder.data
+    data = recorder.export_data()
     time = np.asarray(data['Reference'], dtype=float)
     result = np.asarray(data['f'], dtype=float)
     t0 = driver.time_interval[0]

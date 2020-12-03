@@ -83,7 +83,7 @@ Modules
    cosapp.utils.orderedset
    cosapp.utils.parsing
    cosapp.utils.pull_variables
-   cosapp.utils.search_for_variables
+   cosapp.utils.find_variables
    cosapp.utils.validate
 
 
