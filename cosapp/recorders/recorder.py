@@ -1,14 +1,14 @@
 """Base class for recording data."""
 import abc
 import copy
-from collections import OrderedDict
-from collections.abc import Sequence
+import pandas
+import warnings
 from typing import Union, List, Optional, NamedTuple, Any
 
 from cosapp.core.signal import Signal
 from cosapp.systems import System
 from cosapp.utils.helpers import is_numerical, check_arg
-from cosapp.utils.search_for_variables import search_for_variables
+from cosapp.utils.find_variables import make_wishlist, find_variables
 
 SpecialColumns = NamedTuple(
     "SpecialColumns",
@@ -58,8 +58,6 @@ class BaseRecorder(abc.ABC):
         Signal emitted after `clear` execution
     """
 
-    # TODO Fred should we add a property `data` to all recorders with which a record can be read as a DataFrame or
-    # sth else?
     SPECIALS = SpecialColumns(
         section="Section", status="Status", code="Error code", reference="Reference"
     )
@@ -70,53 +68,17 @@ class BaseRecorder(abc.ABC):
         includes: Union[str, List[str]] = "*",
         excludes: Optional[Union[str, List[str]]] = None,
         # metadata: Optional[Union[str, List[str]]] = None,  # TODO Fred
-        numerical_only: bool = False,
-        section: str = "",
-        precision: int = 9,
-        hold: bool = False,
-        raw_output: bool = False,
+        numerical_only = False,
+        section = "",
+        precision = 9,
+        hold = False,
+        raw_output = False,
     ):
-        def make_wishlist(wishlist, name: str) -> List[str]:
-            ok = True
-            if isinstance(wishlist, str):
-                output = [wishlist]
-            elif isinstance(wishlist, Sequence):
-                output = wishlist
-                ok = len(wishlist) == 0 or all([isinstance(item, str) for item in wishlist])
-            elif wishlist is None:
-                output = []
-            else:
-                ok = False
-            if ok:
-                return output
-            else:
-                raise TypeError(
-                    "{!r} must be a string, or a sequence of strings; got {}.".format(name, wishlist)
-                )
-
-        includes = make_wishlist(includes, "includes")
-        excludes = make_wishlist(excludes, "excludes")
-
         check_arg(raw_output, 'raw_output', bool)
         check_arg(numerical_only, 'numerical_only', bool)
 
-        def filtered(names: list):
-            new_list = list()
-            for name in names:
-                if System.INWARDS.join("..") in name:
-                    new_list.append(name.replace(System.INWARDS.join(".."), "."))
-                elif System.OUTWARDS.join("..") in name:
-                    new_list.append(name.replace(System.OUTWARDS.join(".."), "."))
-                elif name.startswith(System.INWARDS + "."):
-                    new_list.append(name[len(System.INWARDS) + 1 :])
-                elif name.startswith(System.OUTWARDS + "."):
-                    new_list.append(name[len(System.OUTWARDS) + 1 :])
-                else:
-                    new_list.append(name)
-            return new_list
-
-        self.__includes = filtered(includes)  # type: List[str]
-        self.__excludes = filtered(excludes)  # type: List[str]
+        self.__includes = make_wishlist(includes, "includes")  # type: List[str]
+        self.__excludes = make_wishlist(excludes, "excludes")  # type: List[str]
         self._numerical_only = numerical_only  # type: bool
         # self.__metadata = metadata  # type: List[str]
         self.__section = ""  # type: str
@@ -147,12 +109,14 @@ class BaseRecorder(abc.ABC):
         from cosapp.core.module import Module
 
         if not (module is None or isinstance(module, Module)):
+            typename = type(module).__qualname__
             raise TypeError(
-                "Record must be attached to a Driver; got {}.".format(type(module).__qualname__)
+                f"Record must be attached to a System or a Driver; got {typename}."
             )
         self._watch_object = module
 
-    @abc.abstractproperty
+    @property
+    @abc.abstractmethod
     def _raw_data(self) -> List[List[Any]]:
         """Return a raw/unformated version of the records
 
@@ -161,6 +125,23 @@ class BaseRecorder(abc.ABC):
         List[List[Any]]
             The records of the `watched_object` for the variables given by the `get_variables_list` method
         """
+        pass
+
+    @property
+    def data(self) -> pandas.DataFrame:
+        """
+        pandas.DataFrame: DataFrame containing the results.
+        Deprecated property; use `export_data()` instead.
+        """
+        warnings.warn(
+            "Deprecated property; use export_data() instead",
+            DeprecationWarning
+        )
+        return self.export_data()
+
+    @abc.abstractmethod
+    def export_data(self) -> pandas.DataFrame:
+        """Export recorded results into a pandas.DataFrame object."""
         pass
 
     @property
@@ -221,14 +202,14 @@ class BaseRecorder(abc.ABC):
                 filter = lambda x: is_numerical(x)
             else:
                 filter = lambda x: True
-            self.__variables = search_for_variables(
+            self.__variables = find_variables(
                 self.watched_object,
                 self.__includes,
                 self.__excludes,
                 advanced_filter=filter,
             )
 
-        return list() if self.__variables is None else self.__variables
+        return self.__variables or list()
 
     def _get_units(self, vars: Optional[List[str]] = None) -> List[str]:
         """Generate the list of units associated with the requested variables.
@@ -255,7 +236,7 @@ class BaseRecorder(abc.ABC):
                     unit = details.unit
                 except:
                     unit = None
-                units.append(unit if unit else "-")
+                units.append(unit or "-")
 
         return units
 
@@ -264,7 +245,7 @@ class BaseRecorder(abc.ABC):
         if self.watched_object is None:
             raise RuntimeError("A recorder should be watching a Driver.")
 
-    def record_state(self, time_ref: Union[float, str], status: str = "", error_code: str = "0"):
+    def record_state(self, time_ref: Union[float, str], status="", error_code="0") -> None:
         """Record the watched object at the provided status.
 
         Parameters
@@ -276,7 +257,25 @@ class BaseRecorder(abc.ABC):
         error_code : str, optional
             Error code; default `'0'`.
         """
+        if self.paused:
+            return
+
+        line = [self.section, status, error_code, str(time_ref)] + self.collect_data()
+        self._record(line)
         self.state_recorded.emit(time_ref=time_ref, status=status, error_code=error_code)
+
+    @abc.abstractmethod
+    def collect_data(self) -> List[Any]:
+        """Collect recorded data from watched object into a list."""
+        pass
+
+    @abc.abstractmethod
+    def _record(self, line: List[Any]) -> None:
+        """
+        Internally record data collected into list `line`.
+        Required by `record_state` method.
+        """
+        pass
 
     def clear(self):
         """Clear all previously stored data."""
@@ -299,11 +298,9 @@ class BaseRecorder(abc.ABC):
 
         data = self._raw_data
         if index < 0 or index > len(data) - 1:
-            raise AttributeError(
-                'Given index "{}" does not exist in this Recorder'.format(index)
-            )
+            raise IndexError(f"Index {index} does not exist in this Recorder")
 
-        inputs = search_for_variables(
+        inputs = find_variables(
             self._watch_object, includes=["*"], excludes=[], outputs=False
         )
 
@@ -318,3 +315,13 @@ class BaseRecorder(abc.ABC):
                 self._watch_object[var] = copy.deepcopy(recording[idx])
             except KeyError:
                 pass
+
+    def check(self) -> None:
+        try:
+            self.collect_data()
+        except Exception as ex:
+            warnings.warn(
+                f"Captured exception {ex!r} while trying to collect data in {self.watched_object}"
+                "; recorder may fail.",
+                RuntimeWarning
+            )

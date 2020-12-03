@@ -123,6 +123,7 @@ class TopSystem(System):
     def setup(self):
         self.add_inward("top_k")
         self.add_outward("top_tmp")
+        self.add_property('const', 0.123)
 
         self.add_child(
             SubSystem("sub"), pulling={"in_": "in_", "out": "out"}
@@ -273,6 +274,7 @@ def test_System___contains__():
     assert "in_" in s
     assert "out" in s
     assert "in_.Pt" in s
+    assert "const" in s
 
     assert "parent" not in s
     assert "inputs" not in s
@@ -283,26 +285,18 @@ def test_System___contains__():
 
 def test_System___getitem__():
     s = TopSystem("test")
+    assert s["parent"] is s.parent
     assert s["sub"] is s.children["sub"]
+    assert s["sub"] is s.sub
     assert s["out"] is s.outputs["out"]
     assert s["in_"] is s.inputs["in_"]
-    assert s["in_.Pt"] is s.inputs["in_"].Pt
+    assert s["in_.Pt"] == s.inputs["in_"].Pt
     assert s["sub.in_"] is s.children["sub"].inputs["in_"]
-    assert s["sub.out.W"] is s.children["sub"].outputs["out"].W
-
-    for item in [
-        "name",
-        "inputs",
-        "outputs",
-        "children",
-        "residues",
-        "experiments",
-        "exec_order",
-        "parent",
-        "name2variable",
-    ]:
-        with pytest.raises(KeyError):
-            s.__getitem__(item)
+    assert s["sub.out.W"] == s.children["sub"].outputs["out"].W
+    assert s["const"] == s.const
+    assert s["const"] == 0.123
+    assert s["name"] == s.name
+    assert s["top_k"] == s.top_k
 
 
 def test_System__setitem__():
@@ -2226,7 +2220,7 @@ def test_System_add_property():
 
     assert a.foo == 0.123
 
-    with pytest.raises(AttributeError, match="object has no attribute 'foo'"):
+    with pytest.raises(AttributeError, match="has no attribute 'foo'"):
         b.foo
 
     with pytest.raises(AttributeError, match="can't set attribute"):

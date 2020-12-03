@@ -315,10 +315,10 @@ class ExtensiblePort:
         return item in self._variables
 
     def __getitem__(self, item: str) -> Any:
-        if item in self._variables:
+        try:
             return getattr(self, item)
-        else:
-            raise KeyError(f"Variable {item} does not exist in Port {self}.")
+        except AttributeError:
+            raise KeyError(f"Variable or property {item} does not exist in Port {self}.")
 
     def __setitem__(self, key: str, value: Any) -> NoReturn:
         if key in self._variables:

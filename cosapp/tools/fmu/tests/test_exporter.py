@@ -347,9 +347,8 @@ def test_FMU_integration_nonlinear(tmp_path, iterativenonlinear):
     iterativenonlinear.run_drivers()
 
     # Reference
-    data = recorder.data
-    ndata = len(data)
-    assert_almost_equal(data["p_out.x"], 10.0 * numpy.ones(ndata))
+    data = recorder.export_data()
+    assert_almost_equal(data["p_out.x"], numpy.full(len(data), 10.0))
 
     # Convert to FMU
     fmu_file = to_fmu(

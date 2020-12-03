@@ -1,7 +1,6 @@
 """Recorder to Delimited Separated Value format file."""
 import os
-from numbers import Number
-from typing import Any, List, Optional, Tuple, Union
+from typing import Any, List, Optional, Union
 from collections.abc import Collection
 
 import numpy
@@ -60,15 +59,15 @@ class DSVRecorder(BaseRecorder):
     def __init__(
         self,
         filepath: str,
-        delimiter: str = ",",
-        buffer: bool = False,
+        delimiter = ",",
+        buffer = False,
         includes: Union[str, List[str]] = "*",
         excludes: Optional[Union[str, List[str]]] = None,
-        numerical_only: bool = False,
-        section: str = "",
-        precision: int = 9,
-        hold: bool = False,
-        raw_output: bool = False,
+        numerical_only = False,
+        section = "",
+        precision = 9,
+        hold = False,
+        raw_output = False,
     ):
         check_arg(filepath, "filepath", str)
         check_arg(delimiter, "delimiter", str)
@@ -84,23 +83,30 @@ class DSVRecorder(BaseRecorder):
             includes, excludes, numerical_only, section, precision, hold, raw_output
         )
 
-        self._filepath = filepath  # type: str
-        self._delimiter = delimiter  # type: str
-        self.__tmp = list() if buffer else None  # type: List[List[Any]]
+        self.__filepath = filepath  # type: str
+        self.__delimiter = delimiter  # type: str
+        self.__buffer = list() if buffer else None  # type: List[List[Any]]
 
     @property
-    def data(self) -> pandas.DataFrame:
-        """pandas.DataFrame : DataFrame with the results."""
+    def filepath(self) -> str:
+        """str: path of the DSV file"""
+        return self.__filepath
 
-        if os.path.exists(self._filepath):
-            if self.__tmp is not None:
-                with open(self._filepath, "r") as f:
-                    headers = f.readline().split(self._delimiter)
-                return pandas.DataFrame(self.__tmp, columns=headers)
-            else:
-                return pandas.read_csv(self._filepath, delimiter=self._delimiter, header=0)
-        else:
+    @property
+    def delimiter(self) -> str:
+        """str: column delimiter used in DSV file"""
+        return self.__delimiter
+
+    def export_data(self) -> pandas.DataFrame:
+        """Export recorded results into a pandas.DataFrame object."""
+        if not os.path.exists(self.__filepath):
             return pandas.DataFrame()
+        elif self.__buffer is not None:
+            with open(self.__filepath, "r") as f:
+                headers = f.readline().split(self.__delimiter)
+            return pandas.DataFrame(self.__buffer, columns=headers)
+        else:
+            return pandas.read_csv(self.__filepath, delimiter=self.__delimiter, header=0)
 
     @property
     def _raw_data(self) -> List[List[Any]]:
@@ -111,15 +117,15 @@ class DSVRecorder(BaseRecorder):
         List[List[Any]]
             The records of the `watched_object` for the variables given by the `get_variables_list` method
         """
-        if not os.path.exists(self._filepath):
+        if not os.path.exists(self.__filepath):
             return list()
 
-        if self.__tmp is not None:
-            return self.__tmp
+        if self.__buffer is not None:
+            return self.__buffer
 
-        with open(self._filepath, "r") as f:
+        with open(self.__filepath, "r") as f:
             # The header line is skipped
-            content = map(lambda line: line.split(self._delimiter), f.readlines()[1:])
+            content = map(lambda line: line.split(self.__delimiter), f.readlines()[1:])
         return content
 
     def start(self):
@@ -128,8 +134,8 @@ class DSVRecorder(BaseRecorder):
         if not self.hold:
             # TODO Fred we could use clean/dirty here
             self.watched_object.run_once()  # Run the System to be sure the list are developed.
-            if self.__tmp is not None:
-                self.__tmp.clear()
+            if self.__buffer is not None:
+                self.__buffer.clear()
 
             headers = [
                 self.SPECIALS.section,
@@ -140,7 +146,7 @@ class DSVRecorder(BaseRecorder):
 
             def append(lst, base, unit):
                 if unit and not self._raw_output:
-                    lst.append(" ".join((base, "[{}]".format(unit))))
+                    lst.append(f"{base} [{unit}]")
                 else:
                     lst.append(base)
 
@@ -151,49 +157,29 @@ class DSVRecorder(BaseRecorder):
                 unit = "" if self._raw_output else unit
                 if isinstance(value, numpy.ndarray) and value.ndim > 0:
                     for i in range(value.size):
-                        entry = "{}[{}]".format(name, i)
+                        entry = f"{name}[{i}]"
                         append(headers, entry, unit)
                 elif isinstance(value, Collection) and not isinstance(value, str):
                     for i in range(len(value)):
-                        entry = "{}[{}]".format(name, i)
+                        entry = f"{name}[{i}]"
                         append(headers, entry, unit)
                 else:
                     append(headers, name, unit)
 
-            with open(self._filepath, "w") as f:
+            with open(self.__filepath, "w") as f:
                 # Write header
-                f.write(self._delimiter.join(headers) + "\n")
+                f.write(self.__delimiter.join(headers) + "\n")
 
-    def record_state(
-        self, time_ref: Union[float, str], status: str = "", error_code: str = "0"
-    ):
-        """Record the watched object at the provided status.
-
-        Parameters
-        ----------
-        time_ref : float or str
-            Current simulation time (float) or point reference (str)
-        status : str, optional
-            Status of the simulation; default `''`.
-        error_code : str, optional
-            Error code; default `'0'`.
-        """
-        if self.paused:
-            return
-
-        line = list()
-
-        line.append(self.section)
-        line.append(status)
-        line.append(error_code)
-        line.append(str(time_ref))
+    def collect_data(self) -> List[Any]:
+        """Collect recorded data from watched object into a list."""
 
         precision = self.precision
-
         def fmt(value, check=True):
             if check and not is_numerical(value):
                 return str(value)
             return "{0:.{1}e}".format(value, precision)
+
+        line = []
 
         for name in self.get_variables_list():
             value = self.watched_object[name]
@@ -207,23 +193,24 @@ class DSVRecorder(BaseRecorder):
             else:
                 line.append(fmt(value))
 
-        if self.__tmp is None:
-            with open(self._filepath, "a") as f:
-                f.write(self._delimiter.join(line) + "\n")
-        else:
-            self.__tmp.append(line)
+        return line
 
-        super().record_state(time_ref=time_ref, status=status, error_code=error_code)
+    def _record(self, line: List[Any]) -> None:
+        if self.__buffer is None:
+            with open(self.__filepath, "a") as f:
+                f.write(self.__delimiter.join(line) + "\n")
+        else:
+            self.__buffer.append(line)
 
     def clear(self):
         """Clear all previously stored data."""
-        if self.__tmp is not None:
-            self.__tmp.clear()
+        if self.__buffer is not None:
+            self.__buffer.clear()
         super().clear()
 
     def exit(self):
         """Close recording session."""
-        if self.__tmp is not None:
-            with open(self._filepath, "a") as f:
-                for line in self.__tmp:
-                    f.write(self._delimiter.join(line) + "\n")
+        if self.__buffer is not None:
+            with open(self.__filepath, "a") as f:
+                for line in self.__buffer:
+                    f.write(self.__delimiter.join(line) + "\n")

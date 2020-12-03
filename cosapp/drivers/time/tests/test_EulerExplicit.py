@@ -66,8 +66,9 @@ def test_EulerExplicit_twoTanks(two_tank_case, two_tank_solution, dt):
     assert system.tank2.height > 1
     assert system.tank1.height == pytest.approx(system.tank2.height, rel=1e-3)
 
-    assert len(recorder.data) == 51
-    heights = recorder.data.values[:, -2:]
+    df = recorder.export_data()
+    assert len(df) == 51
+    heights = df.values[:, -2:]
     solution = two_tank_solution(system, init)
     assert solution.characteristic_time == pytest.approx(0.5766040318109212)
     error = 0

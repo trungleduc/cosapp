@@ -356,7 +356,7 @@ def test_ExplicitTimeDriver_rate(rate_case_1, dt, tol):
     system.run_drivers()
     solution = lambda t: np.exp(system.k * t) * system.k
 
-    data = recorder.data
+    data = recorder.export_data()
     time = np.asarray(data['Reference'], dtype=float)
     result = np.asarray(data['dU_dt'], dtype=float)
     solution = lambda t: system.k * np.exp(system.k * t)
@@ -397,7 +397,7 @@ def test_ExplicitTimeDriver_rate_no_initial_value():
 
     system.run_drivers()
 
-    data = recorder.data
+    data = recorder.export_data()
     time = np.asarray(data['Reference'], dtype=float)
     result = np.asarray(data['dU_dt'], dtype=float)
     assert system.k == -3.6
@@ -424,7 +424,7 @@ def test_ExplicitTimeDriver_recorded_times(two_tank_case, options, recorder_peri
     period = solver.recording_period
     assert period == expected['period']
     t0, tn = solver.time_interval
-    data = recorder.data
+    data = recorder.export_data()
     time = np.asarray(data['Reference'], dtype=float)
     if period is not None:
         assert time == pytest.approx(np.arange(t0, tn + period / 2, period), abs=1e-12)

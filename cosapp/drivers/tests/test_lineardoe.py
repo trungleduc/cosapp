@@ -92,13 +92,14 @@ def test_LinearDoE_compute():
 
     assert s.K1 == 20.0
     assert s.K2 == 200.0
-    assert len(d.recorder.data) == 9
-    assert d.recorder.data.iloc[4]["K1"] == 10.0
-    assert d.recorder.data.iloc[4]["K2"] == 100.0
-    assert d.recorder.data.iloc[4]["p_out.x"] == 1000.0
-    assert d.recorder.data.iloc[8]["K1"] == 20.0
-    assert d.recorder.data.iloc[8]["K2"] == 200.0
-    assert d.recorder.data.iloc[8]["p_out.x"] == 4000.0
+    df = d.recorder.export_data()
+    assert len(df) == 9
+    assert df.iloc[4]["K1"] == 10.0
+    assert df.iloc[4]["K2"] == 100.0
+    assert df.iloc[4]["p_out.x"] == 1000.0
+    assert df.iloc[8]["K1"] == 20.0
+    assert df.iloc[8]["K2"] == 200.0
+    assert df.iloc[8]["p_out.x"] == 4000.0
 
 
 def test_LinearDoE_run_once():
@@ -114,4 +115,5 @@ def test_LinearDoE_run_once():
         }
     )
     d.run_once()
-    assert d.recorder.data.shape == (9, 4 + len(DataFrameRecorder.SPECIALS))
+    df = d.recorder.export_data()
+    assert df.shape == (9, 4 + len(DataFrameRecorder.SPECIALS))
