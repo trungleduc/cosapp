@@ -229,6 +229,8 @@ def test_System__init__ok(name):
     ("system-2", ValueError),
     ("system:2", ValueError),
     ("system.2", ValueError),
+    ("inwards", ValueError),
+    ("outwards", ValueError),
     (23, TypeError),
     (1.0, TypeError),
     (dict(a=True), TypeError),

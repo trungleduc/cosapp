@@ -15,6 +15,12 @@ from cosapp.ports.enum import Scope, Validity
 from cosapp.ports.units import UnitError
 from cosapp.utils.testing import  get_args
 
+
+@pytest.fixture(scope='function')
+def port():
+    return mock.Mock(spec=ExtensiblePort)
+
+
 @pytest.mark.parametrize("value, expected", [
     (True, None),
     (1, (-np.inf, np.inf)),
@@ -49,27 +55,28 @@ from cosapp.utils.testing import  get_args
 def test_Variable__get_limits_from_type(value, expected):
     assert Variable._get_limits_from_type(value) == expected
 
+
 @pytest.mark.parametrize("limits, valid, value, expected", [
-    (None,(0.0, 5.0), 0.0, ((-np.inf, np.inf), (0.0, 5.0))),
-    (None,(5.0, 0.0), 0.0, ((-np.inf, np.inf), (0.0, 5.0))),
-    (None,(0.0, None), 0.0, ((-np.inf, np.inf), (0.0, np.inf))),
-    (None,(None, 5.0), 0.0, ((-np.inf, np.inf), (-np.inf, 5.0))),
-    (None,(0.0, 5.0), "dummy string", (None, None)),
-    ((0.0, 5.0),None, 0.0, ((0.0, 5.0), (0.0, 5.0))),
-    ((-5.0, 10.0),(0.0, 5.0), 0.0, ((-5.0, 10.0), (0.0, 5.0))),
-    ((1.0, 10.0),(0.0, 5.0), 0.0, ((0.0, 10.0), (0.0, 5.0))),
-    ((-5.0, 4.0),(0.0, 5.0), 0.0, ((-5.0, 5.0), (0.0, 5.0))),
-    ((1.0, 4.0),(0.0, 5.0), 0.0, ((0.0, 5.0), (0.0, 5.0))),
-    ((-5, None),(0.0, 5.0), 0.0, ((-5, np.inf), (0.0, 5.0))),
-    ((None, 10.0),(0.0, 5.0), 0.0, ((-np.inf, 10.0), (0.0, 5.0))),
-    ((0.0, 5.0),(0.0, 5.0), "dummy string",  (None, None)),
+    (None, (0.0, 5.0), 0.0, ((-np.inf, np.inf), (0.0, 5.0))),
+    (None, (5.0, 0.0), 0.0, ((-np.inf, np.inf), (0.0, 5.0))),
+    (None, (0.0, None), 0.0, ((-np.inf, np.inf), (0.0, np.inf))),
+    (None, (None, 5.0), 0.0, ((-np.inf, np.inf), (-np.inf, 5.0))),
+    (None, (0.0, 5.0), "dummy string", (None, None)),
+    ((0.0, 5.0), None, 0.0, ((0.0, 5.0), (0.0, 5.0))),
+    ((-5.0, 10.0), (0.0, 5.0), 0.0, ((-5.0, 10.0), (0.0, 5.0))),
+    ((1.0, 10.0), (0.0, 5.0), 0.0, ((0.0, 10.0), (0.0, 5.0))),
+    ((-5.0, 4.0), (0.0, 5.0), 0.0, ((-5.0, 5.0), (0.0, 5.0))),
+    ((1.0, 4.0), (0.0, 5.0), 0.0, ((0.0, 5.0), (0.0, 5.0))),
+    ((-5, None), (0.0, 5.0), 0.0, ((-5, np.inf), (0.0, 5.0))),
+    ((None, 10.0), (0.0, 5.0), 0.0, ((-np.inf, 10.0), (0.0, 5.0))),
+    ((0.0, 5.0), (0.0, 5.0), "dummy string",  (None, None)),
 ])
 def test_Variable__check_range(limits, valid, value, expected):
     # Test validity range
     assert Variable._check_range(limits, valid, value) == expected 
 
-def test_Variable___init__(caplog):
-    port = mock.Mock(spec=ExtensiblePort)
+
+def test_Variable___init__(port, caplog):
     name = "var1"
     value = 2.0
     setattr(port, name, value)
@@ -499,14 +506,14 @@ def test_Variable___init__(caplog):
         Variable(name, port, value, distribution="Gaussian")
 
 
-def test_Variable___str__():
-    port = mock.Mock(spec=ExtensiblePort)
+def test_Variable___str__(port):
     name = "var1"
     value = 2.0
     setattr(port, name, value)
 
     v = Variable(name, port, value)
     assert str(v) == name
+
 
 @pytest.mark.parametrize("data, expected", [
     (
@@ -524,13 +531,13 @@ def test_Variable___str__():
         "var1 &#128274; : 2 kg;  &#10647; -4 &#10205; -2 &#10205;  value  &#10206; 0 &#10206; 1 &#10648;  # I'm a dummy donkey."
     )
 ])
-def test_Variable___repr__(data, expected):
-    port = mock.Mock(spec=ExtensiblePort)
+def test_Variable___repr__(port, data, expected):
     name = "var1"
     value = 2.0
     setattr(port, name, value)
     v = Variable(name, port, value, **data[1])
     assert repr(v) == expected 
+
 
 @pytest.mark.parametrize("data, expected", [
     (
@@ -564,14 +571,14 @@ def test_Variable___repr__(data, expected):
         
     )
 ])
-def test_Variable___json__(data, expected):
-    port = mock.Mock(spec=ExtensiblePort)
+def test_Variable___json__(port, data, expected):
     name = "var1"
     value = 2.0
     setattr(port, name, value)
 
     v = Variable(name, port, value,**data[1])
     assert v.__json__() == expected
+
 
 @pytest.mark.parametrize("data, expected", [
     (
@@ -599,28 +606,49 @@ def test_Variable___json__(data, expected):
         }
     )
 ])
-def test_Variable_to_dict(data, expected):
-    
-    port = mock.Mock(spec=ExtensiblePort)
+def test_Variable_to_dict(port, data, expected):
     name = "var1"
     value = 2.0  
     setattr(port, name, value)
     w1 = Variable(name, port, value, **data[1])    
     assert w1.to_dict() == expected
 
-def test_Variable_name():
-    port = mock.Mock(spec=ExtensiblePort)
+
+@pytest.mark.parametrize("name, expected", [
+    ("var1", dict()),
+    ("&var", dict(error=ValueError)),
+    ("foo.bar", dict(error=ValueError)),
+    ("time", dict(error=ValueError, match="reserved")),
+    ("inwards", dict(error=ValueError, match="invalid")),
+    ("outwards", dict(error=ValueError, match="invalid")),
+    (3.14159, dict(error=TypeError)),
+])
+def test_Variable_name(port, name, expected):
+    value = 2.0
+    setattr(port, str(name), value)
+    error = expected.get('error', None)
+    
+    if error is None:
+        v = Variable(name, port, value)
+        assert v.name == name
+
+    else:
+        with pytest.raises(error, match=expected.get('match', None)):
+            Variable(name, port, value)
+
+
+def test_Variable_name_change(port):
     name = "var1"
     value = 2.0
     setattr(port, name, value)
 
     v = Variable(name, port, value)
+    assert v.name == name
     with pytest.raises(AttributeError):
         v.name = "hello"
 
 
-def test_Variable_unit():
-    port = mock.Mock(spec=ExtensiblePort)
+def test_Variable_unit(port):
     name = "var1"
     value = 2.0
     setattr(port, name, value)
@@ -630,8 +658,7 @@ def test_Variable_unit():
         v.unit = "Pa"
 
 
-def test_Variable_description():
-    port = mock.Mock(spec=ExtensiblePort)
+def test_Variable_description(port):
     name = "var1"
     value = 2.0
     setattr(port, name, value)
@@ -641,8 +668,7 @@ def test_Variable_description():
         v.description = "This is the most beautiful"
 
 
-def test_Variable_scope():
-    port = mock.Mock(spec=ExtensiblePort)
+def test_Variable_scope(port):
     name = "var1"
     value = 2.0
     setattr(port, name, value)
@@ -720,8 +746,7 @@ def test_Variable_valid_range():
         assert getattr(v, a) == b
 
 
-def test_Variable_invalid_comment():
-    port = mock.Mock(spec=ExtensiblePort)
+def test_Variable_invalid_comment(port):
     name = "var1"
     value = 2.0
     setattr(port, name, value)
@@ -816,8 +841,7 @@ def test_Variable_limits():
         assert getattr(v, a) == b
 
 
-def test_Variable_out_of_limits_comment():
-    port = mock.Mock(spec=ExtensiblePort)
+def test_Variable_out_of_limits_comment(port):
     name = "var1"
     value = 2.0
     setattr(port, name, value)
@@ -828,8 +852,7 @@ def test_Variable_out_of_limits_comment():
     assert v.out_of_limits_comment == "This is really bad"
 
 
-def test_Variable_distribution():
-    port = mock.Mock(spec=ExtensiblePort)
+def test_Variable_distribution(port):
     name = "var1"
     value = 2.0
     setattr(port, name, value)
