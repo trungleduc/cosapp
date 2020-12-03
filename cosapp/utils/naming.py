@@ -1,5 +1,5 @@
 import re
-from typing import Any, List, NoReturn
+from typing import Any, List, Tuple, NoReturn
 from cosapp.utils.helpers import check_arg
 
 
@@ -12,13 +12,16 @@ class NameChecker:
     """Class handling admissible names, through regular expression filtering"""
     def __init__(self,
         pattern = r"^[A-Za-z][\w]*$",
-        message = "Name must start with a letter, and contain only alphanumerics and '_'"
+        message = "Name must start with a letter, and contain only alphanumerics and '_'",
+        excluded: List[str] = [],
         ):
         self.__error_message = lambda name: None  # type: Callable[[str], str]
         self.__message = ""  # type: str
         self.__pattern = None  # type: re.Pattern
+        self.__excluded = tuple()
         self.pattern = pattern
         self.message = message
+        self.excluded = excluded
 
     @classmethod
     def reserved(cls) -> List[str]:
@@ -26,12 +29,27 @@ class NameChecker:
         return ["t", "time"]
 
     @property
-    def pattern(self) -> "re.Pattern":
-        return self.__pattern
+    def pattern(self) -> str:
+        return self.__pattern.pattern
 
     @pattern.setter
     def pattern(self, pattern: str) -> NoReturn:
         self.__pattern = re.compile(pattern)
+
+    @property
+    def excluded(self) -> Tuple[str]:
+        return self.__excluded
+
+    @excluded.setter
+    def excluded(self, excluded) -> None:
+        excluded = excluded or []
+        if isinstance(excluded, str):
+            excluded = [excluded]
+        else:
+            check_arg(excluded, 'excluded', (list, tuple, set),
+                value_ok = lambda col: all(isinstance(s, str) for s in col)
+            )
+        self.__excluded = tuple(excluded)
 
     @property
     def message(self) -> str:
@@ -63,6 +81,8 @@ class NameChecker:
         reserved = self.reserved()
         if name in reserved:
             message = f"Names {reserved} are reserved"
+        elif name in self.excluded:
+            message = f"Names {self.excluded} are invalid"
         elif self.__pattern.match(name) is None:
             message = self.__error_message(name)
         if message is not None:

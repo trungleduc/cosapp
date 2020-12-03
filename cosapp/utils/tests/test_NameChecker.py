@@ -80,3 +80,43 @@ def test_NameChecker_empty():
     assert checker.is_valid("@foo(bar)")
     with pytest.raises(ValueError, match="reserved"):
         checker("t") == "t"
+
+
+def test_NameChecker_excluded():
+    checker = NameChecker(excluded=[])
+
+    assert checker.excluded == tuple()
+    assert checker.is_valid("foobar")
+    assert checker.is_valid("inwards")
+    assert checker.is_valid("outwards")
+
+    checker.excluded = ["inwards", "outwards"]
+    assert checker.excluded == ("inwards", "outwards")
+    assert checker.is_valid("foobar")
+    assert checker.is_valid("inwards_")
+    assert not checker.is_valid("inwards")
+    assert not checker.is_valid("outwards")
+
+    with pytest.raises(ValueError):
+        checker("inwards")
+    
+    with pytest.raises(ValueError):
+        checker("outwards")
+
+    checker.excluded = "foobar"
+    assert checker.excluded == ("foobar", )
+    assert not checker.is_valid("foobar")
+    assert checker.is_valid("inwards")
+    assert checker.is_valid("outwards")
+    
+    with pytest.raises(ValueError):
+        checker("foobar")
+    
+    checker.excluded = None
+    assert checker.excluded == tuple()
+
+    with pytest.raises(TypeError):
+        checker.excluded = 1
+
+    with pytest.raises(ValueError):
+        checker.excluded = ['foo', 3.14]
