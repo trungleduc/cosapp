@@ -69,7 +69,7 @@ class Module(LoggerContext, metaclass=abc.ABCMeta):
         'setup_ran', 'computed', 'clean_ran'
     )
 
-    _name_check = NameChecker()
+    _name_check = NameChecker(excluded=["inwards", "outwards"])
 
     def __init__(self, name: str):
         """`Module` constructor

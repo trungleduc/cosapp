@@ -3,7 +3,6 @@ import array
 import logging
 from collections.abc import MutableSequence
 from numbers import Number
-import re, inspect
 from typing import Any, Dict, Iterable, Optional, Tuple, Union
 
 import numpy as np
@@ -80,7 +79,7 @@ class Variable:
         "_valid_range",
     ]
 
-    __name_check = NameChecker()
+    __name_check = NameChecker(excluded=["inwards", "outwards"])
 
     @staticmethod
     def _get_limits_from_type(variable: Any) -> RangeValue:

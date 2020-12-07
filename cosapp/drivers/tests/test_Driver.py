@@ -42,6 +42,8 @@ def dummy():
     (get_args("foobar-2"), dict(error=None)),
     (get_args("foobar:2"), dict(error=ValueError)),
     (get_args("foobar.2"), dict(error=ValueError)),
+    (get_args("inwards"), dict(error=ValueError)),
+    (get_args("outwards"), dict(error=ValueError)),
     (get_args(23), dict(error=TypeError)),
     (get_args(1.0), dict(error=TypeError)),
     (get_args(dict(a=True)), dict(error=TypeError)),

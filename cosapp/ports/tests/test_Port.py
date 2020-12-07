@@ -104,6 +104,24 @@ from cosapp.ports.port import PortType, Port
         ),
         dict(error=AttributeError, match="object has no attribute 'banana'")
     ),
+    # Test on name validity
+    (
+        dict(name="inwards"), dict(error=None)
+    ),
+    (
+        dict(name="outwards"), dict(error=None)
+    ),
+    (
+        dict(name="time"),
+        dict(error=ValueError, match="reserved")
+    ),
+    (
+        dict(name="3.14"),
+        dict(error=ValueError, match="Name must start with a letter")
+    ),
+    (
+        dict(name=3.14), dict(error=TypeError)
+    ),
 ])
 def test_Port__init__(DummyPort, direction, case_data, expected):
     settings = copy.deepcopy(case_data)

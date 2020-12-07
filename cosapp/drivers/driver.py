@@ -52,7 +52,8 @@ class Driver(Module):
 
     _name_check = NameChecker(
         pattern = r"^[A-Za-z][\w\s@-]*[\w]?$",
-        message = "Driver name must start with a letter, and contain only alphanumerics + {'_', '@', ' ', '-'}"
+        message = "Driver name must start with a letter, and contain only alphanumerics + {'_', '@', ' ', '-'}",
+        excluded = ["inwards", "outwards"],
     )
 
     def __init__(self,
@@ -108,8 +109,8 @@ class Driver(Module):
                 continue
 
     def __repr__(self) -> str:
-        context = "alone" if self.owner is None else "on System {!r}".format(self.owner.name)
-        return "{} ({}) - {}".format(self.name, context, self.__class__.__name__)
+        context = "alone" if self.owner is None else f"on System {self.owner.name!r}"
+        return f"{self.name} ({context}) - {self.__class__.__name__}"
 
     @property
     def owner(self) -> "Optional[cosapp.systems.System]":
@@ -117,21 +118,20 @@ class Driver(Module):
         return self._owner
 
     @owner.setter
-    def owner(self, value: "Optional[cosapp.systems.System]") -> NoReturn:
+    def owner(self, system: "Optional[cosapp.systems.System]") -> NoReturn:
         from cosapp.systems import System
-        if value is not None:
-            check_arg(value, 'owner', System)
+        if system is not None:
+            check_arg(system, 'owner', System)
 
-        self._owner = value
+        self._owner = system
         if self._recorder is not None:
-            self._recorder.watched_object = self.owner
+            self._recorder.watched_object = self._owner
         for child in self.children.values():
-            child.owner = value
+            child.owner = system
 
-    def check_owner_attr(self, item: str):
+    def check_owner_attr(self, item: str) -> None:
         if item not in self.owner:
-            raise AttributeError(f"'{item}' not found in System {self.owner.name!r}")
-        pass
+            raise AttributeError(f"{item!r} not found in System {self.owner.name!r}")
 
     @property
     def recorder(self) -> Optional[BaseRecorder]:
@@ -160,9 +160,7 @@ class Driver(Module):
     def _precompute(self) -> NoReturn:
         """Set execution order and start the recorder."""
         if self.owner is None:
-            raise AttributeError(
-                'Driver "{}" has no owner on which to act.'.format(self.name)
-            )
+            raise AttributeError(f"Driver {self.name!r} has no owner system.")
 
         if self._recorder is not None:
             self._recorder.start()
@@ -175,9 +173,7 @@ class Driver(Module):
 
         if self.owner.parent is None and self.parent is None:
             logger.info(" " + "-" * 60)
-            logger.info(
-                ' # Starting driver "{}" on "{}"'.format(self.name, self.owner.name)
-            )
+            logger.info(f" # Starting driver {self.name!r} on {self.owner.name!r}")
 
     def _postcompute(self) -> NoReturn:
         """Actions performed after the `Module.compute` call."""
@@ -186,7 +182,7 @@ class Driver(Module):
 
         if self.owner.parent is None and self.parent is None:
             logger.info(
-                ' # Ending driver "{}" on {} in {}seconds\n'.format(
+                " # Ending driver {!r} on {!r} in {} seconds\n".format(
                     self.name, self.owner.name, round(time.time() - self.start_time, 3)
                 )
             )
