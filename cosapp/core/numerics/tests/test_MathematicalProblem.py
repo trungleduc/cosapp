@@ -195,7 +195,7 @@ def test_MathematicalProblem_add_equations():
     assert len(m.residues) == 2
 
     for name in ['h == 0', 'g == i']:
-        message = "residue '{}'".format(name)
+        message = f"residue {name!r}"
         assert name in m.residues
         residue = m.residues[name]
         assert isinstance(residue, Residue), message
@@ -207,7 +207,7 @@ def test_MathematicalProblem_add_equations():
     assert len(m.residues) == 2
 
     for name in ['g == i', '2nd']:
-        message = "residue '{}'".format(name)
+        message = f"residue {name!r}"
         assert name in m.residues
         residue = m.residues[name]
         assert isinstance(residue, Residue), message
@@ -224,7 +224,7 @@ def test_MathematicalProblem_add_unknowns():
     for name in ['inwards.a', ]:
         assert name in m.unknowns
         unknown = m.unknowns[name]
-        message = "unknown '{}'".format(name)
+        message = f"unknown {name}"
         assert isinstance(unknown, Unknown), message
         assert unknown.name == name, message
         assert unknown.context is r, message
@@ -237,7 +237,7 @@ def test_MathematicalProblem_add_unknowns():
     for name in ['inwards.a', 'inwards.d']:
         assert name in m.unknowns
         unknown = m.unknowns[name]
-        message = "unknown '{}'".format(name)
+        message = f"unknown {name}"
         assert isinstance(unknown, Unknown), message
         assert unknown.name == name, message
         assert unknown.context is r, message
@@ -250,7 +250,7 @@ def test_MathematicalProblem_add_unknowns():
     for name in ['in_.m', 'inwards.d']:
         assert name in m.unknowns
         unknown = m.unknowns[name]
-        message = "unknown '{}'".format(name)
+        message = f"unknown {name}"
         assert isinstance(unknown, Unknown), message
         assert unknown.name == name, message
         assert unknown.context is r, message

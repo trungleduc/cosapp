@@ -306,7 +306,7 @@ class PhysicalUnit(object):
             self._factor < other._factor
         """
         if self._powers != other._powers or self._offset != other._offset:
-            raise UnitError('Unit {} is not compatible with {}.'.format(other.name(), self.name()))
+            raise UnitError(f"Unit {other.name()} is not compatible with {self.name()}.")
 
         return self._factor < other._factor
 
@@ -325,7 +325,7 @@ class PhysicalUnit(object):
             self._factor > other._factor
         """
         if self._powers != other._powers:
-            raise UnitError('Unit {} is not compatible with {}.'.format(other.name(), self.name()))
+            raise UnitError(f"Unit {other.name()} is not compatible with {self.name()}.")
 
         return self._factor > other._factor
 
@@ -510,7 +510,7 @@ class PhysicalUnit(object):
             The conversion factor and offset from this unit to another unit.
         """
         if self._powers != other._powers:
-            raise UnitError('Unit {} is not compatible with {}.'.format(other.name(), self.name()))
+            raise UnitError(f"Unit {other.name()} is not compatible with {self.name()}.")
 
         # let (s1,d1) be the conversion tuple from 'self' to base units
         #   (ie. (x+d1)*s1 converts a value x from 'self' to base units,
@@ -837,8 +837,7 @@ def _update_library(cfg: RawConfigParser) -> NoReturn:
                 retry1.add((name, baseunit, float(factor), float(offset),
                             comment))
         else:
-            raise ValueError('Unit %r definition %r has invalid format',
-                             name, unit)
+            raise ValueError(f"Unit {name!r} definition {unit!r} has invalid format")
     retry_count = 0
     last_retry_count = -1
     while last_retry_count != retry_count and retry1:

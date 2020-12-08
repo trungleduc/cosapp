@@ -750,9 +750,9 @@ class Variable:
             return range_repr
 
         if status == Validity.ERROR:
-            return " - ".join((range2str(self.limits), self.out_of_limits_comment))
+            return f"{range2str(self.limits)} - {self.out_of_limits_comment}"
         elif status == Validity.WARNING:
-            return " - ".join((range2str(self.valid_range), self.invalid_comment))
+            return f"{range2str(self.valid_range)} - {self.invalid_comment}"
         else:  # Variable is ok
             return ""
 

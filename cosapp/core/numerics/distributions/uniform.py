@@ -2,7 +2,7 @@
 from typing import Optional
 
 import numpy
-from scipy.stats import uniform
+import scipy.stats
 
 from .distribution import Distribution
 
@@ -37,20 +37,18 @@ class Uniform(Distribution):
 
     def _set_distribution(self):
         """Set the probability distribution according the parameters."""
-        if self.pworst + self.pbest > 1.0:
+        if self.pworst + self.pbest > 1:
             raise ValueError(
-                "Best and worst probabilities are incompatible: {!s}.".format(
-                    self.__json__()
-                )
+                f"Best and worst probabilities are incompatible: {self.__json__()!s}."
             )
 
-        scale = numpy.abs(self.worst - self.best) / (1.0 - self.pworst - self.pbest)
+        scale = numpy.abs(self.worst - self.best) / (1 - self.pworst - self.pbest)
         if self.worst < self.best:
             loc = self.worst - scale * self.pworst
         else:
             loc = self.best - scale * self.pbest
 
-        self._rv = uniform(loc=loc, scale=scale)
+        self._rv = scipy.stats.uniform(loc=loc, scale=scale)
 
     def draw(self, quantile: Optional[float] = None) -> float:
         """Generate a random number.

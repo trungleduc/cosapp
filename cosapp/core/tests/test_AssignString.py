@@ -21,7 +21,7 @@ def test_AssignString__init__(eval_context, lhs):
     s = AssignString(lhs, rhs, context)
     assert s.lhs == lhs
     assert s.rhs == rhs
-    assert str(s) == "{} = {}".format(lhs, rhs)
+    assert str(s) == f"{lhs} = {rhs}"
     assert s.eval_context is context
     assert context.x[2] == 0.1
     
@@ -96,7 +96,7 @@ def test_AssignString_exec_a(eval_context, lhs):
     s = AssignString(lhs, rhs, context)
     assert s.lhs == lhs
     assert s.rhs == rhs
-    assert str(s) == "{} = {}".format(lhs, rhs)
+    assert str(s) == f"{lhs} = {rhs}"
     assert s.eval_context is context
     assert s.shape is None
     assert context.a == 0.123, "The creation of an AssignString should not cause any assignment"

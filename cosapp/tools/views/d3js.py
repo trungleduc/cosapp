@@ -65,7 +65,7 @@ def to_d3(system: System, show: bool = True, size: int = 300):
             if parent_name is None:
                 full_name = system.name
             else:
-                full_name = ".".join((parent_name, system.name))
+                full_name = f"{parent_name}.{system.name}"
 
             if nlevels == 0:  # Number of System levels
                 def get_level(syst) -> int:
@@ -91,7 +91,7 @@ def to_d3(system: System, show: bool = True, size: int = 300):
 
         elements = {
             "title": "my viewer",
-            "model_data": "var modelData = {!s}".format(build_d3_json(system)),
+            "model_data": f"var modelData = {build_d3_json(system)!s}",
             "d3_styles": d3_styles,
             "d3JS": d3_js,
             "draw": draw_js,
@@ -104,13 +104,12 @@ def to_d3(system: System, show: bool = True, size: int = 300):
 
         _, ext = os.path.splitext(filename)
         if ext != ".html":
-            filename = os.extsep.join((filename, "html"))
+            filename = f"{filename}{os.extsep}html"
 
         with open(filename, mode="w", encoding="utf-8") as f:
             f.write(rendered_html)
 
-    temp_name = ".".join((system.name, "html"))
-    build_d3_repr(system, temp_name)
+    build_d3_repr(system, f"{system.name}.html")
 
     if show:
         # Optional dependencies

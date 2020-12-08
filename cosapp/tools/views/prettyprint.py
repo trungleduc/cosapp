@@ -425,9 +425,7 @@ def _write_outputs(
                 isinstance(dict_of_outputs[name][column_name], numpy.ndarray)
                 and dict_of_outputs[name][column_name].size > 1
             ):
-                out = "|{}|".format(
-                    str(numpy.linalg.norm(dict_of_outputs[name][column_name]))
-                )
+                out = f"|{numpy.linalg.norm(dict_of_outputs[name][column_name])}|"
             else:
                 out = str(dict_of_outputs[name][column_name])
             _column_widths[column_name] = max(
@@ -551,7 +549,6 @@ def _write_outputs_rows(
 
     if out_stream is None:
         return
-    left_column_width = len(row)
     have_array_values = []  # keep track of which values are arrays
     for column_name in column_names:
         row += _column_spacing * " "
@@ -560,7 +557,7 @@ def _write_outputs_rows(
             and dict_of_outputs[column_name].size > 1
         ):
             have_array_values.append(column_name)
-            out = "|{}|".format(str(numpy.linalg.norm(dict_of_outputs[column_name])))
+            out = f"|{numpy.linalg.norm(dict_of_outputs[column_name])}|"
         else:
             out = str(dict_of_outputs[column_name])
         row += "{:{align}{width}}".format(
@@ -568,8 +565,10 @@ def _write_outputs_rows(
         )
     out_stream.write(row + "\n")
     if print_arrays:
+        left_column_width = len(row)
+        spacing = left_column_width * " "
         for column_name in have_array_values:
-            out_stream.write("{}  {}:\n".format(left_column_width * " ", column_name))
+            out_stream.write(f"{spacing}  {column_name}:\n")
             out_str = str(dict_of_outputs[column_name])
             indented_lines = [
                 (left_column_width + _indent_inc) * " " + s

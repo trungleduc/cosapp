@@ -4,7 +4,6 @@ Utility classes for executing CoSApp simulation following file events.
 Those classes use third-party `watchdog` package to observe file events.
 """
 import logging
-import time
 from threading import Timer
 from typing import AnyStr, List, NoReturn, Union
 
@@ -100,7 +99,7 @@ try:  # watchdog will be a conditional dependency
             self.__observer.stop()
             self.__observer.join()
 
-            logger.info('..trigger on "{}" is timeout'.format(self._owner.name))
+            logger.info(f"..trigger on {self._owner.name!r} is timeout")
 
         def start(self, time_step: float = 1.0) -> NoReturn:
             """Starts the watchdog monitoring
@@ -117,9 +116,7 @@ try:  # watchdog will be a conditional dependency
                 time_step = self.timeout
 
             logger.debug(
-                '> trigger created on "{}" with {} seconds timeout..'.format(
-                    self._owner.name, self.timeout
-                )
+                f"> trigger created on {self._owner.name!r} with {self.timeout} seconds timeout.."
             )
             self.__observer.start()
 
@@ -150,13 +147,11 @@ try:  # watchdog will be a conditional dependency
             event
                 Event that triggered the watchdog
             """
-            logger.info(' #creation of file "{}" detected'.format(event.src_path))
+            logger.info(f" #creation of file {event.src_path!r} detected")
             self.compute(event.src_path)
             self.reset()
             logger.debug(
-                '> trigger restart on "{}" for another {} seconds..'.format(
-                    self._owner.name, self.timeout
-                )
+                f"> trigger restart on {self._owner.name!r} for another {self.timeout} seconds.."
             )
 
     class FileModificationHandler(WatchdogHandler):
@@ -184,13 +179,11 @@ try:  # watchdog will be a conditional dependency
             event
                 Event that triggered the watchdog
             """
-            logger.info(' #modification of file "{}" detected'.format(event.src_path))
+            logger.info(f" #modification of file {event.src_path!r} detected")
             self.compute(event.src_path)
             self.reset()
             logger.debug(
-                '> trigger restart on "{}" for another {} seconds..'.format(
-                    self._owner.name, self.timeout
-                )
+                f"> trigger restart on {self._owner.name!r} for another {self.timeout} seconds.."
             )
 
 

@@ -567,10 +567,8 @@ class ExtensiblePort:
         else:
             if self.direction == PortType.IN:
                 for variable in self:
-                    fullname = ".".join((self.name, variable))
-                    value = getattr(self, variable)
-                    new_dict[fullname] = value
-
+                    fullname = f"{self.name}.{variable}"
+                    new_dict[fullname] = getattr(self, variable)
         
         return new_dict
 

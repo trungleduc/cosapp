@@ -222,22 +222,13 @@ class Module(LoggerContext, metaclass=abc.ABCMeta):
             default latest.
         """
         # Type validation
-        if not isinstance(child, Module):
-            raise TypeError(
-                "Argument 'child' should be of type Module; got {}.".format(
-                    type(child).__name__
-                )
-            )
-        if not isinstance(execution_index, (type(None), int)):
-            raise TypeError(
-                "Argument 'execution_index' should be of type int; got {}.".format(
-                    type(execution_index).__name__
-                )
-            )
+        check_arg(child, 'child', Module)
+        if execution_index is not None:
+            check_arg(execution_index, 'execution_index', int)
 
         if child.name in self.children:
             raise ValueError(
-                "{} {!s} cannot be added, as Module already contains an object with the same name"
+                "{} {!r} cannot be added, as Module already contains an object with the same name"
                 "".format(type(child).__qualname__, child.name)
             )
 
@@ -268,7 +259,7 @@ class Module(LoggerContext, metaclass=abc.ABCMeta):
         children = self.children
 
         if name not in children:
-            message = "Component {} is not a children of {}.".format(name, self)
+            message = f"Component {name} is not a child of {self}."
             logger.error(message)
             raise AttributeError(message)
 

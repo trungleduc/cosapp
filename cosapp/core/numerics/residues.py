@@ -42,7 +42,7 @@ class AbstractResidue:
         return self._name + ":= " + str(self._value)
 
     def __repr__(self) -> str:
-        return "{}({}): {!s}".format(type(self).__qualname__, self._name, self._value)
+        return f"{type(self).__qualname__}({self._name}): {self._value!s}"
 
     def _get_zeros_rhs(self, lhs: Union[str, Number, numpy.ndarray]) -> Union[str, Number, numpy.ndarray]:
         """Generate the default zeroed right hand side of the residue equation.
@@ -63,7 +63,7 @@ class AbstractResidue:
         """
         if isinstance(lhs, str):
             lhs_evaluated = EvalString(lhs, self.context).eval()
-            return "zeros({})".format(numpy.asarray(lhs_evaluated).shape)
+            return f"zeros({numpy.shape(lhs_evaluated)})"
         else:
             return numpy.zeros_like(numpy.asarray(lhs))
 
@@ -255,7 +255,7 @@ class Residue(AbstractResidue):
         lhs, rhs = equation.split(eqsign)
         lhs, rhs = lhs.strip(), rhs.strip()
         if len(lhs) == 0 or len(rhs) == 0:
-            raise SyntaxError("Equation should be of the kind 'lhs == rhs'; got {!r}".format(equation))
+            raise SyntaxError(f"Equation should be of the kind 'lhs == rhs'; got {equation!r}")
         return lhs, rhs
 
     def __set_equation(self, equation: str) -> NoReturn:
@@ -269,11 +269,11 @@ class Residue(AbstractResidue):
         elhs = EvalString(lhs, context)
         erhs = EvalString(rhs, context)
         if elhs.constant and erhs.constant:
-            raise RuntimeWarning("Equation {} == {} is trivially constant".format(lhs, rhs))
+            raise RuntimeWarning(f"Equation {lhs} == {rhs} is trivially constant")
         try:
             elhs.eval() == erhs.eval()
         except:
-            raise TypeError("Expressions {!r} and {!r} are not comparable".format(lhs, rhs))
+            raise TypeError(f"Expressions {lhs!r} and {rhs!r} are not comparable")
         else:
             self.__lhs = elhs
             self.__rhs = erhs
@@ -281,7 +281,7 @@ class Residue(AbstractResidue):
 
     def __str__(self) -> str:
         name = self.__equation or self._name
-        return "{} := {}".format(name, self._value)
+        return f"{name} := {self._value}"
 
     def update(self) -> Union[Number, numpy.ndarray]:
         """Update the residue value

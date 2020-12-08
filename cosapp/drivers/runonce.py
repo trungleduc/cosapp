@@ -64,7 +64,7 @@ class RunOnce(Driver):
         """
         if self.owner is None:
             raise AttributeError(
-                "Driver {!r} must be attached to a System to be assigned initial values.".format(self.name)
+                f"Driver {self.name!r} must be attached to a System to be assigned initial values."
             )
 
         if not isinstance(modifications, dict):
@@ -118,9 +118,7 @@ class RunOnce(Driver):
                     bmask = boundary.mask if boundary.mask is not None else numpy.empty(0)
                     if not numpy.array_equal(umask, bmask):
                         raise ValueError(
-                            "Unknown and initial conditions on '{}' are not masked equally".format(
-                                unknown.name
-                            )
+                            f"Unknown and initial conditions on {unknown.name!r} are not masked equally"
                         )
                     data = deepcopy(boundary.default_value)
                     self.initial_values[name] = boundary

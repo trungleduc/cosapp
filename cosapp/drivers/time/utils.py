@@ -63,7 +63,7 @@ class TimeUnknownStack(AbstractTimeUnknown):
         return str(self.value)
 
     def __repr__(self) -> str:
-        return "{} := {!s}".format(self.__name, self)
+        return f"{self.__name} := {self!s}"
 
     def __init_stack(self) -> NoReturn:
         """
@@ -317,9 +317,9 @@ class TimeVarManager:
             reference2name[reference] = name
             der_context = unknown.der.eval_context
             derivative_expr = str(unknown.der)
-            if derivative_expr in der_context.name2variable:
+            try:
                 ders[reference] = der_context.name2variable[derivative_expr]
-            else:   # Complex derivative expression
+            except KeyError:   # Complex derivative expression
                 ders[reference] = VariableReference(context=der_context, mapping=None, key=derivative_expr)
 
         transients = TimeUnknownDict()
@@ -327,10 +327,8 @@ class TimeVarManager:
         # syst.name2variable["phi"] == syst.name2variable["inwards.phi"]
         tree = self.get_tree(ders)
         for root, branch in tree.items():
-            stack_context = root.context
-            root_name = reference2name[root]
-            root_unknown = context_transients[root_name]
             if len(branch) > 2:  # second- or higher-order derivative -> build unknown stack
+                stack_context = root.context
                 branches = list(map(TimeVarManager._get_variable_fullname, branch[:-1]))
                 root_stack_name = ", ".join(branches).join("[]")
                 context_name = context.get_path_to_child(stack_context)
@@ -342,7 +340,8 @@ class TimeVarManager:
                 transients[stack_name] = TimeUnknownStack(
                     stack_context, stack_name, list(transients_stack))
             else:  # first-order time derivative -> use current unknown
-                transients[root_name] = root_unknown
+                root_name = reference2name[root]
+                transients[root_name] = context_transients[root_name]
 
         self.__transients = transients
         self.__problem = problem
@@ -365,7 +364,7 @@ class TimeVarManager:
         if ref.mapping is None or ref.mapping.name in (System.INWARDS, System.OUTWARDS):
             return ref.key
         else:
-            return ".".join((ref.mapping.name, ref.key))
+            return f"{ref.mapping.name}.{ref.key}"
 
     @staticmethod
     def get_tree(ders: Dict[T, T]) -> Dict[T, List[T]]:

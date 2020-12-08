@@ -137,7 +137,6 @@ def test_RungeKutta_twoTanks(two_tank_case, two_tank_solution, dt):
     )
     
     recorder = driver.add_recorder(recorders.DataFrameRecorder(includes='tank?.height'), period=0.1)
-    # recorder = driver.add_recorder(recorders.DSVRecorder('twoTanks_RK{}.csv'.format(order), includes=['tank?.height', ]), period=0.1)
     assert driver.recording_period == 0.1
 
     system.run_drivers()
@@ -285,7 +284,6 @@ def test_RungeKutta_point_mass(point_mass_case, point_mass_solution, order, dt, 
     settings = dict(order=order, time_interval=(0, 2), dt=dt)
     system, driver = point_mass_case(RungeKutta, **settings)
 
-    # recorder = driver.add_recorder(recorders.DSVRecorder('pointMass_RK{}.csv'.format(driver.order), includes=['x', 'v', 'a']), period=0.1)
     recorder = driver.add_recorder(recorders.DataFrameRecorder(includes=['x', 'v', 'a']), period=0.1)
 
     x0 = [-1., 0., 10]
@@ -305,7 +303,7 @@ def test_RungeKutta_point_mass(point_mass_case, point_mass_solution, order, dt, 
     for i, t in enumerate(time):
         x = traj[i]
         error = np.maximum(error, rel_error(x, solution.x(t)))
-    context = 'dt = {}, order = {}'.format(driver.dt, driver.order)
+    context = f"dt = {driver.dt}, order = {driver.order}"
     assert error.max() < tol, context
 
 
@@ -389,7 +387,6 @@ def test_RungeKutta_pointMassWithPorts(pointMassWithPorts_case, point_mass_solut
     system, driver = pointMassWithPorts_case(RungeKutta, **settings)
 
     includes = ['pos*.x', 'kin*.v', 'a']
-    # recorder = driver.add_recorder(recorders.DSVRecorder('pointMassWithPorts_RK{}.csv'.format(driver.order), includes=includes), period=0.1)
     recorder = driver.add_recorder(recorders.DataFrameRecorder(includes=includes), period=0.1)
 
     x0 = [-1., 0., 10]
@@ -409,7 +406,7 @@ def test_RungeKutta_pointMassWithPorts(pointMassWithPorts_case, point_mass_solut
     for i, t in enumerate(time):
         x = traj[i]
         error = np.maximum(error, rel_error(x, solution.x(t)))
-    context = 'dt = {}, order = {}'.format(driver.dt, driver.order)
+    context = f"dt = {driver.dt}, order = {driver.order}"
     assert error.max() < tol, context
 
 
@@ -435,7 +432,6 @@ def test_RungeKutta_pointMassWithPorts_pulling(point_mass_solution, order, dt, t
     system, driver = make_case(RungeKutta, **settings)
 
     includes = ['*.x', '*.v', '*.a']
-    # recorder = driver.add_recorder(recorders.DSVRecorder('pointMassWithPorts_RK{}.csv'.format(driver.order), includes=includes), period=0.1)
     recorder = driver.add_recorder(recorders.DataFrameRecorder(includes=includes), period=0.1)
 
     x0 = [-1., 0., 10]
@@ -455,7 +451,7 @@ def test_RungeKutta_pointMassWithPorts_pulling(point_mass_solution, order, dt, t
     for i, t in enumerate(time):
         x = traj[i]
         error = np.maximum(error, rel_error(x, solution.x(t)))
-    context = 'dt = {}, order = {}'.format(driver.dt, driver.order)
+    context = f"dt = {driver.dt}, order = {driver.order}"
     assert error.max() < tol, context
 
 
@@ -466,7 +462,7 @@ def test_RungeKutta_pointMassWithPorts_pulling(point_mass_solution, order, dt, t
 def test_RungeKutta_rate_singleTimeStep(rate_case_1, dt, tol):
     settings = dict(order=2, time_interval=(0, dt), dt=dt)
     system, driver = rate_case_1(RungeKutta, **settings)
-    context = 'dt = {}, order = {}'.format(driver.dt, driver.order)
+    context = f"dt = {driver.dt}, order = {driver.order}"
     assert driver.dt == driver.time_interval[1], context
 
     driver.set_scenario(values={'k': 1.9, 'U': 'exp(k * t)'})
@@ -484,11 +480,10 @@ def test_RungeKutta_rate_singleTimeStep(rate_case_1, dt, tol):
 def test_RungeKutta_rate(rate_case_1, dt, tol):
     settings = dict(order=2, time_interval=(0, 1), dt=dt)
     system, driver = rate_case_1(RungeKutta, **settings)
-    context = 'dt = {}, order = {}'.format(driver.dt, driver.order)
+    context = f"dt = {driver.dt}, order = {driver.order}"
 
     driver.set_scenario(values={'k': 1.9, 'U': 'exp(k * t)'})
 
-    # recorder = driver.add_recorder(recorders.DSVRecorder('dUdt_RK{}.csv'.format(driver.order), includes=['U', 'dU_dt']), period=0.1)
     recorder = driver.add_recorder(recorders.DataFrameRecorder(includes=['dU_dt']), period=0.1)
 
     system.run_drivers()

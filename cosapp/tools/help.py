@@ -64,7 +64,7 @@ class DocDisplay:
         object_type = type(self._obj)
 
         indent = 0
-        stripped_doc = ["Class: {}".format(object_type.__name__), ""]
+        stripped_doc = [f"Class: {object_type.__name__}", ""]
         if object_type.__doc__:
             stripped_doc.extend(["  Documentation", ""])
             for l in object_type.__doc__.split("\n"):

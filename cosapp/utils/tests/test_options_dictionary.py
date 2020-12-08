@@ -240,13 +240,13 @@ def test_OptionsDictionary_bounds():
 
     with pytest.raises(
         ValueError,
-        match=r"Value \(3\.0\) of option 'x' exceeds maximum allowed value of 2\.0\.",
+        match=r"Value \(3\.0\) of option 'x' exceeds maximum allowed value 2\.0",
     ):
         opt["x"] = 3.0
 
     with pytest.raises(
         ValueError,
-        match=r"Value \(-3\.0\) of option 'x' is less than minimum allowed value of 0\.0\.",
+        match=r"Value \(-3\.0\) of option 'x' is less than minimum allowed value 0\.0",
     ):
         opt["x"] = -3.0
 
@@ -264,7 +264,7 @@ def test_OptionsDictionary_undeclare():
     opt.undeclare("test")
 
     # prove it is no longer in the dict
-    with pytest.raises(KeyError, match="\"Option 'test' cannot be found\""):
+    with pytest.raises(KeyError, match="Option 'test' cannot be found"):
         opt["test"]
 
 

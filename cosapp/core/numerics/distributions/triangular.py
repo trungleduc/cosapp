@@ -3,8 +3,8 @@ import numbers
 from typing import Any, Dict, NoReturn, Optional
 
 import numpy
-from scipy.stats import triang
-from scipy.optimize import root
+import scipy.stats
+import scipy.optimize
 
 from .distribution import Distribution
 
@@ -70,7 +70,7 @@ class Triangular(Distribution):
         upper = lower + params["scale"]
         if not (lower <= value <= upper):
             raise ValueError(
-                "Likely value not within distribution bounds: {} <= {} <= {}.".format(lower, value, upper)
+                f"Likely value not within distribution bounds: {lower} <= {value} <= {upper}."
             )
         self._likely = value
         self._set_distribution()
@@ -84,12 +84,12 @@ class Triangular(Distribution):
 
         pts = [self.worst, self.best]
         if self.worst > self.best:
-            ppts = [(1.0 - self.pworst), self.pbest]
+            ppts = [1 - self.pworst, self.pbest]
         else:
-            ppts = [self.pworst, (1.0 - self.pbest)]
+            ppts = [self.pworst, 1 - self.pbest]
 
         if self._rv is None:
-            x0 = [min(0.0, self.likely), 2.0 * abs(self.likely)]
+            x0 = [min(0, self.likely), 2 * abs(self.likely)]
         else:
             params = self._rv.kwds  # return {"c": #, "loc": #, "scale": #}
             x0 = [params["loc"], params["scale"]]
@@ -99,13 +99,13 @@ class Triangular(Distribution):
             if any(numpy.isnan(x)):
                 raise ValueError(f"invalid distribution parameters {x}")
             c = (self.likely - x[0]) / x[1]
-            return triang(c=c, loc=x[0], scale=x[1])
+            return scipy.stats.triang(c=c, loc=x[0], scale=x[1])
 
         def f(x):
             t = make_triang(x)
             return t.ppf(ppts) - pts
 
-        res = root(f, x0)
+        res = scipy.optimize.root(f, x0)
         if not res.success or any(numpy.isnan(res.x)):
             raise ValueError(
                 f"Unable to fit triangular distribution on {self.__json__()!s}."

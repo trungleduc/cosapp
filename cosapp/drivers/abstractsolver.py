@@ -80,7 +80,7 @@ class AbstractSolver(Driver):
             if key in self.options:
                 self.options[key] = value
             else:
-                raise KeyError("Unknown solver option '{}'".format(key))
+                raise KeyError(f"Unknown solver option {key!r}")
 
     @property
     def _default_driver_name(self) -> str:

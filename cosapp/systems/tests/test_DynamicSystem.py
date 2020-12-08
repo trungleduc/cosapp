@@ -138,7 +138,7 @@ def test_DynamicSystem_add_transient_compatibility(transient, der, error):
 
 def test_DynamicSystem_transient_unknowns(funky, groovy):
     def check_keys(system, keys):
-        context_msg = "system {!r}".format(system)
+        context_msg = f"system {system!r}"
         problem = system.get_unsolved_problem()
         assert set(problem.transients.keys()) == set(keys), context_msg
 
@@ -205,7 +205,7 @@ def test_DynamicSystem_add_rate(jazzy):
 
 def test_DynamicSystem_rates(funky, groovy, jazzy):
     def check_keys(system, keys):
-        context_msg = "system {!r}".format(system)
+        context_msg = f"system {system!r}"
         problem = system.get_unsolved_problem()
         assert set(problem.rates.keys()) == set(keys), context_msg
 

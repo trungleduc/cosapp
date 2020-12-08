@@ -399,8 +399,7 @@ def test_System_add_child():
     for key, obj in to_check.items():
         assert key in s.name2variable
         reference = s.name2variable[key]
-        context = "key = {}".format(key)
-        assert reference.mapping[reference.key] is obj, context
+        assert reference.mapping[reference.key] is obj, f"key = {key}"
 
     s3 = SubSystem("sub2")
     assert s.add_child(s3, execution_index=0) is s3
@@ -418,8 +417,7 @@ def test_System_add_child():
     for key, obj in to_check.items():
         assert key in s.name2variable
         reference = s.name2variable[key]
-        context = "key = {}".format(key)
-        assert reference.mapping[reference.key] is obj, context
+        assert reference.mapping[reference.key] is obj, f"key = {key}"
 
 
 def test_System_add_child_pulling(caplog):
@@ -708,7 +706,7 @@ def test_System_add_data(DummyFactory):
     # Add one inwards
     s = DummyFactory("test", inwards=get_args("K", 2.0))
     assert "K" in s
-    assert ".".join((System.INWARDS, "K")) in s
+    assert f"{System.INWARDS}.K" in s
     assert s.K == 2.0
 
     with pytest.raises(AttributeError):
@@ -726,7 +724,7 @@ def test_System_add_data(DummyFactory):
 
     for name in ["K", "switch", "r", "q"]:
         assert name in s
-        assert ".".join((System.INWARDS, name)) in s
+        assert f"{System.INWARDS}.{name}" in s
     assert s.K == 2.0
     assert s.switch == True
     assert s.r == 1
@@ -880,7 +878,7 @@ def test_System_add_locals(DummyFactory):
     # Add unique
     s = DummyFactory("dummy", outwards=get_args("r", 42.0))
     assert "r" in s
-    assert ".".join((System.OUTWARDS, "r")) in s
+    assert f"{System.OUTWARDS}.r" in s
     assert s.r == 42
 
     # Add multiple outwards
@@ -895,7 +893,7 @@ def test_System_add_locals(DummyFactory):
 
     for name in ["r", "q", "s", "x"]:
         assert name in s
-        assert ".".join((System.OUTWARDS, name)) in s
+        assert f"{System.OUTWARDS}.{name}" in s
     assert s.r == 42.0
     assert s.q == 12
     assert s.s == 1
@@ -1081,7 +1079,7 @@ def test_System_append_name2variable():
         [(key, VariableReference(context=s2, mapping=d, key=key)) for key in d]
     )
     for key in d:
-        abs_key = ".".join((s2.name, key))
+        abs_key = f"{s2.name}.{key}"
         reference = s.name2variable[abs_key]
         assert reference.mapping[reference.key] is d[key]
 
@@ -1098,12 +1096,12 @@ def test_System_pop_name2variable():
 
     s2 = s.sub
     for key in keys:
-        abs_name = ".".join((s2.name, key))
+        abs_name = f"{s2.name}.{key}"
         assert abs_name in s.name2variable
 
     s2.pop_name2variable(keys)
     for key in keys:
-        abs_key = ".".join((s2.name, key))
+        abs_key = f"{s2.name}.{key}"
         assert abs_key not in s.name2variable
 
 

@@ -24,5 +24,5 @@ class VariableReference(NamedTuple):
         name = self.context.name
         mapping_name = getattr(self.mapping, "name", "")
         if mapping_name:
-            name = ".".join((name, mapping_name))
-        return f'<VariableReference ({name}, {self.key})>'
+            name = f"{name}.{mapping_name}"
+        return f"<VariableReference ({name}, {self.key})>"

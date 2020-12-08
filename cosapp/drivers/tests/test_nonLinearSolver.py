@@ -131,7 +131,7 @@ def test_NonLinearSolver__precompute(caplog, set_master_system):
     d._precompute()
 
     vars = [
-        "{}[{}]".format(d._default_driver_name, u)
+        f"{d._default_driver_name}[{u}]"
         for u in ("inwards.K1", "inwards.K2", "p_in.x")
     ]
     assert set(d.problem.unknowns) == set(vars)
@@ -239,7 +239,7 @@ def test_NonLinearSolver__precompute(caplog, set_master_system):
     assert len(warning_messages) == 1
     assert (
         re.search(
-            r'Including Driver "\w+" without iteratives in Driver "\w+" is not numerically advised.',
+            r"Including Driver '\w+' without iteratives in Driver '\w+' is not numerically advised.",
             warning_messages[0],
         )
         is not None
@@ -442,7 +442,7 @@ def test_NonLinearSolver__postcompute(set_master_system):
     d._precompute()
     d._postcompute()
     vars = [
-        "{}[{}]".format(d._default_driver_name, u)
+        f"{d._default_driver_name}[{u}]"
         for u in ("inwards.K1", "inwards.K2", "p_in.x")
     ]
     assert set(d.problem.unknowns) == set(vars)

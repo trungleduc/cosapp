@@ -83,7 +83,7 @@ class Subject:
         otype = self.observer_type()
         if not isinstance(observer, otype):
             cls_name = self.__class__.__name__
-            raise TypeError("{} can only be observed by objects of type {}".format(cls_name, otype.__name__))
+            raise TypeError(f"{cls_name} can only be observed by objects of type {otype.__name__}")
         self._observers.add(observer)
 
     def remove(self, observer) -> NoReturn:

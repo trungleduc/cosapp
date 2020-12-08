@@ -2267,7 +2267,7 @@ class System(Module, TimeObserver):
             for lib in System._components_librairies:
                 try:
                     if len(component_module) > 0:
-                        mod_name = '.'.join((lib, component_module))
+                        mod_name = f"{lib}.{component_module}"
                         if mod_name.startswith('.'):
                             mod_name = mod_name[1:]
                         lib_modules = importlib.import_module(mod_name)

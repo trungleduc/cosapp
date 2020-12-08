@@ -1,9 +1,7 @@
-import tempfile
+import pytest
 import time
 import os
-from os import path, rename, remove
 from unittest import mock
-import pytest
 from cosapp.tests.library.systems import IterativeNonLinear
 
 watchdog = pytest.importorskip("watchdog")

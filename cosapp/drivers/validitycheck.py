@@ -49,7 +49,7 @@ class ValidityCheck(OptionalDriver):
         (and its children).
         """
         def message(log_dict):
-            return "\n" + "\n\t".join(["{}{}".format(key, msg) for key, msg in log_dict.items()])
+            return "\n" + "\n\t".join([f"{key}{msg}" for key, msg in log_dict.items()])
         self.warnings, self.errors = validate(self.owner)
 
         if self.warnings:

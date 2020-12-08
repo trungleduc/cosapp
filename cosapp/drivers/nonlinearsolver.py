@@ -145,18 +145,19 @@ class NonLinearSolver(AbstractSolver):
         """Print the solution in the log."""
         if self.options['verbose']:
             # TODO move it in MathematicalProblem
-            logger.info('Parameters [{}]: '.format(len(self.solution)))
+            logger.info(f"Parameters [{len(self.solution)}]: ")
             for k, v in self.solution.items():
-                logger.info('   # ' + str(k) + ': ' + str(v))
+                logger.info(f"   # {k}: {v}")
 
             for name, residue in self.problem.residues.items():
                 value = numpy.asarray(residue.value)
                 if value.ndim > 0:
-                    msg = 'Residues [{}]: \n   # ({}'.format(len(self.problem.residues), name)
-                    msg += '\n   #  {}'.format(" " * len(name)).join([", {:.5g}".format(v) for v in value])
-                    msg += ')\n'
+                    spacing = " " * len(name)
+                    msg = f"Residues [{len(self.problem.residues)}]: \n   # ({name}"
+                    msg += f"\n   #  {spacing}".join([f", {v:.5g}" for v in value])
+                    msg += ")\n"
                 else:
-                    logger.info('   # ({}, {:.5g})'.format(name, value))
+                    logger.info(f"   # ({name}, {value:.5g})")
 
             tol = numpy.max(numpy.abs(self.problem.residues_vector))
             try:
@@ -164,7 +165,7 @@ class NonLinearSolver(AbstractSolver):
                 target = self.options[option]
             except:
                 target = 0
-            logger.debug(' # Current tolerance {} for target {}'.format(tol, target))
+            logger.debug(f" # Current tolerance {tol} for target {target}")
 
     def _precompute(self) -> NoReturn:
         """List all iteratives variables and get the initial values."""
@@ -175,8 +176,9 @@ class NonLinearSolver(AbstractSolver):
                 self.problem.extend(child.get_problem(), copy=False)
                 self.initial_values = numpy.append(self.initial_values, child.get_init(self.force_init))
             else:
-                logger.warning('Including Driver "{}" without iteratives in Driver "{}" is not numerically advised.'
-                                ''.format(child.name, self.name))
+                logger.warning(
+                    f"Including Driver {child.name!r} without iteratives in Driver {self.name!r} is not numerically advised."
+                )
 
     def compute(self) -> NoReturn:
         """Run the resolution method to find free vars values that annul residues
@@ -208,7 +210,7 @@ class NonLinearSolver(AbstractSolver):
             if results.success:
                 self.status = ''
                 self.error_code = '0'
-                logger.info('solver : {}{}'.format(self.name, results.message))
+                logger.info(f"solver : {self.name}{results.message}")
             else:
                 self.status = 'ERROR'
                 self.error_code = '9'
@@ -302,10 +304,10 @@ class NonLinearSolver(AbstractSolver):
                     container = StringIO()
                     numpy.savetxt(container, info["jac"], delimiter=",")
                     jacobian = container.getvalue()
-                    unknowns = ",".join(self.problem.unknowns_names)
+                    unknowns = ", ".join(self.problem.unknowns_names)
                     message += f"New Jacobian matrix:\n,{unknowns}\n"
                     for residue, line in zip(self.problem.residues_names, jacobian.splitlines()):
-                        message += f"{residue},{line}\n"
+                        message += f"{residue}, {line}\n"
 
             if len(self.__trace) > 0:
                 if len(self.__trace) == 1:

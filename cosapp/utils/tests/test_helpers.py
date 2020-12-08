@@ -1,9 +1,10 @@
-import enum
-
-import numpy as np
 import pytest
 
+import enum
+import numpy as np
+
 from cosapp.utils.helpers import is_numerical, is_number, check_arg
+from cosapp.utils.testing import no_exception
 
 
 @pytest.mark.parametrize("value, expected", [
@@ -43,6 +44,7 @@ from cosapp.utils.helpers import is_numerical, is_number, check_arg
 ])
 def test_is_numerical(value, expected):
     assert is_numerical(value) == expected
+
 
 @pytest.mark.parametrize("value, expected", [
     (True, False),
@@ -90,41 +92,35 @@ class DummyEnum(enum.Enum):
 
 
 @pytest.mark.parametrize("args, expected", [
-    ((0, 'var', int), None),
-    ((0, 'var', (int, float)), None),
-    ((0.1, 'var', int), (TypeError, )),
-    ((1, 'var', int, lambda n: 0 < n <= 2), None),
-    ((2, 'var', int, lambda n: 0 < n <= 2), None),
-    ((0, 'var', int, lambda n: 0 < n <= 2), (ValueError, )),
-    ((3, 'var', int, lambda n: 0 < n <= 2), (ValueError, )),
-    ((3.14, 'var', (int, str)), (TypeError, )),
-    ((3.14, 'var', (int, float, str)), None),
-    ((3.14, 'var', float), None),
-    ((3.14, 'var', (int, float, str), lambda x: abs(np.sin(x)) < 1e-12), (ValueError, )),
-    (('foo', 'var', (int, float)), (TypeError, )),
-    (('foo', 'var', (int, float, str)), None),
-    (('_foo', 'var', str), None),
-    (('_foo', 'var', str, lambda s: not s.startswith('_')), (ValueError, )),
-    (((1, 2), 'interval', (tuple, list), lambda it: len(it) == 2), None),
-    (((1, 2, 3), 'interval', (tuple, list), lambda it: len(it) == 2), (ValueError, )),
-    (('string', 'interval', (tuple, list), lambda it: len(it) == 2), (TypeError, ".*got str")),
-    (('foo', 'var', DummyEnum), (TypeError, )),
-    ((DummyEnum.A, 'var', DummyEnum), None)
+    ((0, 'var', int), dict()),
+    ((0, 'var', (int, float)), dict()),
+    ((0.1, 'var', int), dict(error=TypeError)),
+    ((1, 'var', int, lambda n: 0 < n <= 2), dict()),
+    ((2, 'var', int, lambda n: 0 < n <= 2), dict()),
+    ((0, 'var', int, lambda n: 0 < n <= 2), dict(error=ValueError)),
+    ((3, 'var', int, lambda n: 0 < n <= 2), dict(error=ValueError)),
+    ((3.14, 'var', (int, str)), dict(error=TypeError)),
+    ((3.14, 'var', (int, float, str)), dict()),
+    ((3.14, 'var', float), dict()),
+    ((3.14, 'var', (int, float, str), lambda x: abs(np.sin(x)) < 1e-12), dict(error=ValueError)),
+    (('foo', 'var', (int, float)), dict(error=TypeError)),
+    (('foo', 'var', (int, float, str)), dict()),
+    (('_foo', 'var', str), dict()),
+    (('_foo', 'var', str, lambda s: not s.startswith('_')), dict(error=ValueError)),
+    (((1, 2), 'interval', (tuple, list), lambda it: len(it) == 2), dict()),
+    (((1, 2, 3), 'interval', (tuple, list), lambda it: len(it) == 2), dict(error=ValueError)),
+    (('string', 'interval', (tuple, list), lambda it: len(it) == 2), dict(error=TypeError, match=".*got str")),
+    (('foo', 'var', DummyEnum), dict(error=TypeError)),
+    ((DummyEnum.A, 'var', DummyEnum), dict())
 ])
 def test_check_arg(args, expected):
     """Test of utility function check_arg"""
+    error = expected.get('error', None)
 
-    def expect_pass(args):
-        try:
-            check_arg(*args)
-        except Exception as ex:
-            self.fail(str(ex) + "\nArguments: " + str(args))
-
-    def expect_fail(args, exception, match=None):
-        with pytest.raises(exception, match=match):
+    if error is None:
+        with no_exception():
             check_arg(*args)
 
-    if expected is None:
-        expect_pass(args)
     else:
-        expect_fail(args, *expected)
+        with pytest.raises(error, match=expected.get('match', None)):
+            check_arg(*args)

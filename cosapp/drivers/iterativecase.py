@@ -49,9 +49,7 @@ class IterativeCase(RunOnce):
         if self.owner is not value:
             if self.owner is not None:
                 logger.warning(
-                    "System owner of Driver '{}' has changed. Optimization equations have been cleared.".format(
-                        self.name
-                    )
+                    f"System owner of Driver {self.name!r} has changed. Optimization equations have been cleared."
                 )
             self.design = MathematicalProblem(self.design.name, value)
         super(IterativeCase, IterativeCase).owner.__set__(self, value)
