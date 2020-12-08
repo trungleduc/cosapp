@@ -5,7 +5,7 @@ stages:
   - deployment
 
 variables:
-  COSAPP_DEP:  jsonschema ipython jinja2 watchdog xlrd ipykernel nbconvert ipywidgets plotly pytest pyfmi scipy pandas packaging typing
+  COSAPP_DEP:  jsonschema ipython jinja2 watchdog xlrd ipykernel nbconvert ipywidgets plotly pytest pyfmi scipy pandas packaging typing pythonfmu~=0.6.0
   USER: "cosapp_test"
 
 # # default windows job parameters
