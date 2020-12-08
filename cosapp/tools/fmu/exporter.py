@@ -458,7 +458,7 @@ class FMUBuilder:
             trim_blocks=True,
             lstrip_blocks=True,
         )
-        template = env.get_template("pythonfmu.py")
+        template = env.get_template("pythonfmu.j2")
 
         rendered_script = template.render(params)
 
