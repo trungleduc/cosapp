@@ -1,5 +1,4 @@
 from numbers import Number
-from typing import NoReturn
 
 from cosapp.drivers.time.interfaces import ExplicitTimeDriver
 
@@ -23,7 +22,7 @@ class EulerExplicit(ExplicitTimeDriver):
         """str: Short description of driver's algorithm"""
         return "Explicit Euler time driver"
 
-    def _update_transients(self, dt: Number) -> NoReturn:
+    def _update_transients(self, dt: Number) -> None:
         """
         Time integration of transient variables over time step `dt` by explicit Euler scheme.
         """

@@ -3,7 +3,7 @@ System tuned to support meta-models.
 """
 import json
 from pathlib import Path
-from typing import Any, Dict, NoReturn, Optional, Union, Tuple, Type
+from typing import Any, Dict, Optional, Union, Tuple, Type
 
 import numpy
 import pandas
@@ -174,7 +174,7 @@ class MetaSystem(System):
         self.add_inward('training_data', data, desc="Training data")
         return kwargs
 
-    def _train(self) -> NoReturn:
+    def _train(self) -> None:
         """Train the model using the provided training data."""
 
         for model_name, model in self.models.items():
@@ -324,7 +324,7 @@ class MetaSystem(System):
         else:
             raise AttributeError(f"Name {name!r} not found in training data of MetaModel {self.name!r}")
 
-    def compute(self) -> NoReturn:
+    def compute(self) -> None:
         """Contains the customized `System` calculation."""
         if not self._trained:
             self._train()

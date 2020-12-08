@@ -1,6 +1,6 @@
 """Class defining a triangular distribution."""
 import numbers
-from typing import Any, Dict, NoReturn, Optional
+from typing import Any, Dict, Optional
 
 import numpy
 import scipy.stats
@@ -75,7 +75,7 @@ class Triangular(Distribution):
         self._likely = value
         self._set_distribution()
 
-    def _set_distribution(self) -> NoReturn:
+    def _set_distribution(self) -> None:
         """Set the probability distribution according the parameters."""
         if self.pworst + self.pbest > 1.0:
             raise ValueError(

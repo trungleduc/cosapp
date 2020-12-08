@@ -1,6 +1,6 @@
 import logging
 from copy import deepcopy
-from typing import Any, Dict, NoReturn, Optional, Union
+from typing import Any, Dict, Optional, Union
 
 import numpy
 
@@ -28,7 +28,7 @@ class RunOnce(Driver):
 
     def __init__(
         self, name: str, owner: "Optional[cosapp.systems.System]" = None, **kwargs
-    ) -> NoReturn:
+    ) -> None:
         """Initialize a driver
 
         Parameters
@@ -47,7 +47,7 @@ class RunOnce(Driver):
         self.solution = dict()  # type: Dict[str, float]
             # desc="Dictionary (name, value) of the latest solution reached."
 
-    def set_init(self, modifications: Dict[str, Any]) -> NoReturn:
+    def set_init(self, modifications: Dict[str, Any]) -> None:
         """Define initial values for one or more variables.
 
         The variable can be contextual `child1.port2.var`. The only rule is that it should belong to
@@ -159,7 +159,7 @@ class RunOnce(Driver):
         # Solution cannot be cleared in setup_run otherwise it won't be available when get_init is called.
         self.solution.clear()
 
-    def compute(self) -> NoReturn:
+    def compute(self) -> None:
         """Execute drivers on all child `System` belonging to the driver `System` owner.
         """
         if len(self.children) == 0:

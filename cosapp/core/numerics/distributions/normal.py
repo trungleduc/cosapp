@@ -1,5 +1,5 @@
 """Basic class to define a variable distribution."""
-from typing import NoReturn, Optional
+from typing import Optional
 
 import scipy.optimize
 import scipy.stats
@@ -33,7 +33,7 @@ class Normal(Distribution):
         self._rv = None  # type: scipy.stats.norm
         super().__init__(worst, best, pworst, pbest)
 
-    def _set_distribution(self) -> NoReturn:
+    def _set_distribution(self) -> None:
         """Set the probability distribution according the parameters."""
         if self.pworst + self.pbest > 1.0:
             raise ValueError(

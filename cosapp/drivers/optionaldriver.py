@@ -1,4 +1,4 @@
-from typing import Any, Dict, NoReturn, Optional
+from typing import Any, Dict, Optional
 
 from cosapp.drivers.driver import Driver
 
@@ -13,7 +13,7 @@ class OptionalDriver(Driver):
     __inhibited = False
 
     @classmethod
-    def set_inhibited(cls, inhibited: bool) -> NoReturn:
+    def set_inhibited(cls, inhibited: bool) -> None:
         """Set the inhibition status for all `OptionalDriver` classes.
 
         Parameters
@@ -28,7 +28,7 @@ class OptionalDriver(Driver):
         owner: "Optional[cosapp.systems.System]" = None, 
         force: Optional[bool] = None, 
         **kwargs
-    ) -> NoReturn:
+    ) -> None:
         """Initialize a driver
 
         Parameters

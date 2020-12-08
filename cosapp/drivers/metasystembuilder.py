@@ -1,5 +1,5 @@
 from collections import OrderedDict
-from typing import Any, Dict, List, NoReturn, Set, Type, Union
+from typing import Any, Dict, List, Set, Type, Union
 
 from cosapp.recorders import DataFrameRecorder
 from cosapp.systems import MetaSystem
@@ -18,7 +18,7 @@ class MetaSystemBuilder(Driver):
 
     def __init__(
         self, name: str, owner: "Optional[cosapp.systems.System]" = None, **kwargs
-    ) -> NoReturn:
+    ) -> None:
         """Initialize a driver
 
         Parameters

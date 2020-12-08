@@ -1,6 +1,6 @@
 import numpy, scipy.interpolate
 import enum
-from typing import Any, Dict, List, NoReturn
+from typing import Any, Dict, List
 
 from cosapp.drivers.driver import Driver
 from cosapp.core.numerics.boundary import Boundary
@@ -30,7 +30,7 @@ class Interpolator:
         return self.__kind
 
     @kind.setter
-    def kind(self, kind: Kind) -> NoReturn:
+    def kind(self, kind: Kind) -> None:
         check_arg(kind, 'kind', self.Kind)
         self.__kind = kind
         self.__update_evaluator()
@@ -40,7 +40,7 @@ class Interpolator:
         return self.__data
     
     @data.setter
-    def data(self, data) -> NoReturn:
+    def data(self, data) -> None:
         data = numpy.asarray(data, dtype=float)
         shape = data.shape
         if data.ndim != 2:
@@ -53,7 +53,7 @@ class Interpolator:
         self.__data.setflags(write=0)
         self.__update_evaluator()
 
-    def __update_evaluator(self) -> NoReturn:
+    def __update_evaluator(self) -> None:
         data = self.data
         if data is None:
             def evaluator(x):
@@ -86,7 +86,7 @@ class InterpolAssignString:
         self.__code = compile(assignment, "<string>", "exec")  # type: CodeType
         self.__str = f"{variable} = {function.__class__.__name__}(t)"
 
-    def exec(self) -> NoReturn:
+    def exec(self) -> None:
         """
         Evaluates rhs, and executes assignment lhs <- rhs.
         """
@@ -109,7 +109,7 @@ class InterpolAssignString:
 class Scenario:
     """Class managing boundary and initial conditions for time simulations"""
 
-    def __init__(self, name: str, owner: Driver) -> NoReturn:
+    def __init__(self, name: str, owner: Driver) -> None:
         """Initialize object
 
         Parameters
@@ -132,12 +132,12 @@ class Scenario:
         scenario.set_values(values)
         return scenario
 
-    def apply_init_values(self) -> NoReturn:
+    def apply_init_values(self) -> None:
         """Execute assignments corresponding to initial conditions"""
         for assignment in self.__init_values:
             assignment.exec()
 
-    def update_values(self) -> NoReturn:
+    def update_values(self) -> None:
         """Execute assignments corresponding to boundary conditions"""
         for assignment in self.__case_values:
             assignment.exec()
@@ -154,14 +154,14 @@ class Scenario:
         return self.__owner
 
     @owner.setter
-    def owner(self, driver: Driver) -> NoReturn:
+    def owner(self, driver: Driver) -> None:
         check_arg(driver, "owner", Driver, lambda driver: hasattr(driver, "owner"))
         self.__owner = driver
         self.__context = driver.owner
         self.clear_init()
         self.clear_values()
 
-    def add_init(self, modifications: Dict[str, Any]) -> NoReturn:
+    def add_init(self, modifications: Dict[str, Any]) -> None:
         """Add a set of initial conditions, from a dictionary of the kind {'variable': value, ...}
 
         Parameters
@@ -187,7 +187,7 @@ class Scenario:
             else:
                 self.__init_values.append(assignment)
 
-    def set_init(self, modifications: Dict[str, Any]) -> NoReturn:
+    def set_init(self, modifications: Dict[str, Any]) -> None:
         """Set initial conditions, from a dictionary of the kind {'variable': value, ...}
 
         See `add_init` for further detail.
@@ -195,7 +195,7 @@ class Scenario:
         self.clear_init()
         self.add_init(modifications)
 
-    def add_values(self, modifications: Dict[str, Any]) -> NoReturn:
+    def add_values(self, modifications: Dict[str, Any]) -> None:
         """Add a set of variables to the list of case values, from a dictionary of the kind {'variable': value, ...}
 
         Each variable and its value can be contextual, as in {'child1.port2.var': '2 * child2.foo'},
@@ -230,7 +230,7 @@ class Scenario:
             else:
                 self.__case_values.append(assignment)
 
-    def set_values(self, modifications: Dict[str, Any]) -> NoReturn:
+    def set_values(self, modifications: Dict[str, Any]) -> None:
         """Set case values, from a dictionary of the kind {'variable': value, ...}
 
         See `add_values` for further detail.
@@ -238,11 +238,11 @@ class Scenario:
         self.clear_values()
         self.add_values(modifications)
 
-    def clear_values(self) -> NoReturn:
+    def clear_values(self) -> None:
         """Clears the list of boundary conditions"""
         self.__case_values.clear()
 
-    def clear_init(self) -> NoReturn:
+    def clear_init(self) -> None:
         """Clears the list of initial conditions"""
         self.__init_values.clear()
 

@@ -1,4 +1,4 @@
-from typing import List, NoReturn, Set, Union
+from typing import List, Set, Union
 
 import numpy
 import pandas
@@ -41,7 +41,7 @@ class Influence(AbstractSetOfCases):
 
     def __init__(
         self, name: str, owner: "Optional[cosapp.systems.System]" = None, **kwargs
-    ) -> NoReturn:
+    ) -> None:
         """Initialize a driver
 
         Parameters
@@ -132,7 +132,7 @@ class Influence(AbstractSetOfCases):
                         f"string expected; got {type(name).__qualname__}."
                     )
 
-    def _build_cases(self) -> NoReturn:
+    def _build_cases(self) -> None:
         """Build the list of cases to run during execution
         """
         self.add_recorder(

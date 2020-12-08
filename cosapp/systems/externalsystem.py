@@ -6,7 +6,7 @@ import sys
 from abc import abstractmethod
 from struct import pack, unpack
 from threading import Timer
-from typing import Any, Dict, NoReturn, Optional
+from typing import Any, Dict, Optional
 
 import numpy.distutils
 from numpy.distutils.exec_command import find_executable
@@ -90,10 +90,10 @@ class Client(Communication):
             logger.warning(f"Failed to connect service {self.name!r} at port {self.port}")
             raise ConnectionRefusedError(f"Server is not responding after {timeout}s")
 
-    def stop(self) -> NoReturn:
+    def stop(self) -> None:
         self.retry = False
 
-    def close_connection(self) -> NoReturn:
+    def close_connection(self) -> None:
         self.connected = False
         self.retry = True
         self.connection.close()
@@ -113,7 +113,7 @@ class ExternalSystem(System):
         return {name: port.serialize_data() for name, port in self.inputs.items()}
 
     @abstractmethod
-    def send_inputs(self) -> NoReturn:
+    def send_inputs(self) -> None:
         pass
 
     @abstractmethod
@@ -179,7 +179,7 @@ class TCPSystem(ExternalSystem):
     def _wrap_inputs(self) -> str:
         return json.dumps(self.serialize_data(), cls=JSONEncoder)
 
-    def _launch_service(self) -> NoReturn:
+    def _launch_service(self) -> None:
         # Make sure command exists
         service = self._service
         command = service['exec']
@@ -205,7 +205,7 @@ class TCPSystem(ExternalSystem):
         self._process = subprocess.Popen(command_for_shell_proc,
             stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
-    def send_inputs(self) -> NoReturn:
+    def send_inputs(self) -> None:
         # TODO use this method to send inputs
         pass
 

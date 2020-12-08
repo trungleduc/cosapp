@@ -1,6 +1,6 @@
 from abc import abstractmethod
 from numbers import Number
-from typing import Any, Dict, NoReturn, Optional, Tuple, Union
+from typing import Any, Dict, Optional, Tuple, Union
 from collections.abc import Collection
 
 import numpy
@@ -85,7 +85,7 @@ class AbstractResidue:
         return self._reference_value
 
     @reference.setter
-    def reference(self, value: Union[Number, numpy.ndarray]) -> NoReturn:
+    def reference(self, value: Union[Number, numpy.ndarray]) -> None:
         """Set the reference value.
 
         Parameters
@@ -258,7 +258,7 @@ class Residue(AbstractResidue):
             raise SyntaxError(f"Equation should be of the kind 'lhs == rhs'; got {equation!r}")
         return lhs, rhs
 
-    def __set_equation(self, equation: str) -> NoReturn:
+    def __set_equation(self, equation: str) -> None:
         """
         Checks that the two sides of an equation of the kind 'lhs == rhs' are compatible,
         and that residue (lhs - rhs) is not trivially constant.

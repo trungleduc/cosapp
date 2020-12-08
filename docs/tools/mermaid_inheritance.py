@@ -34,7 +34,7 @@ import re
 from hashlib import md5
 from importlib import import_module
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, NoReturn, Tuple, cast
+from typing import Any, Dict, Iterable, List, Tuple, cast
 
 import sphinx
 from docutils import nodes
@@ -213,7 +213,7 @@ class MermaidDiagram(InheritanceDiagram):
             return [figure]
 
 
-def html_visit_mermaid_inheritance(self: HTMLTranslator, node: inheritance_diagram) -> NoReturn:
+def html_visit_mermaid_inheritance(self: HTMLTranslator, node: inheritance_diagram) -> None:
     """
     Output the graph for HTML.  This will insert a PNG with clickable
     image map.
@@ -245,7 +245,7 @@ def html_visit_mermaid_inheritance(self: HTMLTranslator, node: inheritance_diagr
     raise nodes.SkipNode
 
 
-def latex_visit_mermaid_inheritance(self: LaTeXTranslator, node: inheritance_diagram) -> NoReturn:
+def latex_visit_mermaid_inheritance(self: LaTeXTranslator, node: inheritance_diagram) -> None:
     """
     Output the graph for LaTeX.  This will insert a PDF.
     """
@@ -260,7 +260,7 @@ def latex_visit_mermaid_inheritance(self: LaTeXTranslator, node: inheritance_dia
     raise nodes.SkipNode
 
 
-def texinfo_visit_mermaid_inheritance(self: TexinfoTranslator, node: inheritance_diagram) -> NoReturn:
+def texinfo_visit_mermaid_inheritance(self: TexinfoTranslator, node: inheritance_diagram) -> None:
     """
     Output the graph for Texinfo.  This will insert a PNG.
     """

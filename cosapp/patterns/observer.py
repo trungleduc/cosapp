@@ -1,7 +1,6 @@
 import abc
 import inspect
 import weakref
-from typing import NoReturn
 
 
 class Observer(abc.ABC):
@@ -12,17 +11,17 @@ class Observer(abc.ABC):
             self.observe(subject)
 
     @abc.abstractmethod
-    def _update(self, *args, **kwargs) -> NoReturn:
+    def _update(self, *args, **kwargs) -> None:
         """Action to perform when notified by observed subject"""
         pass
 
-    def observe(self, subject) -> NoReturn:
+    def observe(self, subject) -> None:
         """Sign in as observer of subject"""
         self.quit()
         subject.add(self)
         self._subject = weakref.ref(subject)
 
-    def quit(self) -> NoReturn:
+    def quit(self) -> None:
         """Quit observing whoever observer is currently observing"""
         if self._subject is not None:
             self._subject().remove(self)
@@ -36,7 +35,7 @@ class Observer(abc.ABC):
             return observing
         return observing and (self._subject() is subject)
 
-    def __del__(self) -> NoReturn:
+    def __del__(self) -> None:
         try:
             object.__getattribute__(self, "_subject")
         except AttributeError:
@@ -70,7 +69,7 @@ class Subject:
         """Returns the type of observers allowed to observe Subject"""
         return cls.__obs_type
     
-    def notify(self, *args, **kwargs) -> NoReturn:
+    def notify(self, *args, **kwargs) -> None:
         """Notify observers that they must update"""
         for observer in self._observers:
             observer._update(*args, **kwargs)
@@ -86,10 +85,10 @@ class Subject:
             raise TypeError(f"{cls_name} can only be observed by objects of type {otype.__name__}")
         self._observers.add(observer)
 
-    def remove(self, observer) -> NoReturn:
+    def remove(self, observer) -> None:
         self._observers.remove(observer)
 
-    def clear(self) -> NoReturn:
+    def clear(self) -> None:
         """Force all observers to quit"""
         for observer in self._observers.copy():
             observer.quit()
@@ -99,5 +98,5 @@ class Subject:
         """int: number of observers of current subject"""
         return len(self._observers)
 
-    def __del__(self) -> NoReturn:
+    def __del__(self) -> None:
         self.clear()

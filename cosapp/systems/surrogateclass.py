@@ -1,5 +1,5 @@
 import numpy
-from typing import Any, Dict, NoReturn, Iterable
+from typing import Any, Dict, Iterable
 import collections
 import pickle
 import pandas
@@ -60,7 +60,7 @@ class SurrogateClass:
         return self.__owner
 
 
-    def __update_doe_out(self) -> NoReturn:
+    def __update_doe_out(self) -> None:
         logger.debug(f"Updating doe_out")
         owner = self.__owner
         doe_out = self.__state.doe_out
@@ -69,7 +69,7 @@ class SurrogateClass:
             logger.debug(f"added data to output {key} value is {doe_out[key]}")
 
 
-    def __set_owner_inputs(self, dic_inputs) -> NoReturn:
+    def __set_owner_inputs(self, dic_inputs) -> None:
         logger.debug(f"Setting {self.owner.name} input values")
         owner = self.__owner
         for key in dic_inputs:
@@ -114,7 +114,7 @@ class SurrogateClass:
         return numpy.asarray(l)
 
 
-    def __set_and_execute(self) -> NoReturn:
+    def __set_and_execute(self) -> None:
         logger.debug(f"Setting and executing in order to build datas for training")
         for label, row in self.state.doe_in.iterrows():
             self.__set_owner_inputs(row.to_dict(into=OrderedDict))#set ONE combination of inputs to the owner
@@ -122,13 +122,13 @@ class SurrogateClass:
             self.__update_doe_out()#adds output datas to 'meta_dico_out'
 
 
-    def add_data(self, newdoe : pandas.DataFrame) -> NoReturn:
+    def add_data(self, newdoe : pandas.DataFrame) -> None:
         #it should merge input lists when matching names #TODO this method doesn't work yet.
         pass
         self.__state = SurrogateClassState(self.__state.doe_in, self.__state.doe_out, self.__state.model, OrderedDict())
 
 
-    def __prepare_and_train(self) -> NoReturn:
+    def __prepare_and_train(self) -> None:
         logger.debug(f"Preparing and training function")
         if len(self.state.doe_out) == 0:
             raise RuntimeError(f"Cannot train surrogate model: no output found in System {self.owner.name!r}")
@@ -139,7 +139,7 @@ class SurrogateClass:
         self.__train_model(x, y)
 
 
-    def __train_model(self, x, y) -> NoReturn:
+    def __train_model(self, x, y) -> None:
         logger.debug(f"Training model {self.state.model} with X as :\n{x} \nand Y as {y}")
         self.__state.model.train(x,y)
         logger.debug(f"Model {self.state.model} trained")
@@ -150,7 +150,7 @@ class SurrogateClass:
         return self.__state.model.predict(x).reshape(1,-1)[0]
 
 
-    def compute(self) -> NoReturn:
+    def compute(self) -> None:
         logger.debug(f"Starting meta_compute() instead of {self.owner.name}'s compute().")
         current_inputs = self.__get_current_inputs()
         current_outputs = self.predict(current_inputs)
@@ -165,7 +165,7 @@ class SurrogateClass:
         return numpy.asarray(L)
 
 
-    def __set_current_outputs(self, np_outputs : numpy.ndarray) -> NoReturn:
+    def __set_current_outputs(self, np_outputs : numpy.ndarray) -> None:
         logger.debug(f"Setting current outputs of system {self.owner.name}")
         for key, value in self.__state.doe_out_sizes.items():
             pos = value[0]
@@ -176,7 +176,7 @@ class SurrogateClass:
                 self.__owner[key].ravel()[:] = np_outputs[pos:pos+length]
         
 
-    def dump(self, filename: str) -> NoReturn:
+    def dump(self, filename: str) -> None:
         logger.debug(f"Dumping metamodel in {filename}")
         with open(filename, 'wb') as fp:
             pickle.dump(self.__state, fp)
@@ -197,7 +197,7 @@ class SurrogateClass:
         return obj
 
 
-    def __check_unknowns_and_transients(self) -> NoReturn:
+    def __check_unknowns_and_transients(self) -> None:
         names = get_unknows_transients(self.__owner)
         unsolvable_unknows = set(names).difference(self.state.doe_out.keys())
         trained_unknowns = unsolvable_unknows.issubset(self.state.doe_in.keys())

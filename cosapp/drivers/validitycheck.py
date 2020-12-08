@@ -1,5 +1,4 @@
 import logging
-from typing import NoReturn, Union
 
 from cosapp.utils.validate import validate
 from cosapp.drivers.optionaldriver import OptionalDriver
@@ -28,7 +27,7 @@ class ValidityCheck(OptionalDriver):
 
     def __init__(
         self, name: str, owner: "Optional[cosapp.systems.System]" = None, **kwargs
-    ) -> NoReturn:
+    ) -> None:
         """Initialize a driver
 
         Parameters
@@ -44,7 +43,7 @@ class ValidityCheck(OptionalDriver):
         self.warnings = dict()  # type: Dict[str, str]
         self.errors = dict()  # type: Dict[str, str]
 
-    def compute(self) -> NoReturn:
+    def compute(self) -> None:
         """Report in the log the validity status for all variables of the driver `System` owner
         (and its children).
         """

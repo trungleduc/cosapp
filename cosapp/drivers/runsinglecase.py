@@ -1,6 +1,6 @@
 import logging
 from collections import OrderedDict
-from typing import Any, Dict, NoReturn, Optional, Union
+from typing import Any, Dict, Optional, Union
 
 import numpy
 
@@ -45,7 +45,7 @@ class RunSingleCase(IterativeCase):
         name: str,
         owner: Optional[System] = None,
         **kwargs
-        ) -> NoReturn:
+        ) -> None:
         """Initialize a driver
 
         Parameters
@@ -108,7 +108,7 @@ class RunSingleCase(IterativeCase):
             # Common residues must be duplicated to avoid modification by one point to the others
             self.problem.residues[fullname] = residue.copy()
 
-    def _precompute(self) -> NoReturn:
+    def _precompute(self) -> None:
         """Actions to carry out before the :py:meth:`~cosapp.drivers.runonce.RunOnce.compute` method call.
 
         It sets the boundary conditions and changes variable status.
@@ -131,7 +131,7 @@ class RunSingleCase(IterativeCase):
         self.problem = None
 
     @IterativeCase.owner.setter
-    def owner(self, value: Optional[System]) -> NoReturn:
+    def owner(self, value: Optional[System]) -> None:
         # Trick to call super setter (see: https://bugs.python.org/issue14965)
         if self.owner is not value:
             if self.owner is not None:
@@ -155,7 +155,7 @@ class RunSingleCase(IterativeCase):
         else:
             return self.problem
 
-    def set_values(self, modifications: Dict[str, Any]) -> NoReturn:
+    def set_values(self, modifications: Dict[str, Any]) -> None:
         """Enter the set of variables defining the case, from a dictionary of the kind {'variable1': value1, ...}
         Note: will erase all previously defined values. Use 'add_values' to append new case values.
 
@@ -174,7 +174,7 @@ class RunSingleCase(IterativeCase):
         self.clear_values()
         self.add_values(modifications)
 
-    def add_values(self, modifications: Dict[str, Any]) -> NoReturn:
+    def add_values(self, modifications: Dict[str, Any]) -> None:
         """Add a set of variables to the list of case values, from a dictionary of the kind {'variable1': value1, ...}
 
         The variable can be contextual `child1.port2.var`. The only rule is that it should belong to
@@ -194,7 +194,7 @@ class RunSingleCase(IterativeCase):
         for variable, value in modifications.items():
             self.add_value(variable, value)
 
-    def add_value(self, variable: str, value: Any) -> NoReturn:
+    def add_value(self, variable: str, value: Any) -> None:
         """Add a single variable to list of case values.
 
         The variable can be contextual `child1.port2.var`. The only rule is that it should belong to

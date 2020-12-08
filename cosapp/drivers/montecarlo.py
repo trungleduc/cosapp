@@ -1,6 +1,6 @@
 import logging
 from collections import OrderedDict
-from typing import Any, Iterable, List, NoReturn, Optional, Set, Union
+from typing import Any, Iterable, List, Optional, Set, Union
 
 import numpy
 
@@ -31,7 +31,7 @@ class MonteCarlo(AbstractSetOfCases):
         name: str,
         owner: "Optional[cosapp.systems.System]" = None,
         **kwargs
-    ) -> NoReturn:
+    ) -> None:
         """Initialize a driver
 
         Parameters
@@ -67,7 +67,7 @@ class MonteCarlo(AbstractSetOfCases):
         self.perturbations = None  # type: Optional[numpy.ndarray]
             # desc="Array of perturbations applied on the system."
 
-    def add_random_variable(self, names: Union[str, Iterable[str]]) -> NoReturn:
+    def add_random_variable(self, names: Union[str, Iterable[str]]) -> None:
         """Add variable to be perturbated.
 
         The perturbation distribution is defined by the variable distribution details.
@@ -123,7 +123,7 @@ class MonteCarlo(AbstractSetOfCases):
                 check_arg(name, name + " in 'names'", str)
                 add_unique_input_var(name)
 
-    def add_response(self, name: Union[str, Iterable[str]]) -> NoReturn:
+    def add_response(self, name: Union[str, Iterable[str]]) -> None:
         """Add a variable for which the statistical response will be calculated.
 
         Parameters
@@ -145,7 +145,7 @@ class MonteCarlo(AbstractSetOfCases):
                 check_arg(n, n + " in 'name'", str)
                 add_unique_response_var(n)
 
-    def _build_cases(self) -> NoReturn:
+    def _build_cases(self) -> None:
         """Build the list of cases to run during execution
         """
         self.cases = sobol_seq.i4_sobol_generate(len(self.random_variables), self.draws)
@@ -225,7 +225,7 @@ class MonteCarlo(AbstractSetOfCases):
         if len(self.reference_case_solution) > 0:
             self.solver.load_solution(self.reference_case_solution)
 
-    def compute(self) -> NoReturn:
+    def compute(self) -> None:
         """Contains the customized `Module` calculation, to execute after children.
         """
         for case_idx, case in enumerate(self.cases):
@@ -237,7 +237,7 @@ class MonteCarlo(AbstractSetOfCases):
                     self.run_children()
                 self._postcase(case_idx, case)
 
-    def __run_linear(self) -> NoReturn:
+    def __run_linear(self) -> None:
         """Approximate MonteCarlo simulation using partial derivatives matrix."""
         # TODO this is not great as we set variables in the system breaking its consistency.
         if len(self.responses) > 0:

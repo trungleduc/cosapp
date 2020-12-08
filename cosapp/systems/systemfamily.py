@@ -1,6 +1,6 @@
 from enum import Enum
 import logging
-from typing import List, NoReturn, Optional
+from typing import List, Optional
 
 from cosapp.systems.system import System, ConversionType
 from cosapp.utils.helpers import check_arg
@@ -86,7 +86,7 @@ class SystemFamily(System):
         for c in to_restore:
             parent.connect(c.sink, c.source, c.variable_mapping)
 
-    def update_connections(self, new_system: System) -> NoReturn:
+    def update_connections(self, new_system: System) -> None:
         # TODO this should be called automatically and not in the _to_ user method?
         """Update connections after conversion of this `System` into the `new_system`.
 

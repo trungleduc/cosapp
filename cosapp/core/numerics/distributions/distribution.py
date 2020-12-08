@@ -1,6 +1,6 @@
 """Basic class to define a variable distribution."""
 from abc import ABC, abstractmethod
-from typing import Any, Dict, NoReturn, Union, Tuple, Optional
+from typing import Any, Dict, Optional
 
 import scipy
 import numpy
@@ -63,7 +63,7 @@ class Distribution(ABC):
         }
 
     @abstractmethod
-    def _set_distribution(self) -> NoReturn:
+    def _set_distribution(self) -> None:
         """Set the probability distribution according the parameters."""
         pass
 

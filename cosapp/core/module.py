@@ -4,8 +4,7 @@ Basic class handling model tree structure.
 import abc
 import collections
 import logging
-import re
-from typing import Any, Dict, List, NoReturn, Optional, Union
+from typing import Any, Optional
 
 from cosapp.core.signal import Signal
 from cosapp.utils.naming import NameChecker
@@ -114,7 +113,7 @@ class Module(LoggerContext, metaclass=abc.ABCMeta):
         return self._name
 
     @name.setter
-    def name(self, name: str) -> NoReturn:
+    def name(self, name: str) -> None:
         self._name = self._name_check(name)
 
     @property
@@ -122,7 +121,7 @@ class Module(LoggerContext, metaclass=abc.ABCMeta):
         return self.__exec_order
 
     @exec_order.setter
-    def exec_order(self, iterable) -> NoReturn:
+    def exec_order(self, iterable) -> None:
         new_set = OrderedSet(iterable)
         if not all(isinstance(elem, str) for elem in new_set):
             raise TypeError(f"All elements of {self.name}.exec_order must be strings")
@@ -295,23 +294,23 @@ class Module(LoggerContext, metaclass=abc.ABCMeta):
                     )
                     self.exec_order.discard(c)
 
-    def _precompute(self) -> NoReturn:
+    def _precompute(self) -> None:
         """Actions performed prior to the `Module.compute` call."""
         pass
 
-    def compute_before(self) -> NoReturn:
+    def compute_before(self) -> None:
         """Contains the customized `Module` calculation, to execute before children."""
         pass
 
-    def compute(self) -> NoReturn:
+    def compute(self) -> None:
         """Contains the customized `Module` calculation, to execute after children."""
         pass
 
-    def _postcompute(self) -> NoReturn:
+    def _postcompute(self) -> None:
         """Actions performed after the `Module.compute` call."""
         pass
 
-    def run_once(self) -> NoReturn:
+    def run_once(self) -> None:
         """Run the module once.
 
         Execute the model of this `Module` and its children in the execution order.

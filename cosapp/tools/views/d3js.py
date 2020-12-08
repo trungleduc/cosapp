@@ -1,6 +1,5 @@
 """Build a D3js view of a System."""
 import os
-from typing import NoReturn
 
 from cosapp.systems import System
 from cosapp.tools import templates
@@ -22,7 +21,7 @@ def to_d3(system: System, show: bool = True, size: int = 300):
 
     def build_d3_repr(
         system: System, filename: str, embeddable: bool = False, size: int = 600
-    ) -> NoReturn:
+    ) -> None:
         env = Environment(
             loader=PackageLoader("cosapp.tools", "templates"),
             trim_blocks=True,

@@ -1,6 +1,6 @@
 import itertools
 from collections import OrderedDict
-from typing import Any, Dict, List, NoReturn, Union
+from typing import Any, Dict, List, Union
 
 import numpy
 
@@ -28,7 +28,7 @@ class LinearDoE(AbstractSetOfCases):
 
     def __init__(
         self, name: str, owner: "Optional[cosapp.systems.System]" = None, **kwargs
-    ) -> NoReturn:
+    ) -> None:
         """Initialize a driver
 
         Parameters

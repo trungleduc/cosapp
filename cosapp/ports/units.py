@@ -17,7 +17,7 @@ from collections import OrderedDict
 from configparser import _UNSET, DEFAULTSECT, RawConfigParser
 from math import floor, pi
 from numbers import Number
-from typing import Any, Dict, List, NoReturn, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 
 # TODO could it be more interesting to merge this with the PhysicalQuantities package of
@@ -614,7 +614,7 @@ class PhysicalUnit(object):
 # Module Functions
 ####################################
 
-def _new_unit(name: str, factor: float, powers: List[int]) -> NoReturn:
+def _new_unit(name: str, factor: float, powers: List[int]) -> None:
     """
     Create new PhysicalUnit and add it to the unit library.
 
@@ -631,7 +631,7 @@ def _new_unit(name: str, factor: float, powers: List[int]) -> NoReturn:
 
 
 def add_offset_unit(name: str, baseunit: Union[str, PhysicalUnit], factor: float, offset: float,
-                    comment: str='') -> NoReturn:
+                    comment: str='') -> None:
     """
     Adding Offset PhysicalUnit to the unit library.
 
@@ -666,7 +666,7 @@ def add_offset_unit(name: str, baseunit: Union[str, PhysicalUnit], factor: float
         _UNIT_LIB.help.append((name, comment, unit))
 
 
-def add_unit(name: str, unit: str, comment: str = '') -> NoReturn:
+def add_unit(name: str, unit: str, comment: str = '') -> None:
     """
     Adding PhysicalUnit from its name and string representation to the unit library.
 
@@ -788,7 +788,7 @@ def import_library(libfilepointer) -> UnitConfigParser:
     return _UNIT_LIB
 
 
-def update_library(filename: Union[str, Any]) -> NoReturn:
+def update_library(filename: Union[str, Any]) -> None:
     """
     Update units in current library from `filename`.
 
@@ -810,7 +810,7 @@ def update_library(filename: Union[str, Any]) -> NoReturn:
         inp.close()
 
 
-def _update_library(cfg: RawConfigParser) -> NoReturn:
+def _update_library(cfg: RawConfigParser) -> None:
     """
     Update library from :class:`RawConfigParser` `cfg`.
 

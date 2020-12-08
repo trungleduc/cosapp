@@ -1,6 +1,6 @@
 import logging
 from io import StringIO
-from typing import (Any, Callable, Dict, List, NoReturn, Optional, Sequence,
+from typing import (Any, Callable, Dict, List, Optional, Sequence,
                     Tuple, Union)
 
 import numpy
@@ -41,7 +41,7 @@ class NonLinearSolver(AbstractSolver):
         owner: "Optional[cosapp.systems.System]" = None, 
         method: Union[NonLinearMethods, str] = NonLinearMethods.NR, 
         **kwargs
-    ) -> NoReturn:
+    ) -> None:
         """Initialize a driver
 
         Parameters
@@ -141,7 +141,7 @@ class NonLinearSolver(AbstractSolver):
 
         return results
 
-    def _print_solution(self) -> NoReturn:  # TODO better returning a string
+    def _print_solution(self) -> None:  # TODO better returning a string
         """Print the solution in the log."""
         if self.options['verbose']:
             # TODO move it in MathematicalProblem
@@ -167,7 +167,7 @@ class NonLinearSolver(AbstractSolver):
                 target = 0
             logger.debug(f" # Current tolerance {tol} for target {target}")
 
-    def _precompute(self) -> NoReturn:
+    def _precompute(self) -> None:
         """List all iteratives variables and get the initial values."""
         super()._precompute()
 
@@ -180,7 +180,7 @@ class NonLinearSolver(AbstractSolver):
                     f"Including Driver {child.name!r} without iteratives in Driver {self.name!r} is not numerically advised."
                 )
 
-    def compute(self) -> NoReturn:
+    def compute(self) -> None:
         """Run the resolution method to find free vars values that annul residues
         """
 

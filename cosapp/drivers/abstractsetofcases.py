@@ -1,5 +1,5 @@
 import abc
-from typing import Any, Dict, Iterable, NoReturn, Optional, Union
+from typing import Any, Dict, Iterable, Optional, Union
 
 from cosapp.drivers.driver import Driver
 
@@ -24,7 +24,7 @@ class AbstractSetOfCases(Driver):
 
     def __init__(
         self, name: str, owner: "Optional[cosapp.systems.System]" = None, **kwargs
-    ) -> NoReturn:
+    ) -> None:
         """Initialize a driver
 
         Parameters
@@ -56,7 +56,7 @@ class AbstractSetOfCases(Driver):
         self.error_code = "0"
 
     @abc.abstractmethod
-    def _build_cases(self) -> NoReturn:
+    def _build_cases(self) -> None:
         """Generator of cases."""
         pass
 
@@ -78,7 +78,7 @@ class AbstractSetOfCases(Driver):
         super()._precompute()
         self._build_cases()
 
-    def run_children(self) -> NoReturn:
+    def run_children(self) -> None:
         """Runs all driver children.
         """
         for child in self.children.values():
@@ -88,7 +88,7 @@ class AbstractSetOfCases(Driver):
             if child.error_code != "0":
                 self.error_code = child.error_code
 
-    def compute(self) -> NoReturn:
+    def compute(self) -> None:
         """Contains the customized `Module` calculation, to execute after children.
         """
         for case_idx, case in enumerate(self.cases):
@@ -97,7 +97,7 @@ class AbstractSetOfCases(Driver):
                 self.run_children()
                 self._postcase(case_idx, case)
 
-    def run_once(self) -> NoReturn:
+    def run_once(self) -> None:
         """Run the system once.
 
         Execute the model of this `Module` and its children in the execution order.

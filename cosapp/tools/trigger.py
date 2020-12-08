@@ -5,7 +5,7 @@ Those classes use third-party `watchdog` package to observe file events.
 """
 import logging
 from threading import Timer
-from typing import AnyStr, List, NoReturn, Union
+from typing import AnyStr, List, Union
 
 from cosapp.systems import System
 
@@ -66,7 +66,7 @@ try:  # watchdog will be a conditional dependency
             self.__timer: Timer = None
             self.__is_alive = False
 
-        def compute(self, file_full_path: str) -> NoReturn:
+        def compute(self, file_full_path: str) -> None:
             """Actions to do while an event is detected
             
             Parameters
@@ -80,7 +80,7 @@ try:  # watchdog will be a conditional dependency
             """Is the watcher alive?"""
             return self.__is_alive
 
-        def reset(self) -> NoReturn:
+        def reset(self) -> None:
             """Reset the watchdog by stopping the timer countdown and starting a new one"""
             if self.__observer is None:
                 raise RuntimeError("Watcher has never been started.")
@@ -88,7 +88,7 @@ try:  # watchdog will be a conditional dependency
             self.__timer = Timer(self.timeout, self.stop)
             self.__timer.start()
 
-        def stop(self) -> NoReturn:
+        def stop(self) -> None:
             """Exits the watchdog monitoring"""
             if not self.__is_alive:
                 logger.debug("Watcher not alive.")
@@ -101,7 +101,7 @@ try:  # watchdog will be a conditional dependency
 
             logger.info(f"..trigger on {self._owner.name!r} is timeout")
 
-        def start(self, time_step: float = 1.0) -> NoReturn:
+        def start(self, time_step: float = 1.0) -> None:
             """Starts the watchdog monitoring
 
             Parameters
@@ -139,7 +139,7 @@ try:  # watchdog will be a conditional dependency
             Define the file patterns to monitor in the chosen path
         """
 
-        def on_created(self, event: FileCreatedEvent) -> NoReturn:  # when file is created
+        def on_created(self, event: FileCreatedEvent) -> None:  # when file is created
             """Actions to complete when a creation event is triggered
             
             Parameters
@@ -171,7 +171,7 @@ try:  # watchdog will be a conditional dependency
 
         def on_modified(
             self, event: FileModifiedEvent
-        ) -> NoReturn:  # when file is modified
+        ) -> None:  # when file is modified
             """Actions to complete when a modification event is triggered
 
             Parameters

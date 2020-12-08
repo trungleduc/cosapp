@@ -2,7 +2,7 @@
 from collections import OrderedDict
 import logging
 import sys
-from typing import Any, Dict, List, NoReturn, Tuple
+from typing import Any, Dict, List, Tuple
 
 import numpy
 
@@ -311,7 +311,7 @@ def get_list_inputs(
 
 def _write_outputs(
     in_or_out: str, outputs: list, hierarchical: bool, print_arrays: bool, out_stream
-) -> NoReturn:
+) -> None:
     """
     Write table of variable names, values, residuals, and metadata to out_stream.
 

@@ -4,7 +4,7 @@ Classes connecting `Port` of foreign `System` to transfer variable values.
 import copy
 import logging
 import weakref
-from typing import Callable, Dict, List, NoReturn, Optional, Tuple, Union
+from typing import Callable, Dict, List, Optional, Tuple, Union
 
 from cosapp.ports import units
 from cosapp.ports.port import ExtensiblePort, PortType
@@ -139,7 +139,7 @@ class Connector:
         return self._source()
 
     @source.setter
-    def source(self, port: ExtensiblePort) -> NoReturn:
+    def source(self, port: ExtensiblePort) -> None:
         check_arg(port, 'source', ExtensiblePort)
 
         if len(self.source) != len(port):
@@ -161,7 +161,7 @@ class Connector:
         return self._sink()
 
     @sink.setter
-    def sink(self, port: ExtensiblePort) -> NoReturn:
+    def sink(self, port: ExtensiblePort) -> None:
         check_arg(port, 'sink', ExtensiblePort)
 
         if len(self.sink) != len(port):
@@ -182,7 +182,7 @@ class Connector:
         """Dict[str, str] : Variable name mapping between the sink (key) and the source (value)."""
         return self._mapping
 
-    def set_perturbation(self, name: str, value: float) -> NoReturn:
+    def set_perturbation(self, name: str, value: float) -> None:
         """Add a perturbation on a connector.
         
         Parameters
@@ -199,7 +199,7 @@ class Connector:
         self._unit_conversions[name] = s, a + value
         self.source.owner.set_dirty(PortType.IN)
 
-    def remove_variables(self, names: List[str]) -> NoReturn:
+    def remove_variables(self, names: List[str]) -> None:
         """Remove the provided variables from this connection.
 
         The provided names should be sink names.
@@ -213,7 +213,7 @@ class Connector:
             del self._mapping[variable]
             del self._unit_conversions[variable]
 
-    def update_unit_conversion(self, name: Optional[str] = None) -> NoReturn:
+    def update_unit_conversion(self, name: Optional[str] = None) -> None:
         """Update the physical unit conversion on the connector.
 
         If `name` is not `None`, update the conversion only for the connexion towards that variable.
@@ -230,7 +230,7 @@ class Connector:
             If unit conversion from source to sink is not possible
         """
 
-        def update_one_connection(key: str) -> NoReturn:
+        def update_one_connection(key: str) -> None:
             """Update the unit converter of the connected key.
 
             Parameters
@@ -265,7 +265,7 @@ class Connector:
         else:
             update_one_connection(name)
 
-    def transfer(self) -> NoReturn:
+    def transfer(self) -> None:
         """Transfer values from `source` to `sink`."""
         # TODO improve efficiency
         def conversion_function(key) -> Callable:

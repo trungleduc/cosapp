@@ -13,7 +13,6 @@
     :license: BSD, see LICENSE for details.
 """
 
-import re
 import codecs
 import posixpath
 import os
@@ -24,7 +23,6 @@ from six import text_type
 from docutils import nodes
 from docutils.parsers.rst import Directive, directives
 from docutils.statemachine import ViewList
-from typing import NoReturn
 
 import sphinx
 from sphinx.application import Sphinx
@@ -379,7 +377,7 @@ def config_inited(app, config):
     app.add_css_file("mermaid.css")
 
 
-def on_build_finished(app: Sphinx, exc: Exception) -> NoReturn:
+def on_build_finished(app: Sphinx, exc: Exception) -> None:
     if exc is None:
         src = os.path.join(os.path.dirname(__file__), "mermaid.css")
         dst = os.path.join(app.outdir, "_static")

@@ -1,5 +1,5 @@
 from numbers import Number
-from typing import Any, Dict, List, NoReturn, Optional, Union, Tuple
+from typing import Any, Dict, List, Optional, Union, Tuple
 
 import abc
 import numpy
@@ -214,7 +214,7 @@ class Boundary:
         return self._mask
 
     @mask.setter
-    def mask(self, mask: Union[None, numpy.ndarray]) -> NoReturn:
+    def mask(self, mask: Union[None, numpy.ndarray]) -> None:
         check_arg(mask, f"mask for variable {self.name!r}", (type(None), list, tuple, numpy.ndarray))
         if mask is not None:
             mask = numpy.asarray(mask)
@@ -247,7 +247,7 @@ class Boundary:
             return numpy.empty(0)
 
     @value.setter
-    def value(self, new: Union[Number, numpy.ndarray]) -> NoReturn:
+    def value(self, new: Union[Number, numpy.ndarray]) -> None:
         me = self.name
 
         if self.mask is None:
@@ -268,7 +268,7 @@ class Boundary:
     def set_default_value(self,
         value: Union[Number, numpy.ndarray, None],
         mask: Optional[numpy.ndarray] = None
-    ) -> NoReturn:
+    ) -> None:
         """Set the default value.
 
         Parameters
@@ -363,7 +363,7 @@ class Boundary:
                 mask = None  # None specified indices are set to the old value
         return value, mask
 
-    def set_to_default(self) -> NoReturn:
+    def set_to_default(self) -> None:
         """Set the current value with the default one."""
         if self._default_value is None:
             # This is to verbose and not understable with a classical use
@@ -510,7 +510,7 @@ class AbstractTimeUnknown(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def reset(self) -> NoReturn:
+    def reset(self) -> None:
         """Reset transient unknown to a reference value"""
         pass
 
@@ -680,7 +680,7 @@ class TimeUnknown(Boundary, AbstractTimeUnknown):
         return self._pulled_from
 
     @Boundary.value.setter
-    def value(self, new: Union[Number, numpy.ndarray]) -> NoReturn:
+    def value(self, new: Union[Number, numpy.ndarray]) -> None:
         super(self.__class__, self.__class__).value.fset(self, new)
         self.context.name2variable[self.name].mapping.owner.set_dirty(PortType.IN)
 
@@ -699,7 +699,7 @@ class TimeUnknown(Boundary, AbstractTimeUnknown):
             "max_time_step": str(self.max_time_step_expr),
         }
 
-    def reset(self) -> NoReturn:
+    def reset(self) -> None:
         """Reset transient unknown to a reference value.
         Inactive for class TimeUnknown."""
         pass
@@ -743,7 +743,7 @@ class TimeDerivative(Boundary):
         except KeyError:  # does not exist in current context
             return str(self.default_value)
 
-    def reset(self, value: Any = None) -> NoReturn:
+    def reset(self, value: Any = None) -> None:
         self.__previous = self.source
         if value is not None:
             self.initial_value = value  # NB: `value` may be an expression
@@ -798,7 +798,7 @@ class TimeDerivative(Boundary):
         self.context.name2variable[self.name].mapping.owner.set_dirty(PortType.IN)
 
     @Boundary.value.setter
-    def value(self, new: Union[Number, numpy.ndarray]) -> NoReturn:
+    def value(self, new: Union[Number, numpy.ndarray]) -> None:
         raise RuntimeError("Time derivatives are computed, and cannot be explicitly set")
 
     @staticmethod

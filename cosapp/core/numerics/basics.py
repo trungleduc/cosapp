@@ -1,7 +1,7 @@
 import logging
 from collections import OrderedDict
 from numbers import Number
-from typing import Any, Dict, Iterable, NoReturn, Optional, Sequence, Union, Tuple
+from typing import Any, Dict, Iterable, Optional, Sequence, Union, Tuple
 
 import numpy
 
@@ -63,7 +63,7 @@ class MathematicalProblem:
         Context in which the mathematical problem will be evaluated.
     """
 
-    def __init__(self, name: str, context: 'Optional[cosapp.systems.System]') -> NoReturn:
+    def __init__(self, name: str, context: 'Optional[cosapp.systems.System]') -> None:
         # TODO add point label to associate set of equations with Single Case
         self._name = name  # type: str
         self._context = context  # type: Optional[cosapp.systems.System]
@@ -417,7 +417,7 @@ class MathematicalProblem:
 
         return self
 
-    def clear(self) -> NoReturn:
+    def clear(self) -> None:
         """Clear all mathematical elements in this problem."""
         self._unknowns.clear()
         self._residues.clear()
@@ -452,7 +452,7 @@ class MathematicalProblem:
             "rates": dict([(name, rate.to_dict()) for name, rate in self.rates.items()])
         }
 
-    def validate(self) -> NoReturn:
+    def validate(self) -> None:
         """Verifies that there are as much unknowns as equations defined.
 
         Raises
