@@ -71,7 +71,7 @@ class NumericSolver:
                 try:
                     results.jac_lup = lu_factor(results.jac, check_finite=False)
                 except (ValueError, LinAlgWarning) as err:  # Silent LU decomposition failure
-                    logger.debug('Silent error: {}'.format(err))
+                    logger.debug(f"Silent error: {err}")
 
             return results
 
@@ -328,7 +328,9 @@ class NumericSolver:
         lu, piv = lu_factor(matrix, check_finite=True)
         min_diag = numpy.abs(lu.diagonal()).min()
         if min_diag < 1e-14:
-            raise LinAlgWarning('Quasi-singular Jacobian matrix; min diag element of U matrix is {}'.format(min_diag))
+            raise LinAlgWarning(
+                f"Quasi-singular Jacobian matrix; min diag element of U matrix is {min_diag}"
+            )
         return lu, piv
 
 

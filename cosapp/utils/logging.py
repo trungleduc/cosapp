@@ -14,7 +14,6 @@ from typing import (
     List,
     Mapping,
     Optional,
-    NoReturn,
     Type,
     Union,
 )
@@ -66,7 +65,7 @@ class HandlerWithContextFilters:
     def __init__(self):
         self.contextual_filters: List[FilterWithContext] = list()
 
-    def _set_contextual_filters(self, filters: Iterable[logging.Filter]) -> NoReturn:
+    def _set_contextual_filters(self, filters: Iterable[logging.Filter]) -> None:
         self.contextual_filters = list(
             filter(lambda f: isinstance(f, FilterWithContext), filters)
         )
@@ -83,7 +82,7 @@ class HandlerWithContextFilters:
         func: Optional[str] = None,
         extra: Optional[Mapping[str, Any]] = None,
         sinfo: Optional[str] = None,
-    ) -> NoReturn:
+    ) -> None:
         """Helper function to publish log message with this handler.
 
         Parameters
@@ -174,7 +173,7 @@ class LoggerContext:
     CONTEXT_EXIT_MESSAGE: ClassVar[str] = "Exiting "
 
     @contextmanager
-    def log_context(self, suffix: str = "") -> NoReturn:
+    def log_context(self, suffix: str = "") -> None:
         """Set this object as the context for the logger.
 
         Parameters
@@ -232,11 +231,11 @@ class FilterWithContext(logging.Filter):
         return self.__context
 
     @current_context.setter
-    def current_context(self, context: LoggerContext) -> NoReturn:
+    def current_context(self, context: LoggerContext) -> None:
         self.__context = context
         self._set_context()
 
-    def _set_context(self) -> NoReturn:
+    def _set_context(self) -> None:
         """Hook method called by current_context setter."""
         pass
 
@@ -255,7 +254,7 @@ class TimeFilter(FilterWithContext):
         self.__start_time = start_time
         self.__current_time = start_time
 
-    def _set_context(self) -> NoReturn:
+    def _set_context(self) -> None:
         """Update current time with the one of the context."""
         self.__current_time = getattr(self.current_context, "time", self.__current_time)
 
@@ -310,7 +309,7 @@ class ContextFilter(FilterWithContext):
         """
         return self._context_filter(record)
 
-    def _set_context(self) -> NoReturn:
+    def _set_context(self) -> None:
         context = self.current_context
         context_name = getattr(context, "name", None)
 
@@ -352,7 +351,7 @@ class FileLogHandler(RotatingFileHandler, HandlerWithContextFilters):
         filename: Union[str, Path] = "cosapp_trace.log",
         backupCount: int = 5,
         encoding: Optional[str] = None,
-    ) -> NoReturn:
+    ) -> None:
         RotatingFileHandler.__init__(
             self, filename, backupCount=backupCount, encoding=encoding, delay=True
         )
@@ -389,7 +388,7 @@ class FileLogHandler(RotatingFileHandler, HandlerWithContextFilters):
 class StreamLogHandler(logging.StreamHandler, HandlerWithContextFilters):
     """Special StreamHandler for CoSApp log message."""
 
-    def __init__(self, stream: io.TextIOBase = DEFAULT_STREAM) -> NoReturn:
+    def __init__(self, stream: io.TextIOBase = DEFAULT_STREAM) -> None:
         if stream is DEFAULT_STREAM:
             stream = sys.stdout
         logging.StreamHandler.__init__(self, stream=stream)
@@ -423,7 +422,7 @@ class StreamLogHandler(logging.StreamHandler, HandlerWithContextFilters):
         return self.needs_handling(record) and super().handle(record)
 
 
-def rollover_logfile() -> NoReturn:
+def rollover_logfile() -> None:
     """Rollover logfile of CoSApp LogHandler."""
     root_logger = logging.getLogger()
 
@@ -441,7 +440,7 @@ def set_log(
     format: str = "%(message)s",
     encoding: Optional[str] = None,
     backupCount: int = 5,
-) -> NoReturn:
+) -> None:
     """Set the CoSApp simulation log behavior.
 
     If `backupCount` is nonzero, at most `backupCount` files will be kept, and if more

@@ -42,8 +42,7 @@ class SurrogateModel(object):
             Point(s) at which the surrogate is evaluated.
         """
         if not self.trained:
-            msg = "{0} has not been trained, so no prediction can be made."\
-                .format(type(self).__name__)
+            msg = f"{type(self).__name__} has not been trained, so no prediction can be made."
             raise RuntimeError(msg)
 
     def vectorized_predict(self, x):

@@ -1,5 +1,5 @@
 from numbers import Number
-from typing import Iterable, List, NoReturn, Tuple, Union
+from typing import Iterable, List, Tuple, Union
 
 import numpy
 
@@ -29,7 +29,7 @@ class RunOptim(IterativeCase):
         name: str,
         owner: "Optional[cosapp.systems.System]" = None,
         **kwargs
-    ) -> NoReturn:
+    ) -> None:
         """Initialize a driver
 
         Parameters
@@ -46,7 +46,7 @@ class RunOptim(IterativeCase):
         self.constraints = list()  # type: List[Dict]
             # desc="Constraints to be applied in the optimization problem"
 
-    def set_objective(self, expression: str) -> NoReturn:
+    def set_objective(self, expression: str) -> None:
         """Set the scalar objective function to be minimized.
 
         Parameters
@@ -95,7 +95,7 @@ class RunOptim(IterativeCase):
         self.design.add_unknown(name, max_abs_step, max_rel_step, lower_bound, upper_bound)
 
     def add_constraints(self, expression: Union[str, List[Union[str, Tuple[str, bool]]]],
-                        inequality: bool = True) -> NoReturn:
+                        inequality: bool = True) -> None:
         """Add constraints to the optimization problem.
 
         Parameters
@@ -106,7 +106,7 @@ class RunOptim(IterativeCase):
             If True, expression must be non-negative; else must be zero.
         """
 
-        def add_constraint(expression: str, inequality: bool) -> NoReturn:
+        def add_constraint(expression: str, inequality: bool) -> None:
             check_arg(expression, 'expression', str)
             check_arg(inequality, 'inequality', bool)
 

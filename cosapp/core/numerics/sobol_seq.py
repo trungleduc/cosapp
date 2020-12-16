@@ -189,9 +189,7 @@ def i4_sobol_generate_std_normal(dim_num, n, skip=1):
 
     sobols = i4_sobol_generate(dim_num, n, skip)
 
-    normals = norm.ppf(sobols)
-
-    return normals
+    return norm.ppf(sobols)
 
 
 def i4_sobol(dim_num, seed):
@@ -315,13 +313,13 @@ def i4_sobol(dim_num, seed):
     #  Check parameters.
     if dim_num < 1 or dim_max < dim_num:
         # TODO test
-        raise ArithmeticError('i4_sobol - The spatial dimension DIM_NUM should satisfy: '
-                              '1 <= DIM_NUM <= {:d} But this input value is DIM_NUM = {:d}'.format(dim_max,
-                                                                                                   dim_num))
+        raise ArithmeticError(
+            f"The spatial dimension DIM_NUM should satisfy"
+            f" 1 <= DIM_NUM <= {dim_max:d}, but DIM_NUM = {dim_num:d}"
+        )
 
     #  Initialize the remaining rows of V.
     for i in range(2, dim_num + 1):
-
         #  The bits of the integer POLY(I) gives the form of polynomial I.
         #  Find the degree of polynomial I from binary encoding.
         j = poly[i - 1]
@@ -371,7 +369,6 @@ def i4_sobol(dim_num, seed):
         lastq = np.zeros(dim_num)
 
     elif seed == seed_save + 1:
-
         #  Find the position of the right-hand zero in SEED.
         l = i4_bit_lo0(seed)
 
@@ -401,7 +398,7 @@ def i4_sobol(dim_num, seed):
     #  Check that the user is not calling too many times!
     if maxcol < l:
         # TODO test
-        raise ArithmeticError('I4_SOBOL -  Too many calls! MAXCOL = {:d}; L = {:d}'.format(maxcol, l))
+        raise ArithmeticError(f"Too many calls! MAXCOL = {maxcol:d}; L = {l:d}")
 
     #  Calculate the new components of QUASI.
     quasi = np.zeros(dim_num)
@@ -459,7 +456,7 @@ def i4_uniform(a, b, seed):
     """
     if seed == 0:
         # TODO test
-        raise ArithmeticError('I4_UNIFORM -   Input SEED = 0!')
+        raise ArithmeticError("Input SEED = 0!")
 
     seed = np.floor(seed)
     a = round(a)

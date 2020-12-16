@@ -1,7 +1,7 @@
 import logging
 from collections import OrderedDict
 from numbers import Number
-from typing import Any, Dict, Iterable, NoReturn, Optional, Sequence, Union, Tuple
+from typing import Any, Dict, Iterable, Optional, Sequence, Union, Tuple
 
 import numpy
 
@@ -63,7 +63,7 @@ class MathematicalProblem:
         Context in which the mathematical problem will be evaluated.
     """
 
-    def __init__(self, name: str, context: 'Optional[cosapp.systems.System]') -> NoReturn:
+    def __init__(self, name: str, context: 'Optional[cosapp.systems.System]') -> None:
         # TODO add point label to associate set of equations with Single Case
         self._name = name  # type: str
         self._context = context  # type: Optional[cosapp.systems.System]
@@ -111,7 +111,7 @@ class MathematicalProblem:
         if self.context is None:
             self._context = context
         else:
-            raise ValueError("Context is already set to '{}'.".format(self.context.name))
+            raise ValueError(f"Context is already set to {self.context.name!r}.")
 
     @property
     def residues(self) -> Dict[str, Residue]:
@@ -125,7 +125,7 @@ class MathematicalProblem:
         for name, residue in self.residues.items():
             n_values = numpy.size(residue.value)
             if n_values > 1:
-                names.extend(['{}[{}]'.format(name, i) for i in range(n_values)])
+                names.extend([f"{name}[{i}]" for i in range(n_values)])
             else:
                 names.append(name)
         return tuple(names)
@@ -158,7 +158,7 @@ class MathematicalProblem:
         for name, unknown in self.unknowns.items():
             n_values = numpy.size(unknown.value)
             if n_values > 1:
-                names.extend(['{}[{}]'.format(name, i) for i in numpy.arange(n_values)[unknown.mask]])
+                names.extend([f"{name}[{i}]" for i in numpy.arange(n_values)[unknown.mask]])
             else:
                 names.append(name)
         return tuple(names)
@@ -228,7 +228,8 @@ class MathematicalProblem:
             """
             if name in self._unknowns:
                 raise ArithmeticError(
-                    "Variable {!r} is defined multiple times as unknown variable in {!r}.".format(name, self.name))
+                    "Variable {name!r} is defined multiple times as unknown variable in {self.name!r}."
+                )
 
             unknown = Unknown(context, name, max_abs_step, max_rel_step, lower_bound, upper_bound, mask)
             # TODO we have a trouble here if a vector variable is defined as unknown partially multiple time
@@ -244,7 +245,7 @@ class MathematicalProblem:
             for unknown in name:
                 if isinstance(unknown, Unknown):
                     current_to_context = self.context.get_path_to_child(unknown.context)
-                    new_name = '.'.join((current_to_context, name)) if current_to_context else unknown.name
+                    new_name = f"{current_to_context}.{name}" if current_to_context else unknown.name
                     if new_name in self._unknowns:
                         logger.warning(
                             "Unknown {!r} already exists in mathematical system {!r}. "
@@ -372,7 +373,7 @@ class MathematicalProblem:
             raise AttributeError("Owner System is required to define a time derivative.")
 
         if name in self._rates:
-            raise ArithmeticError('Variable "{}" is already defined as a time-dependent unknown of "{}".'.format(name, self.name))
+            raise ArithmeticError(f"Variable {name!r} is already defined as a time-dependent unknown of {self.name!r}.")
 
         self._rates[name] = TimeDerivative(self.context, name, source, initial_value)
         return self
@@ -395,21 +396,18 @@ class MathematicalProblem:
         current_to_context = self.context.get_path_to_child(other.context)
 
         if len(current_to_context) > 0:
-            full_path = lambda name: '.'.join((current_to_context, name))
+            full_path = lambda name: f"{current_to_context}.{name}"
             residue_fullname = lambda name: full_path(name if name.endswith(')') else name.join('()'))
         else:
             full_path = residue_fullname = lambda name: name
 
-        if copy:
-            get = lambda obj: obj.copy()
-        else:
-            get = lambda obj: obj
+        get = (lambda obj: obj.copy()) if copy else (lambda obj: obj)
 
         def connect(self_dict, other_dict, get_fullname):
             for name, elem in other_dict.items():
                 fullname = get_fullname(name)
                 if fullname in self_dict:
-                    raise ValueError("'{}' already exists in system '{}'.".format(fullname, self.name))
+                    raise ValueError(f"{fullname!r} already exists in system {self.name!r}.")
                 self_dict[fullname] = get(elem)
 
         connect(self._unknowns, other.unknowns, full_path)
@@ -419,7 +417,7 @@ class MathematicalProblem:
 
         return self
 
-    def clear(self) -> NoReturn:
+    def clear(self) -> None:
         """Clear all mathematical elements in this problem."""
         self._unknowns.clear()
         self._residues.clear()
@@ -454,7 +452,7 @@ class MathematicalProblem:
             "rates": dict([(name, rate.to_dict()) for name, rate in self.rates.items()])
         }
 
-    def validate(self) -> NoReturn:
+    def validate(self) -> None:
         """Verifies that there are as much unknowns as equations defined.
 
         Raises
@@ -464,9 +462,10 @@ class MathematicalProblem:
         """
         n_unknowns, n_equations = self.shape
         if n_unknowns != n_equations:
-            msg = ('Nonlinear problem {} error: Mismatch between numbers of params [{}] and residues [{}]'
-                   ''.format(self.name, n_unknowns, n_equations))
+            msg = "Nonlinear problem {} error: Mismatch between numbers of params [{}] and residues [{}]".format(
+                self.name, n_unknowns, n_equations
+            )
             logger.error(msg)
-            logger.error('Residues: {}'.format(list(self.residues)))
-            logger.error('Variables: {}'.format(list(self.unknowns)))
+            logger.error(f"Residues: {list(self.residues)}")
+            logger.error(f"Variables: {list(self.unknowns)}")
             raise ArithmeticError(msg)

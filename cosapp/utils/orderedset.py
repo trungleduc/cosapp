@@ -60,7 +60,7 @@ class OrderedSet(collections.abc.MutableSet):
         for i, elem in enumerate(self):
             if elem == value:
                 return i
-        raise ValueError("{} is not in set".format(value))
+        raise ValueError(f"{value!r} is not in set")
 
     def discard(self, elem):
         """Remove an element from the set"""   
@@ -108,7 +108,7 @@ class OrderedSet(collections.abc.MutableSet):
 
     def __repr__(self):
         elems = list(self) if self else ""
-        return "{}({})".format(self.__class__.__name__, elems)
+        return f"{self.__class__.__name__}({elems})"
 
     def __eq__(self, other):
         return isinstance(other, OrderedSet) and list(self) == list(other)

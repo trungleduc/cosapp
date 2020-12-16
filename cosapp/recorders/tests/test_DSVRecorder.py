@@ -210,18 +210,12 @@ def test_DSVRecorder_record_iteration(tmp_path):
 
     rec.record_state(0)
     precision = 9
-    line = ["", "", "0", "0"] + ["{0:.{1}e}".format(1.0, precision)] * 3
-    line.extend(["{0:.{1}e}".format(0.0, precision)] * 3)
-    line.append("{0:.{1}e}".format(23, precision))
-    line.append("{0:.{1}e}".format(23, precision))
-    line.append("sammy")
-    line.append("sammy")
-    line.append("{0:.{1}e}".format(1.0, precision))
-    line.append("{0:.{1}e}".format(2.0, precision))
-    line.append("{0:.{1}e}".format(3.0, precision))
-    line.append("{0:.{1}e}".format(1.0, precision))
-    line.append("{0:.{1}e}".format(2.0, precision))
-    line.append("{0:.{1}e}".format(3.0, precision))
+    fmt = lambda value: "{0:.{1}e}".format(value, precision)
+    line = ["", "", "0", "0"] + [fmt(1.0)] * 3
+    line.extend([fmt(0.0)] * 3)
+    line.extend([fmt(23)] * 2)
+    line.extend(["sammy"] * 2)
+    line.extend([fmt(1.0), fmt(2.0), fmt(3.0)] * 2)
 
     content = frecorder.read_text().strip().split("\n")
     assert len(content) == 1
@@ -247,18 +241,12 @@ def test_DSVRecorder_record_precision(tmp_path):
 
     rec.record_state(0)
     precision = 4
-    line = ["", "", "0", "0"] + ["{0:.{1}e}".format(1.0, precision)] * 3
-    line.extend(["{0:.{1}e}".format(0.0, precision)] * 3)
-    line.append("{0:.{1}e}".format(23, precision))
-    line.append("{0:.{1}e}".format(23, precision))
-    line.append("sammy")
-    line.append("sammy")
-    line.append("{0:.{1}e}".format(1.0, precision))
-    line.append("{0:.{1}e}".format(2.0, precision))
-    line.append("{0:.{1}e}".format(3.0, precision))
-    line.append("{0:.{1}e}".format(1.0, precision))
-    line.append("{0:.{1}e}".format(2.0, precision))
-    line.append("{0:.{1}e}".format(3.0, precision))
+    fmt = lambda value: "{0:.{1}e}".format(value, precision)
+    line = ["", "", "0", "0"] + [fmt(1.0)] * 3
+    line.extend([fmt(0.0)] * 3)
+    line.extend([fmt(23)] * 2)
+    line.extend(["sammy"] * 2)
+    line.extend([fmt(1.0), fmt(2.0), fmt(3.0)] * 2)
 
     content = frecorder.read_text().strip().split("\n")
     assert len(content) == 1

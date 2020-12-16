@@ -1,5 +1,5 @@
 import re
-from typing import Any, List, Tuple, NoReturn
+from typing import Any, List, Tuple
 from cosapp.utils.helpers import check_arg
 
 
@@ -33,7 +33,7 @@ class NameChecker:
         return self.__pattern.pattern
 
     @pattern.setter
-    def pattern(self, pattern: str) -> NoReturn:
+    def pattern(self, pattern: str) -> None:
         self.__pattern = re.compile(pattern)
 
     @property
@@ -57,7 +57,7 @@ class NameChecker:
         return self.__message
 
     @message.setter
-    def message(self, message: str) -> NoReturn:
+    def message(self, message: str) -> None:
         check_arg(message, "message", str)
         self.__message = message
         if len(self.__message) > 0:

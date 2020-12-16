@@ -1,7 +1,6 @@
 import abc
 import logging
 from numbers import Number
-from typing import NoReturn
 
 from cosapp.patterns import Singleton, Observer, Subject
 
@@ -71,6 +70,6 @@ class TimeObserver(Observer):
         return UniversalClock().time
 
     @abc.abstractmethod
-    def _update(self, dt: Number) -> NoReturn:
+    def _update(self, dt: Number) -> None:
         """Specifies how object must update when notified a time step of `dt`"""
         pass

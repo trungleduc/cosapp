@@ -3,7 +3,7 @@ import json
 import logging
 from copy import copy
 from numbers import Number
-from typing import (Any, AnyStr, Callable, Dict, List, NoReturn, Optional,
+from typing import (Any, AnyStr, Callable, Dict, List, Optional,
                     Sequence, Tuple, Union)
 
 import numpy
@@ -37,7 +37,7 @@ class AbstractSolver(Driver):
         name: str,
         owner: "Optional[cosapp.systems.System]" = None,
         **kwargs
-    ) -> NoReturn:
+    ) -> None:
         """Initialize a driver
 
         Parameters
@@ -80,7 +80,7 @@ class AbstractSolver(Driver):
             if key in self.options:
                 self.options[key] = value
             else:
-                raise KeyError("Unknown solver option '{}'".format(key))
+                raise KeyError(f"Unknown solver option {key!r}")
 
     @property
     def _default_driver_name(self) -> str:
@@ -128,7 +128,7 @@ class AbstractSolver(Driver):
             if isinstance(child, IterativeCase):
                 counter += child.set_iteratives(x[counter:])
 
-    def _precompute(self) -> NoReturn:
+    def _precompute(self) -> None:
         """Set up the mathematical problem."""
         # TODO we should check that all variables are of numerical types
         super()._precompute()
@@ -202,7 +202,7 @@ class AbstractSolver(Driver):
         pass
 
     # Don't clean initial_values and problem => could be useful for debugging
-    # def _postcompute(self) -> NoReturn:
+    # def _postcompute(self) -> None:
     #     """Undo pull inputs and reset iteratives sets."""
     #     self.initial_values = numpy.empty(0, dtype=numpy.float)
     #     self.problem = None

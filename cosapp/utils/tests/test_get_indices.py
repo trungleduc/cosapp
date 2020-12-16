@@ -67,12 +67,12 @@ def test__get_indices():
 
     with pytest.raises(
         IndexError,
-        match=r'Selection "[\w\[\.\s,\]]+" for variable "\w+.[\w\.]+" is not valid: .*',
+        match=r"Selection '[\w\[\.\s,\]]+' for variable '\w+.[\w\.]+' is not valid:.*",
     ):
         get_indices(s, "one.a[[2, 4]]")
 
     with pytest.raises(
         SyntaxError,
-        match=r'Selection "[\w\[\.\s,\]]+" for variable "\w+.[\w\.]+" is not valid: .*',
+        match=r"Selection '[\w\[\.\s,\]]+' for variable '\w+.[\w\.]+' is not valid:.*",
     ):
         get_indices(s, "one.a[[2, 4]")

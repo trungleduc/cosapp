@@ -3,7 +3,7 @@
 """
 import logging
 from collections import OrderedDict
-from typing import Callable, NoReturn, Optional, Sequence, Tuple, Union
+from typing import Callable, Optional, Sequence, Tuple, Union
 
 import numpy
 import scipy.optimize
@@ -82,7 +82,7 @@ class Optimizer(AbstractSolver):
         name: str,
         owner: "Optional[cosapp.systems.System]" = None,
         **kwargs
-    ) -> NoReturn:
+    ) -> None:
         """Initialize a driver
 
         Parameters
@@ -244,7 +244,7 @@ class Optimizer(AbstractSolver):
                 self.problem.extend(child.get_problem(), copy=False)
                 self.initial_values = numpy.append(self.initial_values, child.get_init(self.force_init))
 
-    def compute(self) -> NoReturn:
+    def compute(self) -> None:
         """Execute the optimization."""
         self.status = ''
         self.error_code = '0'
@@ -320,12 +320,12 @@ class Optimizer(AbstractSolver):
         else:
             logger.warning('No design variable has been specified for the optimization.')
 
-    def _postcompute(self) -> NoReturn:
+    def _postcompute(self) -> None:
         """Undo pull inputs and reset iteratives sets."""
         OptionalDriver.set_inhibited(False)
         super()._postcompute()
 
-    def _print_solution(self) -> NoReturn:  # TODO better returning a string
+    def _print_solution(self) -> None:  # TODO better returning a string
         """Print the solution in the log."""
         if self.options['verbose']:
             logger.info(f"Objective function: {self.problem.residues_vector[0]:.5g}")

@@ -1,6 +1,6 @@
 from collections.abc import MutableMapping
 from numbers import Number
-from typing import Any, Dict, Iterator, List, NoReturn, Optional, Tuple, TypeVar, Union
+from typing import Any, Dict, Iterator, List, Optional, Tuple, TypeVar, Union
 
 import numpy
 
@@ -63,9 +63,9 @@ class TimeUnknownStack(AbstractTimeUnknown):
         return str(self.value)
 
     def __repr__(self) -> str:
-        return "{} := {!s}".format(self.__name, self)
+        return f"{self.__name} := {self!s}"
 
-    def __init_stack(self) -> NoReturn:
+    def __init_stack(self) -> None:
         """
         1. Update the expression of the time derivative vector, and
         the size of individual variables (1 for scalars, n > 1 for vectors).
@@ -104,7 +104,7 @@ class TimeUnknownStack(AbstractTimeUnknown):
         return self.__value
 
     @value.setter
-    def value(self, new: Union[List[float], numpy.ndarray]) -> NoReturn:
+    def value(self, new: Union[List[float], numpy.ndarray]) -> None:
         if numpy.shape(new) != self.__value.shape:
             raise ValueError("Incompatible array shapes")
         self.__value = numpy.array(new)
@@ -114,7 +114,7 @@ class TimeUnknownStack(AbstractTimeUnknown):
             offset = i * size
             unknown.value = self.__sub_value(offset)
 
-    def reset(self) -> NoReturn:
+    def reset(self) -> None:
         """Reset stack value from original system variables"""
         self.__value = numpy.array(list(map(lambda t: t.value, self.__transients))).ravel()
 
@@ -154,7 +154,7 @@ class TimeUnknownDict(MutableMapping):
     def __getitem__(self, key: str) -> AbstractTimeUnknown:
         return self.__transients[key]
 
-    def __setitem__(self, key: str, value: AbstractTimeUnknown) -> NoReturn:
+    def __setitem__(self, key: str, value: AbstractTimeUnknown) -> None:
         if not isinstance(key, str):
             raise TypeError(
                 f"Keys of TimeUnknownDict must be strings; invalid key {key!r}"
@@ -173,7 +173,7 @@ class TimeUnknownDict(MutableMapping):
             except KeyError:
                 pass
 
-    def __delitem__(self, key: str) -> NoReturn:
+    def __delitem__(self, key: str) -> None:
         self.__transients.__delitem__(key)
         try:
             self.__constrained.__delitem__(key)
@@ -221,11 +221,11 @@ class TimeUnknownDict(MutableMapping):
         finally:
             return self.__transients.pop(key, *default)
 
-    def update(self, mapping: Dict) -> NoReturn:
+    def update(self, mapping: Dict) -> None:
         for key, value in mapping.items():
             self.__setitem__(key, value)
 
-    def clear(self) -> NoReturn:
+    def clear(self) -> None:
         self.__transients.clear()
         self.__constrained.clear()
 
@@ -305,7 +305,7 @@ class TimeVarManager:
         """
         return self.__problem.rates
 
-    def update_transients(self) -> NoReturn:
+    def update_transients(self) -> None:
         """Update the transient variable dictionary (see property `transients` for details)"""
         context = self.__context
         problem = context.get_unsolved_problem()
@@ -317,9 +317,9 @@ class TimeVarManager:
             reference2name[reference] = name
             der_context = unknown.der.eval_context
             derivative_expr = str(unknown.der)
-            if derivative_expr in der_context.name2variable:
+            try:
                 ders[reference] = der_context.name2variable[derivative_expr]
-            else:   # Complex derivative expression
+            except KeyError:   # Complex derivative expression
                 ders[reference] = VariableReference(context=der_context, mapping=None, key=derivative_expr)
 
         transients = TimeUnknownDict()
@@ -327,10 +327,8 @@ class TimeVarManager:
         # syst.name2variable["phi"] == syst.name2variable["inwards.phi"]
         tree = self.get_tree(ders)
         for root, branch in tree.items():
-            stack_context = root.context
-            root_name = reference2name[root]
-            root_unknown = context_transients[root_name]
             if len(branch) > 2:  # second- or higher-order derivative -> build unknown stack
+                stack_context = root.context
                 branches = list(map(TimeVarManager._get_variable_fullname, branch[:-1]))
                 root_stack_name = ", ".join(branches).join("[]")
                 context_name = context.get_path_to_child(stack_context)
@@ -342,7 +340,8 @@ class TimeVarManager:
                 transients[stack_name] = TimeUnknownStack(
                     stack_context, stack_name, list(transients_stack))
             else:  # first-order time derivative -> use current unknown
-                transients[root_name] = root_unknown
+                root_name = reference2name[root]
+                transients[root_name] = context_transients[root_name]
 
         self.__transients = transients
         self.__problem = problem
@@ -365,7 +364,7 @@ class TimeVarManager:
         if ref.mapping is None or ref.mapping.name in (System.INWARDS, System.OUTWARDS):
             return ref.key
         else:
-            return ".".join((ref.mapping.name, ref.key))
+            return f"{ref.mapping.name}.{ref.key}"
 
     @staticmethod
     def get_tree(ders: Dict[T, T]) -> Dict[T, List[T]]:
@@ -428,7 +427,7 @@ class TimeStepManager:
         return self.__nominal_dt
 
     @nominal_dt.setter
-    def nominal_dt(self, value: Number) -> NoReturn:
+    def nominal_dt(self, value: Number) -> None:
         if value is not None:
             check_arg(value, 'dt', Number, value_ok = lambda dt: dt > 0)
         self.__nominal_dt = value
@@ -439,7 +438,7 @@ class TimeStepManager:
         return self.__growthrate
 
     @max_growth_rate.setter
-    def max_growth_rate(self, value: Number) -> NoReturn:
+    def max_growth_rate(self, value: Number) -> None:
         if value is None:
             self.__growthrate = numpy.inf
         else:

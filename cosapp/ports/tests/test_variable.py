@@ -21,6 +21,14 @@ def port():
     return mock.Mock(spec=ExtensiblePort)
 
 
+@pytest.fixture(scope='function')
+def plainvar(port):
+    name = 'plain'
+    value = 2.0
+    setattr(port, name, value)
+    return Variable(name, port, value)
+
+
 @pytest.mark.parametrize("value, expected", [
     (True, None),
     (1, (-np.inf, np.inf)),
@@ -52,8 +60,8 @@ def port():
     (np.asarray([], dtype=np.int), (-np.inf, np.inf)),
     (np.asarray([], dtype=np.unicode), None),
     ])
-def test_Variable__get_limits_from_type(value, expected):
-    assert Variable._get_limits_from_type(value) == expected
+def test_Variable__get_limits_from_type(plainvar, value, expected):
+    assert plainvar._get_limits_from_type(value) == expected
 
 
 @pytest.mark.parametrize("limits, valid, value, expected", [
@@ -71,9 +79,9 @@ def test_Variable__get_limits_from_type(value, expected):
     ((None, 10.0), (0.0, 5.0), 0.0, ((-np.inf, 10.0), (0.0, 5.0))),
     ((0.0, 5.0), (0.0, 5.0), "dummy string",  (None, None)),
 ])
-def test_Variable__check_range(limits, valid, value, expected):
+def test_Variable__check_range(plainvar, limits, valid, value, expected):
     # Test validity range
-    assert Variable._check_range(limits, valid, value) == expected 
+    assert plainvar._check_range(limits, valid, value) == expected 
 
 
 def test_Variable___init__(port, caplog):

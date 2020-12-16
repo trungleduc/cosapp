@@ -1,5 +1,5 @@
 import logging
-from typing import Any, List, NoReturn, Union, Sequence, Dict
+from typing import Any, List, Union, Sequence, Dict
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +56,7 @@ def pull_variables(
                 child_var: str,
                 parent_var: str,
                 value: Any,
-            ) -> NoReturn:
+            ) -> None:
                 details = child[port].get_details(child_var)
                 args = (parent_var, value)
                 # Validation criteria are removed to avoid warning duplication when checking

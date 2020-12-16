@@ -5,7 +5,7 @@ import logging
 import re
 import time
 from collections import OrderedDict
-from typing import List, Dict, NoReturn, Optional, Any
+from typing import List, Dict, Optional, Any
 
 from cosapp.core.module import Module
 from cosapp.recorders.recorder import BaseRecorder
@@ -60,7 +60,7 @@ class Driver(Module):
         name: str,
         owner: "Optional[cosapp.systems.System]" = None,
         **kwargs
-    ) -> NoReturn:
+    ) -> None:
         """Initialize a driver
 
         Parameters
@@ -118,7 +118,7 @@ class Driver(Module):
         return self._owner
 
     @owner.setter
-    def owner(self, system: "Optional[cosapp.systems.System]") -> NoReturn:
+    def owner(self, system: "Optional[cosapp.systems.System]") -> None:
         from cosapp.systems import System
         if system is not None:
             check_arg(system, 'owner', System)
@@ -152,12 +152,12 @@ class Driver(Module):
 
         return False
 
-    def _set_children_active_status(self, active_status : bool) -> NoReturn:
+    def _set_children_active_status(self, active_status : bool) -> None:
         self._active = active_status
         for child in self.children.values():
             child._set_children_active_status(active_status)
 
-    def _precompute(self) -> NoReturn:
+    def _precompute(self) -> None:
         """Set execution order and start the recorder."""
         if self.owner is None:
             raise AttributeError(f"Driver {self.name!r} has no owner system.")
@@ -175,7 +175,7 @@ class Driver(Module):
             logger.info(" " + "-" * 60)
             logger.info(f" # Starting driver {self.name!r} on {self.owner.name!r}")
 
-    def _postcompute(self) -> NoReturn:
+    def _postcompute(self) -> None:
         """Actions performed after the `Module.compute` call."""
         if self._recorder is not None:
             self._recorder.exit()  # TODO Fred Better in clean_run ?

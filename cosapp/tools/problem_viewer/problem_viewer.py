@@ -70,7 +70,7 @@ def _get_connections(
         if s.startswith(name):  # Case of port of systems group connect inside and outside
             return s
         else:
-            return '.'.join((name, s))
+            return f"{name}.{s}"
 
     # Gather the connections for the current system
     for c in system.connectors.values():
@@ -78,7 +78,7 @@ def _get_connections(
             continue
 
         for target, origin in c.variable_mapping.items():
-            connections['.'.join((c.sink.contextual_name, target))] = '.'.join((c.source.contextual_name, origin))
+            connections[f"{c.sink.contextual_name}.{target}"] = f"{c.source.contextual_name}.{origin}"
 
     # Recursively gather children connections
     for name, child in system.children.items():

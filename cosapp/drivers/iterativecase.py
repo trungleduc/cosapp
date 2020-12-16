@@ -1,6 +1,4 @@
 import logging
-from typing import NoReturn
-
 import numpy
 
 from cosapp.drivers.runonce import RunOnce
@@ -26,7 +24,7 @@ class IterativeCase(RunOnce):
 
     def __init__(
         self, name: str, owner: "Optional[cosapp.systems.System]" = None, **kwargs
-    ) -> NoReturn:
+    ) -> None:
         """Initialize a driver
 
         Parameters
@@ -44,14 +42,12 @@ class IterativeCase(RunOnce):
             # desc="Additional mathematical problem to solve for the case.",
 
     @RunOnce.owner.setter
-    def owner(self, value: "Optional[cosapp.systems.System]") -> NoReturn:
+    def owner(self, value: "Optional[cosapp.systems.System]") -> None:
         # Trick to call super setter (see: https://bugs.python.org/issue14965)
         if self.owner is not value:
             if self.owner is not None:
                 logger.warning(
-                    "System owner of Driver '{}' has changed. Optimization equations have been cleared.".format(
-                        self.name
-                    )
+                    f"System owner of Driver {self.name!r} has changed. Optimization equations have been cleared."
                 )
             self.design = MathematicalProblem(self.design.name, value)
         super(IterativeCase, IterativeCase).owner.__set__(self, value)
@@ -86,7 +82,7 @@ class IterativeCase(RunOnce):
 
         return counter
 
-    def _postcompute(self) -> NoReturn:
+    def _postcompute(self) -> None:
         """Actions to carry out after the :py:meth:`~cosapp.drivers.runonce.RunOnce.compute` method call.
 
         This gathers the residues for this point and undo the variable status changes

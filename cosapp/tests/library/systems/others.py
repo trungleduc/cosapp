@@ -128,11 +128,11 @@ class RealDuct(System):
         def wr_Mach(mach):
             return Residue.evaluate_residue(
                 wr,
-                mach * (1 + 0.5 * (gamma - 1.) * mach ** 2) ** (0.5 * (gamma + 1) / (gamma - 1))
+                mach * (1 + 0.5 * (gamma - 1) * mach ** 2) ** (0.5 * (gamma + 1) / (gamma - 1))
             )
 
         self.mach = root(wr_Mach, self.mach).x[0]
-        logger.debug('Internal iterative, residue: {}, {}'.format(self.mach, wr_Mach(self.mach)))
+        logger.debug(f"Internal iterative, residue: {self.mach}, {wr_Mach(self.mach)}")
         f = (1 + 0.5 * (gamma - 1.) * self.mach ** 2)
         self.ps = self.fl_in.Pt / f ** (gamma / (gamma - 1.))
         self.ts = self.fl_in.Tt / f
@@ -241,7 +241,7 @@ class Fan(System):
                         fl_in.Pt / 101325.)
         else:
             logger.error(
-                '"{}" at port "{}": Tt cannot be negative or null'.format(self.name, 'fl_in'))
+                f"{self.name!r} at port 'fl_in': Tt cannot be negative or null")
             raise ZeroDivisionError
 
         fl_out.Pt = fl_in.Pt * (0.01 * (self.pcnr + self.gh) + 1)

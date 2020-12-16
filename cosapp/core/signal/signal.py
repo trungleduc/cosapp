@@ -5,7 +5,7 @@ Module defining the Signal class.
 import inspect
 import logging
 import threading
-from typing import Any, Callable, List, NoReturn, Optional, Union
+from typing import Any, Callable, List, Optional, Union
 
 from cosapp.core.signal.slot import Slot
 
@@ -68,7 +68,7 @@ class Signal:
         args: Optional[List[str]] = None,
         name: Optional[str] = None,
         threadsafe: bool = False,
-    ) -> NoReturn:
+    ) -> None:
         self.__slots = []
         self.__slot_lock = threading.RLock() if threadsafe else DummyLock()
         self.args = args or []
@@ -89,7 +89,7 @@ class Signal:
             self.__slots = slots
             return list(slots)
 
-    def connect(self, slot: Union[Slot, Callable]) -> NoReturn:
+    def connect(self, slot: Union[Slot, Callable]) -> None:
         """
         Connect a callback `slot` to this signal.
         """
@@ -114,7 +114,7 @@ class Signal:
         with self.__slot_lock:
             return slot in self.__slots
 
-    def disconnect(self, slot: Slot) -> NoReturn:
+    def disconnect(self, slot: Slot) -> None:
         """
         Disconnect a slot from a signal if it is connected; else do nothing.
         """

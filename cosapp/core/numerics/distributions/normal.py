@@ -1,8 +1,8 @@
 """Basic class to define a variable distribution."""
-from typing import Any, Dict, NoReturn, Union, Tuple, Optional
+from typing import Optional
 
-from scipy.optimize import root
-from scipy.stats import norm
+import scipy.optimize
+import scipy.stats
 from .distribution import Distribution
 
 
@@ -31,16 +31,13 @@ class Normal(Distribution):
         pbest: Optional[float] = 0.15,
     ):
         self._rv = None  # type: scipy.stats.norm
+        super().__init__(worst, best, pworst, pbest)
 
-        super(Normal, self).__init__(worst, best, pworst, pbest)
-
-    def _set_distribution(self) -> NoReturn:
+    def _set_distribution(self) -> None:
         """Set the probability distribution according the parameters."""
         if self.pworst + self.pbest > 1.0:
             raise ValueError(
-                "Best and worst probabilities are incompatible: {!s}.".format(
-                    self.__json__()
-                )
+                f"Best and worst probabilities are incompatible: {self.__json__()!s}."
             )
 
         pts = [self.worst, self.best]
@@ -56,16 +53,16 @@ class Normal(Distribution):
             x0 = [params["loc"], params["scale"]]
 
         def f(x):
-            t = norm(loc=x[0], scale=x[1])
+            t = scipy.stats.norm(loc=x[0], scale=x[1])
             ppf = t.ppf(ppts)
             return ppf - pts
 
-        res = root(f, x0)
+        res = scipy.optimize.root(f, x0)
         if not res.success:
             raise ValueError(
-                "Unable to fit normal distribution on {!s}.".format(self.__json__())
+                f"Unable to fit normal distribution on {self.__json__()!s}."
             )
-        self._rv = norm(loc=res.x[0], scale=res.x[1])
+        self._rv = scipy.stats.norm(loc=res.x[0], scale=res.x[1])
 
     def draw(self, quantile: Optional[float] = None) -> float:
         """Generate a random number.

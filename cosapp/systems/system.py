@@ -17,7 +17,7 @@ from numbers import Number
 from pathlib import Path
 from typing import (
     Any, Callable, ClassVar, Dict, FrozenSet,
-    Iterable, List, NoReturn,
+    Iterable, List,
     Optional, Tuple, Union,
 )
 import weakref
@@ -244,7 +244,7 @@ class System(Module, TimeObserver):
         self.__enforce_scope()
         self._locked = True
 
-    def _update(self, dt) -> NoReturn:
+    def _update(self, dt) -> None:
         """Required by TimeObserver base class"""
         pass
         
@@ -263,7 +263,7 @@ class System(Module, TimeObserver):
         """
         return self._is_clean[direction]
 
-    def set_clean(self, direction: PortType) -> NoReturn:
+    def set_clean(self, direction: PortType) -> None:
         """Set to clean ports of a certain direction.
 
         Parameters
@@ -273,7 +273,7 @@ class System(Module, TimeObserver):
         """
         self._is_clean[direction] = True
 
-    def set_dirty(self, direction: PortType) -> NoReturn:
+    def set_dirty(self, direction: PortType) -> None:
         """Set to dirty ports of a certain direction.
 
         Parameters
@@ -289,7 +289,7 @@ class System(Module, TimeObserver):
         ):
             self.parent.set_dirty(direction)
 
-    def __enforce_scope(self) -> NoReturn:
+    def __enforce_scope(self) -> None:
         """Encapsulate input ports for which some variables are out of scope."""
         if self._user_context is None:
 
@@ -373,7 +373,7 @@ class System(Module, TimeObserver):
 
     def setup(
         self, **kwargs
-    ) -> NoReturn:  # TODO update doc for **kwargs and add unit tests
+    ) -> None:  # TODO update doc for **kwargs and add unit tests
         """`System` port and/or child `System` are defined in this function.
 
         This function allows to populate a customized `System` class. The helper functions for the
@@ -444,7 +444,7 @@ class System(Module, TimeObserver):
         except KeyError:
             return super().__getattribute__(name)
 
-    def __setattr__(self, name: str, value: Any) -> NoReturn:
+    def __setattr__(self, name: str, value: Any) -> None:
         try:  # Faster than testing `if name in self`
             # Faster to duplicate __setitem__ call than calling it
             variable_ref = super().__getattribute__("name2variable")[name]
@@ -472,7 +472,7 @@ class System(Module, TimeObserver):
                 f"Variable {name!r} not found in the context of System {self.name!r}"
             )
 
-    def __setitem__(self, name: str, value: Any) -> NoReturn:
+    def __setitem__(self, name: str, value: Any) -> None:
         try:
             variable_ref = self.name2variable[name]
         except KeyError:
@@ -488,7 +488,7 @@ class System(Module, TimeObserver):
 
     def append_name2variable(
         self, additional_mapping: Iterable[Tuple[str, VariableReference]]
-    ) -> NoReturn:
+    ) -> None:
         """Append the `Iterable` of (`str`, `VariableReference`) `Tuple` to the lookup variables mapping.
 
         The additional mapping is also transfer upward to the parent `System`.
@@ -507,7 +507,7 @@ class System(Module, TimeObserver):
             rel2absname = lambda item: (f"{name}.{item[0]}", item[1])
             self.parent.append_name2variable(map(rel2absname, iter(additional_mapping)))
 
-    def pop_name2variable(self, keys: Iterable[str]) -> NoReturn:
+    def pop_name2variable(self, keys: Iterable[str]) -> None:
         """Remove the given keys from the name mapping dictionary.
 
         The keys will be remove from the local mapping. Then the keys list will be sent
@@ -527,7 +527,7 @@ class System(Module, TimeObserver):
             rel2absname = lambda relname: f"{self.name}.{relname}"
             self.parent.pop_name2variable(map(rel2absname, keys))
 
-    def add_property(self, name: str, value: Any) -> NoReturn:
+    def add_property(self, name: str, value: Any) -> None:
         """Create new read-only property `name`, set to `value`"""
         self.__lock_check("add_property")
         name = Variable.name_check(name)
@@ -638,7 +638,7 @@ class System(Module, TimeObserver):
         self._add_port(new_port)
         return new_port
 
-    def _add_port(self, port: ExtensiblePort) -> NoReturn:
+    def _add_port(self, port: ExtensiblePort) -> None:
         """Add a port to the system
 
         Parameters
@@ -680,12 +680,12 @@ class System(Module, TimeObserver):
                 keys.append((f"{port.name}.{attr}", VariableReference(context=self, mapping=port, key=attr)))
         self.append_name2variable(keys)
 
-    def __lock_check(self, method: str) -> NoReturn:
+    def __lock_check(self, method: str) -> None:
         """Raises AttributeError if system is locked"""
         if self._locked:
             raise AttributeError(f"`{method}` cannot be called outside `setup`")
 
-    def __check_attr(self, name: str, prefix: str = "") -> NoReturn:
+    def __check_attr(self, name: str, prefix: str = "") -> None:
         """Raises ValueError if attribute `name` already exists in system"""
         if name in self:
             message = f"{self.name}.{name} already exists"
@@ -706,7 +706,7 @@ class System(Module, TimeObserver):
         desc: str = "",
         distribution: Optional[Distribution] = None,
         scope: Scope = Scope.PRIVATE,
-    ) -> NoReturn:
+    ) -> None:
         """Add a inward variable to the `System`.
 
         A inward variable is calculated by the `System`. But its value is not mandatory in any
@@ -774,7 +774,7 @@ class System(Module, TimeObserver):
             distribution: Optional[Distribution] = None,
             desc: str = "",
             scope: Scope = Scope.PRIVATE,
-        ) -> NoReturn:
+        ) -> None:
 
             self.__check_attr(name, f"cannot add inward {name!r};")
 
@@ -834,7 +834,7 @@ class System(Module, TimeObserver):
         out_of_limits_comment: str = "",
         desc: str = "",
         scope: Scope = Scope.PUBLIC,
-    ) -> NoReturn:
+    ) -> None:
         """Add a outward variable to the `System`.
 
         A outward variable is calculated by the `System`. But its value is not mandatory in any
@@ -899,7 +899,7 @@ class System(Module, TimeObserver):
             out_of_limits_comment: str = "",
             desc: str = "",
             scope: Scope = Scope.PUBLIC,
-        ) -> NoReturn:
+        ) -> None:
             self.__check_attr(name, f"cannot add outward {name!r}")
 
             outputs = self.outputs
@@ -950,7 +950,7 @@ class System(Module, TimeObserver):
             desc: str = None,
             max_time_step: Union[Number, str] = numpy.inf,
             max_abs_step: Union[Number, str] = numpy.inf,
-        ) -> NoReturn:
+        ) -> None:
         """
         Declare a transient variable, defined implicitly by the expression of its time derivative, and add
         a time-dependent unknown to the mathematical problem.
@@ -1033,7 +1033,7 @@ class System(Module, TimeObserver):
             source: Any,  # `name` is the time derivative of `source`
             initial_value: Union[Number, numpy.ndarray, str] = None,
             desc: str = None,
-        ) -> NoReturn:
+        ) -> None:
         """
         Add a variable monitoring the rate-of-change of a given quantity (referred to as `source`) as the system evolves.
         Rates are defined by their source, and are updated by the time driver computing the time evolution of the system.
@@ -1136,7 +1136,7 @@ class System(Module, TimeObserver):
             return lambda s: "d^{0}({1})/dt^{0}".format(s, order)
         return lambda s: s
 
-    def _precompute(self) -> NoReturn:
+    def _precompute(self) -> None:
         if len(self._math.rates) > 0:
             self.set_dirty(PortType.IN)  # ensured that system is recomputed at first time step
 
@@ -1619,7 +1619,7 @@ class System(Module, TimeObserver):
 
         return emit_record
 
-    def call_setup_run(self, skip_driver: bool = False) -> NoReturn:
+    def call_setup_run(self, skip_driver: bool = False) -> None:
         """Execute `setup_run` recursively on all modules.
         
         Parameters
@@ -1632,7 +1632,7 @@ class System(Module, TimeObserver):
                 driver.call_setup_run()
         super().call_setup_run()
 
-    def call_clean_run(self, skip_driver: bool = False) -> NoReturn:
+    def call_clean_run(self, skip_driver: bool = False) -> None:
         """Execute `clean_run` recursively on all modules.
         
         Parameters
@@ -1648,7 +1648,7 @@ class System(Module, TimeObserver):
         self.set_dirty(PortType.IN)
         self.set_dirty(PortType.OUT)
 
-    def _postcompute(self) -> NoReturn:
+    def _postcompute(self) -> None:
         """Actions performed after the `System.compute` call."""
         if self.is_clean(PortType.IN):
             self.set_clean(PortType.OUT)
@@ -1660,7 +1660,7 @@ class System(Module, TimeObserver):
             for r in self.residues.values():
                 r.update()
 
-    def run_once(self) -> NoReturn:
+    def run_once(self) -> None:
         """Run the system once.
 
         Execute the model of this `System` and its children in the execution order.
@@ -1724,7 +1724,7 @@ class System(Module, TimeObserver):
     def any_active_driver(self) -> bool:
         return any(driver.is_active() for driver in self.drivers.values())
 
-    def run_drivers(self) -> NoReturn:
+    def run_drivers(self) -> None:
         """Run the drivers defined on this `System`.
         """
         with System.set_master(repr(self), type_checking=False) as is_master:
@@ -1749,7 +1749,7 @@ class System(Module, TimeObserver):
                 self.call_clean_run()
                 self.close_loops()
 
-    def run_children_drivers(self) -> NoReturn:
+    def run_children_drivers(self) -> None:
         """Solve the children `System` in the execution order.
         """
         with System.set_master(repr(self), type_checking=False) as is_master:
@@ -1821,7 +1821,7 @@ class System(Module, TimeObserver):
         port1: ExtensiblePort,
         port2: ExtensiblePort,
         mapping: Union[str, List[str], Dict[str, str], None] = None,
-    ) -> NoReturn:
+    ) -> None:
         """Connect two ports together. 
 
         This method connect ``port1`` to ``port2``. If no mapping is provided, connection
@@ -2114,7 +2114,7 @@ class System(Module, TimeObserver):
         """Close loops opened to allow system resolution."""
         logger.debug(f"Call {self.name}.close_loops")
 
-        def restore_connector(connection: IterativeConnector) -> NoReturn:
+        def restore_connector(connection: IterativeConnector) -> None:
             # Remove the IterativeConnector instance
             self.pop_child(connection.name)
 
@@ -2161,7 +2161,7 @@ class System(Module, TimeObserver):
             else:
                 child.close_loops()
 
-    def convert_to(self, *args, **kwargs) -> NoReturn:
+    def convert_to(self, *args, **kwargs) -> None:
         """Convert system into another `System`.
         Note: not implemented for class `System`.
 
@@ -2176,7 +2176,7 @@ class System(Module, TimeObserver):
         )
 
     @classmethod
-    def check_config_dict(cls, params: dict) -> NoReturn:
+    def check_config_dict(cls, params: dict) -> None:
         """Check if the provided dictionary respects the convention of a model file.
 
         Parameters
@@ -2267,7 +2267,7 @@ class System(Module, TimeObserver):
             for lib in System._components_librairies:
                 try:
                     if len(component_module) > 0:
-                        mod_name = '.'.join((lib, component_module))
+                        mod_name = f"{lib}.{component_module}"
                         if mod_name.startswith('.'):
                             mod_name = mod_name[1:]
                         lib_modules = importlib.import_module(mod_name)
@@ -2350,7 +2350,7 @@ class System(Module, TimeObserver):
 
         return top_system
 
-    def save(self, fp, indent: int = 2, sort_keys: bool = True) -> NoReturn:
+    def save(self, fp, indent: int = 2, sort_keys: bool = True) -> None:
         """Serialize the `System` as a JSON formatted stream to fp.
 
         Parameters
@@ -2496,7 +2496,7 @@ class System(Module, TimeObserver):
         from cosapp.tools.views.d3js import to_d3
         return to_d3(self, show, size)
 
-    def to_html(self, filename: str, embeddable: bool = False) -> NoReturn:
+    def to_html(self, filename: str, embeddable: bool = False) -> None:
         """Save the `System` as HTML using vis.JS library.
 
         Parameters
@@ -2546,14 +2546,14 @@ class System(Module, TimeObserver):
         self.active_surrogate = activate
         return self._meta
     
-    def load_surrogate(self, filename: str, activate=True) -> NoReturn:
+    def load_surrogate(self, filename: str, activate=True) -> None:
         """
         This method loads a surrogate model that has been saved previously.
         """
         self._meta = SurrogateClass.load(self, filename)
         self.active_surrogate = activate
 
-    def dump_surrogate(self, filename: str) -> NoReturn:
+    def dump_surrogate(self, filename: str) -> None:
         """
         This method is useful to save the meta/surrogate model of your system.
         The idea beyond that is to avoid a new training of your meta model between two sessions of using.
@@ -2566,7 +2566,7 @@ class System(Module, TimeObserver):
         return self._meta is not None and self._meta_active_status
 
     @active_surrogate.setter
-    def active_surrogate(self, boolean: bool) -> NoReturn:
+    def active_surrogate(self, boolean: bool) -> None:
         """
         This method is used :
         - if you want to deactivate your metamodelized system and turn back to your original system.
@@ -2595,7 +2595,7 @@ class System(Module, TimeObserver):
     def has_surrogate(self):
         return self._meta is not None
 
-    def _set_recursive_active_status(self, active_status : bool) -> NoReturn:
+    def _set_recursive_active_status(self, active_status : bool) -> None:
         #TODO save and recover drivers original status
         logger.debug(f"Starting recursive active status modifying of {self.name}, status to be set is {active_status}")
         self._active = active_status
@@ -2633,7 +2633,7 @@ class IterativeConnector(System):
 
     # TODO check and complete documentation
 
-    def __init__(self, connector: Connector) -> NoReturn:
+    def __init__(self, connector: Connector) -> None:
         """`IterativeConnector` constructor."""
         check_arg(connector, 'connector', Connector)
         sink, source = connector.sink, connector.source
@@ -2708,7 +2708,7 @@ class IterativeConnector(System):
         """
         return (self._sink, self._source, self._mapping)
 
-    def set_dirty(self, direction: PortType) -> NoReturn:
+    def set_dirty(self, direction: PortType) -> None:
         """Set to dirty ports of a certain direction.
 
         Parameters

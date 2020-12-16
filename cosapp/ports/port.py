@@ -7,7 +7,7 @@ import re
 import weakref
 from collections import OrderedDict
 from collections.abc import MutableSequence
-from typing import Any, Dict, Iterator, NoReturn, Optional, Tuple, Union
+from typing import Any, Dict, Iterator, Optional, Tuple, Union
 import numpy
 
 from cosapp.core.numerics.distributions.distribution import Distribution
@@ -35,7 +35,7 @@ class ExtensiblePort:
 
     _name_check = NameChecker()
 
-    def __init__(self, name: str, direction: PortType) -> NoReturn:
+    def __init__(self, name: str, direction: PortType) -> None:
         """`ExtensiblePort` constructor.
 
         Parameters
@@ -146,7 +146,7 @@ class ExtensiblePort:
         desc: str = "",
         distribution: Optional[Distribution] = None,
         scope: Scope = Scope.PRIVATE,
-    ) -> NoReturn:
+    ) -> None:
         """Add a variable to the port.
 
         The `valid_range` defines the range of value for which a model is known to behave correctly.
@@ -210,7 +210,7 @@ class ExtensiblePort:
         setattr(self, name, value)
 
     # TODO unused and should be removed -> to dangerous for consistency
-    def remove_variable(self, name: str) -> NoReturn:
+    def remove_variable(self, name: str) -> None:
         """Remove the variable from the port.
 
         Parameters
@@ -240,7 +240,7 @@ class ExtensiblePort:
         if key in self._variables and self._owner:
             self._owner.set_dirty(self.direction)
 
-    def validate(self, key: str, value: Any) -> NoReturn:
+    def validate(self, key: str, value: Any) -> None:
         """Check if a variable is in the scope of the user and the type is valid.
         
         Parameters
@@ -296,7 +296,7 @@ class ExtensiblePort:
     __setattr__ = __set_variable
 
     @staticmethod
-    def set_type_checking(activate: bool) -> NoReturn:
+    def set_type_checking(activate: bool) -> None:
         """(Un)set type checking when affecting port variables.
 
         By default type checking is activated.
@@ -320,7 +320,7 @@ class ExtensiblePort:
         except AttributeError:
             raise KeyError(f"Variable or property {item} does not exist in Port {self}.")
 
-    def __setitem__(self, key: str, value: Any) -> NoReturn:
+    def __setitem__(self, key: str, value: Any) -> None:
         if key in self._variables:
             setattr(self, key, value)
         else:
@@ -339,12 +339,12 @@ class ExtensiblePort:
         return self.__clearance
 
     @scope_clearance.setter
-    def scope_clearance(self, user_scope: Scope) -> NoReturn:
+    def scope_clearance(self, user_scope: Scope) -> None:
         check_arg(user_scope, "scope_clearance", Scope)
         self.__clearance = user_scope
         self.__update_filter()
 
-    def __update_filter(self) -> NoReturn:
+    def __update_filter(self) -> None:
         """Update the implementation of method `out_of_scope`
         according to port's clearance level and owner."""
         if self._owner is None:
@@ -503,7 +503,7 @@ class ExtensiblePort:
 
         return new_port
 
-    def morph(self, port: "ExtensiblePort") -> NoReturn:
+    def morph(self, port: "ExtensiblePort") -> None:
         """Morph the provided port into this port.
 
         Morphing a port is useful when converting a `System` in something equivalent. The morphing
@@ -567,10 +567,8 @@ class ExtensiblePort:
         else:
             if self.direction == PortType.IN:
                 for variable in self:
-                    fullname = ".".join((self.name, variable))
-                    value = getattr(self, variable)
-                    new_dict[fullname] = value
-
+                    fullname = f"{self.name}.{variable}"
+                    new_dict[fullname] = getattr(self, variable)
         
         return new_dict
 
@@ -632,7 +630,7 @@ class Port(ExtensiblePort):
 
     def __init__(
         self, name: str, direction: PortType, variables: Optional[Dict[str, Any]] = None
-    ) -> NoReturn:
+    ) -> None:
         """`Port` constructor.
 
         An optional dictionary may be specified to overwrite variable value and some of their
@@ -680,7 +678,7 @@ class Port(ExtensiblePort):
 
         self._locked = True
 
-    def setup(self) -> NoReturn:
+    def setup(self) -> None:
         """`Port` variables are defined in this function by calling `add_variable`.
 
         This function allows to populate a customized `Port` class. The `add_variable`
@@ -712,7 +710,7 @@ class Port(ExtensiblePort):
         desc: str = "",
         distribution: Optional[Distribution] = None,
         scope=Scope.PUBLIC,
-    ) -> NoReturn:
+    ) -> None:
         """Add a variable to the port.
 
         The `valid_range` defines the range of value for which a model is known to behave correctly.
@@ -766,7 +764,7 @@ class Port(ExtensiblePort):
         )
 
     # TODO remove ?
-    def remove_variable(self, name: str) -> NoReturn:
+    def remove_variable(self, name: str) -> None:
         """Remove the variable from the port.
 
         Parameters

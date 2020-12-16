@@ -11,7 +11,7 @@ except ImportError:
     JSONDecodeError = ValueError
 import logging
 from pathlib import Path
-from typing import FrozenSet, NoReturn
+from typing import FrozenSet
 
 import jsonschema
 
@@ -37,7 +37,7 @@ class CoSAppConfiguration:
     COSAPP_CONFIG_DIR = ".cosapp.d"
     CONFIG_FILE = "cosapp_config.json"  # type: str
 
-    def __init__(self) -> NoReturn:
+    def __init__(self) -> None:
         """Constructor"""
         self._userid = ""  # type: str
         self._roles = frozenset()  # type: FrozenSet[FrozenSet[str]]
@@ -51,7 +51,7 @@ class CoSAppConfiguration:
         )
         return folder.joinpath(CoSAppConfiguration.CONFIG_FILE)
 
-    def __load_configuration(self) -> NoReturn:
+    def __load_configuration(self) -> None:
         """Read configuration from file or generate the default.
 
         Raises
@@ -116,7 +116,7 @@ class CoSAppConfiguration:
 
         return params
 
-    def update_configuration(self) -> NoReturn:
+    def update_configuration(self) -> None:
         """Update the configuration file for the current user.
 
         The update process ask the server about updated role.

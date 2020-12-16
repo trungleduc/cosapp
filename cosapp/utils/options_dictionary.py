@@ -224,38 +224,27 @@ class OptionsDictionary(object):
             # If only values is declared
             if values is not None:
                 if value not in values:
-                    if isinstance(value, str):
-                        value = "'{}'".format(value)
                     raise ValueError(
-                        "Value ({}) of option '{}' "
-                        "is not one of {}.".format(value, name, values)
+                        f"Value ({value!r}) of option {name!r} is not one of {values}."
                     )
             # If only dtype is declared
             elif dtype is not None:
                 if not isinstance(value, dtype):
                     vtype = type(value)
-                    if isinstance(value, str):
-                        value = "'{}'".format(value)
                     raise TypeError(
-                        "Value ({}) of option '{}' has type of ({}), but "
+                        "Value ({!r}) of option {!r} has type of ({}), but "
                         "expected type ({}).".format(value, name, vtype, dtype)
                     )
 
             if upper is not None:
                 if value > upper:
                     raise ValueError(
-                        "Value ({}) of option '{}' "
-                        "exceeds maximum allowed value of {}.".format(
-                            value, name, upper
-                        )
+                        f"Value ({value!r}) of option {name!r} exceeds maximum allowed value {upper}."
                     )
             if lower is not None:
                 if value < lower:
                     raise ValueError(
-                        "Value ({}) of option '{}' "
-                        "is less than minimum allowed value of {}.".format(
-                            value, name, lower
-                        )
+                        f"Value ({value!r}) of option {name!r} is less than minimum allowed value {lower}."
                     )
 
         # General function test
@@ -365,7 +354,7 @@ class OptionsDictionary(object):
 
     def clear(self):
         if self._read_only:
-            raise KeyError("Cannot clear read-only dictionnary '{}'.".format(self))
+            raise KeyError(f"Cannot clear read-only dictionnary {self}.")
         self._dict.clear()
 
     def __iter__(self):
@@ -398,7 +387,7 @@ class OptionsDictionary(object):
     def __len__(self):
         return len(self._dict)
 
-    def __setitem__(self, name, value):
+    def __setitem__(self, name: str, value):
         """
         Set an option in the local dictionary.
 
@@ -410,14 +399,14 @@ class OptionsDictionary(object):
             value of the option to be value- and type-checked if declared.
         """
         if self._read_only:
-            raise KeyError("Tried to set read-only option '{}'.".format(name))
+            raise KeyError(f"Tried to set read-only option {name!r}.")
 
         try:
             meta = self._dict[name]
         except KeyError:
             # The key must have been declared.
-            msg = "Option '{}' cannot be set because it has not been declared."
-            raise KeyError(msg.format(name))
+            msg = f"Option {name!r} cannot be set because it has not been declared."
+            raise KeyError(msg)
 
         self._assert_valid(name, value)
 
@@ -445,7 +434,7 @@ class OptionsDictionary(object):
                 return meta["value"]
             else:
                 raise RuntimeError(
-                    "Option '{}' is required but has not been set.".format(name)
+                    f"Option {name!r} is required but has not been set."
                 )
         except KeyError:
-            raise KeyError("Option '{}' cannot be found".format(name))
+            raise KeyError(f"Option {name!r} cannot be found")

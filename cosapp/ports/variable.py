@@ -1,11 +1,11 @@
 """This module define the basic class encapsulating a variable attributes."""
 import array
+import numpy
 import logging
 from collections.abc import MutableSequence
 from numbers import Number
-from typing import Any, Dict, Iterable, Optional, Tuple, Union
+from typing import Any, Dict, Iterable, Optional, Tuple, Union, NoReturn
 
-import numpy as np
 
 from cosapp.core.numerics.distributions.distribution import Distribution
 from cosapp.ports import units
@@ -96,15 +96,18 @@ class Variable:
             Default (lower, upper) limits
         """
         if is_numerical(variable):
-            return -np.inf, np.inf
+            return -numpy.inf, numpy.inf
         else:
             return None
 
-    @staticmethod
-    def check_range_type( value : Iterable, name : Optional[str] = None) -> RangeType:
+    @property
+    def full_name(self) -> str:
+        return f"{self._port.contextual_name}.{self.name}"
+
+    def check_range_type(self, value: Iterable) -> RangeType:
         """Get type of valid_range of limits of variable.
-        This function check if `value` is a 2-tuple of scalar or
-        a tuple of tuples
+        This function checks if `value` is a size 2 tuple of scalar
+        or a tuple of (lower, upper) tuples.
         
         Parameters
         ----------
@@ -116,7 +119,6 @@ class Variable:
         int (from enum RangeType)
             Type of `value`
         """
-
         tuple_check = True
         value_check = True
 
@@ -138,20 +140,21 @@ class Variable:
         if value_check and not tuple_check:
             if len(value) != 2:
                 raise TypeError(
-                    "Valid range or limits must be a 2-tuple with type comparable to value"
+                    "Valid range or limits must be a size 2 tuple with type comparable to value"
                 )
             return RangeType.VALUE
         elif tuple_check and not value_check:
             return RangeType.TUPLE
-        else :
+        else:
             raise ValueError(
-                f"Mixed values in valid_range object {value} of {name}."
+                f"Mixed values in valid_range {value} of {self.full_name!r}."
                 " Valid object can contain only numerical values or only tuples"
             ) 
 
-    @staticmethod
-    def _check_range(
-        limits: RangeValue, valid_range: RangeValue, value: Any, name : str = None
+    def _check_range(self,
+        limits: RangeValue,
+        valid_range: RangeValue,
+        value: Any,
     ) -> Tuple[RangeValue, RangeValue]:
         """Correct coherence of limits and validation range depending on value type.
 
@@ -168,12 +171,25 @@ class Variable:
         Tuple[Tuple[Any, Any] or Tuple[Tuple] or None, Tuple[Any, Any] or Tuple[Tuple] or None]
             Tuple of corrected (limits, validation range)
         """
-        
         default = Variable._get_limits_from_type(value)
-        range_type = Variable.check_range_type(valid_range, name)
-        limits_type = Variable.check_range_type(limits, name)
-        
+        range_type = self.check_range_type(valid_range)
+        limits_type = self.check_range_type(limits)
+
         if default is not None:
+
+            def get_bounds(lower, upper) -> Tuple[float, float]:
+                if lower is None:
+                    lower = default[0]
+                if upper is None:
+                    upper = default[1]
+                return (lower, upper) if lower < upper else (upper, lower)
+
+            def raise_inconsistency() -> NoReturn:
+                name = self.full_name
+                raise ValueError(
+                    f"valid_range {valid_range} and limits {limits} of variable {name!r} have different formats"
+                )
+
             if limits is None:
                 limits = (None, None)
 
@@ -181,104 +197,40 @@ class Variable:
                 valid_range = limits
 
             if range_type == RangeType.VALUE:
-                min_range, max_range = valid_range
-                if min_range is None:
-                    min_range = default[0]
-                if max_range is None:
-                    max_range = default[1]
 
-                if min_range > max_range:
-                    min_range, max_range = max_range, min_range
-
-                valid_range = (min_range, max_range)
+                min_range, max_range = valid_range = get_bounds(*valid_range)
 
                 if limits_type == RangeType.VALUE:
-                    min_limit, max_limit = limits
-
-                    if min_limit is None:
-                        min_limit = default[0]
-                    if max_limit is None:
-                        max_limit = default[1]
-
-                    if min_limit > max_limit:
-                        min_limit, max_limit = max_limit, min_limit
-
-                    limits = (np.minimum(min_range, min_limit), np.maximum(max_range, max_limit))
+                    min_limit, max_limit = get_bounds(*limits)
+                    limits = (numpy.minimum(min_range, min_limit), numpy.maximum(max_range, max_limit))
                 elif limits_type == RangeType.NONE:
-                    limits = (default[0], default[1])
+                    limits = tuple(default)
                 else:
-                    raise ValueError(
-                        f"valid_range {valid_range} and limits {limits} of object {name} do not take the same format")
+                    raise_inconsistency()
 
             elif range_type == RangeType.TUPLE:
-                new_range = []
-                for range_item in valid_range : 
-                    min_range, max_range = range_item
-                    if min_range is None:
-                        min_range = default[0]
-                    if max_range is None:
-                        max_range = default[1]
-                    if min_range > max_range:
-                        min_range, max_range = max_range, min_range
 
-                    new_range.append((min_range, max_range)) 
-                valid_range =tuple(new_range)
+                valid_range = tuple(get_bounds(*pair) for pair in valid_range)
+
                 if limits_type == RangeType.TUPLE:
-                    new_limit = []
-                    for limit_item in limits:
-                        min_limit, max_limit = limit_item
-                        if min_limit is None:
-                            min_limit = default[0]
-                        if max_limit is None:
-                            max_limit = default[1]
-
-                        if min_limit > max_limit:
-                            min_limit, max_limit = max_limit, min_limit    
-
-                        new_limit.append((min_limit, max_limit))
-                    limits = tuple(new_limit)
+                    limits = tuple(get_bounds(*pair) for pair in limits)
                 elif limits_type == RangeType.NONE:
-                    limits = (default[0], default[1])
+                    limits = tuple(default)
                 else:
-                    raise ValueError(
-                        f"valid_range {valid_range} and limits {limits} of object {name} do not take the same format")                     
-                                
-            elif  range_type == RangeType.NONE :
+                    raise_inconsistency()
+                    
+            elif range_type == RangeType.NONE:
+
                 if limits_type == RangeType.VALUE:
-                    min_limit, max_limit = limits
-
-                    if min_limit is None:
-                        min_limit = default[0]
-                    if max_limit is None:
-                        max_limit = default[1]
-
-                    if min_limit > max_limit:
-                        min_limit, max_limit = max_limit, min_limit
-
-                    limits = (min_limit, max_limit)
-                    valid_range = limits
-                elif  limits_type == RangeType.TUPLE:
-                    new_limit = []
-                    for limit_item in limits:
-                        min_limit, max_limit = limit_item
-                        if min_limit is None:
-                            min_limit = default[0]
-                        if max_limit is None:
-                            max_limit = default[1]
-
-                        if min_limit > max_limit:
-                            min_limit, max_limit = max_limit, min_limit    
-
-                        new_limit.append((min_limit, max_limit))
-                    limits = tuple(new_limit) 
-                    valid_range = limits                   
+                    limits = valid_range = get_bounds(*limits)
+                elif limits_type == RangeType.TUPLE:
+                    limits = valid_range = tuple(get_bounds(*pair) for pair in limits)
                 elif limits_type == RangeType.NONE:
-                    valid_range = (default[0], default[1])
-                    limits = (default[0], default[1])  
+                    limits = valid_range = tuple(default)
 
         else:
-            valid_range = None
-            limits = None
+            limits = valid_range = None
+
         return limits, valid_range
 
     def __init__(
@@ -328,46 +280,45 @@ class Variable:
 
         if dtype is None:
             if value is None:
-                dtype = (
-                    None
-                )  # If value and dtype are None, we cannot figure out the type
+                dtype = None  # can't figure out type if both value and dtype are None
             else:
                 dtype = type(value)
                 if is_numerical(value):
                     # Force generic number type only if user has not specified any type
                     if issubclass(dtype, Number):
-                        dtype = (Number, np.ndarray)
+                        dtype = (Number, numpy.ndarray)
                     elif isinstance(value, (MutableSequence, array.ArrayType)):
                         # We have a collection => transform Mutable to ndarray
-                        dtype = (MutableSequence, array.ArrayType, np.ndarray)
-                        value = np.asarray(value)
+                        dtype = (MutableSequence, array.ArrayType, numpy.ndarray)
+                        value = numpy.asarray(value)
         elif value is not None:
             # Test value has the right type
             if not isinstance(value, dtype):
                 typename = get_typename(dtype)
+                varname = f"{port.contextual_name}.{name}"
                 raise TypeError(
-                    "Cannot set {}.{} of type {} with a {}.".format(
-                        port.contextual_name, name, typename, type(value).__qualname__
+                    "Cannot set {} of type {} with a {}.".format(
+                        varname, typename, type(value).__qualname__
                     )
                 )
 
-        # TODO: better handle of this possible miss of understanding of the user at numpy array instantiation
-        if isinstance(value, np.ndarray):
-            if value.dtype == np.integer:
+        # TODO: better handle of this possible misunderstanding for users at numpy array instantiation
+        if isinstance(value, numpy.ndarray):
+            if issubclass(value.dtype.type, numpy.integer):
                 logger.warning(
                     f"Variable {name!r} instantiates a numpy array with integer dtype."
                     " This may lead to unpredictible consequences."
                 )
 
         # Check validation ranges are compatible and meaningful for this type of data
-        limits, valid_range = self._check_range(limits, valid_range, value, self._port.contextual_name)
+        limits, valid_range = self._check_range(limits, valid_range, value)
 
-        if valid_range is None and len(invalid_comment):
+        if valid_range is None and len(invalid_comment) > 0:
             logger.warning(
                 f"Invalid comment specified for variable {name!r} without validity range."
             )
 
-        if limits is None and len(out_of_limits_comment):
+        if limits is None and len(out_of_limits_comment) > 0:
             logger.warning(
                 f"Out-of-limits comment specified for variable {name!r} without limits."
             )
@@ -404,19 +355,19 @@ class Variable:
             self.valid_range if self.valid_range is not None else (None, None)
         )
         min_limit, max_limit = self.limits if self.limits is not None else (None, None)
-        if min_limit is None or np.all(np.isinf(min_limit)):
+        if min_limit is None or numpy.all(numpy.isinf(min_limit)):
             msg["min_limit"] = ""
         else:
             msg["min_limit"] = f" &#10647; {min_limit:.5g} &#10205; "
-        if max_limit is None or np.all(np.isinf(max_limit)):
+        if max_limit is None or numpy.all(numpy.isinf(max_limit)):
             msg["max_limit"] = ""
         else:
             msg["max_limit"] = f" &#10206; {max_limit:.5g} &#10648; "
-        if min_valid is None or min_limit == min_valid or np.all(np.isinf(min_valid)):
+        if min_valid is None or min_limit == min_valid or numpy.all(numpy.isinf(min_valid)):
             msg["min_valid"] = ""
         else:
             msg["min_valid"] = f"{min_valid:.5g} &#10205; "
-        if max_valid is None or max_limit == max_valid or np.all(np.isinf(max_valid)):
+        if max_valid is None or max_limit == max_valid or numpy.all(numpy.isinf(max_valid)):
             msg["max_valid"] = ""
         else:
             msg["max_valid"] = f" &#10206; {max_valid:.5g}"
@@ -486,7 +437,7 @@ class Variable:
     @valid_range.setter
     def valid_range(self, new_range: RangeValue):
         
-        range_type = Variable.check_range_type(new_range, self._port.contextual_name)
+        range_type = self.check_range_type(new_range)
 
         value = getattr(self._port, self._name)
         default = self._get_limits_from_type(value)
@@ -495,11 +446,10 @@ class Variable:
             if range_type == RangeType.VALUE :
                 if len(new_range) != 2:
                     raise TypeError(
-                        "Validity range must be a 2-tuple with type comparable to value."
+                        "Validity range must be a size 2 tuple with type comparable to value."
                     )
                 limits = self.limits
                 valid_range = new_range
-                
 
             elif range_type == RangeType.TUPLE: 
                 limits = self.limits
@@ -546,7 +496,7 @@ class Variable:
     @limits.setter
     def limits(self, new_limits: RangeValue):
 
-        limits_type = Variable.check_range_type(new_limits, self._port.contextual_name)
+        limits_type = self.check_range_type(new_limits)
 
         value = getattr(self._port, self._name)
         default = self._get_limits_from_type(value)
@@ -555,7 +505,7 @@ class Variable:
             if limits_type == RangeType.VALUE :
                 if len(new_limits) != 2:
                     raise TypeError(
-                        "Limits must be a 2-tuple with type comparable to value."
+                        "Limits must be a size 2 tuple with type comparable to value."
                     )
 
                 limits = new_limits
@@ -565,8 +515,8 @@ class Variable:
                     limits = (limits[0], default[1])
 
                 current_range = self.valid_range
-                min_valid = limits[0] if limits[0] > current_range[0] else current_range[0]
-                max_valid = limits[1] if limits[1] < current_range[1] else current_range[1]
+                min_valid = max(limits[0], current_range[0])
+                max_valid = min(limits[1], current_range[1])
                 valid_range = (min_valid, max_valid)
             
             elif limits_type == RangeType.TUPLE:
@@ -581,24 +531,23 @@ class Variable:
 
                 current_range = self.valid_range
                 valid_range_list = list(current_range)
-                for index in range(len(valid_range_list)):
+                for index, valid_range in enumerate(valid_range_list):
                     limit_value = limits[index]
                     range_value = current_range[index]
-                    valid_range_list[index] = (limit_value[0] if limit_value[0] > range_value[0] else range_value[0], valid_range_list[index][1]) 
-                    valid_range_list[index] = (valid_range_list[index][0], limit_value[1] if limit_value[1] < range_value[1] else range_value[1])
+                    valid_range_list[index] = (max(limit_value[0], range_value[0]), valid_range[1]) 
+                    valid_range_list[index] = (valid_range[0], min(limit_value[1], range_value[1]))
                 valid_range = tuple(valid_range_list)
 
             elif limits_type == RangeType.NONE:
                 limits = self.limits
                 current_range = self.valid_range
-                min_valid = limits[0] if limits[0] > current_range[0] else current_range[0]
-                max_valid = limits[1] if limits[1] < current_range[1] else current_range[1]
+                min_valid = max(limits[0], current_range[0])
+                max_valid = min(limits[1], current_range[1])
                 valid_range = (min_valid, max_valid)
 
 
         else:
-            valid_range = None
-            limits = None
+            limits = valid_range = None
 
         limits, valid_range = self._check_range(limits, valid_range, value)
         self._valid_range = valid_range
@@ -649,40 +598,42 @@ class Variable:
         status = Validity.OK
         value = getattr(self._port, self._name)
 
-        if not isinstance(value, (Number, np.ndarray)):
+        if not isinstance(value, (Number, numpy.ndarray)):
             return status
 
         if self.valid_range is not None:
 
-            range_type = Variable.check_range_type(self.valid_range, self._port.contextual_name)
-            if isinstance(value, np.ndarray):  
-                
+            range_type = self.check_range_type(self.valid_range)
+            if isinstance(value, numpy.ndarray):  
+            
                 if range_type == RangeType.VALUE:
                     min_range, max_range = self.valid_range 
-                    if np.any(np.where(value <= max_range, False, True)) or np.any(np.where(value >= min_range, False, True)):
+                    if numpy.any(value > max_range) or numpy.any(value < min_range):
                         status = Validity.WARNING
                     
                     if self.limits is not None:
                         min_limit, max_limit = self.limits
-                        if np.any(np.where(value <= max_limit, False, True)) or np.any(np.where(value >= min_limit, False, True)):
+                        if numpy.any(value > max_limit) or numpy.any(value < min_limit):
                             status = Validity.ERROR
 
                 elif range_type == RangeType.TUPLE:
 
-                    for index,val in enumerate(value):
-                        if (self.valid_range[index][0] > val) or (self.valid_range[index][1] < val):
-                            status = Validity.WARNING
-                            break
-                    
-                    if self.limits is not None:
-                        for index,val in enumerate(value):
-                            if (self.limits[index][0] > val) or (self.limits[index][1] < val):
-                                status = Validity.ERROR
+                    def check_values(bound_list, key) -> None:
+                        nonlocal status
+                        for v, (lower, upper) in zip(value, bound_list):
+                            if not (lower <= v <= upper):
+                                status = Validity[key]
                                 break
 
+                    check_values(self.valid_range, "WARNING")
+                    
+                    if self.limits is not None:
+                        check_values(self.limits, "ERROR")
+
                 else:
+                    varname = f"{self._port.contextual_name}.{self.name}"
                     raise ValueError(
-                        f"Mixed values in valid_range object {self.valid_range} of {self._port.contextual_name}."
+                        f"Mixed values in valid_range {self.valid_range} of {varname!r}."
                         " Valid object can contain only numerical values or only tuples")                     
                 
             else:    
@@ -697,9 +648,10 @@ class Variable:
                                 status = Validity.ERROR
 
                 elif range_type == RangeType.TUPLE:
+                    varname = f"{self._port.contextual_name}.{self.name}"
                     raise ValueError(
-                        f"valid_range {self.valid_range} or limits {self.limits} of object {self._port.contextual_name}"
-                        f" does not take the same format as its input {value}")
+                        f"valid_range {self.valid_range} or limits {self.limits} of variable {varname!r}"
+                        f" are incompatible with its value {value}")
 
         return status
 
@@ -721,7 +673,7 @@ class Variable:
 
         def range2str(range: RangeValue) -> str:
 
-            range_type = Variable.check_range_type(range, self._port.contextual_name)
+            range_type = self.check_range_type(range)
 
             if range_type == RangeType.VALUE:
                 min_valid, max_valid = range if range is not None else (None, None)
@@ -734,7 +686,7 @@ class Variable:
 
 
             def get_range_repr(valid, fmt):
-                if not isinstance(valid, (list, tuple, np.ndarray)):
+                if not isinstance(valid, (list, tuple, numpy.ndarray)):
                     fmt.replace("{}", "{:.5g}")
                 return fmt.format(valid)
 
@@ -750,9 +702,9 @@ class Variable:
             return range_repr
 
         if status == Validity.ERROR:
-            return " - ".join((range2str(self.limits), self.out_of_limits_comment))
+            return f"{range2str(self.limits)} - {self.out_of_limits_comment}"
         elif status == Validity.WARNING:
-            return " - ".join((range2str(self.valid_range), self.invalid_comment))
+            return f"{range2str(self.valid_range)} - {self.invalid_comment}"
         else:  # Variable is ok
             return ""
 
@@ -764,23 +716,22 @@ class Variable:
         dict
             The dictionary representing this variable.
         """
-
-        ret = { "value" : getattr(self._port, self._name),
-                "unit": self.unit if self.unit != "" else None,
-                "invalid_comment": self.invalid_comment if self.invalid_comment != "" else None,
-                "out_of_limits_comment": self.out_of_limits_comment if self.out_of_limits_comment != "" else None,
-                "desc" : self.description if self.description != "" else None,
-                "distribution": self.distribution.__json__() if self.distribution else None
-
-            } 
+        ret = {
+            "value" : getattr(self._port, self._name),
+            "unit": self.unit or None,
+            "invalid_comment": self.invalid_comment or None,
+            "out_of_limits_comment": self.out_of_limits_comment or None,
+            "desc" : self.description or None,
+            "distribution": self.distribution.__json__() if self.distribution else None,
+        } 
         
         for key in ["valid_range", "limits"]:
             tmp_val = list(getattr(self, key))
             for idx, val in enumerate(tmp_val):
-                if np.isinf(val):
+                if numpy.isinf(val):
                     tmp_val[idx] = str(val) 
             if  tmp_val == ["-inf", "inf"]:
                 tmp_val = None
-            ret[key] =  tmp_val 
+            ret[key] = tmp_val 
                  
-        return {key : value for (key,value) in ret.items() if value is not None } 
+        return { key: value for (key, value) in ret.items() if value is not None }

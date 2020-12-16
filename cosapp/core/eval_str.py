@@ -5,7 +5,7 @@ This code is inspired from the OpenMDAO module openmdao.components.exec_comp.
 """
 import abc
 from numbers import Number
-from typing import Any, Dict, Iterable, NoReturn, Optional, Set, Tuple, Union
+from typing import Any, Dict, Iterable, Optional, Set, Tuple, Union
 
 import numpy
 
@@ -130,7 +130,7 @@ class EvalString:
 
         def _import_functs(
             mod: object, dct: Dict[str, Any], names: Optional[Iterable[str]] = None
-        ) -> NoReturn:
+        ) -> None:
             """
             Map attributes names from the given module into the given dict.
 
@@ -254,7 +254,7 @@ class EvalString:
 
         return cls.__globals
 
-    def __init__(self, expression: Any, context: "System") -> NoReturn:
+    def __init__(self, expression: Any, context: "System") -> None:
         """Class constructor.
 
         Compiles an expression, and checks that it is evaluable within a given context.
@@ -360,7 +360,7 @@ class EvalString:
 class AssignString:
     """Create an executable assignment of the kind 'lhs = rhs' from two evaluable expressions lhs and rhs."""
 
-    def __init__(self, lhs: str, rhs: Any, context: "System") -> NoReturn:
+    def __init__(self, lhs: str, rhs: Any, context: "System") -> None:
         lhs = EvalString(lhs, context)
         if lhs.constant:
             raise ValueError(
@@ -398,7 +398,7 @@ class AssignString:
         return self.__raw_sides[1]
 
     @rhs.setter
-    def rhs(self, rhs: Any) -> NoReturn:
+    def rhs(self, rhs: Any) -> None:
         context = self.eval_context
         lhs = self.lhs
         erhs = EvalString(rhs, context)

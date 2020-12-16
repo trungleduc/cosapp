@@ -2,7 +2,6 @@ import logging
 import weakref
 from enum import IntEnum
 from functools import partial
-from typing import NoReturn
 
 try:
     from pythonfmu import Fmi2Status
@@ -61,7 +60,7 @@ class FMUForwardHandler(logging.Handler):
         cls, 
         handler: "ReferenceType[FMUForwardHandler]", 
         fmu: "Optional[ReferenceType[pythonfmu.Fmi2Slave]]" = None
-    ) -> NoReturn:
+    ) -> None:
         """Remove the instance of the provided handler on the
         root logger.
         
@@ -99,7 +98,7 @@ class FMUForwardHandler(logging.Handler):
         else:
             return Fmi2Status.ok
 
-    def emit(self, record: "logging.LogRecord") -> NoReturn:
+    def emit(self, record: "logging.LogRecord") -> None:
         """Forward a record to the FMU logger.
         
         Parameters

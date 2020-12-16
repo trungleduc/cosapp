@@ -56,7 +56,7 @@ def test_Boundary___init__(args, kwargs, attributes):
     expected = dict(port='inwards', variable='', name=None, mask=None, default_value=None)
     expected.update(attributes)
     if expected['name'] is None:
-        expected['name'] = '.'.join((expected['port'], expected['variable']))
+        expected['name'] = f"{expected['port']}.{expected['variable']}"
     # Test object attributes:
     assert x.context is a
     if x.mask is not None:

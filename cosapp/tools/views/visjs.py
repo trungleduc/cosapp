@@ -238,13 +238,13 @@ def to_visjs(system: System, filename: str, embeddable: bool = False):
         # Add hidden node for the top system
         nodes.append(
             dict(
-                label="{}".format(system.name),
-                title="{} - {}".format(system.name, system.__class__.__name__),
+                label=f"{system.name}",
+                title=f"{system.name} - {system.__class__.__name__}",
                 id=id_init,
                 level=0,
                 hidden=True,
                 physics=False,
-                group=".{}".format(system.name),
+                group=f".{system.name}",
             )
         )
 
@@ -276,11 +276,9 @@ def to_visjs(system: System, filename: str, embeddable: bool = False):
                 port_name = c.name
 
                 ref = dict(
-                    title="{}.{} - {}".format(
-                        c.owner.name, port_name, c.__class__.__name__
-                    ),
+                    title=f"{c.owner.name}.{port_name} - {c.__class__.__name__}",
                     id=id,
-                    group="{}".format(get_fullname(c.owner)),
+                    group=f"{get_fullname(c.owner)}",
                     mass=2,
                 )
 
@@ -298,13 +296,13 @@ def to_visjs(system: System, filename: str, embeddable: bool = False):
                 # Add driver node
                 ref = dict(
                     label=type(c).__name__,
-                    title="{} - {}".format(c.name, type(c).__name__),
+                    title=f"{c.name} - {type(c).__name__}",
                     id=id,
                     level=-0.7,
                     shape="box",
                     hidden=True,
                     physics=False,
-                    group="{}".format(get_fullname(c.owner)),
+                    group=f"{get_fullname(c.owner)}",
                 )
 
                 # Add edge to Module owner if top driver
@@ -330,10 +328,8 @@ def to_visjs(system: System, filename: str, embeddable: bool = False):
 
             else:
                 ref = dict(
-                    label="{}".format(c.name),
-                    title="{}.{} - {}".format(
-                        c.parent.name, c.name, c.__class__.__name__
-                    ),
+                    label=f"{c.name}",
+                    title=f"{c.parent.name}.{c.name} - {c.__class__.__name__}", 
                     id=id,
                 )
 
@@ -344,7 +340,7 @@ def to_visjs(system: System, filename: str, embeddable: bool = False):
                     for child in c.children.values():
                         edges.append({"from": id, "to": cmpt2id[child], "hidden": True})
 
-                ref["group"] = "{}".format(get_fullname(c.parent))
+                ref["group"] = f"{get_fullname(c.parent)}"
 
             if "level" not in ref:
                 ref["level"] = 0
@@ -375,7 +371,7 @@ def to_visjs(system: System, filename: str, embeddable: bool = False):
 
     _, ext = os.path.splitext(filename)
     if ext != ".html":
-        filename = os.extsep.join((filename, "html"))
+        filename = f"{filename}{os.extsep}html"
 
     with open(filename, mode="w", encoding="utf-8") as f:
         f.write(rendered_html)

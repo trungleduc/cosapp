@@ -1,9 +1,9 @@
 import abc
-from io import StringIO
 import logging
-from numbers import Number
 import numpy
-from typing import NoReturn, Tuple, Union
+from io import StringIO
+from numbers import Number
+from typing import Tuple, Union
 
 from cosapp.core.time import UniversalClock
 from cosapp.drivers.driver import Driver
@@ -77,7 +77,7 @@ class ExplicitTimeDriver(Driver):
         return self.__dt_manager.nominal_dt
 
     @dt.setter
-    def dt(self, value: Number) -> NoReturn:
+    def dt(self, value: Number) -> None:
         self.__dt_manager.nominal_dt = value
 
     @property
@@ -91,7 +91,7 @@ class ExplicitTimeDriver(Driver):
         return self.__time_interval
 
     @time_interval.setter
-    def time_interval(self, interval: Tuple[Number, Number]) -> NoReturn:
+    def time_interval(self, interval: Tuple[Number, Number]) -> None:
         if interval is not None:
             check_arg(interval, 'time_interval', (tuple, list), lambda it: len(it) == 2)
             interval = tuple(interval)
@@ -108,7 +108,7 @@ class ExplicitTimeDriver(Driver):
     # def end_time(self):
     #     return self.__time_interval[1]
 
-    def set_scenario(self, name="scenario", init=dict(), values=dict()) -> NoReturn:
+    def set_scenario(self, name="scenario", init=dict(), values=dict()) -> None:
         """
         Define a simulation scenario, from initial and boundary conditions.
 
@@ -136,7 +136,7 @@ class ExplicitTimeDriver(Driver):
             self.recording_period = period
         return self.recorder
 
-    def setup_run(self) -> NoReturn:
+    def setup_run(self) -> None:
         """Setup the driver once before starting the simulation and before
         calling the systems `setup_run`.
         """
@@ -152,7 +152,7 @@ class ExplicitTimeDriver(Driver):
         logger.debug(f"Reset time to {self.__time_interval[0]}")
         self.__clock.reset(self.__time_interval[0])
 
-    def compute(self) -> NoReturn:
+    def compute(self) -> None:
         """Simulate the time-evolution of owner System over a prescribed time interval"""
         self._initialize()
 
@@ -220,7 +220,7 @@ class ExplicitTimeDriver(Driver):
 
         self.__recorded_dt = numpy.asarray(recorded_dt)
 
-    def _set_time(self, t: Number) -> NoReturn:
+    def _set_time(self, t: Number) -> None:
         dt = t - self.time
         self.__clock.time = t
         self.__scenario.update_values()
@@ -238,14 +238,14 @@ class ExplicitTimeDriver(Driver):
         for rate in self._rates.values():
             rate.reset()
 
-    def _update_children(self) -> NoReturn:
+    def _update_children(self) -> None:
         if len(self.children) > 0:
             for name in self.exec_order:
                 self.children[name].run_once()
         else:
             self.owner.run_children_drivers()
 
-    def _update_rates(self, dt: Number) -> NoReturn:
+    def _update_rates(self, dt: Number) -> None:
         """Update rate-of-changes over time interval dt"""
         if dt == 0:
             return
@@ -259,7 +259,7 @@ class ExplicitTimeDriver(Driver):
             self._update_children()
 
     @abc.abstractmethod
-    def _update_transients(self, dt: Number) -> NoReturn:
+    def _update_transients(self, dt: Number) -> None:
         """
         Time integration of transient variables over time step `dt`.
         Actual implementation depends on chosen numerical scheme.

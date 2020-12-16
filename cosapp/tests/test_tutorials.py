@@ -38,7 +38,7 @@ def copy_tutorials():
     [file for file in os.listdir(tutorials_folder) if os.path.splitext(file)[1] == '.ipynb'])
 def test_all(copy_tutorials, filename):
     fullpath = os.path.join(copy_tutorials, filename)
-    assert os.path.exists(fullpath), "Tutorial {} was not copied.".format(filename)
+    assert os.path.exists(fullpath), f"Tutorial {filename} was not copied."
 
     with open(fullpath) as fnb:
         nb = read(fnb, current_nbformat)

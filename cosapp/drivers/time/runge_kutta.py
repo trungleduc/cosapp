@@ -1,7 +1,5 @@
-from numbers import Number
-from typing import NoReturn
-
 import numpy
+from numbers import Number
 
 from cosapp.drivers.time.interfaces import ExplicitTimeDriver
 from cosapp.utils.helpers import check_arg
@@ -50,7 +48,7 @@ class RungeKutta(ExplicitTimeDriver):
         return len(self.__coefs)
 
     @order.setter
-    def order(self, order: int) -> NoReturn:
+    def order(self, order: int) -> None:
         check_arg(order, 'order', int, lambda n: 2 <= n <= 4)
         if order == 2:
             # Ralston's second-order scheme
@@ -65,13 +63,13 @@ class RungeKutta(ExplicitTimeDriver):
             self.__fracs = numpy.r_[0.5, 0.5, 1]
             self.__coefs = numpy.r_[1, 2, 2, 1] / 6
 
-    def _precompute(self) -> NoReturn:
+    def _precompute(self) -> None:
         super()._precompute()
         # Create memory buffer to store nstages intermediate values of dx/dt, and x at t = tn
         nstages = len(self.__coefs)
         self.__buffer = { name : [x.value] * (nstages + 1) for name, x in self._transients.items() }
 
-    def _update_transients(self, dt: Number) -> NoReturn:
+    def _update_transients(self, dt: Number) -> None:
         """
         Time integration of transient variables over time step `dt` by Runge-Kutta scheme.
         """

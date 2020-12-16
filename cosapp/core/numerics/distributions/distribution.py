@@ -1,6 +1,6 @@
 """Basic class to define a variable distribution."""
 from abc import ABC, abstractmethod
-from typing import Any, Dict, NoReturn, Union, Tuple, Optional
+from typing import Any, Dict, Optional
 
 import scipy
 import numpy
@@ -63,7 +63,7 @@ class Distribution(ABC):
         }
 
     @abstractmethod
-    def _set_distribution(self) -> NoReturn:
+    def _set_distribution(self) -> None:
         """Set the probability distribution according the parameters."""
         pass
 
@@ -95,7 +95,7 @@ class Distribution(ABC):
     def pworst(self, value: float):
         if not (0.0 <= value <= 1.0):
             raise ValueError(
-                "Worst probability does not verify 0 <= {} <= 1.".format(value)
+                f"Worst probability does not verify 0 <= {value} <= 1."
             )
         self._pworst = value
         self._set_distribution()
@@ -128,7 +128,7 @@ class Distribution(ABC):
     def pbest(self, value: float):
         if not (0.0 <= value <= 1.0):
             raise ValueError(
-                "Best probability does not verify 0 <= {} <= 1.".format(value)
+                f"Best probability does not verify 0 <= {value} <= 1."
             )
         self._pbest = value
         self._set_distribution()

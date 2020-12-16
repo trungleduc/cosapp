@@ -4,8 +4,7 @@ Basic class handling model tree structure.
 import abc
 import collections
 import logging
-import re
-from typing import Any, Dict, List, NoReturn, Optional, Union
+from typing import Any, Optional
 
 from cosapp.core.signal import Signal
 from cosapp.utils.naming import NameChecker
@@ -114,7 +113,7 @@ class Module(LoggerContext, metaclass=abc.ABCMeta):
         return self._name
 
     @name.setter
-    def name(self, name: str) -> NoReturn:
+    def name(self, name: str) -> None:
         self._name = self._name_check(name)
 
     @property
@@ -122,7 +121,7 @@ class Module(LoggerContext, metaclass=abc.ABCMeta):
         return self.__exec_order
 
     @exec_order.setter
-    def exec_order(self, iterable) -> NoReturn:
+    def exec_order(self, iterable) -> None:
         new_set = OrderedSet(iterable)
         if not all(isinstance(elem, str) for elem in new_set):
             raise TypeError(f"All elements of {self.name}.exec_order must be strings")
@@ -222,22 +221,13 @@ class Module(LoggerContext, metaclass=abc.ABCMeta):
             default latest.
         """
         # Type validation
-        if not isinstance(child, Module):
-            raise TypeError(
-                "Argument 'child' should be of type Module; got {}.".format(
-                    type(child).__name__
-                )
-            )
-        if not isinstance(execution_index, (type(None), int)):
-            raise TypeError(
-                "Argument 'execution_index' should be of type int; got {}.".format(
-                    type(execution_index).__name__
-                )
-            )
+        check_arg(child, 'child', Module)
+        if execution_index is not None:
+            check_arg(execution_index, 'execution_index', int)
 
         if child.name in self.children:
             raise ValueError(
-                "{} {!s} cannot be added, as Module already contains an object with the same name"
+                "{} {!r} cannot be added, as Module already contains an object with the same name"
                 "".format(type(child).__qualname__, child.name)
             )
 
@@ -268,7 +258,7 @@ class Module(LoggerContext, metaclass=abc.ABCMeta):
         children = self.children
 
         if name not in children:
-            message = "Component {} is not a children of {}.".format(name, self)
+            message = f"Component {name} is not a child of {self}."
             logger.error(message)
             raise AttributeError(message)
 
@@ -304,23 +294,23 @@ class Module(LoggerContext, metaclass=abc.ABCMeta):
                     )
                     self.exec_order.discard(c)
 
-    def _precompute(self) -> NoReturn:
+    def _precompute(self) -> None:
         """Actions performed prior to the `Module.compute` call."""
         pass
 
-    def compute_before(self) -> NoReturn:
+    def compute_before(self) -> None:
         """Contains the customized `Module` calculation, to execute before children."""
         pass
 
-    def compute(self) -> NoReturn:
+    def compute(self) -> None:
         """Contains the customized `Module` calculation, to execute after children."""
         pass
 
-    def _postcompute(self) -> NoReturn:
+    def _postcompute(self) -> None:
         """Actions performed after the `Module.compute` call."""
         pass
 
-    def run_once(self) -> NoReturn:
+    def run_once(self) -> None:
         """Run the module once.
 
         Execute the model of this `Module` and its children in the execution order.

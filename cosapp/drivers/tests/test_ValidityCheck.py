@@ -1,13 +1,13 @@
 import pytest
 
-from unittest.mock import MagicMock
-from typing import Any
-from collections.abc import Iterable 
 import numpy as np
 import logging
+from collections.abc import Iterable
+from typing import Any
 from cosapp.ports import Port
 from cosapp.systems import System
 from cosapp.drivers import RunOnce, ValidityCheck
+
 
 class XPort(Port):
     def setup(self):
@@ -19,10 +19,10 @@ class XPort(Port):
             out_of_limits_comment="Don't push your luck",
         )
 
+
 @pytest.fixture(scope="function")
 def Simple():
     def factory(name, k_val, k_valid_range, k_limits):
-
         class _Simple(System):
             def setup(self):
                 self.add_input(XPort, "x_in")
@@ -52,12 +52,13 @@ def Simple():
     return factory
 
 
-def get_log(log : Any, lvl : int) -> str:
+def get_log(log: Any, lvl: int) -> str:
     ret = ""
     for record in log.record_tuples:
         if record[1] == lvl:
             ret = record[2]
     return ret
+
 
 def test_ValidityCheck_setup(Simple):
     s = Simple("system", 2, None, None)
@@ -104,7 +105,7 @@ def test_ValidityCheck_setup(Simple):
 ])
 def test_ArrayValidityCheck(caplog, Simple, k_val, k_valid_range, k_limits, warning_msg, error_msg):
 
-    s = Simple("test",k_val, k_valid_range, k_limits)
+    s = Simple("test", k_val, k_valid_range, k_limits)
     s.add_driver(RunOnce("run"))
     s.add_driver(ValidityCheck("check"))
 
@@ -112,31 +113,52 @@ def test_ArrayValidityCheck(caplog, Simple, k_val, k_valid_range, k_limits, warn
     with caplog.at_level(logging.WARNING):
         s.run_drivers()
         
-        assert  get_log(caplog, logging.WARNING) == warning_msg 
-        assert  get_log(caplog, logging.ERROR) == error_msg
+        assert get_log(caplog, logging.WARNING) == warning_msg 
+        assert get_log(caplog, logging.ERROR) == error_msg
 
 
-@pytest.mark.parametrize("k_val, k_valid_range, k_limits, exception , exception_msg", [
-    (1, ((2,3), (2,6)), ((2,3),(2,6)), ValueError,
-        "valid_range ((2, 3), (2, 6)) or limits ((2, 3), (2, 6)) of object test.inwards does not take the same format as its input 1"),
+@pytest.mark.parametrize("k_val, k_valid_range, k_limits, expected", [
+    (
+        1, ((2, 3), (2, 6)), ((2, 3), (2, 6)),
+        dict(
+            error = ValueError,
+            match = r"valid_range \(.*\) or limits \(.*\) of variable 'test.inwards.k' are incompatible with its value 1",
+        ),
+    ),
+    (
+        np.array([3.3, 3]), 2, (None, 3),
+        dict(
+            error = TypeError,
+            match = "Validity or limit range must be a tuple with format comparable to value",
+        ),
+    ),
+    (
+        np.array([3.3, 3]), (1, 2, 3), (None, 3),
+        dict(
+            error = TypeError,
+            match = "Valid range or limits must be a size 2 tuple with type comparable to value",
+        ),
+    ),
+    (
+        np.array([3.3, 3]), ((1, 2), (2, 3)), (None, 3),
+        dict(
+            error = ValueError,
+            match = r"valid_range \(.*\) and limits \(None, 3\) of variable 'test.inwards.k' have different formats",
+        ),
+    ),
+    (
+        np.array([3.3, 3]), ((1, 2), (2, 3)), ((1, 5), 3),
+        dict(
+            error = ValueError,
+            match = r"Mixed values in valid_range \(\(1, 5\), 3\) of 'test.inwards.k'",
+        ),
+    ),
+])
+def test_ArrayValidityException(Simple, k_val, k_valid_range, k_limits, expected):
+    error = expected['error']
 
-    (np.array([3.3, 3]), 2, (None, 3), TypeError,
-        "Validity or limit range must be a tuple with format comparable to value"),
-
-    (np.array([3.3, 3]), (1, 2, 3), (None, 3), TypeError,
-        "Valid range or limits must be a 2-tuple with type comparable to value"),
-
-    (np.array([3.3, 3]), ((1, 2), (2, 3)), (None, 3), ValueError,
-        "valid_range ((1, 2), (2, 3)) and limits (None, 3) of object test.inwards do not take the same format"),
-
-    (np.array([3.3, 3]), ((1, 2), (2, 3)), ((1, 5), 3), ValueError,
-        "Mixed values in valid_range object ((1, 5), 3) of test.inwards. Valid object can contain only numerical values or only tuples"),
-])        
-def test_ArrayValidityException(Simple, k_val, k_valid_range, k_limits, exception, exception_msg):
-    with pytest.raises(exception) as excinfo:
+    with pytest.raises(error, match=expected.get('match', None)):
         s = Simple("test", k_val, k_valid_range, k_limits)
         s.add_driver(RunOnce("run"))
         s.add_driver(ValidityCheck("check"))
         s.run_drivers()
-
-    assert exception_msg in str(excinfo.value)
