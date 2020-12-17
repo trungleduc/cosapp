@@ -25,7 +25,7 @@ from types import MappingProxyType
 
 import jsonschema
 import numpy
-import pandas as pd
+import pandas
 
 from cosapp.core.connectors import Connector, ConnectorError
 from cosapp.core.eval_str import EvalString
@@ -44,8 +44,9 @@ from cosapp.utils.helpers import check_arg, is_number, is_numerical
 from cosapp.utils.json import JSONEncoder, decode_cosapp_dict
 from cosapp.utils.logging import LogFormat, LogLevel, rollover_logfile
 from cosapp.utils.pull_variables import pull_variables
-from cosapp.systems.surrogateclass import SurrogateClass, SurrogateClassState
 from cosapp.utils.find_variables import get_attributes
+from cosapp.systems.systemSurrogate import SystemSurrogate
+from cosapp.systems.surrogate_models.kriging import FloatKrigingSurrogate
 
 logger = logging.getLogger(__name__)
 
@@ -1704,7 +1705,7 @@ class System(Module, TimeObserver):
                         logger.debug(f"Call {self.name}.compute")
                         self._compute_calls += 1
                         with self._context_lock:
-                            if self._meta is not None and self._meta_active_status:
+                            if self.active_surrogate:
                                 self._meta.compute()
                             else :
                                 self.compute()
@@ -1785,7 +1786,7 @@ class System(Module, TimeObserver):
                     if not self.is_clean(PortType.IN):
                         self._compute_calls += 1
                         with self._context_lock:
-                            if self._meta is not None and self._meta_active_status:
+                            if self.active_surrogate:
                                 self._meta.compute()
                                 logger.debug(f"Call {self.name}.meta.compute")
                             else :
@@ -2534,65 +2535,110 @@ class System(Module, TimeObserver):
         from cosapp.tools.views.markdown import system_to_md
         return system_to_md(self)
 
-    def make_surrogate(self, data_in: pd.DataFrame, model: Any, activate=True, *args, **kwargs) -> "SurrogateClass":
+    def make_surrogate(self,
+        data_in: Union[pandas.DataFrame, Dict[str, List[float]]],
+        model = FloatKrigingSurrogate,
+        activate = True,
+        data_out: Optional[Union[pandas.DataFrame, Dict[str, Any]]] = None,
+        postsynch: Union[str, List[str]] = '*',
+        *args, **kwargs) -> SystemSurrogate:
         """
-        The role of this class method is to transform the system
-        into a surrogate model, thanks to a model and input datas
-        which are the training points for the model.
+        Creates a surrogate model superseding the normal behaviour of `compute()`.
+        The surrogate model is trained from datasets `data_in` and `data_out`,
+        given as `pandas.DataFrame` objects, or dictionnaries interpretable as so.
+
+        If no output data are provided (default), they are computed as the response
+        of system to design-of-experiment `data_in`.
+
+        Parameters
+        ----------
+        - data_in: pandas.DataFrame or Dict[str, List[float]]
+            Design of experiments for variables in dataframe columns or dict keys.
+            Column/key names must match variable contextual names, as in 'wing.geom.length', e.g.
+        - model: type
+            Model class, implementing methods `train(x, y)` and `predict(x)`, where x and y are 1D arrays.
+            Default is `cosapp.systems.surrogate_models.kriging.FloatKrigingSurrogate`.
+        - activate: bool, optional
+            Boolean determining whether or not surrogate model should be activated once created.
+            Default is `True`.
+        - data_out: pandas.DataFrame or Dict[str, List[float]], optional
+            Y-dataset used for surrogate model training. Default is None (dataset is computed).
+        - postsynch: str or List[str]
+            List of output variable names to synchronize after each surrogate model execution.
+            Default is '*', meaning all outputs are post-synchronized.
+        - *args, **kwargs: Any
+            Additional parameters passed to `model` constructor.
+
+        Returns:
+        --------
+        SystemSurrogate
+            System surrogate attached to the system.
         """
+        check_arg(data_in, 'data_in', (pandas.DataFrame, dict))
+        surrogate = SystemSurrogate(self, data_in, model, data_out, postsynch, *args, **kwargs)
+        self.__set_surrogate(surrogate, activate)
+        return surrogate
+
+    def __set_surrogate(self, surrogate: SystemSurrogate, activate=True) -> None:
+        """Private setter for surrogate model"""
         if self._meta is not None:
-            warnings.warn(f"{self.name} already had a surrogate model. It has been overwritten by new one.")
-        self._meta = SurrogateClass(self, data_in, model, *args, **kwargs)
+            warnings.warn(f"Existing surrogate model of {self.name} has been overwritten by a new one.")
+        self._meta = surrogate
         self.active_surrogate = activate
-        return self._meta
     
     def load_surrogate(self, filename: str, activate=True) -> None:
         """
-        This method loads a surrogate model that has been saved previously.
+        Loads a surrogate model from a binary file created by `dump_surrogate`.
+
+        Parameters
+        ----------
+        - filename: str
+            Destination file name.
+        - activate: bool, optional
+            Boolean determining whether or not surrogate model should be activated once loaded.
+            Default is `True`.
         """
-        self._meta = SurrogateClass.load(self, filename)
-        self.active_surrogate = activate
+        surrogate = SystemSurrogate.load(self, filename)
+        self.__set_surrogate(surrogate, activate)
 
     def dump_surrogate(self, filename: str) -> None:
-        """
-        This method is useful to save the meta/surrogate model of your system.
-        The idea beyond that is to avoid a new training of your meta model between two sessions of using.
-        The saved file can then be  loaded in a system which has the same structure than the original system you metamodelized and saved.
-        """
+        """Dumps system surrogate model (if any) into a binary file."""
+        if self._meta is None:
+            raise AttributeError(f"{self.name!r} has no surrogate model")
         self._meta.dump(filename)
     
     @property
     def active_surrogate(self) -> bool:
+        """bool: True if surrogate model is activated, False otherwise."""
         return self._meta is not None and self._meta_active_status
 
     @active_surrogate.setter
-    def active_surrogate(self, boolean: bool) -> None:
-        """
-        This method is used :
-        - if you want to deactivate your metamodelized system and turn back to your original system.
-        - if you want to activate your metamodelized system.
-        """
-        check_arg(boolean, "boolean", bool)
+    def active_surrogate(self, activated: bool) -> None:
+        """Activation boolean setter for surrogate model."""
+        check_arg(activated, "active_surrogate", bool)
         if self._meta is None:
-            raise RuntimeError("\n\
-                Can't use '.active_surrogate = ...' if there is no surrogate model created.\n\
-                To do so, please use '.make_surrogate(...)' or '.load_surrogate(...)' before using '.active_surrogate = ...'\n"
+            raise AttributeError(
+                "Can't set `active_surrogate` if no surrogate model has been created"
+                " by either `make_surrogate` or `load_surrogate`."
             )
 
-        if boolean:
-            if self._meta_active_status: return
-            # self._meta_active_status = True
-            self._set_recursive_active_status(False) #deactivate owner, drivers, children and children drivers
-            self._active = True #reactivate the owner after upper recursion
+        if activated == self._meta_active_status:
+            return
+
+        if activated:
+            # Deactivate owner, children, and all drivers
+            self._set_recursive_active_status(False)
+            # Reactivate owner after upper recursion
+            self._active = True
             self._meta_active_status = True
         
         else:
-            if not self._meta_active_status: return
             self._set_recursive_active_status(True)
             self._meta_active_status = False
 
     @property
-    def has_surrogate(self):
+    def has_surrogate(self) -> bool:
+        """bool: True if system has a surrogate model (even if inactive), False otherwise."""
         return self._meta is not None
 
     def _set_recursive_active_status(self, active_status : bool) -> None:
