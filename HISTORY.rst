@@ -1,6 +1,54 @@
 History
 =======
 
+0.11.3 (2020-21-16)
+---------------------
+
+New feature:
+
+* Surrogate models:
+  It is now possible to create a surrogate model at any system level with new method `System.make_surrogate` (MR `#3 <https://gitlab.com/cosapp/cosapp/-/merge_requests/3>`_ and `#12 <https://gitlab.com/cosapp/cosapp/-/merge_requests/12>`_):
+  
+  .. code:: python
+
+      plane = Aeroplane('plane')  # system with subsystems engine1 and engine2
+
+      # Say engine systems have one input parameter `fuel_rate`
+      # and possibly several outputs, and many sub-systems
+
+      # Create training schedule for input data
+      doe = pandas.DataFrame(
+        # loads of input data
+        columns=['fuel_rate', 'fan.diameter', ..]  # input names
+      )
+      plane.engine1.make_surrogate(doe)  # generates output data and train model
+
+      plane.run_once()  # executes the surrogate model of `engine1` instead of original compute()
+      
+      # dump model to file
+      plane.engine1.dump_surrogate('engine.bin')
+      # load model into `engine2`:
+      plane.engine2.load_surrogate('engine.bin')
+
+      # deactivate surrogate model on demand
+      plane.engine1.active_surrogate = plane.engine2.active_surrogate = False
+
+Bug fixes, minor improvements and code quality:
+
+* Add several US-common unit conversions (MR `#2 <https://gitlab.com/cosapp/cosapp/-/merge_requests/2>`_).
+* New method to export cosapp system structure into a dictionary (MR `#5 <https://gitlab.com/cosapp/cosapp/-/merge_requests/5>`_)
+* Make recorders capture port and system properties (MR `#8 <https://gitlab.com/cosapp/cosapp/-/merge_requests/8>`_).
+* Fix Module/System naming bug: *'inwards' and 'outwards' are allowed as Module/System names* (MR `#9 <https://gitlab.com/cosapp/cosapp/-/merge_requests/9>`_).
+* Broad code quality improvement (MR `#11 <https://gitlab.com/cosapp/cosapp/-/merge_requests/11>`_).
+
+  * Replace `typing.NoReturn` by `None` when appropriate.
+  * Rewording pass, typo and error fixes in tutorial notebooks.
+  * Suppress a `DeprecationWarning` raised by `numpy` in class `Variable`.
+  * Reformat many strings as Python f-strings, for clarity.
+  * Symplify many occurrences of `str.join()` for just two elements.
+
+Global rewording of tutorial notebooks, including a few error fixes.
+
 0.11.2 (2020-09-28)
 ---------------------
 
