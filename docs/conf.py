@@ -228,7 +228,7 @@ nbsphinx_thumbnails = {
     "tutorials/04-Triggers": "_images/zap.svg",
     "tutorials/05-Validation": "_images/verified.svg",
     "tutorials/06-Visibility": "_images/eye.svg",
-    "tutorials/07-Metamodels": "_images/fold.svg",
+    "tutorials/SystemSurrogates": "_images/fold.svg",
     "tutorials/10-Recorders": "_images/desktop-download.svg",
     "tutorials/FMI": "_images/package.svg",
     "tutorials/Logging": "_images/pulse.svg",
