@@ -15,6 +15,7 @@ Contributors
 * `Adrien Delsalle <https://gitlab.com/adriendelsalle>`_
 * `Guy De Spiegeleer <https://gitlab.com/GuyDS>`_ <guy.de-spiegeleer@safrangroup.com>
 * Alexis Cassier <alexis.cassier@safrangroup.com>
-* Amath Waly Ndiaye <amath-waly.ndiaye@safrangroup.com>
+* Amath Waly Ndiaye
 * Thomas Federici <thomas.federici@safrangroup.com>
+* `Jeffrey Borlik <https://gitlab.com/JeffreyBorlik>`_
 * `Adrien Talatizi <https://gitlab.com/AdrienTalatizi>`_
