@@ -228,7 +228,7 @@ class MathematicalProblem:
             """
             if name in self._unknowns:
                 raise ArithmeticError(
-                    "Variable {name!r} is defined multiple times as unknown variable in {self.name!r}."
+                    f"Variable {name!r} is defined multiple times as unknown variable in {self.name!r}."
                 )
 
             unknown = Unknown(context, name, max_abs_step, max_rel_step, lower_bound, upper_bound, mask)
