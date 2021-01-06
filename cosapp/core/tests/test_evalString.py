@@ -113,7 +113,7 @@ def test_EvalString_residue_as_context(self):
     ("2**3+2", 2 ** 3 + 2),
     ("2**9", 2 ** 9),
     ("{1, 2, 3, 3, 2, }", {1, 2, 3}),
-    ])
+])
 def test_EvalString_constant_expr(eval_context, expression, expected):
     """Test expressions expected to be interpreted as constant"""
     s = EvalString(expression, eval_context)
@@ -123,6 +123,20 @@ def test_EvalString_constant_expr(eval_context, expression, expected):
         assert s.eval() is None
     else:
         assert s.eval() == pytest.approx(expected, rel=1e-14)
+
+
+@pytest.mark.parametrize("expression, expected", [
+    ("-2 * g", dict(value=pytest.approx(-2 * 9.80665, rel=1e-14), constant=True)),
+    ("1e-23 * NA + g", dict(value=pytest.approx(15.828790), constant=True)),
+    ("g * x", dict(constant=False)),
+])
+def test_EvalString_with_constants(eval_context, expression, expected):
+    """Test expressions with system constants, expected to be interpreted as constant"""
+    s = EvalString(expression, eval_context)
+    assert s.eval_context is eval_context
+    assert s.constant == expected.get('constant', False)
+    if 'value' in expected:
+        assert s.eval() == expected['value']
 
 
 @pytest.mark.parametrize("expression, expected", [

@@ -19,6 +19,8 @@ class FooBar(System):
 
 class Bogus(System):
     def setup(self):
+        self.add_property('g', 9.80665)
+        self.add_property('NA', 6.02214076e23)
         self.add_inward('a', 2.0)
         self.add_inward('x', numpy.r_[0.1, -0.2, -3.14])
         self.add_inward('y', numpy.ones(3))

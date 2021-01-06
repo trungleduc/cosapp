@@ -262,7 +262,7 @@ class EvalString:
         from cosapp.systems import System
         if not isinstance(context, System):
             raise TypeError(
-                f"Object '{type(context)}' is not a valid context to evaluate expression '{expression}'."
+                f"Object of type '{type(context)}' is not a valid context to evaluate expression '{expression}'."
             )
 
         self.list_available_function()
@@ -274,8 +274,11 @@ class EvalString:
         # Look for the requested variables
         self.__locals = ContextLocals(context)  # type: ContextLocals
         value = eval(code, EvalString.__globals, self.__locals)
-
-        self.__constant = len(self.__locals) == 0  # type: bool
+        
+        constants = context.properties
+        self.__constant = len(self.__locals) == 0 or all(
+            key in constants for key in self.__locals
+        )  # type: bool
 
         if self.__constant:
             # simply return constant value
