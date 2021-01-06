@@ -3,6 +3,7 @@ import pytest
 from collections import OrderedDict
 from numbers import Number
 import numpy as np
+import logging, re
 
 from cosapp.systems import System
 from cosapp.ports import Port
@@ -327,6 +328,27 @@ def test_MathematicalProblem_add_unknown(test_objects, args_kwargs, expected):
             assert unknown.mask is None, message
         else:
             assert tuple(unknown.mask) == tuple(mask), message
+
+
+def test_MathematicalProblem_add_unknown_repeated(test_objects, caplog):
+    """Check that defining the same unknown several times does not raise any exception"""
+    m = test_objects[1]
+    m.add_unknown('a', max_abs_step=1)
+    assert m.unknowns['inwards.a'].max_rel_step == np.inf
+    assert m.unknowns['inwards.a'].max_abs_step == 1
+
+    caplog.clear()
+    with caplog.at_level(logging.INFO):
+        m.add_unknown('a', max_rel_step=0.1)
+        m.add_unknown('inwards.a', max_abs_step=2)
+    
+    assert len(caplog.records) == 2
+    pattern = "Variable '{}' is already declared as unknown"
+    assert re.match(pattern.format('a'), caplog.records[0].message)
+    assert re.match(pattern.format('inwards.a'), caplog.records[1].message)
+    # Check that unknown properties have not changed
+    assert m.unknowns['inwards.a'].max_rel_step == np.inf
+    assert m.unknowns['inwards.a'].max_abs_step == 1
 
 
 def test_MathematicalProblem_add_transient():
