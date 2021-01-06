@@ -226,15 +226,16 @@ class MathematicalProblem:
             mask : numpy.ndarray or None
                 Mask of unknown values in the vector variable
             """
-            if name in self._unknowns:
-                raise ArithmeticError(
-                    f"Variable {name!r} is defined multiple times as unknown variable in {self.name!r}."
-                )
+            # TODO we have a problem here if a vector variable is defined as unknown partially multiple times
+            #   Example a = [1, 2, 3] with Unknown1 = a[0] & Unknown2 = a[2]
 
             unknown = Unknown(context, name, max_abs_step, max_rel_step, lower_bound, upper_bound, mask)
-            # TODO we have a trouble here if a vector variable is defined as unknown partially multiple time
-            #   Example a = [1, 2, 3] with Unknown1 = a[0] & Unknown2 = a[2]
-            self._unknowns[unknown.name] = unknown
+            if unknown.name in self._unknowns:
+                logger.info(
+                    f"Variable {name!r} is already declared as unknown in {self.name!r}."
+                )
+            else:
+                self._unknowns[unknown.name] = unknown
 
         if self.context is None:
             raise AttributeError("Owner System is required to define unknowns.")
