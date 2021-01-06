@@ -3,12 +3,14 @@ import pytest
 from collections import OrderedDict
 from numbers import Number
 import numpy as np
+import logging, re
 
 from cosapp.systems import System
 from cosapp.ports import Port
 from cosapp.core.numerics.basics import MathematicalProblem
 from cosapp.core.numerics.boundary import Unknown, TimeUnknown
 from cosapp.core.numerics.residues import Residue
+from cosapp.utils.testing import get_args
 
 
 class BogusPort(Port):
@@ -172,119 +174,182 @@ def test_MathematicalProblem_add_methods():
     assert residue.name == 'h - gorilla'
 
 
-def test_MathematicalProblem_add_equations():
-    r = SystemA('a')
-    m = MathematicalProblem('test', r)
+@pytest.mark.parametrize("args_kwargs, expected", [
+    (
+        get_args('g == i'),
+        {
+            'g == i': dict(),
+        }
+    ),
+    (
+        get_args('g == i', 'gi_balance', reference=0.1),
+        {
+            'gi_balance': dict(reference=0.1),
+        }
+    ),
+    (
+        get_args(['g == i', 'h == 0']),
+        {
+            'g == i': dict(),
+            'h == 0': dict(),
+        }
+    ),
+    (
+        get_args(['g == i', dict(equation='h == 0', name='h_eqn')]),
+        {
+            'g == i': dict(),
+            'h_eqn': dict(),
+        }
+    ),
+    (
+        get_args(['g == i', dict(equation='h == 0', name='h_eqn', reference=10)]),
+        {
+            'g == i': dict(),
+            'h_eqn': dict(reference=10),
+        }
+    ),
+    (
+        get_args(['g == i', dict(equation='h == 0', name='h_eqn'), 'sum(c) == 1']),
+        {
+            'g == i': dict(),
+            'h_eqn': dict(),
+            'sum(c) == 1': dict(),
+        }
+    ),
+])
+def test_MathematicalProblem_add_equation(test_objects, args_kwargs, expected):
+    s, m = test_objects
+    args, kwargs = args_kwargs
+    m.add_equation(*args, **kwargs)
 
-    assert len(m.residues) == 0
-    m.add_equation("g == 0")
-    assert len(m.residues) == 1
-    assert 'g == 0' in m.residues
-    assert m.residues['g == 0'].name == 'g == 0'
+    residues = m.residues
+    assert set(residues.keys()) == set(expected.keys())
 
-    r = SystemA('a')
-    m = MathematicalProblem('test', r)
-    m.add_equation("g == i", "my_res")
-    assert len(m.residues) == 1
-    assert 'my_res' in m.residues
-    assert m.residues['my_res'].name == 'my_res'
-
-    r = SystemA('a')
-    m = MathematicalProblem('test', r)
-    m.add_equation(["g == i", "h == 0"])
-    assert len(m.residues) == 2
-
-    for name in ['h == 0', 'g == i']:
+    for name, properties in expected.items():
+        residue = residues[name]
         message = f"residue {name!r}"
-        assert name in m.residues
-        residue = m.residues[name]
         assert isinstance(residue, Residue), message
+        assert residue.context is s, message
         assert residue.name == name, message
-
-    r = SystemA('a')
-    m = MathematicalProblem('test', r)
-    m.add_equation(["g == i", dict(equation="h == 0", name="2nd")])
-    assert len(m.residues) == 2
-
-    for name in ['g == i', '2nd']:
-        message = f"residue {name!r}"
-        assert name in m.residues
-        residue = m.residues[name]
-        assert isinstance(residue, Residue), message
-        assert residue.name == name, message
-        assert residue.context is r, message
+        assert residue.reference == properties.get('reference', 1), message
 
 
-def test_MathematicalProblem_add_unknowns():
-    r = SystemA('a')
-    m = MathematicalProblem('test', r)
-    m.add_unknown("a")
-    assert len(m.unknowns) == 1
+@pytest.mark.parametrize("args_kwargs, expected", [
+    (
+        get_args('a'),
+        {
+            'inwards.a': dict(),
+        }
+    ),
+    (
+        get_args(['a', 'd']),
+        {
+            'inwards.a': dict(),
+            'inwards.d': dict(),
+        }
+    ),
+    (
+        get_args(["in_.m", dict(name="d", max_rel_step=0.1)]),
+        {
+            'in_.m': dict(),
+            'inwards.d': dict(max_rel_step=0.1),
+        }
+    ),
+    # Vector unknowns:
+    (
+        get_args('c'),
+        {
+            'unknown_names': ('inwards.c[0]', 'inwards.c[1]'),
+            'inwards.c': dict(mask=[True, True]),
+        }
+    ),
+    (
+        get_args('c[:]'),
+        {
+            'unknown_names': ('inwards.c[0]', 'inwards.c[1]'),
+            'inwards.c': dict(mask=[True, True]),
+        }
+    ),
+    (
+        get_args('c[1]'),
+        {
+            'unknown_names': ('inwards.c',),
+            'inwards.c': dict(mask=[False, True]),
+        }
+    ),
+    (
+        get_args('c', mask=[False, True]),
+        {
+            'unknown_names': ('inwards.c',),
+            'inwards.c': dict(mask=[False, True]),
+        }
+    ),
+    (
+        get_args([
+            dict(name="c", mask=[True, False]),
+            dict(name='in_.m', max_abs_step=0.5, lower_bound=-2),
+            'a',
+        ]),
+        {
+            'unknown_names': ('inwards.c', 'in_.m', 'inwards.a'),
+            'inwards.c': dict(mask=[True, False]),
+            'inwards.a': dict(),
+            'in_.m': dict(max_abs_step=0.5, lower_bound=-2),
+        }
+    ),
+])
+def test_MathematicalProblem_add_unknown(test_objects, args_kwargs, expected):
+    s, m = test_objects
+    args, kwargs = args_kwargs
+    m.add_unknown(*args, **kwargs)
 
-    for name in ['inwards.a', ]:
-        assert name in m.unknowns
-        unknown = m.unknowns[name]
-        message = f"unknown {name}"
+    try:
+        expected_names = expected.pop('unknown_names')
+    except KeyError:
+        pass
+    else:
+        assert m.unknowns_names == expected_names
+
+    unknowns = m.unknowns
+    assert set(unknowns.keys()) == set(expected.keys())
+
+    for name, properties in expected.items():
+        unknown = unknowns[name]
+        message = f"unknown {name!r}"
         assert isinstance(unknown, Unknown), message
+        assert unknown.context is s, message
         assert unknown.name == name, message
-        assert unknown.context is r, message
+        assert unknown.max_abs_step == properties.get('max_abs_step', np.inf), message
+        assert unknown.max_rel_step == properties.get('max_rel_step', np.inf), message
+        assert unknown.lower_bound == properties.get('lower_bound', -np.inf), message
+        assert unknown.upper_bound == properties.get('upper_bound', np.inf), message
+        mask = properties.get('mask', None)
+        if mask is None:
+            assert unknown.mask is None, message
+        else:
+            assert tuple(unknown.mask) == tuple(mask), message
 
-    r = SystemA('a')
-    m = MathematicalProblem('test', r)
-    m.add_unknown(["a", "d"])
-    assert len(m.unknowns) == 2
 
-    for name in ['inwards.a', 'inwards.d']:
-        assert name in m.unknowns
-        unknown = m.unknowns[name]
-        message = f"unknown {name}"
-        assert isinstance(unknown, Unknown), message
-        assert unknown.name == name, message
-        assert unknown.context is r, message
+def test_MathematicalProblem_add_unknown_repeated(test_objects, caplog):
+    """Check that defining the same unknown several times does not raise any exception"""
+    m = test_objects[1]
+    m.add_unknown('a', max_abs_step=1)
+    assert m.unknowns['inwards.a'].max_rel_step == np.inf
+    assert m.unknowns['inwards.a'].max_abs_step == 1
 
-    r = SystemA('a')
-    m = MathematicalProblem('test', r)
-    m.add_unknown(["in_.m", dict(name="d", max_rel_step=0.1)])
-    assert len(m.unknowns) == 2
+    caplog.clear()
+    with caplog.at_level(logging.INFO):
+        m.add_unknown('a', max_rel_step=0.1)
+        m.add_unknown('inwards.a', max_abs_step=2)
+    
+    assert len(caplog.records) == 2
+    pattern = "Variable '{}' is already declared as unknown"
+    assert re.match(pattern.format('a'), caplog.records[0].message)
+    assert re.match(pattern.format('inwards.a'), caplog.records[1].message)
+    # Check that unknown properties have not changed
+    assert m.unknowns['inwards.a'].max_rel_step == np.inf
+    assert m.unknowns['inwards.a'].max_abs_step == 1
 
-    for name in ['in_.m', 'inwards.d']:
-        assert name in m.unknowns
-        unknown = m.unknowns[name]
-        message = f"unknown {name}"
-        assert isinstance(unknown, Unknown), message
-        assert unknown.name == name, message
-        assert unknown.context is r, message
-    unknown = m.unknowns['inwards.d']
-    assert unknown.max_rel_step == 0.1
-
-    m.add_unknown('a')
-    assert len(m.unknowns) == 3
-    assert 'inwards.a' in m.unknowns
-
-    # Vector
-    r = SystemA('r')
-    m = MathematicalProblem('test_vector', r)
-    m.add_unknown("c")
-    assert len(m.unknowns) == 1
-    assert len(m.unknowns_names) == len(r.c)
-
-    r = SystemA('r')
-    m = MathematicalProblem('test_vector', r)
-    m.add_unknown("c[1]")
-    assert len(m.unknowns) == 1
-    assert len(m.unknowns_names) == 1
-
-    r = SystemA('r')
-    m = MathematicalProblem('test_vector', r)
-    m.add_unknown("c", mask=[False, True])
-    assert len(m.unknowns) == 1
-    assert len(m.unknowns_names) == 1
-
-    r = SystemA('r')
-    m = MathematicalProblem('test_vector', r)
-    m.add_unknown([dict(name="c", mask=[False, True])])
-    assert len(m.unknowns) == 1
-    assert len(m.unknowns_names) == 1
 
 def test_MathematicalProblem_add_transient():
     s = DynamicSystemC('s')
@@ -293,15 +358,16 @@ def test_MathematicalProblem_add_transient():
     assert len(m.transients) == 1
     assert 'A' in m.transients
     A = m.transients['A']
+    assert isinstance(A.value, Number)
     assert A.context is s
     assert A.name == 'inwards.A'
     assert A.d_dt == 1
-    assert isinstance(A.value, Number)
 
     m.add_transient('x', der='v / q**2')
     assert len(m.transients) == 2
     assert 'x' in m.transients
     x = m.transients['x']
+    assert isinstance(x.value, np.ndarray)
     s.v = np.r_[1, 2, 3]
     s.q = 2.0
     assert x.context is s
