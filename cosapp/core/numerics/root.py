@@ -214,12 +214,14 @@ class NumericSolver:
         n_broyden_update = 0
         d_residues = numpy.zeros(current_res.shape)
         dx = numpy.zeros(current_res.shape)
+
         try:
             res_index_to_update = {}
             consecutive_p_jac = 0
 
             while max_current_res > tol and it_solver < max_iter:
                 logger.log(log_level, f'Iteration {it_solver}')
+
                 if calc_jac:
                     if consecutive_p_jac > p_jac_tries or not p_jac:
                         res_index_to_update = range(x.size)
@@ -230,7 +232,9 @@ class NumericSolver:
                                                           jac, res_index_to_update)
 
                     jac_lu, piv = cls.__lu_factor(jac)  # may raise an exception
-                elif it_solver > 0:  # Good Broyden update - source: https://nickcdryan.com/2017/09/16/broydens-method-in-python/
+
+                elif it_solver > 0:
+                    # Good Broyden update - source: https://nickcdryan.com/2017/09/16/broydens-method-in-python/
                     logger.log(log_level, f'Broyden update')
                     n_broyden_update += 1
                     jac = jac + numpy.outer((d_residues - numpy.dot(jac, dx)), dx) / numpy.dot(dx, dx)
@@ -240,17 +244,16 @@ class NumericSolver:
                 it_solver += 1
 
                 dx = -lu_solve((jac_lu, piv), current_res)
-                abs_dx = numpy.abs(dx)
-                # Compute relaxation factor from max absolute step
-                dx_max = options['abs_step']
-                factor_abs = numpy.where(abs_dx > dx_max, dx_max / abs_dx, 1).min()
-                # Compute relaxation factor from max relative step
-                abs_x = numpy.abs(x)
-                dx_max = numpy.array([r * step if r > 0 else numpy.inf
-                    for r, step in zip(abs_x, options['rel_step'])])
-                factor_rel = numpy.where(abs_dx > dx_max, dx_max / abs_dx, 1).min()
+                # Compute relaxation factors from max absolute and relative steps
+                with numpy.errstate(invalid='ignore', divide='ignore'):
+                    abs_x = numpy.abs(x)
+                    abs_dx = numpy.abs(dx)
+                    dx_max_abs = options['abs_step']
+                    dx_max_rel = numpy.where(abs_x > 0, abs_x * options['rel_step'], numpy.inf)
+                    factor_abs = numpy.where(abs_dx > dx_max_abs, dx_max_abs / abs_dx, 1).min()
+                    factor_rel = numpy.where(abs_dx > dx_max_rel, dx_max_rel / abs_dx, 1).min()
 
-                factor = min(factor_rel, factor_abs, factor)
+                factor = min(factor_rel, factor_abs, factor, 1)
 
                 if factor < factor_ref:
                     logger.debug(f"\trelaxation factor lowered to {factor}")
