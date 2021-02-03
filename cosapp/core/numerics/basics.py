@@ -43,7 +43,7 @@ class SolverResults:
         self.x = list()  # type: Sequence[float]
         self.success = False  # type: bool
         self.message = ''  # type: str
-        self.fun = numpy.array([], dtype=numpy.float)  # type: numpy.ndarray
+        self.fun = numpy.array([], dtype=float)  # type: numpy.ndarray
         self.jac_lup = (None, None)  # type: Optional[(numpy.ndarray, numpy.ndarray)]
         self.jac = None  # type: Optional[numpy.ndarray]
         self.jac_errors = dict()

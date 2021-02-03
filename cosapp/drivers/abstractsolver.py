@@ -56,7 +56,7 @@ class AbstractSolver(Driver):
 
         self.problem = None  # type: Optional[MathematicalProblem]
             # desc="Mathematical problem to solve."
-        self.initial_values = numpy.empty(0, dtype=numpy.float)  # type: numpy.ndarray
+        self.initial_values = numpy.empty(0, dtype=float)  # type: numpy.ndarray
             # desc="List of initial values for all iteratives.",
         self.solution = {}  # type: Dict[str, float]
             # desc="Dictionary (name, value) of the latest solution reached."
@@ -133,7 +133,7 @@ class AbstractSolver(Driver):
         # TODO we should check that all variables are of numerical types
         super()._precompute()
 
-        self.initial_values = numpy.empty(0, dtype=numpy.float)
+        self.initial_values = numpy.empty(0, dtype=float)
         self.problem = MathematicalProblem(self.name, self.owner)
 
     def _fresidues(self,
@@ -204,7 +204,7 @@ class AbstractSolver(Driver):
     # Don't clean initial_values and problem => could be useful for debugging
     # def _postcompute(self) -> None:
     #     """Undo pull inputs and reset iteratives sets."""
-    #     self.initial_values = numpy.empty(0, dtype=numpy.float)
+    #     self.initial_values = numpy.empty(0, dtype=float)
     #     self.problem = None
     #     super()._postcompute()
 
