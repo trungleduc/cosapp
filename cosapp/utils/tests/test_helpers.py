@@ -37,10 +37,10 @@ from cosapp.utils.testing import no_exception
     ({'a': 1, 'b': 2, 'c': 3}, False),
     (np.ones(4), True),
     (np.asarray(['a', 'b', 'c']), False),
-    (np.asarray([], dtype=np.bool), False),
-    (np.asarray([], dtype=np.float), True),
-    (np.asarray([], dtype=np.int), True),
-    (np.asarray([], dtype=np.unicode), False),
+    (np.asarray([], dtype=bool), False),
+    (np.asarray([], dtype=float), True),
+    (np.asarray([], dtype=int), True),
+    (np.asarray([], dtype=str), False),
 ])
 def test_is_numerical(value, expected):
     assert is_numerical(value) == expected
@@ -76,10 +76,10 @@ def test_is_numerical(value, expected):
     ({'a': 1, 'b': 2, 'c': 3}, False),
     (np.ones(4), False),
     (np.asarray(['a', 'b', 'c']), False),
-    (np.asarray([], dtype=np.bool), False),
-    (np.asarray([], dtype=np.float), False),
-    (np.asarray([], dtype=np.int), False),
-    (np.asarray([], dtype=np.unicode), False),
+    (np.asarray([], dtype=bool), False),
+    (np.asarray([], dtype=float), False),
+    (np.asarray([], dtype=int), False),
+    (np.asarray([], dtype=str), False),
 ])
 def test_is_number(value, expected):
     assert is_number(value) == expected

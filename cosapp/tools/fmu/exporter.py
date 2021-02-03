@@ -249,11 +249,11 @@ class FMUBuilder:
 
         if isinstance(value, (bool, numpy.bool_)):
             dtype = VariableType.Boolean
-        elif isinstance(value, (int, numpy.integer)):
+        elif isinstance(value, (int, numpy.int_)):
             dtype = VariableType.Integer
-        elif isinstance(value, (float, numpy.float)):
+        elif isinstance(value, (float, numpy.float_)):
             dtype = VariableType.Real
-        elif isinstance(value, (str, numpy.str)):
+        elif isinstance(value, (str, numpy.str_)):
             dtype = VariableType.String
         elif isinstance(value, numpy.ndarray):
             if value.ndim != 0:

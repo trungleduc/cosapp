@@ -3,8 +3,7 @@
 Surrogate Model based on second order response surface equations.
 """
 
-from numpy import zeros, einsum
-from numpy.dual import lstsq
+import numpy
 from .surrogate_model import SurrogateModel
 
 
@@ -26,12 +25,12 @@ class ResponseSurface(SurrogateModel):
         """
         Initialize all attributes.
         """
-        super(ResponseSurface, self).__init__()
+        super().__init__()
 
         self.m = 0  # number of training points
         self.n = 0  # number of independents
         # vector of response surface equation coefficients
-        self.betas = zeros(0)
+        self.betas = numpy.zeros(0)
 
     def train(self, x, y):
         """
@@ -44,12 +43,12 @@ class ResponseSurface(SurrogateModel):
         y : array-like
             Model responses at given inputs.
         """
-        super(ResponseSurface, self).train(x, y)
+        super().train(x, y)
 
         m = self.m = x.shape[0]
         n = self.n = x.shape[1]
 
-        X = zeros((m, ((n + 1) * (n + 2)) // 2))
+        X = numpy.zeros((m, ((n + 1) * (n + 2)) // 2))
 
         # Modify X to include constant, squared terms and cross terms
 
@@ -62,15 +61,14 @@ class ResponseSurface(SurrogateModel):
         # Quadratic Terms
         X_offset = X[:, n + 1 :]
         for i in range(n):
-            # Z = einsum('i,ij->ij', X, Y) is equivalent to, but much faster and
+            # Z = numpy.einsum('i,ij->ij', X, Y) is equivalent to, but much faster and
             # memory efficient than, diag(X).dot(Y) for vector X and 2D array Y.
             # I.e. Z[i,j] = X[i]*Y[i,j]
-            X_offset[:, : n - i] = einsum("i,ij->ij", x[:, i], x[:, i:])
+            X_offset[:, : n - i] = numpy.einsum("i,ij->ij", x[:, i], x[:, i:])
             X_offset = X_offset[:, n - i :]
 
-        # Determine response surface equation coefficients (betas) using least
-        # squares
-        self.betas, rs, r, s = lstsq(X, y)
+        # Determine response surface equation coefficients (betas) using least squares
+        self.betas = numpy.linalg.lstsq(X, y)[0]
 
     def predict(self, x):
         """
@@ -86,11 +84,11 @@ class ResponseSurface(SurrogateModel):
         float
             Predicted response.
         """
-        super(ResponseSurface, self).predict(x)
+        super().predict(x)
 
         n = x.size
 
-        X = zeros(((self.n + 1) * (self.n + 2)) // 2)
+        X = numpy.zeros(((self.n + 1) * (self.n + 2)) // 2)
 
         # Modify X to include constant, squared terms and cross terms
 

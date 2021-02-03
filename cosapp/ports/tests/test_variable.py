@@ -56,9 +56,9 @@ def plainvar(port):
     ({"a": 1, "b": 2, "c": 3}, None),
     (np.ones(4), (-np.inf, np.inf)),
     (np.asarray(["a", "b", "c"]), None),
-    (np.asarray([], dtype=np.float), (-np.inf, np.inf)),
-    (np.asarray([], dtype=np.int), (-np.inf, np.inf)),
-    (np.asarray([], dtype=np.unicode), None),
+    (np.asarray([], dtype=float), (-np.inf, np.inf)),
+    (np.asarray([], dtype=int), (-np.inf, np.inf)),
+    (np.asarray([], dtype=str), None),
     ])
 def test_Variable__get_limits_from_type(plainvar, value, expected):
     assert plainvar._get_limits_from_type(value) == expected
