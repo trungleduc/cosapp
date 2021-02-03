@@ -1,8 +1,6 @@
-import os
-
+import pytest
 import numpy as np
 import pandas as pd
-import pytest
 
 from cosapp.ports import Port
 from cosapp.systems import System
@@ -51,18 +49,10 @@ def test_MetaSystem__initialize(test_data):
     with pytest.raises(TypeError):
         my_meta = MetaA("metaA", data=1.0)
 
-    my_meta = MetaA("metaA", data=str(test_data / "export_doe.csv"))
-    my_meta = MetaA("metaA", data=str(test_data / "export_doe.cs"))
-    try:
-        import xlrd
-    except ImportError:
-        pass
-    else:
-        my_meta = MetaA("metaA", data=str(test_data / "export_doe.xlsx"))
-    my_meta = MetaA("metaA", data=str(test_data / "export_doe.json"))
-
-    assert "K1" in my_meta.training_data.columns
-    assert "myK" not in my_meta.training_data.columns
+    for ext in ("csv", "cs", "json"):
+        my_meta = MetaA("metaA", data=str(test_data / f"export_doe.{ext}"))
+        assert "K1" in my_meta.training_data.columns
+        assert "myK" not in my_meta.training_data.columns
 
     my_meta = MetaA(
         "metaA", data=str(test_data / "export_doe.csv"), mapping={"K1": "myK"}

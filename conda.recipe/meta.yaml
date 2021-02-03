@@ -32,8 +32,7 @@ test:
     - pytest
     - pythonfmu~=0.6.0
     - watchdog
-    - xlrd
-    - xlsxwriter
+    - openpyxl
   commands:
     - python -m cosapp.tests.all_tests
 
