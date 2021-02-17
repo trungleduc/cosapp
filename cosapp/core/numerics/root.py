@@ -153,22 +153,22 @@ class NumericSolver:
                           it_jac: int,
                           it_p_jac: int,
                           jac: numpy.ndarray=None,
-                          res_indices_to_update=set()) -> Tuple[numpy.ndarray, int, int]:
+                          r_indices_to_update=set()) -> Tuple[numpy.ndarray, int, int]:
 
             n = x.size
             if jac is None or jac.shape != (n, n):
                 new_jac = numpy.zeros((n, n), dtype=float)
-                p_indices_to_update = set(range(n))
+                x_indices_to_update = set(range(n))
             else:
                 new_jac = jac.copy()
                 ncol = new_jac.shape[1]
-                p_indices_to_update = set()
-                for i in res_indices_to_update:
-                    p_indices_to_update.update([j for j in range(ncol) if new_jac[i, j] != 0])
+                x_indices_to_update = set()
+                for i in r_indices_to_update:
+                    x_indices_to_update.update([j for j in range(ncol) if new_jac[i, j] != 0])
 
             x_copy = x.copy()
 
-            for j in p_indices_to_update:
+            for j in x_indices_to_update:
                 delta = jac_rel_perturbation
                 if abs(x_copy[j]) >= jac_rel_perturbation:
                     delta = x_copy[j] * jac_rel_perturbation
@@ -178,11 +178,11 @@ class NumericSolver:
                 new_jac[:, j] = (perturbation - residues) * (1 / delta)
                 x_copy[j] = x[j]
 
-            n_partial = len(p_indices_to_update)
+            n_partial = len(x_indices_to_update)
             if n_partial == n:
                 logger.log(log_level, f'Jacobian matrix: full update')
                 it_jac += 1
-            elif p_indices_to_update:
+            elif x_indices_to_update:
                 it_p_jac += 1
                 logger.log(log_level, 
                     f'Jacobian matrix: {n_partial} over {n} derivative(s) updated')
@@ -231,6 +231,7 @@ class NumericSolver:
                 if calc_jac:
                     if consecutive_p_jac > p_jac_tries or not p_jac:
                         res_index_to_update = range(x.size)
+                        consecutive_p_jac = 0
                     else:
                         consecutive_p_jac += 1
 
@@ -287,11 +288,13 @@ class NumericSolver:
                     break
 
                 # Estimate non-linearity by comparing extrapolated and actual residues
+                abs_r = numpy.abs(r)
                 extrapolated_r = r + jac.dot(dx)
                 delta_vs_linear = numpy.abs(extrapolated_r - new_r)
                 res_index_to_update = set(
-                    numpy.argwhere(delta_vs_linear > jac_update_tol * numpy.abs(r)).flatten()
+                    numpy.argwhere(delta_vs_linear > jac_update_tol * abs_r).ravel()
                 )
+                res_index_to_update -= set(numpy.argwhere(abs_r < tol).ravel())
 
                 r, dr = new_r, new_r - r
 
