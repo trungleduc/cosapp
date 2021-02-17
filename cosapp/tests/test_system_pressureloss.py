@@ -64,7 +64,7 @@ def test_system2tank(test_library, test_data):
     s.tank1.vol = 100.0
     s.run_once()
     assert s.p2.flnum_out.Pt == 80000.0
-    assert s.tank1.vol == pytest.approx(100.0)
+    assert s.tank1.vol == pytest.approx(100)
     assert s.tank1.flnum_out.W == 10.0
 
 
@@ -78,7 +78,7 @@ def test_system11(test_library, test_data):
     s.p1.exec_order = ["p11"]
     s.run_once()
 
-    assert s.p1.p11.flnum_out.Pt / 90000.0 == pytest.approx(1.0, abs=5.0e-8)
+    assert s.p1.p11.flnum_out.Pt == pytest.approx(90000, rel=5e-8)
 
 
 def test_system11bis(test_library, test_data):
@@ -89,8 +89,8 @@ def test_system11bis(test_library, test_data):
     s = System.load(test_data / "system_config_pressureloss11bis.json")
     s.run_once()
 
-    assert s.p2.p21.flnum_out.Pt / 80000.0 == pytest.approx(1.0, abs=5.0e-8)
-    assert s.p3.flnum_out.Pt / 70000.0 == pytest.approx(1.0, abs=5.0e-8)
+    assert s.p2.p21.flnum_out.Pt == pytest.approx(80000, rel=5e-8)
+    assert s.p3.flnum_out.Pt == pytest.approx(70000, rel=5e-8)
 
 
 def test_system12(test_library, test_data):
@@ -102,7 +102,7 @@ def test_system12(test_library, test_data):
     s.p1.exec_order = ["p11", "p12"]
     s.run_once()
 
-    assert s.p1.p12.flnum_out.Pt / 80000.0 == pytest.approx(1.0, abs=5.0e-8)
+    assert s.p1.p12.flnum_out.Pt == pytest.approx(80000, rel=5.0e-8)
 
 
 def test_system22(test_library, test_data):
@@ -114,7 +114,7 @@ def test_system22(test_library, test_data):
     s.p1.exec_order = ["p11", "p12"]
     s.run_once()
 
-    assert s.p2.flnum_out.Pt / 70000.0 == pytest.approx(1.0, abs=5.0e-8)
+    assert s.p2.flnum_out.Pt == pytest.approx(70000, rel=5.0e-8)
 
 
 def test_system121(test_library, test_data):
@@ -143,11 +143,9 @@ def test_system121(test_library, test_data):
     residues = s.get_unsolved_problem().residues
     assert "mx.(epsilon == 0)" in residues
 
-    assert s.p4.flnum_out.Pt / 77500.0 == pytest.approx(1.0, abs=1e-6)
-    assert s.p2.flnum_out.W / 5.0 == pytest.approx(1.0, abs=1e-6)
-    assert s.mx.flnum_out.W / (s.mx.flnum_in1.W + s.mx.flnum_in2.W) == pytest.approx(
-        1.0, abs=1e-5
-    )
+    assert s.p4.flnum_out.Pt == pytest.approx(77500, rel=1e-6)
+    assert s.p2.flnum_out.W == pytest.approx(5, rel=1e-6)
+    assert s.mx.flnum_out.W == pytest.approx(s.mx.flnum_in1.W + s.mx.flnum_in2.W, rel=1e-5)
 
 
 def test_system131(test_library, test_data):
@@ -166,34 +164,35 @@ def test_system131(test_library, test_data):
     d = s.add_driver(NonLinearSolver("design"))
 
     s.run_drivers()
-    assert s.p4.flnum_out.Pt / 67900.0 == pytest.approx(1.0, abs=1e-5)
-    assert s.p2.flnum_out.W / 11.0 == pytest.approx(1.0, abs=1e-5)
-    assert s.p4.flnum_out.W / 10.0 == pytest.approx(1.0, abs=1e-5)
-    assert s.sp.x / (10 / 11.0) == pytest.approx(1.0, abs=2e-5)
+    assert s.p4.flnum_out.Pt == pytest.approx(67900, rel=1e-5)
+    assert s.p2.flnum_out.W == pytest.approx(11, rel=1e-5)
+    assert s.p4.flnum_out.W == pytest.approx(10, rel=1e-5)
+    assert s.sp.x == pytest.approx(10 / 11, rel=2e-5)
 
     s.p3.K = -3600
     s.run_drivers()
-    assert s.p4.flnum_out.Pt / 65600.0 == pytest.approx(1.0, abs=1e-5)
-    assert s.p2.flnum_out.W / 12.0 == pytest.approx(1.0, abs=1e-5)
-    assert s.p4.flnum_out.W / 10.0 == pytest.approx(1.0, abs=1e-5)
-    assert s.sp.x / (10 / 12.0) == pytest.approx(1.0, abs=1e-5)
+    print(d.problem)
+    assert s.p4.flnum_out.Pt == pytest.approx(65600, rel=1e-5)
+    assert s.p2.flnum_out.W == pytest.approx(12, rel=1e-5)
+    assert s.p4.flnum_out.W == pytest.approx(10, rel=1e-5)
+    assert s.sp.x == pytest.approx(10 / 12, rel=1e-5)
 
     s.p3.K = -12100
     d.options["factor"] = 0.7
     s.run_drivers()
-    assert s.p4.flnum_out.Pt / 67900.0 == pytest.approx(1.0, abs=1e-5)
-    assert s.p2.flnum_out.W / 11.0 == pytest.approx(1.0, abs=1e-5)
-    assert s.p4.flnum_out.W / 10.0 == pytest.approx(1.0, abs=1e-5)
-    assert s.sp.x / (10 / 11.0) == pytest.approx(1.0, abs=1e-5)
+    assert s.p4.flnum_out.Pt == pytest.approx(67900, rel=1e-5)
+    assert s.p2.flnum_out.W == pytest.approx(11, rel=1e-5)
+    assert s.p4.flnum_out.W == pytest.approx(10, rel=1e-5)
+    assert s.sp.x == pytest.approx(10 / 11, rel=1e-5)
 
     s.p3.K = -260100
     # d.options["factor"] = 0.9
     s.run_drivers()
 
-    assert s.p2.flnum_out.W / 10.2 == pytest.approx(1.0, abs=1e-5)
-    assert s.p4.flnum_out.W / 10.0 == pytest.approx(1.0, abs=1e-5)
-    assert s.sp.x / (10 / 10.2) == pytest.approx(1.0, abs=1e-5)
-    assert s.p4.flnum_out.Pt / 69596.0 == pytest.approx(1.0, abs=1e-5)
+    assert s.p2.flnum_out.W == pytest.approx(10.2, rel=1e-5)
+    assert s.p4.flnum_out.W == pytest.approx(10.0, rel=1e-5)
+    assert s.sp.x == pytest.approx(10 / 10.2, rel=1e-5)
+    assert s.p4.flnum_out.Pt == pytest.approx(69596, rel=1e-5)
 
 
 def test_system222(test_library, test_data):
@@ -215,9 +214,8 @@ def test_system222(test_library, test_data):
     d.runner.offdesign.add_unknown(["p2.s21.x", "s1.x"])
     s.run_drivers()
 
-    assert s.p2.p24.flnum_out.Pt / 67900.0 == pytest.approx(1.0, abs=1e-5)
-    assert s.p2.flnum_out.W / 10.0 == pytest.approx(1.0, abs=1e-5)
-    assert s.p4.flnum_out.W / 9.0 == pytest.approx(1.0, abs=1e-5)
-    assert s.s1.x / (9 / 10) == pytest.approx(1.0, abs=1e-5)
-    assert s.p2.s21.x / (10 / 11) == pytest.approx(1.0, abs=1e-5)
-
+    assert s.p2.p24.flnum_out.Pt == pytest.approx(67900, rel=1e-5)
+    assert s.p2.flnum_out.W == pytest.approx(10, rel=1e-5)
+    assert s.p4.flnum_out.W == pytest.approx(9, rel=1e-5)
+    assert s.s1.x == pytest.approx(9 / 10, rel=1e-5)
+    assert s.p2.s21.x == pytest.approx(10 / 11, rel=1e-5)

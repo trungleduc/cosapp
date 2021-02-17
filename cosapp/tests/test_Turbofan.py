@@ -35,11 +35,11 @@ def test_SimpleTurbofan_running_80():
     s.fan.mech_in.XN = 80
     s.run_drivers()
     assert s.fan.mech_in.XN == 80.0
-    assert s.fan.gh / 0.038579270081290681 == pytest.approx(1.0, abs=1e-5)
-    assert s.fan.mech_in.PW / 8279856.0537550747 == pytest.approx(1.0, abs=1e-5)
+    assert s.fan.gh == pytest.approx(0.0385792701, rel=1e-5)
+    assert s.fan.mech_in.PW == pytest.approx(8279856, rel=1e-5)
     # a second run changes fan power because of poor fsolve behavior
     # first run gives fan power residue bigger than 1e-5
-    assert s.inlet.W_in.W / 161.46335209778994 == pytest.approx(1.0, abs=1e-4)
+    assert s.inlet.W_in.W == pytest.approx(161.463, rel=1e-4)
 
 
 def test_SimpleTurbofan_running_100():
@@ -55,9 +55,9 @@ def test_SimpleTurbofan_running_100():
     s.run_drivers()
 
     assert s.fan.mech_in.XN == 100.0
-    assert s.fan.gh / 0.15669212068943697 == pytest.approx(1.0, abs=1e-5)
-    assert s.fan.mech_in.PW / 10874232.300347026 == pytest.approx(1.0, abs=1e-5)
-    assert s.inlet.W_in.W / 177.03398835527886 == pytest.approx(1.0, abs=1e-5)
+    assert s.fan.gh == pytest.approx(0.1566921207, rel=1e-5)
+    assert s.fan.mech_in.PW == pytest.approx(10874232, rel=1e-5)
+    assert s.inlet.W_in.W == pytest.approx(177.034, rel=1e-5)
 
 
 def test_AdvancedTurbofan_set_inputs():
@@ -87,16 +87,16 @@ def test_AdvancedTurbofan_running_80():
     s.fan.mech_in.XN = 80
     s.run_drivers()
     assert s.fan.mech_in.XN == 80.0
-    assert s.fan.gh / 0.038579270081290681 == pytest.approx(1.0, abs=1e-5)
-    assert s.fan.mech_in.PW / 8279856.0537550747 == pytest.approx(1.0, abs=1e-5)
-    assert s.inlet.W_in.W / 161.46335209778994 == pytest.approx(1.0, abs=1e-5)
+    assert s.fan.gh == pytest.approx(0.038579270081290681, rel=1e-5)
+    assert s.fan.mech_in.PW == pytest.approx(8279856, rel=1e-5)
+    assert s.inlet.W_in.W == pytest.approx(161.463, rel=1e-5)
 
-    assert s.bleed.fl2_out.W / 1.6309429518683161 == pytest.approx(1.0, abs=1e-5)
-    assert s.merger.fl2_in.W / 1.6309429518683161 == pytest.approx(1.0, abs=1e-5)
-    assert s.bleed.fl2_out.Pt / 180023.00671059423 == pytest.approx(1.0, abs=1e-5)
-    assert s.merger.fl2_in.Pt / 180023.00671059423 == pytest.approx(1.0, abs=1e-5)
-    assert s.bleed.fl2_out.Tt / 324.22579195039475 == pytest.approx(1.0, abs=1e-5)
-    assert s.merger.fl2_in.Tt / 324.22579195039475 == pytest.approx(1.0, abs=1e-5)
+    assert s.bleed.fl2_out.W == pytest.approx(1.630942952, rel=1e-5)
+    assert s.merger.fl2_in.W == pytest.approx(1.630942952, rel=1e-5)
+    assert s.bleed.fl2_out.Pt == pytest.approx(180023, rel=1e-5)
+    assert s.merger.fl2_in.Pt == pytest.approx(180023, rel=1e-5)
+    assert s.bleed.fl2_out.Tt == pytest.approx(324.2258, rel=1e-5)
+    assert s.merger.fl2_in.Tt == pytest.approx(324.2258, rel=1e-5)
 
 
 def test_AdvancedTurbofan_running_100():
@@ -112,16 +112,16 @@ def test_AdvancedTurbofan_running_100():
     s.run_drivers()
 
     assert s.fan.mech_in.XN == 100.0
-    assert s.fan.gh / 0.15669212068943689 == pytest.approx(1.0, abs=1e-5)
-    assert s.fan.mech_in.PW / 10874232.300347026 == pytest.approx(1.0, abs=1e-5)
-    assert s.inlet.W_in.W / 177.03398835527886 == pytest.approx(1.0, abs=1e-5)
+    assert s.fan.gh == pytest.approx(0.15669212068943689, rel=1e-5)
+    assert s.fan.mech_in.PW == pytest.approx(10874232, rel=1e-5)
+    assert s.inlet.W_in.W == pytest.approx(177.034, rel=1e-5)
 
-    assert s.bleed.fl2_out.W / 1.7882221045987776 == pytest.approx(1.0, abs=1e-5)
-    assert s.merger.fl2_in.W / 1.7882221045987776 == pytest.approx(1.0, abs=1e-5)
-    assert s.bleed.fl2_out.Pt / 200435.42510736716 == pytest.approx(1.0, abs=1e-5)
-    assert s.merger.fl2_in.Pt / 200435.42510736716 == pytest.approx(1.0, abs=1e-5)
-    assert s.bleed.fl2_out.Tt / 334.32982635034119 == pytest.approx(1.0, abs=1e-5)
-    assert s.merger.fl2_in.Tt / 334.32982635034119 == pytest.approx(1.0, abs=1e-5)
+    assert s.bleed.fl2_out.W == pytest.approx(1.7882221046, rel=1e-5)
+    assert s.merger.fl2_in.W == pytest.approx(1.7882221046, rel=1e-5)
+    assert s.bleed.fl2_out.Pt == pytest.approx(200435.4, rel=1e-5)
+    assert s.merger.fl2_in.Pt == pytest.approx(200435.4, rel=1e-5)
+    assert s.bleed.fl2_out.Tt == pytest.approx(334.330, rel=1e-5)
+    assert s.merger.fl2_in.Tt == pytest.approx(334.330, rel=1e-5)
 
 
 def test_ComplexTurbofan_set_inputs():
@@ -154,16 +154,16 @@ def test_ComplexTurbofan_running_80():
     s.fanC.mech_in.XN = 80
     s.run_drivers()
     assert s.fanC.mech_in.XN == 80.0
-    assert s.fanC.gh / 0.038579270081290681 == pytest.approx(1.0, abs=1e-5)
-    assert s.fanC.mech_in.PW / 8114258.9326799763 == pytest.approx(1.0, abs=1e-5)
-    assert s.inlet.W_in.W / 158.23408418127087 == pytest.approx(1, abs=1e-5)
+    assert s.fanC.gh == pytest.approx(0.03857927008129068, rel=1e-5)
+    assert s.fanC.mech_in.PW == pytest.approx(8114258.93, rel=1e-5)
+    assert s.inlet.W_in.W == pytest.approx(158.2341, rel=1e-5)
 
-    assert s.bleed.fl2_out.W / 1.598324092287366 == pytest.approx(1.0, abs=1e-5)
-    assert s.merger.fl2_in.W / 1.598324092287366 == pytest.approx(1.0, abs=1e-5)
-    assert s.bleed.fl2_out.Pt / 176422.54890477096 == pytest.approx(1.0, abs=1e-5)
-    assert s.merger.fl2_in.Pt / 176422.54890477096 == pytest.approx(1.0, abs=1e-5)
-    assert s.bleed.fl2_out.Tt / 324.22579195039475 == pytest.approx(1.0, abs=1e-5)
-    assert s.merger.fl2_in.Tt / 324.22579195039475 == pytest.approx(1.0, abs=1e-5)
+    assert s.bleed.fl2_out.W == pytest.approx(1.59832409, rel=1e-5)
+    assert s.merger.fl2_in.W == pytest.approx(1.59832409, rel=1e-5)
+    assert s.bleed.fl2_out.Pt == pytest.approx(176422.55, rel=1e-5)
+    assert s.merger.fl2_in.Pt == pytest.approx(176422.55, rel=1e-5)
+    assert s.bleed.fl2_out.Tt == pytest.approx(324.2258, rel=1e-5)
+    assert s.merger.fl2_in.Tt == pytest.approx(324.2258, rel=1e-5)
 
 
 def test_ComplexTurbofan_internal_loop_ductC_running_80():
@@ -182,27 +182,23 @@ def test_ComplexTurbofan_internal_loop_ductC_running_80():
     s.run_drivers()
 
     assert s.fanC.mech_in.XN == 80.0
-    assert s.fanC.gh / 0.038579270081290681 == pytest.approx(1, abs=1e-5)
-    assert s.fanC.mech_in.PW / 8114258.9326799763 == pytest.approx(1.0, abs=1e-5)
-    assert s.inlet.W_in.W / 158.23408418127087 == pytest.approx(1, abs=1e-5)
+    assert s.fanC.gh == pytest.approx(0.03857927008, rel=1e-5)
+    assert s.fanC.mech_in.PW == pytest.approx(8114258.932, rel=1e-5)
+    assert s.inlet.W_in.W == pytest.approx(158.2341, rel=1e-5)
 
-    assert s.bleed.fl2_out.W / 1.598324092287366 == pytest.approx(1.0, abs=1e-5)
-    assert s.merger.fl2_in.W / 1.598324092287366 == pytest.approx(1.0, abs=1e-5)
-    assert s.bleed.fl2_out.Pt / 176422.54890477096 == pytest.approx(1.0, abs=1e-5)
-    assert s.merger.fl2_in.Pt / 176422.54890477096 == pytest.approx(1.0, abs=1e-5)
-    assert s.bleed.fl2_out.Tt / 324.22579195039475 == pytest.approx(1.0, abs=1e-5)
-    assert s.merger.fl2_in.Tt / 324.22579195039475 == pytest.approx(1.0, abs=1e-5)
+    assert s.bleed.fl2_out.W == pytest.approx(1.59832409, rel=1e-5)
+    assert s.merger.fl2_in.W == pytest.approx(1.59832409, rel=1e-5)
+    assert s.bleed.fl2_out.Pt == pytest.approx(176422.55, rel=1e-5)
+    assert s.merger.fl2_in.Pt == pytest.approx(176422.55, rel=1e-5)
+    assert s.bleed.fl2_out.Tt == pytest.approx(324.2258, rel=1e-5)
+    assert s.merger.fl2_in.Tt == pytest.approx(324.2258, rel=1e-5)
 
-    assert s.fanC.ductC.bleed.fl2_out.W / 0.79514614357830227 == pytest.approx(
-        1.0, abs=1e-5
-    )
-    assert s.fanC.ductC.merger.fl2_in.W / 0.79514614357830227 == pytest.approx(
-        1.0, abs=1e-5
-    )
-    assert s.fanC.ductC.bleed.fl2_out.Pt / 98802.0075 == pytest.approx(1.0, abs=1e-5)
-    assert s.fanC.ductC.merger.fl2_in.Pt / 98802.0075 == pytest.approx(1.0, abs=1e-5)
-    assert s.fanC.ductC.bleed.fl2_out.Tt / 273.15 == pytest.approx(1.0, abs=1e-5)
-    assert s.fanC.ductC.merger.fl2_in.Tt / 273.15 == pytest.approx(1.0, abs=1e-5)
+    assert s.fanC.ductC.bleed.fl2_out.W == pytest.approx(0.79514614358, rel=1e-5)
+    assert s.fanC.ductC.merger.fl2_in.W == pytest.approx(0.79514614358, rel=1e-5)
+    assert s.fanC.ductC.bleed.fl2_out.Pt == pytest.approx(98802.0075, rel=1e-5)
+    assert s.fanC.ductC.merger.fl2_in.Pt == pytest.approx(98802.0075, rel=1e-5)
+    assert s.fanC.ductC.bleed.fl2_out.Tt == pytest.approx(273.15, rel=1e-5)
+    assert s.fanC.ductC.merger.fl2_in.Tt == pytest.approx(273.15, rel=1e-5)
 
 
 def test_ComplexTurbofan_internal_loop_fanC_running_80():
@@ -221,27 +217,23 @@ def test_ComplexTurbofan_internal_loop_fanC_running_80():
     s.run_drivers()
 
     assert s.fanC.mech_in.XN == 80.0
-    assert s.fanC.gh / 0.038579270081290681 == pytest.approx(1, abs=1e-5)
-    assert s.fanC.mech_in.PW / 8114258.9326799763 == pytest.approx(1.0, abs=1e-5)
-    assert s.inlet.W_in.W / 158.23408418127087 == pytest.approx(1, abs=1e-5)
+    assert s.fanC.gh / 0.038579270081290681 == pytest.approx(1, rel=1e-5)
+    assert s.fanC.mech_in.PW / 8114258.9326799763 == pytest.approx(1.0, rel=1e-5)
+    assert s.inlet.W_in.W / 158.23408418127087 == pytest.approx(1, rel=1e-5)
 
-    assert s.bleed.fl2_out.W / 1.598324092287366 == pytest.approx(1.0, abs=1e-5)
-    assert s.merger.fl2_in.W / 1.598324092287366 == pytest.approx(1.0, abs=1e-5)
-    assert s.bleed.fl2_out.Pt / 176422.54890477096 == pytest.approx(1.0, abs=1e-5)
-    assert s.merger.fl2_in.Pt / 176422.54890477096 == pytest.approx(1.0, abs=1e-5)
-    assert s.bleed.fl2_out.Tt / 324.22579195039475 == pytest.approx(1.0, abs=1e-5)
-    assert s.merger.fl2_in.Tt / 324.22579195039475 == pytest.approx(1.0, abs=1e-5)
+    assert s.bleed.fl2_out.W == pytest.approx(1.59832409, rel=1e-5)
+    assert s.merger.fl2_in.W == pytest.approx(1.59832409, rel=1e-5)
+    assert s.bleed.fl2_out.Pt == pytest.approx(176422.55, rel=1e-5)
+    assert s.merger.fl2_in.Pt == pytest.approx(176422.55, rel=1e-5)
+    assert s.bleed.fl2_out.Tt == pytest.approx(324.2258, rel=1e-5)
+    assert s.merger.fl2_in.Tt == pytest.approx(324.2258, rel=1e-5)
 
-    assert s.fanC.ductC.bleed.fl2_out.W / 0.79514614357830227 == pytest.approx(
-        1.0, abs=1e-5
-    )
-    assert s.fanC.ductC.merger.fl2_in.W / 0.79514614357830227 == pytest.approx(
-        1.0, abs=1e-5
-    )
-    assert s.fanC.ductC.bleed.fl2_out.Pt / 98802.0075 == pytest.approx(1.0, abs=1e-5)
-    assert s.fanC.ductC.merger.fl2_in.Pt / 98802.0075 == pytest.approx(1.0, abs=1e-5)
-    assert s.fanC.ductC.bleed.fl2_out.Tt / 273.15 == pytest.approx(1.0, abs=1e-5)
-    assert s.fanC.ductC.merger.fl2_in.Tt / 273.15 == pytest.approx(1.0, abs=1e-5)
+    assert s.fanC.ductC.bleed.fl2_out.W == pytest.approx(0.79514614358, rel=1e-5)
+    assert s.fanC.ductC.merger.fl2_in.W == pytest.approx(0.79514614358, rel=1e-5)
+    assert s.fanC.ductC.bleed.fl2_out.Pt == pytest.approx(98802.0075, rel=1e-5)
+    assert s.fanC.ductC.merger.fl2_in.Pt == pytest.approx(98802.0075, rel=1e-5)
+    assert s.fanC.ductC.bleed.fl2_out.Tt == pytest.approx(273.15, rel=1e-5)
+    assert s.fanC.ductC.merger.fl2_in.Tt == pytest.approx(273.15, rel=1e-5)
 
 
 def test_ComplexTurbofan_running_100():
@@ -258,16 +250,16 @@ def test_ComplexTurbofan_running_100():
     s.run_drivers()
 
     assert s.fanC.mech_in.XN == 100.0
-    assert s.fanC.gh / 0.15669212068943694 == pytest.approx(1.0, abs=1e-5)
-    assert s.fanC.mech_in.PW / 10656747.654340087 == pytest.approx(1.0, abs=1e-5)
-    assert s.inlet.W_in.W / 173.49330858817328 == pytest.approx(1.0, abs=1e-5)
+    assert s.fanC.gh == pytest.approx(0.15669212069, rel=1e-5)
+    assert s.fanC.mech_in.PW == pytest.approx(10656747.6, rel=1e-5)
+    assert s.inlet.W_in.W == pytest.approx(173.4933, rel=1e-5)
 
-    assert s.bleed.fl2_out.W / 1.75245766250680226 == pytest.approx(1.0, abs=1e-5)
-    assert s.merger.fl2_in.W / 1.75245766250680226 == pytest.approx(1.0, abs=1e-5)
-    assert s.bleed.fl2_out.Pt / 196426.71660521982 == pytest.approx(1.0, abs=1e-5)
-    assert s.merger.fl2_in.Pt / 196426.71660521982 == pytest.approx(1.0, abs=1e-5)
-    assert s.bleed.fl2_out.Tt / 334.32982635034119 == pytest.approx(1.0, abs=1e-5)
-    assert s.merger.fl2_in.Tt / 334.32982635034119 == pytest.approx(1.0, abs=1e-5)
+    assert s.bleed.fl2_out.W == pytest.approx(1.75245766, rel=1e-5)
+    assert s.merger.fl2_in.W == pytest.approx(1.75245766, rel=1e-5)
+    assert s.bleed.fl2_out.Pt == pytest.approx(196426.7, rel=1e-5)
+    assert s.merger.fl2_in.Pt == pytest.approx(196426.7, rel=1e-5)
+    assert s.bleed.fl2_out.Tt == pytest.approx(334.330, rel=1e-5)
+    assert s.merger.fl2_in.Tt == pytest.approx(334.330, rel=1e-5)
 
 
 def to_ComplexTurbofan_html():

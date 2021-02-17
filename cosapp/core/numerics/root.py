@@ -119,7 +119,9 @@ class NumericSolver:
         rel_step : numpy.ndarray
             Max relative step for parameters iterated by solver.
         history : bool, optional
-            Store the history trace of the resolution; default False
+            Store the history trace of the resolution; default False.
+        jac_update_tol : float, optional
+            Tolerance level for Jacobian matrix update, based on nonlinearity estimation; default 0.01
 
         Returns
         -------
@@ -135,9 +137,13 @@ class NumericSolver:
 
         jac_rel_perturbation = options['eps']
         factor_ref = factor = options['factor']
-        jac = options.get('jac', None)
+        try:
+            jac = numpy.asarray(options['jac'])
+        except:
+            jac = None
         jac_lu, piv = options.get('jac_lup', (None, None))
         calc_jac = options.get('compute_jacobian', True) or jac is None or jac.shape[1] != x0.shape[0]
+        jac_update_tol = options.get('jac_update_tol', 0.01)
         recorder = options['recorder']
         history = options.get('history', False)
         trace = list()
@@ -147,22 +153,22 @@ class NumericSolver:
                           it_jac: int,
                           it_p_jac: int,
                           jac: numpy.ndarray=None,
-                          res_indices_to_update: set={}) -> Tuple[numpy.ndarray, int, int]:
+                          r_indices_to_update=set()) -> Tuple[numpy.ndarray, int, int]:
 
             n = x.size
             if jac is None or jac.shape != (n, n):
                 new_jac = numpy.zeros((n, n), dtype=float)
-                p_indices_to_update = set(range(n))
+                x_indices_to_update = set(range(n))
             else:
                 new_jac = jac.copy()
                 ncol = new_jac.shape[1]
-                p_indices_to_update = set()
-                for i in res_indices_to_update:
-                    p_indices_to_update.update([j for j in range(ncol) if new_jac[i, j] != 0])
+                x_indices_to_update = set()
+                for i in r_indices_to_update:
+                    x_indices_to_update.update([j for j in range(ncol) if new_jac[i, j] != 0])
 
             x_copy = x.copy()
 
-            for j in p_indices_to_update:
+            for j in x_indices_to_update:
                 delta = jac_rel_perturbation
                 if abs(x_copy[j]) >= jac_rel_perturbation:
                     delta = x_copy[j] * jac_rel_perturbation
@@ -172,11 +178,11 @@ class NumericSolver:
                 new_jac[:, j] = (perturbation - residues) * (1 / delta)
                 x_copy[j] = x[j]
 
-            n_partial = len(p_indices_to_update)
+            n_partial = len(x_indices_to_update)
             if n_partial == n:
                 logger.log(log_level, f'Jacobian matrix: full update')
                 it_jac += 1
-            elif p_indices_to_update:
+            elif x_indices_to_update:
                 it_p_jac += 1
                 logger.log(log_level, 
                     f'Jacobian matrix: {n_partial} over {n} derivative(s) updated')
@@ -185,9 +191,9 @@ class NumericSolver:
 
         logger.debug("NR - Reference call")
         x = numpy.array(x0, dtype=float)
-        current_res = fresidues(x, *args)
-        max_current_res = numpy.abs(current_res).max()
-        logger.log(log_level, f"Initial residue: {max_current_res}")
+        r = fresidues(x, *args)
+        r_norm = numpy.linalg.norm(r, numpy.inf)
+        logger.log(log_level, f"Initial residue: {r_norm}")
         logger.log(LogLevel.FULL_DEBUG, f"Initial relaxation factor {factor}.")
         results = SolverResults()
 
@@ -201,7 +207,7 @@ class NumericSolver:
         check_numerical_features('rel_step', numpy.inf)
 
         if history:
-            trace.append({"x": x.copy(), "residues": current_res.copy()})
+            trace.append({"x": x.copy(), "residues": r.copy()})
         if recorder is not None:
             recorder.record_state(str(it_solver), 'ok', )
 
@@ -212,23 +218,24 @@ class NumericSolver:
         p_jac, p_jac_tries = options['partial_jac'], options['partial_jac_tries']
         it_jac, it_p_jac = 0, 0  # number of full and partial evalutions of the Jacobian
         n_broyden_update = 0
-        d_residues = numpy.zeros(current_res.shape)
-        dx = numpy.zeros(current_res.shape)
+        dr = numpy.zeros_like(r)
+        dx = numpy.full_like(r, numpy.nan)
 
         try:
             res_index_to_update = {}
             consecutive_p_jac = 0
 
-            while max_current_res > tol and it_solver < max_iter:
+            while r_norm > tol and it_solver < max_iter:
                 logger.log(log_level, f'Iteration {it_solver}')
 
                 if calc_jac:
                     if consecutive_p_jac > p_jac_tries or not p_jac:
                         res_index_to_update = range(x.size)
+                        consecutive_p_jac = 0
                     else:
                         consecutive_p_jac += 1
 
-                    jac, it_jac, it_p_jac = calc_jacobian(x, current_res, it_jac, it_p_jac,
+                    jac, it_jac, it_p_jac = calc_jacobian(x, r, it_jac, it_p_jac,
                                                           jac, res_index_to_update)
 
                     jac_lu, piv = cls.__lu_factor(jac)  # may raise an exception
@@ -237,13 +244,13 @@ class NumericSolver:
                     # Good Broyden update - source: https://nickcdryan.com/2017/09/16/broydens-method-in-python/
                     logger.log(log_level, f'Broyden update')
                     n_broyden_update += 1
-                    jac = jac + numpy.outer((d_residues - numpy.dot(jac, dx)), dx) / numpy.dot(dx, dx)
+                    corr = numpy.outer((dr - jac.dot(dx)), dx) / dx.dot(dx)
+                    jac += corr
                     jac_lu, piv = cls.__lu_factor(jac)
 
-                max_previous_res = max_current_res.copy()
                 it_solver += 1
 
-                dx = -lu_solve((jac_lu, piv), current_res)
+                dx = -lu_solve((jac_lu, piv), r)
                 # Compute relaxation factors from max absolute and relative steps
                 with numpy.errstate(invalid='ignore', divide='ignore'):
                     abs_x = numpy.abs(x)
@@ -258,6 +265,8 @@ class NumericSolver:
                 if factor < factor_ref:
                     logger.debug(f"\trelaxation factor lowered to {factor}")
 
+                r_norm_prev = r_norm
+                x_prev = x.copy()
                 dx *= factor
                 x += dx
 
@@ -270,21 +279,27 @@ class NumericSolver:
                 x = numpy.maximum(x, options['lower_bound'])
                 x = numpy.minimum(x, options['upper_bound'])
 
-                expected_new_res = current_res + numpy.dot(jac, dx)
+                new_r = fresidues(x, *args)
+                r_norm = numpy.linalg.norm(new_r, numpy.inf)
+                logger.log(log_level, f'Residue: {r_norm:.5g}')
 
-                new_f = fresidues(x, *args)
-                max_current_res = numpy.abs(new_f).max()
-                logger.log(log_level, f'Residue: {max_current_res:.5g}')
+                if numpy.allclose(x, x_prev, rtol=1e-14):
+                    logger.log(log_level, f"Fixed point detected: x = {x}, dx = {x - x_prev}")
+                    break
 
-                d_residues = new_f - current_res
-                current_res = new_f
- 
-                # TODO Adrien confirm absolute delta is more efficient than relative
-                delta_vs_expected = numpy.abs(expected_new_res - current_res)
-                res_index_to_update = set(numpy.argwhere(delta_vs_expected > 0.1).flatten())
+                # Estimate non-linearity by comparing extrapolated and actual residues
+                abs_r = numpy.abs(r)
+                extrapolated_r = r + jac.dot(dx)
+                delta_vs_linear = numpy.abs(extrapolated_r - new_r)
+                res_index_to_update = set(
+                    numpy.argwhere(delta_vs_linear > jac_update_tol * abs_r).ravel()
+                )
+                res_index_to_update -= set(numpy.argwhere(abs_r < tol).ravel())
+
+                r, dr = new_r, new_r - r
 
                 if history:
-                    trace.append({"x": x.copy(), "residues": current_res.copy()})
+                    trace.append({"x": x.copy(), "residues": r.copy()})
                     if calc_jac:
                         trace[-1]["jac"] = jac.copy()
                 if recorder is not None:
@@ -293,8 +308,8 @@ class NumericSolver:
                 if res_index_to_update:
                     factor = factor_ref
                     calc_jac = True
-                elif max_current_res != 0:
-                    growth_rate = 1 + 0.1 * (1 - factor) * max_previous_res / max_current_res
+                elif r_norm != 0:
+                    growth_rate = 1 + 0.1 * (1 - factor) * r_norm_prev / r_norm
                     factor = min(growth_rate * factor, 1)
                     calc_jac = False
                     logger.log(LogLevel.FULL_DEBUG, f"New relaxation factor {factor}.")
@@ -314,11 +329,11 @@ class NumericSolver:
         results.jac_lup = (jac_lu, piv)
         results.jac_calls = it_jac + it_p_jac
         results.fres_calls = it_solver
-        results.success = (max_current_res <= tol)
+        results.success = (r_norm <= tol)
         
         convergence = f'Converged' if results.success else 'Not converged'
         results.message = (
-            f'   -> {convergence} ({max_current_res:.4e}) in {it_solver} iterations,'
+            f'   -> {convergence} ({r_norm:.4e}) in {it_solver} iterations,'
             f' {it_jac} complete, {it_p_jac} partial Jacobian and {n_broyden_update}'
             f' Broyden evaluation(s)')
         results.trace = trace

@@ -350,8 +350,10 @@ class NonLinearSolver(AbstractSolver):
                 desc='A parameter determining the initial step bound factor * norm(diag * x). Should be in the interval [0.1, 1].')
             self.options.declare('partial_jac', True, dtype=bool, allow_none=False,
                 desc='Defines if partial Jacobian updates can be computed before a complete Jacobian matrix update.')
-            self.options.declare('partial_jac_tries', 5, dtype=int, allow_none=False, lower=1, upper=5,
+            self.options.declare('partial_jac_tries', 10, dtype=int, allow_none=False, lower=1, upper=10,
                 desc='Defines how many partial Jacobian updates can be tried before a complete Jacobian matrix update.')
+            self.options.declare('jac_update_tol', 0.01, dtype=float, allow_none=False, lower=0, upper=1,
+                desc='Tolerance level for partial Jacobian matrix update, based on nonlinearity estimation.')
             self.options.declare('recorder', None, allow_none=True,
                 desc='A recorder to store solver intermediate results.')
             self.options.declare('lower_bound', None, dtype=numpy.ndarray, allow_none=True,
