@@ -119,7 +119,9 @@ class NumericSolver:
         rel_step : numpy.ndarray
             Max relative step for parameters iterated by solver.
         history : bool, optional
-            Store the history trace of the resolution; default False
+            Store the history trace of the resolution; default False.
+        jac_update_tol : float, optional
+            Tolerance level for Jacobian matrix update, based on nonlinearity estimation; default 0.01
 
         Returns
         -------
@@ -135,9 +137,13 @@ class NumericSolver:
 
         jac_rel_perturbation = options['eps']
         factor_ref = factor = options['factor']
-        jac = options.get('jac', None)
+        try:
+            jac = numpy.asarray(options['jac'])
+        except:
+            jac = None
         jac_lu, piv = options.get('jac_lup', (None, None))
         calc_jac = options.get('compute_jacobian', True) or jac is None or jac.shape[1] != x0.shape[0]
+        jac_update_tol = options.get('jac_update_tol', 0.01)
         recorder = options['recorder']
         history = options.get('history', False)
         trace = list()
@@ -147,7 +153,7 @@ class NumericSolver:
                           it_jac: int,
                           it_p_jac: int,
                           jac: numpy.ndarray=None,
-                          res_indices_to_update: set={}) -> Tuple[numpy.ndarray, int, int]:
+                          res_indices_to_update=set()) -> Tuple[numpy.ndarray, int, int]:
 
             n = x.size
             if jac is None or jac.shape != (n, n):
@@ -212,8 +218,8 @@ class NumericSolver:
         p_jac, p_jac_tries = options['partial_jac'], options['partial_jac_tries']
         it_jac, it_p_jac = 0, 0  # number of full and partial evalutions of the Jacobian
         n_broyden_update = 0
-        d_residues = numpy.zeros(current_res.shape)
-        dx = numpy.zeros(current_res.shape)
+        d_residues = numpy.zeros_like(current_res)
+        dx = numpy.full_like(current_res, numpy.nan)
 
         try:
             res_index_to_update = {}
@@ -237,7 +243,8 @@ class NumericSolver:
                     # Good Broyden update - source: https://nickcdryan.com/2017/09/16/broydens-method-in-python/
                     logger.log(log_level, f'Broyden update')
                     n_broyden_update += 1
-                    jac = jac + numpy.outer((d_residues - numpy.dot(jac, dx)), dx) / numpy.dot(dx, dx)
+                    corr = numpy.outer((d_residues - jac.dot(dx)), dx) / dx.dot(dx)
+                    jac += corr
                     jac_lu, piv = cls.__lu_factor(jac)
 
                 max_previous_res = max_current_res.copy()
@@ -258,6 +265,7 @@ class NumericSolver:
                 if factor < factor_ref:
                     logger.debug(f"\trelaxation factor lowered to {factor}")
 
+                x_prev = x.copy()
                 dx *= factor
                 x += dx
 
@@ -270,18 +278,19 @@ class NumericSolver:
                 x = numpy.maximum(x, options['lower_bound'])
                 x = numpy.minimum(x, options['upper_bound'])
 
-                expected_new_res = current_res + numpy.dot(jac, dx)
-
-                new_f = fresidues(x, *args)
-                max_current_res = numpy.abs(new_f).max()
+                new_res = fresidues(x, *args)
+                max_current_res = numpy.abs(new_res).max()
                 logger.log(log_level, f'Residue: {max_current_res:.5g}')
 
-                d_residues = new_f - current_res
-                current_res = new_f
- 
-                # TODO Adrien confirm absolute delta is more efficient than relative
-                delta_vs_expected = numpy.abs(expected_new_res - current_res)
-                res_index_to_update = set(numpy.argwhere(delta_vs_expected > 0.1).flatten())
+                # Estimate non-linearity by comparing extrapolated and actual residues
+                extrapolated_res = current_res + jac.dot(dx)
+                delta_vs_linear = numpy.abs(extrapolated_res - new_res)
+                res_index_to_update = set(
+                    numpy.argwhere(delta_vs_linear > jac_update_tol * numpy.abs(current_res)).flatten()
+                )
+
+                d_residues = new_res - current_res
+                current_res = new_res
 
                 if history:
                     trace.append({"x": x.copy(), "residues": current_res.copy()})
