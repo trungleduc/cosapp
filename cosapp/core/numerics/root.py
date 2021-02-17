@@ -282,6 +282,10 @@ class NumericSolver:
                 max_current_res = numpy.abs(new_res).max()
                 logger.log(log_level, f'Residue: {max_current_res:.5g}')
 
+                if numpy.allclose(x, x_prev, rtol=1e-14):
+                    logger.log(log_level, f"Fixed point detected: x = {x}, dx = {x - x_prev}")
+                    break
+
                 # Estimate non-linearity by comparing extrapolated and actual residues
                 extrapolated_res = current_res + jac.dot(dx)
                 delta_vs_linear = numpy.abs(extrapolated_res - new_res)
