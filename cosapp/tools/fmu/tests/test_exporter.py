@@ -20,9 +20,8 @@ from cosapp.systems import System
 from cosapp.tools.fmu.exporter import (
     Fmi2Causality,
     Fmi2Variability,
-    FMUBuilder,
+    FmuBuilder,
     TimeIntegrator,
-    Variable,
     VariableType,
     to_fmu,
 )
@@ -87,9 +86,9 @@ def test_TimeIntegrator_options(value):
 def test_FMUBuilder__get_variable_type(value, expected):
     if isinstance(expected, type) and issubclass(expected, Exception):
         with pytest.raises(expected):
-            FMUBuilder._get_variable_type(value)
+            FmuBuilder._get_variable_type(value)
     else:
-        assert FMUBuilder._get_variable_type(value) == expected
+        assert FmuBuilder._get_variable_type(value) == expected
 
 
 @pytest.mark.parametrize(
@@ -99,7 +98,7 @@ def test_FMUBuilder__get_variable_type(value, expected):
 def test_FMUBuilder__add_variables(causality, variability):
     data = dict((("a", True), ("b", 2), ("c", 42.0), ("d", "hello")))
 
-    vars = FMUBuilder._add_variables(data, causality, variability)
+    vars = FmuBuilder._add_variables(data, causality, variability)
 
     for v in vars:
         assert v.name in data
@@ -111,11 +110,11 @@ def test_FMUBuilder__add_variables(causality, variability):
     assert len(vars) == len(data)
 
     with pytest.raises(TypeError):
-        FMUBuilder._add_variables({"data": b"hello"}, causality, variability)
+        FmuBuilder._add_variables({"data": b"hello"}, causality, variability)
 
 
 def test_FMUBuilder__get_default_value(testtype):
-    variables = FMUBuilder._get_default_value(
+    variables = FmuBuilder._get_default_value(
         list(testtype.inputs[System.INWARDS]), testtype
     )
 
@@ -125,16 +124,16 @@ def test_FMUBuilder__get_default_value(testtype):
         else:
             assert v == getattr(testtype, k)
 
-    variables = FMUBuilder._get_default_value(("k[0]", "k[1]", "k[2]"), testtype)
+    variables = FmuBuilder._get_default_value(("k[0]", "k[1]", "k[2]"), testtype)
 
     for i in range(3):
         assert variables[f"k[{i}]"] == testtype["k"][i]
 
     with pytest.raises(ValueError):
-        FMUBuilder._get_default_value(("k[4]",), testtype)
+        FmuBuilder._get_default_value(("k[4]",), testtype)
 
     with pytest.raises(ValueError):
-        FMUBuilder._get_default_value(("rr",), testtype)
+        FmuBuilder._get_default_value(("rr",), testtype)
 
 
 def test_FMUBuilder__get_default_variables():
@@ -154,13 +153,13 @@ def test_FMUBuilder__get_default_variables():
     p2.add_variable("k", numpy.array([1, 2]))
     p2.add_variable("l", numpy.array(b"hello", dtype="S"))
 
-    out = FMUBuilder._get_default_variables({"p1": p1, System.OUTWARDS: p2}, to_skip=())
+    out = FmuBuilder._get_default_variables({"p1": p1, System.OUTWARDS: p2}, to_skip=())
     expected = ("p1.a", "p1.b", "p1.c", "p1.d", "g", "h", "i", "j")
     for e in expected:
         assert e in out
     assert len(out) == len(expected)
 
-    out = FMUBuilder._get_default_variables(
+    out = FmuBuilder._get_default_variables(
         {"p1": p1, System.OUTWARDS: p2}, to_skip=["p1.c", "p1.a", "j"]
     )
     expected = ("p1.b", "p1.d", "g", "h", "i")
@@ -195,13 +194,13 @@ def test_FMU_export_all_causality(tmp_path, allcausality):
 
 def test_FMU_export_hide_all_variables(tmp_path, allcausality):
     test = allcausality
-    fmu_folder = FMUBuilder.generate_fmu_facade(
+    fmu_folder = FmuBuilder.generate_fmu_facade(
         test, dest=tmp_path, inputs=[], locals=[], outputs=[], parameters=[]
     )
 
     fmu_slave = load_fmu_class(
         "allcausality",
-        str(FMUBuilder._get_project_folder(tmp_path) / "allcausality.py"),
+        str(FmuBuilder._get_project_folder(tmp_path) / "allcausality.py"),
     )
 
     assert len(fmu_slave.vars) == 0
@@ -209,10 +208,10 @@ def test_FMU_export_hide_all_variables(tmp_path, allcausality):
 
 def test_FMU_export_all_type(tmp_path, testtype):
     test = testtype
-    fmu_folder = FMUBuilder.generate_fmu_facade(test, dest=tmp_path)
+    fmu_folder = FmuBuilder.generate_fmu_facade(test, dest=tmp_path)
 
     fmu_slave = load_fmu_class(
-        "testtype", str(FMUBuilder._get_project_folder(tmp_path) / "testtype.py")
+        "testtype", str(FmuBuilder._get_project_folder(tmp_path) / "testtype.py")
     )
 
     assert len(fmu_slave.vars) == 8
