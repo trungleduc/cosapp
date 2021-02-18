@@ -3,8 +3,6 @@ import itertools
 import logging
 import os
 import shutil
-import tempfile
-from collections import OrderedDict
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
@@ -14,7 +12,7 @@ from collections.abc import Collection
 import numpy
 
 from cosapp.core import __version__ as cosapp_version
-from cosapp.drivers import Driver, RunSingleCase
+from cosapp.drivers import RunSingleCase
 from cosapp.drivers.abstractsolver import AbstractSolver
 from cosapp.ports.port import ExtensiblePort
 from cosapp.systems import System
@@ -118,7 +116,7 @@ class FMUBuilder:
             try:
                 dtype = FMUBuilder._get_variable_type(value)
             except TypeError as e:
-                raise TypeError(str(e) + f" for variable {name}")
+                raise TypeError(f"{e!s} for variable {name}")
 
             l_vars.append(
                 Variable(
@@ -221,9 +219,8 @@ class FMUBuilder:
     def _get_script_file(dest: Path, system: System, suffix: str) -> Path:
         """Path: Facade module file path."""
         class_name = type(system).__name__
-        filename = FMUBuilder._get_project_folder(dest) / (
-            class_name.lower() + suffix + ".py"
-        )
+        path = FMUBuilder._get_project_folder(dest)
+        filename = path / f"{class_name.lower()}{suffix}.py"
         filename.parent.mkdir(parents=True, exist_ok=True)
         return filename
 
@@ -479,9 +476,7 @@ class FMUBuilder:
         if not python_env.exists():
             logger.info("Create default package list.")
 
-            from cosapp import core
-
-            package_list = {"cosapp": core.__version__}
+            package_list = {"cosapp": cosapp_version}
 
             python_env.write_text(
                 "\n".join(
@@ -616,7 +611,7 @@ class FMUBuilder:
 
         shutil.rmtree(temp_dest)
 
-        return dest / (type(system).__name__ + ".fmu")
+        return dest / f"{type(system).__name__}.fmu"
 
 
 to_fmu = FMUBuilder.to_fmu
