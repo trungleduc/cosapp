@@ -76,12 +76,8 @@ class {{ class_name }}FMU(Fmi2Slave):
         # Initialize the problem
         self.__driver._precompute()
         self.__driver.compute_before()
-        for child in self.__driver.exec_order:
-            self.__driver.children[child].run_once()
-
         self.__driver._initialize()
-        for rate in self.__driver._rates.values():
-            rate.reset()
+        self.__driver._update_children()
 
     def __restore(self):
         self.__driver._postcompute()
