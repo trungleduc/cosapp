@@ -7,11 +7,6 @@ from cosapp.systems import System
 from cosapp.tests.library.systems.multiply import IterativeNonLinear
 
 
-def case_factory(system_cls, name, **kwargs):
-    """Case factory used in test fixtures below"""
-    return system_cls(name, **kwargs)
-
-
 class Float(Port):
     def setup(self):
         self.add_variable('x', 1.)
@@ -26,7 +21,7 @@ class AllCausality(System):
 
 @pytest.fixture(scope='function')
 def allcausality():
-    return case_factory(AllCausality, 'test')
+    return AllCausality('test')
 
 
 class TestType(System):
@@ -46,7 +41,7 @@ class TestType(System):
 
 @pytest.fixture(scope='function')
 def testtype():
-    return case_factory(TestType, 'test')
+    return TestType('test')
 
 
 class ExpRampOde(System):
@@ -70,7 +65,7 @@ class ExpRampOde(System):
 
 @pytest.fixture(scope='function')
 def ode():
-    return case_factory(ExpRampOde, 'ode')
+    return ExpRampOde('ode')
 
 
 class VectorSyst(System):
@@ -81,7 +76,7 @@ class VectorSyst(System):
 
 @pytest.fixture(scope='function')
 def vector_syst():
-    return case_factory(VectorSyst, "syst")
+    return VectorSyst("syst")
 
 
 @pytest.fixture(scope='function')
@@ -111,4 +106,4 @@ class VectorProblem(System):
 
 @pytest.fixture(scope='function')
 def vector_problem():
-    return case_factory(VectorProblem, "problem")
+    return VectorProblem("problem")

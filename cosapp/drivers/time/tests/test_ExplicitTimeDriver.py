@@ -1,25 +1,32 @@
+import pytest
+from unittest.mock import MagicMock, patch
+
 import logging
 import re
-from unittest.mock import MagicMock
 import numpy as np
-import pytest
 
 import cosapp.recorders as recorders
 from cosapp.drivers.time import interfaces
 from cosapp.drivers.time.interfaces import ExplicitTimeDriver
 from cosapp.systems import System
 from cosapp.utils.logging import LogFormat, LogLevel
-from cosapp.utils.testing import rel_error
+from cosapp.utils.testing import rel_error, not_raised
 
 
-class MockupTimeDriver(ExplicitTimeDriver):
-    """Mock-up class to test MockupTimeDriver interface"""
-    def _update_transients(self, dt):
-        pass
+@pytest.fixture(autouse=True)
+def PatchExplicitTimeDriver():
+    """Patch ExplicitTimeDriver to make it instanciable for tests"""
+    patcher = patch.multiple(
+        ExplicitTimeDriver,
+        __abstractmethods__ = set(),
+    )
+    patcher.start()
+    yield
+    patcher.stop()
 
 
 def test_ExplicitTimeDriver_init_default():
-    driver = MockupTimeDriver()
+    driver = ExplicitTimeDriver()
     assert driver.name == "Explicit time driver"
     assert driver.owner is None
     assert driver.dt is None
@@ -43,13 +50,13 @@ def test_ExplicitTimeDriver_init_default():
 def test_ExplicitTimeDriver_init_args(settings, expected):
     error = expected.get('error', None)
     if error is None:
-        driver = MockupTimeDriver(**settings)
+        driver = ExplicitTimeDriver(**settings)
         assert driver.dt == expected.get('dt', None)
         assert driver.time_interval == expected.get('time_interval', None)
         assert driver.name == expected.get('name', 'Explicit time driver')
     else:
         with pytest.raises(error):
-            MockupTimeDriver(**settings)
+            ExplicitTimeDriver(**settings)
 
 
 @pytest.mark.parametrize("value, expected", [
@@ -61,7 +68,7 @@ def test_ExplicitTimeDriver_init_args(settings, expected):
     ("0.5", dict(error=TypeError, match="got str")),
 ])
 def test_ExplicitTimeDriver_dt(value, expected):
-    driver = MockupTimeDriver()
+    driver = ExplicitTimeDriver()
     assert driver.dt is None
 
     error = expected.get('error', None)
@@ -89,7 +96,7 @@ def test_ExplicitTimeDriver_dt(value, expected):
     ("lifetime", dict(error=TypeError, match="got str")),
 ])
 def test_ExplicitTimeDriver_time_interval(value, expected):
-    driver = MockupTimeDriver()
+    driver = ExplicitTimeDriver()
     assert driver.time_interval is None
 
     error = expected.get('error', None)
@@ -104,7 +111,7 @@ def test_ExplicitTimeDriver_time_interval(value, expected):
 
 @pytest.mark.parametrize("dt, expected", [(1e-2, 1e-2), (0.1, 0.02), (None, 0.02)])
 def test_ExplicitTimeDriver_limit_dt(ode_case_1, dt, expected):
-    ode, driver = ode_case_1(MockupTimeDriver, time_interval=[0, 0.1], record_dt=True)
+    ode, driver = ode_case_1(ExplicitTimeDriver, time_interval=[0, 0.1], record_dt=True)
     if dt is not None:
         driver.dt = dt
         assert driver.dt == dt
@@ -152,7 +159,7 @@ def test_ExplicitTimeDriver_dt_RuntimeError(scenario, ok):
             continue
 
     s = DynamicSystem('s')
-    driver = s.add_driver(MockupTimeDriver(**settings))
+    driver = s.add_driver(ExplicitTimeDriver(**settings))
     driver.set_scenario(**scenario)
 
     if ok:
@@ -175,7 +182,7 @@ def test_ExplicitTimeDriver_set_time_before_System_setup():
             nonlocal start_t
             assert self.time == start_t
 
-    driver = MockupTimeDriver()
+    driver = ExplicitTimeDriver()
     system = DummySystem('dummy')
 
     system.add_driver(driver)
@@ -192,12 +199,12 @@ def test_ExplicitTimeDriver_set_time_before_System_setup():
 
 
 def test_ExplicitTimeDriver_is_standalone():
-    driver = MockupTimeDriver()
+    driver = ExplicitTimeDriver()
     assert driver.is_standalone()
 
 
 def test_ExplicitTimeDriver_ode_run_driver(ode_case_1):
-    ode, driver = ode_case_1(MockupTimeDriver, record_dt=True)
+    ode, driver = ode_case_1(ExplicitTimeDriver, record_dt=True)
     assert driver.owner is ode
     assert driver.dt is None
     assert driver.time_interval is None
@@ -211,14 +218,14 @@ def test_ExplicitTimeDriver_ode_run_driver(ode_case_1):
     assert driver.recorded_dt.min() == pytest.approx(0.02, rel=1e-12)
     assert driver.recorded_dt.max() == pytest.approx(0.02, rel=1e-12)
 
-    ode, driver = ode_case_1(MockupTimeDriver, dt=1e-2)
+    ode, driver = ode_case_1(ExplicitTimeDriver, dt=1e-2)
     assert driver.owner is ode
     assert driver.dt == 1e-2
     assert driver.time_interval is None
     with pytest.raises(ValueError, match="Time interval.*not specified"):
         ode.run_drivers()
 
-    ode, driver = ode_case_1(MockupTimeDriver, dt=1e-2, time_interval=[0, 1])
+    ode, driver = ode_case_1(ExplicitTimeDriver, dt=1e-2, time_interval=[0, 1])
     assert driver.owner is ode
     assert driver.dt == 1e-2
     assert driver.time_interval == (0, 1)
@@ -233,7 +240,7 @@ def test_ExplicitTimeDriver_dt_None():
             self.add_transient('A', der='a')  # max_time_step unspecified
 
     system = PlainSystem('plain')
-    driver = system.add_driver(MockupTimeDriver(time_interval=(0, 1)))
+    driver = system.add_driver(ExplicitTimeDriver(time_interval=(0, 1)))
     assert driver.dt is None
     assert driver.time_interval == (0, 1)
     with pytest.raises(ValueError, match="Time step.*not specified.*and could not be determined from transient variables"):
@@ -241,7 +248,7 @@ def test_ExplicitTimeDriver_dt_None():
 
 
 def test_ExplicitTimeDriver_ode_add_scenario(ode_case_1):
-    ode, driver = ode_case_1(MockupTimeDriver)
+    ode, driver = ode_case_1(ExplicitTimeDriver)
     driver.set_scenario()
     assert driver.scenario.name == "scenario"
     assert driver.scenario.context is ode
@@ -267,7 +274,7 @@ def test_ExplicitTimeDriver_ode_add_scenario(ode_case_1):
 ])
 def test_ExplicitTimeDriver_add_recorder(two_tank_case, driver_settings, period, expected):
     """Test `add_recorder` method before driver execution"""
-    system, driver = two_tank_case(MockupTimeDriver, **driver_settings)
+    system, driver = two_tank_case(ExplicitTimeDriver, **driver_settings)
 
     rec_options = dict(includes='tank?.height')
     error = expected.get('error', None)
@@ -294,7 +301,7 @@ def test_ExplicitTimeDriver_add_recorder(two_tank_case, driver_settings, period,
 ])
 def test_ExplicitTimeDriver_recorder(ode_case_1, caplog, driver_settings, period, expected):
     """Test recorder behaviour during driver execution, assuming `add_recorder` is correct"""
-    system, driver = ode_case_1(MockupTimeDriver, **driver_settings)
+    system, driver = ode_case_1(ExplicitTimeDriver, **driver_settings)
 
     driver.add_recorder(recorders.DataFrameRecorder(includes='*'), period)
     driver.set_scenario(init={'f': 0}, values={'tau': 0.5})
@@ -325,7 +332,7 @@ def test_ExplicitTimeDriver_recorder(ode_case_1, caplog, driver_settings, period
 ])
 def test_ExplicitTimeDriver_rate_singleTimeStep(rate_case_1, dt, tol):
     settings = dict(time_interval=(0, dt), dt=dt)
-    system, driver = rate_case_1(MockupTimeDriver, **settings)
+    system, driver = rate_case_1(ExplicitTimeDriver, **settings)
     assert driver.dt == driver.time_interval[1]
 
     driver.set_scenario(
@@ -344,7 +351,7 @@ def test_ExplicitTimeDriver_rate_singleTimeStep(rate_case_1, dt, tol):
 ])
 def test_ExplicitTimeDriver_rate(rate_case_1, dt, tol):
     settings = dict(time_interval=(0, 1), dt=dt)
-    system, driver = rate_case_1(MockupTimeDriver, **settings)
+    system, driver = rate_case_1(ExplicitTimeDriver, **settings)
 
     driver.set_scenario(
         values = {'k': 1.5, 'U': 'exp(k * t)'}
@@ -383,7 +390,7 @@ def test_ExplicitTimeDriver_rate_no_initial_value():
             self.add_rate("dU_dt", source="U")
 
     system = RateSystem("system")
-    driver = system.add_driver(MockupTimeDriver(time_interval=(0, 0.1), dt=0.1))
+    driver = system.add_driver(ExplicitTimeDriver(time_interval=(0, 0.1), dt=0.1))
 
     driver.set_scenario(
         init = {'dU_dt': 'k'},
@@ -415,7 +422,7 @@ def test_ExplicitTimeDriver_rate_no_initial_value():
 def test_ExplicitTimeDriver_recorded_times(two_tank_case, options, recorder_period, expected):
     driver_settings = dict(dt=1e-1, time_interval=[0, 1])
     driver_settings.update(options)
-    system, solver = two_tank_case(MockupTimeDriver, **driver_settings)
+    system, solver = two_tank_case(ExplicitTimeDriver, **driver_settings)
 
     recorder = solver.add_recorder(
         recorders.DataFrameRecorder(includes='tank1.height'), recorder_period)
@@ -455,8 +462,7 @@ def test_ExplicitTimeDriver_recorded_times(two_tank_case, options, recorder_peri
     ("common message", dict(), True, None),
 ])
 def test_ExplicitTimeDriver_log_debug_message(format, msg, kwargs, to_log, emitted):
-    # Attribute of a mock object can be created by passing them as
-    # kwargs.
+    # Attribute of a mock object can be created by passing them as kwargs.
     # Here, we get an object in the variable handler with two members:
     # an attribute level == LogLevel.DEBUG and an mocked attribute log
     handler = MagicMock(level=LogLevel.DEBUG, log=MagicMock())
@@ -464,7 +470,7 @@ def test_ExplicitTimeDriver_log_debug_message(format, msg, kwargs, to_log, emitt
     for key, value in kwargs.items():
         setattr(rec, key, value)
 
-    d = MockupTimeDriver("dummy")
+    d = ExplicitTimeDriver("dummy")
 
     assert d.log_debug_message(handler, rec, format) == to_log
 
@@ -478,3 +484,48 @@ def test_ExplicitTimeDriver_log_debug_message(format, msg, kwargs, to_log, emitt
         assert re.match(emitted["pattern"], args[1]) is not None
     else:
         handler.log.assert_not_called()
+
+
+def test_ExplicitTimeDriver_init_conditions():
+    """
+    Test checking that initial conditions are applied before any system compute.
+    Related to https://gitlab.com/cosapp/cosapp/-/issues/20
+    """
+    class Dummy(System):
+        def setup(self):
+            self.add_inward('c', 1.0)
+            self.add_transient('x', der='c - c')
+
+        def compute(self):
+            if self.x <= 0:
+                raise RuntimeError("x must be positive")
+            if self.c >= 0:
+                raise RuntimeError("c must be negative")
+
+    system = Dummy('dummy')
+    driver = system.add_driver(ExplicitTimeDriver(dt=0.1, time_interval=[0, 0.1]))
+
+    driver.set_scenario(
+        init = {'x': 1.0},  # valid initial value for x
+        values = {'c': '-(1 + t**2)'},  # valid c(t) value
+    )
+
+    system.x = system.c = -1.0
+    with pytest.raises(RuntimeError, match="x must be positive"):
+        system.run_once()
+
+    system.x = system.c = 1.0
+    with pytest.raises(RuntimeError, match="c must be negative"):
+        system.run_once()
+
+    system.c, system.x = 1.0, -1.0  # both invalid
+    with pytest.raises(RuntimeError):
+        system.run_once()
+    
+    # Running the time driver should not raise RuntimeError,
+    # as both x and c are expected to be set at valid values
+    with not_raised(RuntimeError):
+        system.run_drivers()
+
+    assert system.x == 1
+    assert system.c == pytest.approx(-1.01)

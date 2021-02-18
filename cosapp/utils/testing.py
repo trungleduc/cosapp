@@ -56,7 +56,7 @@ def not_raised(ExpectedException):
         yield
 
     except ExpectedException as error:
-        raise AssertionError(f"Raised {type(error).__name__} exception when it should not!")
+        raise AssertionError(f"Raised {error!r} exception when it should not!")
 
     except Exception as error:
         raise AssertionError(f"Unexpected exception raised: {error!r}")

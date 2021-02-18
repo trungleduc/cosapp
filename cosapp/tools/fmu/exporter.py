@@ -3,8 +3,6 @@ import itertools
 import logging
 import os
 import shutil
-import tempfile
-from collections import OrderedDict
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
@@ -14,14 +12,14 @@ from collections.abc import Collection
 import numpy
 
 from cosapp.core import __version__ as cosapp_version
-from cosapp.drivers import Driver, RunSingleCase
+from cosapp.drivers import RunSingleCase
 from cosapp.drivers.abstractsolver import AbstractSolver
 from cosapp.ports.port import ExtensiblePort
 from cosapp.systems import System
 from cosapp.utils.helpers import check_arg
 
 try:
-    from pythonfmu import Fmi2Causality, Fmi2Variability, FmuBuilder
+    from pythonfmu import Fmi2Causality, Fmi2Variability, FmuBuilder as PyFmuBuilder
 except ImportError:
 
     class Fmi2Causality(Enum):
@@ -38,7 +36,7 @@ except ImportError:
         discrete = 3
         continuous = 4
 
-    FmuBuilder = None
+    PyFmuBuilder = None
 
 
 logger = logging.getLogger(__name__)
@@ -87,8 +85,8 @@ class Variable(NamedTuple):
     variability: Optional[Fmi2Variability] = None
 
 
-class FMUBuilder:
-    """FMU builder"""
+class FmuBuilder:
+    """CoSApp FMU builder"""
 
     @staticmethod
     def _add_variables(
@@ -116,9 +114,9 @@ class FMUBuilder:
         l_vars = list()
         for name, value in vars.items():
             try:
-                dtype = FMUBuilder._get_variable_type(value)
+                dtype = FmuBuilder._get_variable_type(value)
             except TypeError as e:
-                raise TypeError(str(e) + f" for variable {name}")
+                raise TypeError(f"{e!s} for variable {name}")
 
             l_vars.append(
                 Variable(
@@ -194,7 +192,7 @@ class FMUBuilder:
 
                 value = port[name]
                 try:
-                    FMUBuilder._get_variable_type(value)
+                    FmuBuilder._get_variable_type(value)
                 except TypeError:
                     logger.debug(
                         f"Variable '{full_name}' has unsupported type for FMI."
@@ -221,9 +219,8 @@ class FMUBuilder:
     def _get_script_file(dest: Path, system: System, suffix: str) -> Path:
         """Path: Facade module file path."""
         class_name = type(system).__name__
-        filename = FMUBuilder._get_project_folder(dest) / (
-            class_name.lower() + suffix + ".py"
-        )
+        path = FmuBuilder._get_project_folder(dest)
+        filename = path / f"{class_name.lower()}{suffix}.py"
         filename.parent.mkdir(parents=True, exist_ok=True)
         return filename
 
@@ -399,44 +396,44 @@ class FMUBuilder:
 
         if inputs is None:
             inward_port = system.inputs.pop(System.INWARDS)
-            inputs = FMUBuilder._get_default_variables(system.inputs, user_list)
+            inputs = FmuBuilder._get_default_variables(system.inputs, user_list)
             system.inputs[System.INWARDS] = inward_port  # Restore popped port
         else:
-            inputs = FMUBuilder._get_default_value(inputs, system)
+            inputs = FmuBuilder._get_default_value(inputs, system)
         if parameters is None:
-            parameters = FMUBuilder._get_default_variables(
+            parameters = FmuBuilder._get_default_variables(
                 {System.INWARDS: system.inputs[System.INWARDS]}, user_list
             )
         else:
-            parameters = FMUBuilder._get_default_value(parameters, system)
+            parameters = FmuBuilder._get_default_value(parameters, system)
 
         if outputs is None:
             outward_port = system.outputs.pop(System.OUTWARDS)
-            outputs = FMUBuilder._get_default_variables(system.outputs, user_list)
+            outputs = FmuBuilder._get_default_variables(system.outputs, user_list)
             system.outputs[System.OUTWARDS] = outward_port
         else:
-            outputs = FMUBuilder._get_default_value(outputs, system)
+            outputs = FmuBuilder._get_default_value(outputs, system)
 
         if locals is None:
-            locals = FMUBuilder._get_default_variables(
+            locals = FmuBuilder._get_default_variables(
                 {System.OUTWARDS: system.outputs[System.OUTWARDS]}, user_list
             )
         else:
-            locals = FMUBuilder._get_default_value(locals, system)
+            locals = FmuBuilder._get_default_value(locals, system)
 
         params["variables"].extend(
-            FMUBuilder._add_variables(inputs, Fmi2Causality.input)
+            FmuBuilder._add_variables(inputs, Fmi2Causality.input)
         )
         params["variables"].extend(
-            FMUBuilder._add_variables(
+            FmuBuilder._add_variables(
                 parameters, Fmi2Causality.parameter, Fmi2Variability.tunable
             )
         )
         params["variables"].extend(
-            FMUBuilder._add_variables(outputs, Fmi2Causality.output)
+            FmuBuilder._add_variables(outputs, Fmi2Causality.output)
         )
         params["variables"].extend(
-            FMUBuilder._add_variables(locals, Fmi2Causality.local)
+            FmuBuilder._add_variables(locals, Fmi2Causality.local)
         )
 
         if non_linear_solver is not None:
@@ -462,11 +459,11 @@ class FMUBuilder:
 
         rendered_script = template.render(params)
 
-        filename = FMUBuilder._get_script_file(temp_dest, system, fmu_name_suffix)
+        filename = FmuBuilder._get_script_file(temp_dest, system, fmu_name_suffix)
         with open(filename, mode="w", encoding="utf-8") as f:
             f.write(rendered_script)
 
-        project_folder = FMUBuilder._get_project_folder(temp_dest)
+        project_folder = FmuBuilder._get_project_folder(temp_dest)
         deck_file = project_folder / DECK_FILE_NAME
         system.save(deck_file)  # Save the customized system
 
@@ -479,9 +476,7 @@ class FMUBuilder:
         if not python_env.exists():
             logger.info("Create default package list.")
 
-            from cosapp import core
-
-            package_list = {"cosapp": core.__version__}
+            package_list = {"cosapp": cosapp_version}
 
             python_env.write_text(
                 "\n".join(
@@ -489,7 +484,7 @@ class FMUBuilder:
                 )
             )
 
-        doc_folder = FMUBuilder._get_documentation_folder(temp_dest)
+        doc_folder = FmuBuilder._get_documentation_folder(temp_dest)
         license_file = None
         if license is not None and license.endswith("Proprietary"):
             company = license[: -len("Proprietary")].strip()
@@ -576,7 +571,7 @@ class FMUBuilder:
         dest = Path(dest)
         temp_dest = dest / "tmp"
 
-        temp_dest = FMUBuilder.generate_fmu_facade(
+        temp_dest = FmuBuilder.generate_fmu_facade(
             system,
             inputs,
             parameters,
@@ -594,19 +589,19 @@ class FMUBuilder:
             fmu_name_suffix,
         )
 
-        if FmuBuilder is None:
+        if PyFmuBuilder is None:
             logger.warning(
                 "pythonfmu needs to be installed to package the simulation as FMU."
             )
             return dest
 
-        project_folder = FMUBuilder._get_project_folder(temp_dest)
+        project_folder = FmuBuilder._get_project_folder(temp_dest)
         project_files = set([Path(f) for f in project_files])
         project_files.update(project_folder.glob("*"))
 
-        documentation_folder = FMUBuilder._get_documentation_folder(temp_dest)
-        FmuBuilder.build_FMU(
-            FMUBuilder._get_script_file(temp_dest, system, fmu_name_suffix),
+        documentation_folder = FmuBuilder._get_documentation_folder(temp_dest)
+        PyFmuBuilder.build_FMU(
+            FmuBuilder._get_script_file(temp_dest, system, fmu_name_suffix),
             dest=dest,
             project_files=project_files,
             documentation_folder=documentation_folder,
@@ -616,7 +611,7 @@ class FMUBuilder:
 
         shutil.rmtree(temp_dest)
 
-        return dest / (type(system).__name__ + ".fmu")
+        return dest / f"{type(system).__name__}.fmu"
 
 
-to_fmu = FMUBuilder.to_fmu
+to_fmu = FmuBuilder.to_fmu
