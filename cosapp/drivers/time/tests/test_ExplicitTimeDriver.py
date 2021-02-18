@@ -9,7 +9,7 @@ from cosapp.drivers.time import interfaces
 from cosapp.drivers.time.interfaces import ExplicitTimeDriver
 from cosapp.systems import System
 from cosapp.utils.logging import LogFormat, LogLevel
-from cosapp.utils.testing import rel_error
+from cosapp.utils.testing import rel_error, not_raised
 
 
 class MockupTimeDriver(ExplicitTimeDriver):
@@ -478,3 +478,48 @@ def test_ExplicitTimeDriver_log_debug_message(format, msg, kwargs, to_log, emitt
         assert re.match(emitted["pattern"], args[1]) is not None
     else:
         handler.log.assert_not_called()
+
+
+def test_ExplicitTimeDriver_init_conditions():
+    """
+    Test checking that initial conditions are applied before any system compute.
+    Related to https://gitlab.com/cosapp/cosapp/-/issues/20
+    """
+    class Dummy(System):
+        def setup(self):
+            self.add_inward('c', 1.0)
+            self.add_transient('x', der='c - c')
+
+        def compute(self):
+            if self.x <= 0:
+                raise RuntimeError("x must be positive")
+            if self.c >= 0:
+                raise RuntimeError("c must be negative")
+
+    system = Dummy('dummy')
+    driver = system.add_driver(MockupTimeDriver(dt=0.1, time_interval=[0, 0.1]))
+
+    driver.set_scenario(
+        init = {'x': 1.0},  # valid initial value for x
+        values = {'c': '-(1 + t**2)'},  # valid c(t) value
+    )
+
+    system.x = system.c = -1.0
+    with pytest.raises(RuntimeError, match="x must be positive"):
+        system.run_once()
+
+    system.x = system.c = 1.0
+    with pytest.raises(RuntimeError, match="c must be negative"):
+        system.run_once()
+
+    system.c, system.x = 1.0, -1.0  # both invalid
+    with pytest.raises(RuntimeError):
+        system.run_once()
+    
+    # Running the time driver should not raise RuntimeError,
+    # as both x and c are expected to be set at valid values
+    with not_raised(RuntimeError):
+        system.run_drivers()
+
+    assert system.x == 1
+    assert system.c == pytest.approx(-1.01)
