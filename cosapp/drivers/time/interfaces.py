@@ -149,8 +149,7 @@ class ExplicitTimeDriver(Driver):
         self._rates = manager.rates
         logger.debug(f"Transient variables: {self._transients!r}")
         logger.debug(f"Rate variables: {self._rates!r}")
-        logger.debug(f"Reset time to {self.__time_interval[0]}")
-        self.__clock.reset(self.__time_interval[0])
+        self.__reset_time()
 
     def compute(self) -> None:
         """Simulate the time-evolution of owner System over a prescribed time interval"""
@@ -175,7 +174,8 @@ class ExplicitTimeDriver(Driver):
                 record_all = True
             eps = min(1e-8, dt / 100)
             must_record = lambda t, t_record: abs(t - t_record) < eps
-            record = lambda : self._recorder.record_state(self.time, self.status, self.error_code)
+            record = lambda : self._recorder.record_state(
+                round(self.time, 15), self.status, self.error_code)
             t_record = numpy.inf if record_all else t0
 
         recorded_dt = []
@@ -227,10 +227,16 @@ class ExplicitTimeDriver(Driver):
         self._update_children()
         self._update_rates(dt)
 
+    def __reset_time(self) -> None:
+        """Reset clock time to driver start time"""
+        time = self.__time_interval[0]
+        logger.debug(f"Reset time to {time}")
+        self.__clock.reset(time)
+
     def _initialize(self):
-        self._set_time(self.__time_interval[0])
-        logger.debug("Apply initial conditions")
+        self.__reset_time()
         self.__scenario.apply_init_values()
+        self.__scenario.update_values()
         for transient in self._transients.values():
             # re-synch stacked unknowns with root variables
             transient.reset()

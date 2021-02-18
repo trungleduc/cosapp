@@ -1,11 +1,14 @@
 import numpy, scipy.interpolate
 import enum
+import logging
 from typing import Any, Dict, List
 
 from cosapp.drivers.driver import Driver
 from cosapp.core.numerics.boundary import Boundary
 from cosapp.core.eval_str import AssignString
 from cosapp.utils.helpers import check_arg
+
+logger = logging.getLogger(__name__)
 
 
 class Interpolator:
@@ -134,7 +137,9 @@ class Scenario:
 
     def apply_init_values(self) -> None:
         """Execute assignments corresponding to initial conditions"""
+        logger.debug("Apply initial conditions")
         for assignment in self.__init_values:
+            logger.debug(f"\t{assignment}")
             assignment.exec()
 
     def update_values(self) -> None:
