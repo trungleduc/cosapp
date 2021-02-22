@@ -32,19 +32,17 @@ def is_numerical(value: Any) -> bool:
     bool
         Is the value numerical type?
     """
-    numerical = False
     if isinstance(value, (bool, str)):
         # to avoid bool being considered as int
-        # And because str is Collection
-        pass
-    elif isinstance(value, Number):
-        numerical = True
-    elif isinstance(value, numpy.ndarray):
-        numerical = numpy.issubdtype(value.dtype, numpy.number)
-    elif isinstance(value, Collection) and len(value) > 0:
-        array = numpy.asarray(list(value))  # Need to convert to list first to accept set and frozenset
-        numerical = numpy.issubdtype(array.dtype, numpy.number) and array.size > 0
-    return numerical
+        # and because str is Collection
+        return False
+    if isinstance(value, Number):
+        return True
+    if isinstance(value, numpy.ndarray):
+        return numpy.issubdtype(value.dtype, numpy.number)
+    if isinstance(value, Collection) and len(value) > 0:
+        return all(is_numerical(v) for v in value)
+    return False
 
 
 def is_number(value: Any) -> bool:
@@ -67,15 +65,14 @@ def is_number(value: Any) -> bool:
     bool
         Is the value numerical type?
     """
-    numerical = False
     if isinstance(value, bool):
         # to avoid bool being considered as int
-        pass
-    elif isinstance(value, Number):
-        numerical = True
-    elif isinstance(value, numpy.ndarray) and value.ndim == 0:
-        numerical = numpy.issubdtype(value.dtype, numpy.number)
-    return numerical
+        return False
+    if isinstance(value, Number):
+        return True
+    if isinstance(value, numpy.ndarray) and value.ndim == 0:
+        return numpy.issubdtype(value.dtype, numpy.number)
+    return False
 
 
 def get_typename(dtype: Union[Type, Tuple[Type]], multiformat="({})") -> str:

@@ -3,11 +3,9 @@ Module handling the execution of code provided as string by the user.
 
 This code is inspired from the OpenMDAO module openmdao.components.exec_comp.
 """
-import abc
-from numbers import Number
-from typing import Any, Dict, Iterable, Optional, Set, Tuple, Union
-
 import numpy
+from numbers import Number
+from typing import Any, Dict, Iterable, Optional, Tuple, Union, Callable
 
 from cosapp.utils.helpers import check_arg
 
@@ -98,65 +96,65 @@ class EvalString:
     zeros(N)                   Create an array of zeros
     =========================  ====================================
 
+    Full list is returned by `EvalString.available_symbols()`
+
     Parameters
     ----------
     expression : str
-        An Python statement. In addition to standard Python operators, a subset of numpy and scipy
-        functions is supported.
+        Interpretable Python statement. In addition to standard Python operators,
+        a subset of numpy and scipy functions is supported.
     context : cosapp.core.module.Module or cosapp.core.numerics.basics.Residue
         System or Residue defining the local context in which the statement will be executed
 
     Notes
     -----
-    The context is used to included the `System` ports, children, inwards and outwards.
-    If the context is a `Residue`, the reference value from the residue is added as `residue_reference` variable in the
-    execution context.
+    The context is used to include the `System` ports, children, inwards and outwards.
+    If the context is a `Residue`, the reference value from the residue is added as
+    `residue_reference` variable in the execution context.
     """
 
     # this dict will act as the global scope when we eval our expressions
     __globals = {}  # type: Dict[str, Any]
 
     @classmethod
-    def list_available_function(cls) -> Dict[str, Any]:
-        """List the available functions in the execution context.
+    def available_symbols(cls) -> Dict[str, Any]:
+        """
+        List of available symbols (constants and functions) in current execution context.
 
         Returns
         -------
         Dict[str, Any]
-            Mapping of the available functions by their name.
+            Mapping of available symbols by their name.
         """
-        if len(cls.__globals) > 0:
-            return cls.__globals
+        mapping = cls.__globals
 
-        def _import_functs(
-            mod: object, dct: Dict[str, Any], names: Optional[Iterable[str]] = None
+        if len(mapping) > 0:
+            return mapping
+        
+        def add_symbols(
+            module: object, names: Optional[Iterable[str]] = None
         ) -> None:
             """
-            Map attributes names from the given module into the given dict.
+            Map attribute names from the given module into the global dict.
 
             Parameters
             ----------
             mod : object
                 Module to check.
-            dct : dict
-                Dictionary that will contain the mapping
             names : iter of str, optional
                 If supplied, only map attrs that match the given names
             """
             if names is None:
-                names = dir(mod)
+                names = dir(module)
             for name in names:
                 if isinstance(name, tuple):
                     name, alias = name
                 else:
                     alias = name
                 if not name.startswith("_"):
-                    dct[name] = getattr(mod, name)
-                    dct[alias] = dct[name]
+                    mapping[alias] = mapping[name] = getattr(module, name)
 
-        _import_functs(
-            numpy,
-            cls.__globals,
+        add_symbols(numpy,
             names=[
                 # Numpy types
                 "int8",
@@ -172,6 +170,7 @@ class EvalString:
                 "complex64",
                 "complex128",
                 # Array functions
+                "abs",
                 "array",
                 "asarray",
                 "arange",
@@ -221,38 +220,24 @@ class EvalString:
                 ("arccosh", "acosh"),
             ],
         )
-        _import_functs(
-            numpy.linalg, cls.__globals, names=["norm"]
-        )
+        add_symbols(numpy.linalg, names=["norm"])
 
-        # if scipy is available, add some functions
+        # if scipy is available, add few specials functions
         try:
             import scipy.special
         except ImportError:
             pass
         else:
-            _import_functs(
-                scipy.special, cls.__globals, names=["factorial", "erf", "erfc"]
+            add_symbols(scipy.special,
+                names=["factorial", "erf", "erfc"]
             )
-
-        # Put any functions here that need special versions to work under
-        # complex step
-
-        def _cs_abs(x):
-            if isinstance(x, numpy.ndarray):
-                return x * numpy.sign(x)
-            elif x.real < 0.0:
-                return -x
-            return x
-
-        cls.__globals["abs"] = _cs_abs
 
         # Add residues helper function
         from cosapp.core.numerics.residues import Residue
-        cls.__globals["evaluate_residue"] = Residue.evaluate_residue
-        cls.__globals["residue_norm"] = Residue.residue_norm
+        mapping["evaluate_residue"] = Residue.evaluate_residue
+        mapping["residue_norm"] = Residue.residue_norm
 
-        return cls.__globals
+        return mapping
 
     def __init__(self, expression: Any, context: "System") -> None:
         """Class constructor.
@@ -261,33 +246,30 @@ class EvalString:
         """
         from cosapp.systems import System
         if not isinstance(context, System):
+            cname = type(context).__name__
             raise TypeError(
-                f"Object of type '{type(context)}' is not a valid context to evaluate expression '{expression}'."
+                f"Object of type {cname!r} is not a valid context to evaluate expression '{expression}'."
             )
-
-        self.list_available_function()
 
         self.__str = EvalString.string(expression)  # type: str
 
         code = compile(self.__str, "<string>", "eval")  # type: CodeType
 
         # Look for the requested variables
-        self.__locals = ContextLocals(context)  # type: ContextLocals
-        value = eval(code, EvalString.__globals, self.__locals)
+        global_dict = self.available_symbols()
+        self.__locals = local_dict = ContextLocals(context)  # type: ContextLocals
+        value = eval(code, global_dict, local_dict)
         
         constants = context.properties
-        self.__constant = len(self.__locals) == 0 or all(
-            key in constants for key in self.__locals
-        )  # type: bool
+        self.__constant = set(local_dict).issubset(constants)  # type: bool
 
         if self.__constant:
             # simply return constant value
-            self.__eval = lambda *args, **kwargs: value  # type: Callable[[], Any]
+            eval_impl = lambda: value
         else:            
-            def eval_impl():
-                # By specifying global and local contexts, we limit the user power.
-                return eval(code, self.globals, self.locals)
-            self.__eval = eval_impl  # type: Callable[[], Any]
+            # By specifying global and local contexts, we limit the user scope.
+            eval_impl = lambda: eval(code, self.globals, self.locals)
+        self.__eval = eval_impl  # type: Callable[[], Any]
 
     @staticmethod
     def string(expression: Any) -> str:

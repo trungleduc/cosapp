@@ -1,8 +1,8 @@
 import pytest
 
-import itertools
 import math
 import numpy as np
+import warnings
 
 from cosapp.core.eval_str import EvalString
 from cosapp.systems import System
@@ -21,17 +21,17 @@ def test_EvalString__init__(eval_context):
     assert_keys(e.locals, 'a')
 
 
-@pytest.mark.parametrize("f", itertools.product(
-    [func_name for func_name in EvalString.list_available_function() if not func_name.startswith('u')],
-))
+@pytest.mark.parametrize("f", [
+        func_name for func_name in EvalString.available_symbols()
+        if not func_name.startswith('u')
+])
 def test_EvalString_exec_comp_value(f, ufunc_test_data):
     class Test(System):
         def setup(self, **kwargs):
             for arg_name, arg_value in kwargs.items():
                 self.add_inward(arg_name, **arg_value)
 
-    test_data = ufunc_test_data[f[0]]
-    s = Test('tmp', **test_data.get('args', {}))
+    test_data = ufunc_test_data[f]
 
     if 'check_func' in test_data:
         check_args = []
@@ -43,12 +43,15 @@ def test_EvalString_exec_comp_value(f, ufunc_test_data):
             check_args.append(test_data['args']['y']['value'])
         except:
             pass
-        check_args = tuple(check_args)
         expected = test_data['check_func'](*check_args)
     else:
         expected = test_data['check_val']
 
-    eval_str = EvalString(test_data['str'], s)
+    with warnings.catch_warnings():
+        warnings.simplefilter('error')  # 'default', 'ignore', or 'error'
+        s = Test('tmp', **test_data.get('args', {}))
+        eval_str = EvalString(test_data['str'], s)
+
     assert eval_str.eval() == pytest.approx(expected, rel=1e-14)
 
 

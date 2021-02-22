@@ -68,7 +68,7 @@ class ResponseSurface(SurrogateModel):
             X_offset = X_offset[:, n - i :]
 
         # Determine response surface equation coefficients (betas) using least squares
-        self.betas = numpy.linalg.lstsq(X, y)[0]
+        self.betas = numpy.linalg.lstsq(X, y, rcond=None)[0]
 
     def predict(self, x):
         """
