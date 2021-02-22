@@ -269,7 +269,7 @@ class Variable:
         check_arg(desc, 'desc', str)
         check_arg(scope, 'scope', Scope)
 
-        if not is_numerical(value) and unit:
+        if unit and not is_numerical(value):
             unit = ""
             logger.warning(
                 f"A physical unit is defined for non-numerical variable {name!r}; it will be ignored."
@@ -344,7 +344,7 @@ class Variable:
         return self.name
 
     def __repr__(self) -> str:
-        msg = {"name": self.name, "unit": " " + self.unit if self.unit else ""}
+        msg = {"name": self.name, "unit": f" {self.unit}" if self.unit else ""}
         value = getattr(self._port, self._name)
         if is_number(value):
             msg["value"] = f"{value:.5g}"
@@ -372,7 +372,7 @@ class Variable:
         else:
             msg["max_valid"] = f" &#10206; {max_valid:.5g}"
         if self.description:
-            msg["description"] = " # " + self.description
+            msg["description"] = f" # {self.description}"
         else:
             msg["description"] = ""
 
@@ -383,12 +383,12 @@ class Variable:
         }
         msg["scope"] = scope_format[self.scope]
 
-        if len(msg["min_limit"] + msg["min_valid"]) > 0 or len(msg["max_limit"] + msg["max_valid"]) > 0:
-            msg["range"] = " value "
-            msg["separator"] = "; "
-        else:
+        if len(msg["min_limit"] + msg["min_valid"]) == len(msg["max_limit"] + msg["max_valid"]) == 0:
             msg["range"] = ""
             msg["separator"] = ""
+        else:
+            msg["range"] = " value "
+            msg["separator"] = "; "
 
         return (
             "{name}{scope}: {value!s}{unit}"

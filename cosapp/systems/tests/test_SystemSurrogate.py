@@ -517,6 +517,7 @@ def test_SystemSurrogate_init1(p1e2mg, data_in):
 
 
 @pytest.mark.filterwarnings("ignore:The.*unknowns/transients are not part of the training set")
+@pytest.mark.filterwarnings("ignore:Values in x were outside bounds during a minimize step")
 def test_SystemSurrogate_equation_warning(pme, cubic_DoE):
     data = {
         'x_in.x': [0.5, 1., 1.5],
