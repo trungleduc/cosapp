@@ -181,7 +181,7 @@ deploy:
     - python -m pip install --upgrade pip
     - pip install $JOB_DEP
     - python setup.py sdist bdist_wheel
-    - twine upload dist/*.whl
+    - twine upload dist/*.*
   artifacts:
     paths:
       - dist/
