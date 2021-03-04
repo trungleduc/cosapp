@@ -8,7 +8,6 @@ import json
 import logging
 import os
 import warnings
-import weakref
 from contextlib import contextmanager
 from copy import deepcopy
 from enum import Enum
@@ -20,7 +19,6 @@ from typing import (
     Iterable, List,
     Optional, Tuple, Union,
 )
-import weakref
 from types import MappingProxyType
 
 import jsonschema
@@ -441,7 +439,7 @@ class System(Module, TimeObserver):
         try:  # Faster than testing `if name in self`
             # Faster to duplicate __getitem__ call than calling it
             variable_ref = self.name2variable[name]
-            return variable_ref.mapping[variable_ref.key]
+            return variable_ref.value
         except KeyError:
             return super().__getattribute__(name)
 
@@ -449,7 +447,7 @@ class System(Module, TimeObserver):
         try:  # Faster than testing `if name in self`
             # Faster to duplicate __setitem__ call than calling it
             variable_ref = super().__getattribute__("name2variable")[name]
-            variable_ref.mapping[variable_ref.key] = value
+            variable_ref.value = value
         except KeyError:
             if hasattr(self, name):
                 super().__setattr__(name, value)
@@ -482,7 +480,7 @@ class System(Module, TimeObserver):
             raise KeyError(
                 f"Variable {name!r} not found in the context of System {self.name!r}"
             )
-        variable_ref.mapping[variable_ref.key] = value
+        variable_ref.value = value
 
     def __repr__(self) -> str:
         return f"{self.name} - {type(self).__name__}"
@@ -1203,36 +1201,36 @@ class System(Module, TimeObserver):
     @property
     def residues(self) -> Dict[str, Residue]:
         """Dict[str, Residue] : Get the residues for the current `System`."""
-        # Proxy through weakref to forbid external modification
-        return weakref.WeakValueDictionary(self._math.residues)
+        # MappingProxyType forbids external modification
+        return MappingProxyType(self._math.residues)
 
     @property
     def unknowns(self) -> Dict[str, Unknown]:
         """Dict[str, Unknown] : Get the unknowns for the current `System`."""
-        # Proxy through weakref to forbid external modification
-        return weakref.WeakValueDictionary(self._math.unknowns)
+        # MappingProxyType forbids external modification
+        return MappingProxyType(self._math.unknowns)
 
     @property
     def transients(self) -> Dict[str, TimeUnknown]:
         """Returns a dictionary containing all transient unknowns in current system tree"""
-        # Proxy through weakref to forbid external modification
-        return weakref.WeakValueDictionary(self._math.transients)
+        # MappingProxyType forbids external modification
+        return MappingProxyType(self._math.transients)
 
     @property
     def rates(self) -> Dict[str, TimeDerivative]:
         """Returns a dictionary containing all time derivatives (rates) in current system tree"""
-        # Proxy through weakref to forbid external modification
-        return weakref.WeakValueDictionary(self._math.rates)
+        # MappingProxyType forbids external modification
+        return MappingProxyType(self._math.rates)
 
     @property
     def connectors(self) -> Dict[str, Connector]:
-        """weakref.WeakValueDictionary[str, Connector] : Connectors contained by the system."""
-        # Proxy through a weak reference dictionary to forbid external modification
-        out = weakref.WeakValueDictionary()
+        """MappingProxyType[str, Connector] : Connectors contained by the system."""
+        # MappingProxyType forbids external modification
+        out = dict()
         for connectors in self._connectors.values():
             for connector in connectors:
                 out[connector.name] = connector
-        return out
+        return MappingProxyType(out)
 
     def get_unsolved_problem(self) -> MathematicalProblem:
         """Returns the unsolved mathematical problem.

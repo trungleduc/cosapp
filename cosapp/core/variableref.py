@@ -19,6 +19,15 @@ class VariableReference(NamedTuple):
     context: "System"
     mapping: "Union[Mapping[str, Any], ExtensiblePort]"
     key: str
+
+    @property
+    def value(self) -> Any:
+        """Any: variable reference value"""
+        return self.mapping[self.key]
+
+    @value.setter
+    def value(self, value: Any) -> None:
+        self.mapping[self.key] = value
     
     def __repr__(self) -> str:
         name = self.context.name

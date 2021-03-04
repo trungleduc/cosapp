@@ -3,11 +3,10 @@ Classes containing all `System` variables.
 """
 import array
 import logging
-import re
-import weakref
 from collections import OrderedDict
 from collections.abc import MutableSequence
 from typing import Any, Dict, Iterator, Optional, Tuple, Union
+from types import MappingProxyType
 import numpy
 
 from cosapp.core.numerics.distributions.distribution import Distribution
@@ -80,10 +79,8 @@ class ExtensiblePort:
 
         If the port has no owner, the port name is returned.
         """
-        if self._owner is None:
-            return self._name
-        else:
-            return f"{self._owner.name}.{self._name}"
+        owner = self._owner
+        return self._name if owner is None else f"{owner.name}.{self._name}"
 
     @property
     def direction(self) -> PortType:
@@ -403,13 +400,11 @@ class ExtensiblePort:
 
         Returns
         -------
-        weakref.WeakValueDictionary[str, cosapp.ports.variable.Variable] or cosapp.ports.variable.Variable
-            The variable looked for or all port variables
+        types.MappingProxyType[str, cosapp.ports.variable.Variable] or cosapp.ports.variable.Variable
+            The sought variable, or a read-only view on all port variables.
         """
         if name is None:
-            # Proxy through a weakref value dictionary to avoid changes in the reference
-            # and ensuring minimal memory foot print
-            return weakref.WeakValueDictionary(self._variables)
+            return MappingProxyType(self._variables)
         else:
             return self._variables[name]
 

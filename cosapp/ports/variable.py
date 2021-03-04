@@ -10,7 +10,7 @@ from typing import Any, Dict, Iterable, Optional, Tuple, Union, NoReturn
 from cosapp.core.numerics.distributions.distribution import Distribution
 from cosapp.ports import units
 from cosapp.ports.enum import Scope, Validity, RangeType
-from cosapp.utils.helpers import check_arg, is_numerical, is_number, get_typename
+from cosapp.utils.helpers import check_arg, is_numerical, get_typename
 from cosapp.utils.naming import NameChecker
 
 logger = logging.getLogger(__name__)
@@ -345,10 +345,10 @@ class Variable:
 
     def __repr__(self) -> str:
         msg = {"name": self.name, "unit": f" {self.unit}" if self.unit else ""}
-        value = getattr(self._port, self._name)
-        if is_number(value):
+        value = self.value
+        try:
             msg["value"] = f"{value:.5g}"
-        else:
+        except:
             msg["value"] = value
 
         min_valid, max_valid = (
@@ -405,7 +405,7 @@ class Variable:
             The dictionary
         """
         return {
-            "value": getattr(self._port, self._name),
+            "value": self.value,
             "valid_range": self.valid_range,
             "invalid_comment": self.invalid_comment,
             "limits": self.limits,
@@ -417,6 +417,10 @@ class Variable:
     def name(self) -> str:
         """str : Variable name"""
         return self._name
+
+    @property
+    def value(self) -> Any:
+        return getattr(self._port, self._name)
 
     @property
     def unit(self) -> str:
@@ -439,7 +443,7 @@ class Variable:
         
         range_type = self.check_range_type(new_range)
 
-        value = getattr(self._port, self._name)
+        value = self.value
         default = self._get_limits_from_type(value)
 
         if default is not None:
@@ -498,7 +502,7 @@ class Variable:
 
         limits_type = self.check_range_type(new_limits)
 
-        value = getattr(self._port, self._name)
+        value = self.value
         default = self._get_limits_from_type(value)
 
         if default is not None:
@@ -596,7 +600,7 @@ class Variable:
             Variable value validity
         """
         status = Validity.OK
-        value = getattr(self._port, self._name)
+        value = self.value
 
         if not isinstance(value, (Number, numpy.ndarray)):
             return status
@@ -717,7 +721,7 @@ class Variable:
             The dictionary representing this variable.
         """
         ret = {
-            "value" : getattr(self._port, self._name),
+            "value" : self.value,
             "unit": self.unit or None,
             "invalid_comment": self.invalid_comment or None,
             "out_of_limits_comment": self.out_of_limits_comment or None,
@@ -733,5 +737,5 @@ class Variable:
             if  tmp_val == ["-inf", "inf"]:
                 tmp_val = None
             ret[key] = tmp_val 
-                 
+        
         return { key: value for (key, value) in ret.items() if value is not None }
