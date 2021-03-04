@@ -1,9 +1,7 @@
 import pytest
 
 from numbers import Number
-import weakref
 import logging, re
-
 import numpy as np
 
 from cosapp.ports.variable import Variable
@@ -407,10 +405,16 @@ def test_ExtensiblePort_get_details(direction, scope, options, expected):
 
     if error is None:
         port.add_variable("var", **options)
-        assert isinstance(port.get_details(), weakref.WeakValueDictionary)
         assert isinstance(port.get_details("var"), Variable)
-        assert port.get_details("var") is port.get_details()["var"]
-        assert len(port.get_details()) == len(port)
+        details = port.get_details()
+        assert set(details) == {'var'}
+        # Check that `details` is immutable
+        with pytest.raises(TypeError):
+            details["var"] = 0
+        with pytest.raises(TypeError):
+            details["newkey"] = 0
+        assert port.get_details("var") is details["var"]
+        assert len(details) == len(port)
         with pytest.raises(KeyError):
             assert port.get_details("foobar")
 

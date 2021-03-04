@@ -215,10 +215,10 @@ class MonteCarlo(AbstractSetOfCases):
         # Set perturbation
         self.perturbations = numpy.zeros(len(self.random_variables))
         for i, params in enumerate(self.random_variables.values()):
-            (ref, connector, distribution) = params
+            ref, connector, distribution = params
             self.perturbations[i] = distribution.draw(case[i])
             if connector is None:
-                ref.mapping[ref.key] += self.perturbations[i]
+                ref.value += self.perturbations[i]
             else:
                 connector.set_perturbation(ref.key, self.perturbations[i])
 
@@ -265,8 +265,8 @@ class MonteCarlo(AbstractSetOfCases):
 
         # Remove the perturbation
         for i, params in enumerate(self.random_variables.values()):
-            (ref, connector, _) = params
+            ref, connector = params[:2]
             if connector is None:
-                ref.mapping[ref.key] -= self.perturbations[i]
+                ref.value -= self.perturbations[i]
             else:
-                connector.set_perturbation(ref.key, -1.0 * self.perturbations[i])
+                connector.set_perturbation(ref.key, -self.perturbations[i])

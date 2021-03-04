@@ -399,7 +399,7 @@ def test_System_add_child():
     for key, obj in to_check.items():
         assert key in s.name2variable
         reference = s.name2variable[key]
-        assert reference.mapping[reference.key] is obj, f"key = {key}"
+        assert reference.value is obj, f"key = {key}"
 
     s3 = SubSystem("sub2")
     assert s.add_child(s3, execution_index=0) is s3
@@ -417,7 +417,7 @@ def test_System_add_child():
     for key, obj in to_check.items():
         assert key in s.name2variable
         reference = s.name2variable[key]
-        assert reference.mapping[reference.key] is obj, f"key = {key}"
+        assert reference.value is obj, f"key = {key}"
 
 
 def test_System_add_child_pulling(caplog):
@@ -1070,7 +1070,7 @@ def test_System_append_name2variable():
     )
     for key in d:
         reference = s.name2variable[key]
-        assert reference.mapping[reference.key] is d[key]
+        assert reference.value is d[key]
 
     s2 = SubSystem("sub")
     s.add_child(s2)
@@ -1081,7 +1081,7 @@ def test_System_append_name2variable():
     for key in d:
         abs_key = f"{s2.name}.{key}"
         reference = s.name2variable[abs_key]
-        assert reference.mapping[reference.key] is d[key]
+        assert reference.value is d[key]
 
 
 def test_System_pop_name2variable():
