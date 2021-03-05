@@ -6,7 +6,7 @@ import warnings
 from typing import Union, List, Optional, NamedTuple, Any
 
 from cosapp.core.signal import Signal
-from cosapp.systems import System
+from cosapp.core.eval_str import EvalString
 from cosapp.utils.helpers import is_numerical, check_arg
 from cosapp.utils.find_variables import make_wishlist, find_variables
 
@@ -89,6 +89,7 @@ class BaseRecorder(abc.ABC):
         self.precision = precision
         self._raw_output = raw_output  # type: bool
         self.__variables = None  # type: Optional[List[str]]
+        self.__expressions = None  # type: Optional[List[str]]
         self._watch_object = None  # type: Optional[cosapp.core.module.Module]
         self._owner = None  # type: Optional[str]
 
@@ -111,19 +112,24 @@ class BaseRecorder(abc.ABC):
         if not (module is None or isinstance(module, Module)):
             typename = type(module).__qualname__
             raise TypeError(
-                f"Record must be attached to a System or a Driver; got {typename}."
+                f"Recorder must be attached to a System or a Driver; got {typename}."
             )
-        self._watch_object = module
+        is_new = module is not self._watch_object
+        
+        if self._watch_object is None or is_new:
+            self.__variables = None
+            self.__expressions = None
+            self._watch_object = module
 
     @property
     @abc.abstractmethod
     def _raw_data(self) -> List[List[Any]]:
-        """Return a raw/unformated version of the records
+        """Returns a raw/unformated version of records.
 
         Returns
         -------
         List[List[Any]]
-            The records of the `watched_object` for the variables given by the `get_variables_list` method
+            Records of `watched_object` for variables given by method `field_names()`
         """
         pass
 
@@ -184,10 +190,8 @@ class BaseRecorder(abc.ABC):
         check_arg(value, 'precision', int, lambda n: n > 0)
         self.__precision = value
 
-    def get_variables_list(self) -> List[str]:
-        """Generate the list of requested variables.
-
-        The variable are sorted in alphabetical order.
+    def field_names(self) -> List[str]:
+        """Returns list of requested variables and expressions.
 
         Returns
         -------
@@ -198,18 +202,39 @@ class BaseRecorder(abc.ABC):
             Inward and outward variables will appear without the prefix `inwards.` or `outwards.`.
         """
         if self.__variables is None and self.watched_object is not None:
-            if self._numerical_only:
-                filter = lambda x: is_numerical(x)
-            else:
-                filter = lambda x: True
-            self.__variables = find_variables(
-                self.watched_object,
-                self.__includes,
-                self.__excludes,
-                advanced_filter=filter,
-            )
-
+            self.__update_varlist()
         return self.__variables or list()
+
+    def __update_varlist(self) -> None:
+        """Update the list of fields to be recorded"""
+        includes = []
+        evaluables = []
+        context = self.watched_object
+        for expression in set(self.__includes):
+            try:
+                EvalString(expression, context)
+            except:
+                includes.append(expression)
+            else:
+                if expression in context:
+                    # Keep expression in search list,
+                    # in case it matches an exclusion pattern
+                    includes.append(expression)
+                else:
+                    evaluables.append(expression)
+        if self._numerical_only:
+            filter = lambda x: is_numerical(x)
+        else:
+            filter = lambda x: True
+        variables = find_variables(
+            context,
+            includes,
+            self.__excludes,
+            advanced_filter=filter,
+        )
+        variables.extend(evaluables)
+        self.__variables = variables = sorted(variables)
+        self.__expressions = EvalString(", ".join(variables).join("[]"), context)
 
     def _get_units(self, vars: Optional[List[str]] = None) -> List[str]:
         """Generate the list of units associated with the requested variables.
@@ -217,7 +242,7 @@ class BaseRecorder(abc.ABC):
         Parameters
         ----------
         vars : list of str, optional
-            List of the variables to get the units; if not provided, takes get_variables_list
+            List of the variables to get the units; if not provided, takes field_names
 
         Returns
         -------
@@ -225,7 +250,7 @@ class BaseRecorder(abc.ABC):
             Variable units for the variables matching the includes/excludes patterns of the user.
         """
         if not vars:
-            vars = self.get_variables_list()
+            vars = self.field_names()
 
         units = list()
         if self.watched_object is not None:
@@ -260,14 +285,20 @@ class BaseRecorder(abc.ABC):
         if self.paused:
             return
 
-        line = [self.section, status, error_code, str(time_ref)] + self.collect_data()
+        line = [self.section, status, error_code, str(time_ref)] + self.formatted_data()
         self._record(line)
         self.state_recorded.emit(time_ref=time_ref, status=status, error_code=error_code)
 
     @abc.abstractmethod
-    def collect_data(self) -> List[Any]:
-        """Collect recorded data from watched object into a list."""
+    def formatted_data(self) -> List[Any]:
+        """Returns collected data from watched object as a formatted list."""
         pass
+
+    def collected_data(self) -> List[Any]:
+        """Collects and returns recorded data from watched object as a list."""
+        if self.__expressions is None:
+            self.__update_varlist()
+        return self.__expressions.eval()
 
     @abc.abstractmethod
     def _record(self, line: List[Any]) -> None:
@@ -308,7 +339,7 @@ class BaseRecorder(abc.ABC):
 
         for idx, var in [
             (idx, var)
-            for idx, var in enumerate(self.get_variables_list())
+            for idx, var in enumerate(self.field_names())
             if var in inputs
         ]:
             try:
@@ -318,7 +349,7 @@ class BaseRecorder(abc.ABC):
 
     def check(self) -> None:
         try:
-            self.collect_data()
+            self.formatted_data()
         except Exception as ex:
             warnings.warn(
                 f"Captured exception {ex!r} while trying to collect data in {self.watched_object}"

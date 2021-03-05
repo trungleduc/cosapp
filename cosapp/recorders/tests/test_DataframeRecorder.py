@@ -11,7 +11,6 @@ from cosapp.tests.library.systems.vectors import AllTypesSystem, BooleanSystem
 from cosapp.tests.library.systems.multiply import Multiply2
 
 
-
 def test_DataframeRecorder___init__default():
     """Test default constructor"""
     recorder = DataFrameRecorder()
@@ -40,27 +39,27 @@ def test_DataframeRecorder_start():
     recorder.start()
     recorder.record_state(0)
     data = recorder.export_data()
-    assert data.shape == (1, len(BaseRecorder.SPECIALS) + len(recorder.get_variables_list()))
-    assert set(data.columns) == set([*BaseRecorder.SPECIALS, *recorder.get_variables_list()])
+    assert data.shape == (1, len(BaseRecorder.SPECIALS) + len(recorder.field_names()))
+    assert set(data.columns) == set([*BaseRecorder.SPECIALS, *recorder.field_names()])
 
     recorder.record_state(1)
     data = recorder.export_data()
-    assert data.shape == (2, len(BaseRecorder.SPECIALS) + len(recorder.get_variables_list()))
-    assert set(data.columns) == set([*BaseRecorder.SPECIALS, *recorder.get_variables_list()])
+    assert data.shape == (2, len(BaseRecorder.SPECIALS) + len(recorder.field_names()))
+    assert set(data.columns) == set([*BaseRecorder.SPECIALS, *recorder.field_names()])
 
     recorder.start()
     recorder.record_state(0)
     data = recorder.export_data()
-    assert data.shape == (1, len(BaseRecorder.SPECIALS) + len(recorder.get_variables_list()))
-    assert set(data.columns) == set([*BaseRecorder.SPECIALS, *recorder.get_variables_list()])
+    assert data.shape == (1, len(BaseRecorder.SPECIALS) + len(recorder.field_names()))
+    assert set(data.columns) == set([*BaseRecorder.SPECIALS, *recorder.field_names()])
 
     # Test hold
     recorder.hold = True
     recorder.start()
     recorder.record_state(1)
     data = recorder.export_data()
-    assert data.shape == (2, len(BaseRecorder.SPECIALS) + len(recorder.get_variables_list()))
-    assert set(data.columns) == set([*BaseRecorder.SPECIALS, *recorder.get_variables_list()])
+    assert data.shape == (2, len(BaseRecorder.SPECIALS) + len(recorder.field_names()))
+    assert set(data.columns) == set([*BaseRecorder.SPECIALS, *recorder.field_names()])
 
 
 def test_DataframeRecorder_record_iteration():
@@ -72,12 +71,12 @@ def test_DataframeRecorder_record_iteration():
 
     recorder.record_state(0)
     data = recorder.export_data()
-    assert data.shape == (1, len(BaseRecorder.SPECIALS) + len(recorder.get_variables_list()))
+    assert data.shape == (1, len(BaseRecorder.SPECIALS) + len(recorder.field_names()))
     headers = ["Section", "Reference", "Status", "Error code"]
     headers.extend(
         [
             f"{n} [{u}]"
-            for n, u in zip(recorder.get_variables_list(), recorder._get_units(recorder.get_variables_list()))
+            for n, u in zip(recorder.field_names(), recorder._get_units(recorder.field_names()))
         ]
     )
     assert set(data.columns) == set(headers)
@@ -90,45 +89,18 @@ def test_DataframeRecorder_record_iteration():
 
     recorder.record_state(0)
     data = recorder.export_data()
-    assert data.shape == (1, len(BaseRecorder.SPECIALS) + len(recorder.get_variables_list()))
-    assert set(data.columns) == set([*BaseRecorder.SPECIALS, *recorder.get_variables_list()])
+    assert data.shape == (1, len(BaseRecorder.SPECIALS) + len(recorder.field_names()))
+    assert set(data.columns) == set([*BaseRecorder.SPECIALS, *recorder.field_names()])
 
     recorder.record_state(1)
     data = recorder.export_data()
-    assert data.shape == (2, len(BaseRecorder.SPECIALS) + len(recorder.get_variables_list()))
-    assert set(data.columns) == set([*BaseRecorder.SPECIALS, *recorder.get_variables_list()])
+    assert data.shape == (2, len(BaseRecorder.SPECIALS) + len(recorder.field_names()))
+    assert set(data.columns) == set([*BaseRecorder.SPECIALS, *recorder.field_names()])
 
 
-def test_DataframeRecorder_record_properties():
-    class XyPort(Port):
-        def setup(self):
-            self.add_variable('x', 0.0)
-            self.add_variable('y', 1.0)
-
-        @property
-        def xy_ratio(self):  # property matching '*_ratio' pattern
-            return self.x / self.y
-
-        def custom_ratio(self):  # method matching '*_ratio' pattern
-            return 'not a property'
-
-    class MySystem(System):
-        def setup(self):
-            self.add_input(XyPort, 'in_')
-            self.add_output(XyPort, 'out')
-            self.add_outward('a', 0.0)
-
-        @property
-        def bogus_ratio(self):
-            """Bogus property matching '*_ratio' name pattern"""
-            return 2 * self.in_.x
-
-        def compute(self):
-            self.out.x = self.in_.x
-            self.out.y = self.in_.y * 2
-            self.a = 0.1 * self.out.xy_ratio
-
-    s = MySystem('s')
+def test_DataframeRecorder_record_properties(SystemWithProps):
+    """Test a recorder recording system and port properties"""
+    s = SystemWithProps('s')
     driver = s.add_driver(EulerExplicit(dt=0.1, time_interval=(0, 1)))
 
     driver.set_scenario(values={
@@ -145,11 +117,45 @@ def test_DataframeRecorder_record_properties():
     assert set(df.columns) == set(headers)
     
     time = np.asarray(df['Reference'], dtype=float)
-    out_xy_ratio = np.asarray(df['out.xy_ratio'], dtype=float)
+    out_xy_ratio = np.asarray(df['out.xy_ratio'])
     assert out_xy_ratio == pytest.approx(np.cos(np.pi * time) / (2 + np.sin(2 * np.pi * time)))
-    assert np.asarray(df['a'], dtype=float) == pytest.approx(0.1 * out_xy_ratio)
-    bogus_ratio = np.asarray(df['bogus_ratio'], dtype=float)
-    assert bogus_ratio == pytest.approx(2 * np.cos(np.pi * time))
+    assert np.asarray(df['a']) == pytest.approx(0.1 * out_xy_ratio)
+    assert np.asarray(df['bogus_ratio']) == pytest.approx(2 * np.cos(np.pi * time))
+
+
+def test_DataframeRecorder_record_expressions(SystemWithProps):
+    """Test a recorder involving evaluable expressions"""
+    s = SystemWithProps('s')
+    driver = s.add_driver(EulerExplicit(dt=0.1, time_interval=(0, 1)))
+
+    driver.set_scenario(values={
+        'in_.x': 'cos(pi * t)',
+        'in_.y': '1 + 0.5 * sin(2 * pi * t)',
+    })
+
+    driver.add_recorder(DataFrameRecorder(
+        includes=['a', 'bogus*', '-2 * a + out.y', 'sin(pi * t)'],
+    ))
+
+    s.run_drivers()
+    df = driver.recorder.export_data()
+    headers = ["Section", "Reference", "Status", "Error code"]
+    headers.extend(['a', '-2 * a + out.y', 'sin(pi * t)', 'bogus_ratio'])
+    assert set(df.columns) == set(headers)
+    
+    time = np.asarray(df['Reference'], dtype=float)
+    exact = {
+        'a': lambda t: 0.1 * np.cos(np.pi * t) / (2 + np.sin(2 * np.pi * t)),
+        'out.y': lambda t: 2 + np.sin(2 * np.pi * t),
+    }
+    expected = {
+        'a': pytest.approx(exact['a'](time), rel=1e-14),
+        'sin(pi * t)': pytest.approx(np.sin(np.pi * time), rel=1e-14),
+        'bogus_ratio': pytest.approx(2 * np.cos(np.pi * time), rel=1e-14),
+        '-2 * a + out.y': pytest.approx(-2 * exact['a'](time) + exact['out.y'](time), rel=1e-14),
+    }
+    for field in expected:
+        assert np.asarray(df[field]) == expected[field], f"field: {field}"
 
 
 def test_DataframeRecorder_restore():

@@ -11,7 +11,7 @@ def PatchBaseRecorder():
     patcher = mock.patch.multiple(
         BaseRecorder,
         __abstractmethods__ = set(),
-        collect_data = lambda self: list(),
+        formatted_data = lambda self: list(),
     )
     patcher.start()
     yield
@@ -131,16 +131,23 @@ def test_BaseRecorder_precision(value, expected):
             recorder.precision = value
 
 
-def test_BaseRecorder_watched_object(AllTypesSystem):
-    recorder = BaseRecorder()
+def test_BaseRecorder_watched_object(AllTypesSystem, SystemWithProps):
+    recorder = BaseRecorder(includes='?')
     assert recorder.watched_object is None
 
-    s = AllTypesSystem('test')
-    recorder.watched_object = s
-    assert recorder.watched_object is s
+    a = AllTypesSystem('a')
+    recorder.watched_object = a
+    assert recorder.watched_object is a
+    assert set(recorder.field_names()) == set('abcde')
 
-    with pytest.raises(TypeError, match="Record must be attached to a System or a Driver"):
+    with pytest.raises(TypeError, match="Recorder must be attached to a System or a Driver"):
         recorder.watched_object = 'dummy'
+
+    # Watch new object; should update field names
+    p = SystemWithProps('p')
+    recorder.watched_object = p
+    assert recorder.watched_object is p
+    assert set(recorder.field_names()) == {'a'}
 
 
 def test_BaseRecorder_includes():
@@ -161,21 +168,23 @@ def test_BaseRecorder_excludes():
 
 def test_BaseRecorder_get_variables_list(AllTypesSystem):
     recorder = BaseRecorder()
-    assert recorder.get_variables_list() == list()
+    assert recorder.field_names() == list()
 
     # Single system
     s = AllTypesSystem('test')
     recorder.watched_object = s
-    assert set(recorder.get_variables_list()) == set(('a', 'b', 'c', 'e', 'd', 'in_.x', 'out.x'))
+    assert set(recorder.field_names()) == {'a', 'b', 'c', 'e', 'd', 'in_.x', 'out.x'}
 
     # Two levels system
     recorder = BaseRecorder()
     t = AllTypesSystem('top')
     t.add_child(s)
     recorder.watched_object = t
-    assert set(recorder.get_variables_list()) == set(('a', 'b', 'c', 'e', 'd', 'in_.x', 'out.x',
-                                                'test.a', 'test.b', 'test.c', 'test.d', 'test.e',
-                                                'test.in_.x', 'test.out.x'))
+    assert set(recorder.field_names()) == {
+        'a', 'b', 'c', 'e', 'd', 'in_.x', 'out.x',
+        'test.a', 'test.b', 'test.c', 'test.d', 'test.e',
+        'test.in_.x', 'test.out.x',
+    }
 
 
 @pytest.mark.parametrize("includes, expected", [
@@ -197,7 +206,7 @@ def test_BaseRecorder_get_variables_list__includes(AllTypesSystem, includes, exp
     recorder = BaseRecorder(includes=includes)
     recorder.watched_object = t
     assert recorder.watched_object is t
-    assert set(recorder.get_variables_list()) == set(expected)  # test lists regardless of order
+    assert set(recorder.field_names()) == set(expected)  # test lists regardless of order
 
 
 @pytest.mark.parametrize("excludes, expected", [
@@ -234,7 +243,38 @@ def test_BaseRecorder_get_variables_list__excludes(AllTypesSystem, excludes, exp
     recorder = BaseRecorder(excludes=excludes)
     recorder.watched_object = t
     assert recorder.watched_object is t
-    assert set(recorder.get_variables_list()) == set(expected)  # test lists regardless of order
+    assert set(recorder.field_names()) == set(expected)  # test lists regardless of order
+
+
+@pytest.mark.parametrize("ctor, expected", [
+    (dict(includes='?'), list('abcde')),
+    (dict(includes='?', excludes='a'), list('bcde')),
+    (dict(includes=['a', 'b'], excludes='a'), ['b']),
+    (
+        dict(includes=['a', '*_ratio']),
+        ['a', 'sub.in_.xy_ratio', 'sub.out.xy_ratio', 'sub.bogus_ratio'],
+    ),
+    (
+        dict(includes=['a', '*_ratio'], excludes=['*bogus*']),
+        ['a', 'sub.in_.xy_ratio', 'sub.out.xy_ratio'],
+    ),
+    (dict(includes=['sub.a']), ['sub.a']),
+    (dict(includes=['sub.a'], excludes='sub.?'), []),
+    (dict(includes=['a[-1]'], excludes='?'), ['a[-1]']),
+    (dict(includes=['a[-1]', '2 * a + sub.out.y']), ['a[-1]', '2 * a + sub.out.y']),
+    (dict(includes=['sub.a +']), []),    # expressions with syntax errors should be filtered out
+    (dict(includes=['2 * sub.?']), []),  # can't combine mathematical expression and search pattern
+])
+def test_BaseRecorder_get_variables_list_expressions(AllTypesSystem, SystemWithProps, ctor, expected):
+    """Test inclusion and exclusion patterns involving properties and evaluable expressions"""
+    top = AllTypesSystem('top')
+    sub = SystemWithProps('sub')
+    top.add_child(sub)
+    recorder = BaseRecorder(**ctor)
+    recorder.watched_object = top
+    assert recorder.watched_object is top
+
+    assert set(recorder.field_names()) == set(expected)
 
 
 def test_BaseRecorder__get_units(AllTypesSystem):
@@ -244,41 +284,50 @@ def test_BaseRecorder__get_units(AllTypesSystem):
     # Single system
     s = AllTypesSystem('test')
     recorder.watched_object = s
-    assert len(recorder._get_units()) == len(recorder.get_variables_list())
-    assert isinstance(recorder._get_units()[0], str)
+    units = recorder._get_units()
+    assert len(units) == len(recorder.field_names())
+    assert all(isinstance(unit, str) for unit in units)
 
     # Two levels system
     recorder = BaseRecorder()
     t = AllTypesSystem('top')
     t.add_child(s)
     recorder.watched_object = t
-    assert len(recorder._get_units()) == len(recorder.get_variables_list())
-    assert isinstance(recorder._get_units()[0], str)
+    units = recorder._get_units()
+    assert len(units) == len(recorder.field_names())
+    assert all(isinstance(unit, str) for unit in units)
 
     # Test includes
     recorder = BaseRecorder(includes='test.*')
     recorder.watched_object = t
-    assert len(recorder._get_units()) == len(recorder.get_variables_list())
-    assert isinstance(recorder._get_units()[0], str)
+    units = recorder._get_units()
+    assert len(units) == len(recorder.field_names())
+    assert all(isinstance(unit, str) for unit in units)
 
     recorder = BaseRecorder(includes='banana')
     recorder.watched_object = t
-    assert len(recorder._get_units()) == 0
+    units = recorder._get_units()
+    assert len(units) == 0
+    assert len(units) == len(recorder.field_names())
 
     # Test excludes
     recorder = BaseRecorder(excludes='test.*')
     recorder.watched_object = t
-    assert len(recorder._get_units()) == len(recorder.get_variables_list())
-    assert isinstance(recorder._get_units()[0], str)
+    units = recorder._get_units()
+    assert len(units) == len(recorder.field_names())
+    assert all(isinstance(unit, str) for unit in units)
 
     recorder = BaseRecorder(excludes='*')
     recorder.watched_object = t
-    assert len(recorder._get_units()) == 0
+    units = recorder._get_units()
+    assert len(units) == len(recorder.field_names())
+    assert all(isinstance(unit, str) for unit in units)
 
     recorder = BaseRecorder(excludes='banana')
     recorder.watched_object = t
-    assert len(recorder._get_units()) == len(recorder.get_variables_list())
-    assert isinstance(recorder._get_units()[0], str)
+    units = recorder._get_units()
+    assert len(units) == len(recorder.field_names())
+    assert all(isinstance(unit, str) for unit in units)
 
 
 def test_BaseRecorder_start():

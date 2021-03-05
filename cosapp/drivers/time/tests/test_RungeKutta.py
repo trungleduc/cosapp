@@ -147,14 +147,12 @@ def test_RungeKutta_twoTanks(two_tank_case, two_tank_solution, dt):
 
     data = recorder.export_data()
     assert len(data) == 51
-    heights = data.values[:, -2:]
     solution = two_tank_solution(system, init)
     assert solution.characteristic_time == pytest.approx(0.5766040318109212)
     assert driver.dt < solution.characteristic_time
     time = np.array(data['Reference'], dtype=float)
     error = 0
-    for i, h1 in enumerate(heights[1:, 0]):
-        t = time[i + 1]
+    for t, h1 in zip(time, data['tank1.height']):
         exact = solution(t)
         error = max(error, abs(h1 - exact[0]))
     # Test that maximum error ~ dt^2
@@ -297,11 +295,9 @@ def test_RungeKutta_point_mass(point_mass_case, point_mass_solution, order, dt, 
 
     data = recorder.export_data()
     time = np.array(data['Reference'], dtype=float)
-    traj = np.asarray([value for value in data.values[:, -1]])
     solution = point_mass_solution(system, v0, x0)
     error = np.zeros(3)
-    for i, t in enumerate(time):
-        x = traj[i]
+    for t, x in zip(time, data['x']):
         error = np.maximum(error, rel_error(x, solution.x(t)))
     context = f"dt = {driver.dt}, order = {driver.order}"
     assert error.max() < tol, context
@@ -400,11 +396,10 @@ def test_RungeKutta_pointMassWithPorts(pointMassWithPorts_case, point_mass_solut
 
     data = recorder.export_data()
     time = np.asarray(data['Reference'], dtype=float)
-    traj = np.asarray([value for value in data.values[:, -1]])
+    traj = np.asarray(data['position.x'])
     solution = point_mass_solution(system, v0, x0)
     error = np.zeros(3)
-    for i, t in enumerate(time):
-        x = traj[i]
+    for t, x in zip(time, traj):
         error = np.maximum(error, rel_error(x, solution.x(t)))
     context = f"dt = {driver.dt}, order = {driver.order}"
     assert error.max() < tol, context
@@ -445,11 +440,10 @@ def test_RungeKutta_pointMassWithPorts_pulling(point_mass_solution, order, dt, t
 
     data = recorder.export_data()
     time = np.asarray(data['Reference'], dtype=float)
-    traj = np.asarray([value for value in data.values[:, -1]])
+    traj = np.asarray(data['pos.x'])
     solution = point_mass_solution(system.point, v0, x0)
     error = np.zeros(3)
-    for i, t in enumerate(time):
-        x = traj[i]
+    for t, x in zip(time, traj):
         error = np.maximum(error, rel_error(x, solution.x(t)))
     context = f"dt = {driver.dt}, order = {driver.order}"
     assert error.max() < tol, context

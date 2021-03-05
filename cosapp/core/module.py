@@ -4,7 +4,7 @@ Basic class handling model tree structure.
 import abc
 import collections
 import logging
-from typing import Any, Optional
+from typing import Any, Optional, List
 
 from cosapp.core.signal import Signal
 from cosapp.utils.naming import NameChecker
@@ -100,7 +100,7 @@ class Module(LoggerContext, metaclass=abc.ABCMeta):
     @property
     def contextual_name(self) -> str:
         """str : Name of the module relative to the root one."""
-        return "" if self.parent is None else self._get_fullname(skip_root=True)
+        return "" if self.parent is None else self.full_name(trim_root=True)
 
     @property
     def compute_calls(self) -> int:
@@ -135,27 +135,38 @@ class Module(LoggerContext, metaclass=abc.ABCMeta):
             size += child.size
         return size
 
-    def _get_fullname(self, skip_root: bool = False) -> str:
-        """Get the fullname up to the root Module.
+    def path_namelist(self) -> List[str]:
+        """Returns full name list up to root Module.
+        
+        Returns
+        -------
+        List[str]
+            The module full name list
+        """
+        current = self
+        names = [current.name]
+        while current.parent is not None:
+            current = current.parent
+            names.append(current.name)
+        names.reverse()
+        return names
+
+    def full_name(self, trim_root=False) -> str:
+        """Returns full name up to root Module.
         
         Parameters
         ----------
-        skip_root : bool
-            Should the root Module name be skipped.
+        trim_root : bool (optional, default False)
+            Exclude root Module name if True.
 
         Returns
         -------
         str
-            The module fullname
+            The module full name
         """
-        current = self
-        fullname = [current.name]
-        while current.parent is not None:
-            current = current.parent
-            fullname.append(current.name)
-        if skip_root:
-            fullname.pop()
-        return ".".join(reversed(fullname))
+        names = self.path_namelist()
+        start = 1 if trim_root else 0
+        return ".".join(names[start:])
 
     def call_setup_run(self):
         """Execute `setup_run` recursively on all modules."""
@@ -184,24 +195,26 @@ class Module(LoggerContext, metaclass=abc.ABCMeta):
         """Method called once after any simulation."""
         pass  # pragma: no cover
 
-    def get_path_to_child(self, from_child: "Module") -> str:
-        """Get the roots of the current `Module`.
+    def get_path_to_child(self, other: "Module") -> str:
+        """
+        Returns the relative path to target Module `other`.
+        Raises `ValueError` if `other` is not related to current Module.
 
         Returns
         -------
         Roots
-            The root name of the `Module`
+            The relative path to `target`
         """
-        s = from_child
         path = list()
-        while s is not self:
-            path.insert(0, s.name)
-            s = s.parent
-            if s is None:
+        child = other
+        while child is not self:
+            path.append(child.name)
+            child = child.parent
+            if child is None:
                 raise ValueError(
-                    f"Module '{from_child.name}' is not a child of module '{self.name}'."
+                    f"{other.name!r} is not a child of {self.name!r}."
                 )
-        return ".".join(path)
+        return ".".join(reversed(path))
 
     def add_child(self,
         child: "Module",
@@ -400,7 +413,7 @@ class Module(LoggerContext, metaclass=abc.ABCMeta):
             activate = getattr(record, "activate", None)
             if activate == False:
                 # Display the number of system execution
-                msg = f"Compute calls for {self._get_fullname()}: {self.compute_calls}"
+                msg = f"Compute calls for {self.full_name()}: {self.compute_calls}"
                 handler.log(LogLevel.DEBUG, msg, name=logger.name)
 
         return emit_record

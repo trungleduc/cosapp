@@ -1,11 +1,9 @@
+import pytest
 import logging
 import re
 import weakref
 from unittest import mock
 
-import pytest
-
-import cosapp.core.module as module_module
 from cosapp.core.module import Module
 from cosapp.core.signal import Slot
 from cosapp.drivers import Driver
@@ -14,14 +12,36 @@ from cosapp.utils.orderedset import OrderedSet
 from cosapp.utils.testing import no_exception
 
 
-class MockModule(Module):
-    def is_standalone(self) -> bool:
-        return False
+@pytest.fixture(autouse=True)
+def PatchModule():
+    """Patch Module to make it instanciable for tests"""
+    patcher = mock.patch.multiple(
+        Module,
+        __abstractmethods__ = set(),
+        is_standalone = lambda self: False,
+    )
+    patcher.start()
+    yield
+    patcher.stop()
+
+
+@pytest.fixture(autouse=True)
+def Russian_dolls():
+    def factory(name: str, *submodules: str):
+        head = Module(name)
+        module_list = [head]
+        last = head
+        for name in submodules:
+            last = last.add_child(Module(name))
+            module_list.append(last)
+        return module_list
+
+    return factory
 
 
 @pytest.fixture(scope="function")
 def fake():
-    return MockModule("fake")
+    return Module("fake")
 
 
 @pytest.mark.parametrize("name, error", [
@@ -53,11 +73,11 @@ def fake():
 ])
 def test_Module__init__(name, error):
     if error is None:
-        module = MockModule(name)
+        module = Module(name)
         assert module.name == name
     else:
         with pytest.raises(error):
-            MockModule(name)
+            Module(name)
 
 
 def test_Module__weakref__(fake):
@@ -66,7 +86,7 @@ def test_Module__weakref__(fake):
 
 
 def test_Module_name_setter():
-    module = MockModule("foo")
+    module = Module("foo")
     assert module.name == "foo"
     module.name = "bar"
     assert module.name == "bar"
@@ -74,47 +94,40 @@ def test_Module_name_setter():
         module.name = "invalid.name"
 
 
-def test_Module_contextual_name():
-    s = MockModule("s")
-    T = MockModule("T")
-    u = MockModule("u")
-    v = MockModule("v")
+def test_Module_contextual_name(Russian_dolls):
+    a, b, c, d = Russian_dolls(*iter('abcd'))
 
-    s.add_child(T)
-    T.add_child(u)
-    u.add_child(v)
-
-    assert v.contextual_name == "T.u.v"
-    assert u.contextual_name == "T.u"
-    assert s.contextual_name == ""
-    assert T.contextual_name == "T"
+    assert a.contextual_name == ""
+    assert b.contextual_name == "b"
+    assert c.contextual_name == "b.c"
+    assert d.contextual_name == "b.c.d"
 
 
-@pytest.mark.parametrize("skip_root", [True, False])
-def test_Module__get_fullname(skip_root):
-    s = MockModule("s")
-    T = MockModule("T")
-    u = MockModule("u")
-    v = MockModule("v")
+def test_Module_fullname(Russian_dolls):
+    a, b, c, d = Russian_dolls(*iter('abcd'))
 
-    s.add_child(T)
-    T.add_child(u)
-    u.add_child(v)
+    assert a.full_name(trim_root=True) == ""
+    assert b.full_name(trim_root=True) == "b"
+    assert c.full_name(trim_root=True) == "b.c"
+    assert d.full_name(trim_root=True) == "b.c.d"
 
-    if skip_root:
-        assert v._get_fullname(skip_root) == "T.u.v"
-        assert u._get_fullname(skip_root) == "T.u"
-        assert s._get_fullname(skip_root) == ""
-        assert T._get_fullname(skip_root) == "T"
-    else:
-        assert v._get_fullname(skip_root) == "s.T.u.v"
-        assert u._get_fullname(skip_root) == "s.T.u"
-        assert s._get_fullname(skip_root) == "s"
-        assert T._get_fullname(skip_root) == "s.T"
+    assert a.full_name() == "a"
+    assert b.full_name() == "a.b"
+    assert c.full_name() == "a.b.c"
+    assert d.full_name() == "a.b.c.d"
+
+
+def test_Module_path_namelist(Russian_dolls):
+    a, b, c, d = Russian_dolls(*iter('abcd'))
+
+    assert a.path_namelist() == ["a"]
+    assert b.path_namelist() == ["a", "b"]
+    assert c.path_namelist() == ["a", "b", "c"]
+    assert d.path_namelist() == ["a", "b", "c", "d"]
 
 
 def test_Module_compute_calls():
-    m = MockModule("m")
+    m = Module("m")
 
     assert m.compute_calls == 0
 
@@ -124,36 +137,39 @@ def test_Module_compute_calls():
     m.call_setup_run()  # Reset counter
     assert m.compute_calls == 0
 
+
 def test_Module_size():
-    s = MockModule("s")
-    T = MockModule("T")
-    u = MockModule("u")
-    v = MockModule("v")
+    s = Module("s")
+    T = Module("T")
+    u = Module("u")
+    v = Module("v")
 
     s.add_child(T)
     T.add_child(u)
     T.add_child(v)
-    s.add_child(MockModule("r"))
+    s.add_child(Module("r"))
 
     assert s.size == 5
     assert u.size == 1
     assert T.size == 3
 
 
-def test_Module_get_path_to_child():
-    s = MockModule("s")
-    T = MockModule("T")
-    u = MockModule("u")
-    v = MockModule("v")
+def test_Module_get_path_to_child(Russian_dolls):
+    a, b, c, d = Russian_dolls("a", "b", "c", "d")
 
-    s.add_child(T)
-    T.add_child(u)
-    u.add_child(v)
+    assert a.get_path_to_child(a) == ""
+    assert a.get_path_to_child(b) == "b"
+    assert a.get_path_to_child(c) == "b.c"
+    assert a.get_path_to_child(d) == "b.c.d"
+    assert b.get_path_to_child(c) == "c"
+    assert b.get_path_to_child(d) == "c.d"
 
-    assert s.get_path_to_child(v) == "T.u.v"
-    assert s.get_path_to_child(u) == "T.u"
-    assert s.get_path_to_child(s) == ""
-    assert T.get_path_to_child(v) == "u.v"
+    with pytest.raises(ValueError, match="not a child of 'b'"):
+        b.get_path_to_child(a)
+
+    orphan = Module('orphan')
+    with pytest.raises(ValueError, match="not a child of 'a'"):
+        a.get_path_to_child(orphan)
 
 
 def test_Module_pop_child_driver():
@@ -238,7 +254,7 @@ def test_Module_log_debug_message(format, msg, kwargs, to_log, emitted):
     for key, value in kwargs.items():
         setattr(rec, key, value)
     
-    m = MockModule("dummy")
+    m = Module("dummy")
 
     assert m.log_debug_message(handler, rec, format) == to_log
 

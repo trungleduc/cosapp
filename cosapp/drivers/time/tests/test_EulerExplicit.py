@@ -68,12 +68,11 @@ def test_EulerExplicit_twoTanks(two_tank_case, two_tank_solution, dt):
 
     df = recorder.export_data()
     assert len(df) == 51
-    heights = df.values[:, -2:]
     solution = two_tank_solution(system, init)
     assert solution.characteristic_time == pytest.approx(0.5766040318109212)
+    time = np.array(df['Reference'], dtype=float)
     error = 0
-    for i, h1 in enumerate(heights[1:, 0]):
-        t = (i + 1) * driver.recording_period
+    for t, h1 in zip(time, df['tank1.height']):
         exact = solution(t)
         error = max(error, abs(h1 - exact[0]))
     # Test that maximum error ~ dt

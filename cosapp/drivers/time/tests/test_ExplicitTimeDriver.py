@@ -357,7 +357,6 @@ def test_ExplicitTimeDriver_rate(rate_case_1, dt, tol):
         values = {'k': 1.5, 'U': 'exp(k * t)'}
     )
 
-    # recorder = driver.add_recorder(recorders.DSVRecorder('dUdt.csv', includes=['U', 'dU_dt']), period=0.1)
     recorder = driver.add_recorder(recorders.DataFrameRecorder(includes=['dU_dt']), period=0.1)
 
     system.run_drivers()
@@ -365,12 +364,10 @@ def test_ExplicitTimeDriver_rate(rate_case_1, dt, tol):
 
     data = recorder.export_data()
     time = np.asarray(data['Reference'], dtype=float)
-    result = np.asarray(data['dU_dt'], dtype=float)
     solution = lambda t: system.k * np.exp(system.k * t)
     error = 0
-    for i, t in enumerate(time):
+    for t, dU_dt in zip(time, data['dU_dt']):
         exact = solution(t)
-        dU_dt = result[i]
         error = max(error, rel_error(dU_dt, exact))
     assert error < tol
 
@@ -405,7 +402,6 @@ def test_ExplicitTimeDriver_rate_no_initial_value():
     system.run_drivers()
 
     data = recorder.export_data()
-    time = np.asarray(data['Reference'], dtype=float)
     result = np.asarray(data['dU_dt'], dtype=float)
     assert system.k == -3.6
     assert result[0] == system.k

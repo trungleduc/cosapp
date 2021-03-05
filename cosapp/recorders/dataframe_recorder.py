@@ -65,14 +65,14 @@ class DataFrameRecorder(BaseRecorder):
 
     def export_data(self) -> pandas.DataFrame:
         """Export recorded results into a pandas.DataFrame object."""
-        # According to DataFrame documentation, it is more efficient to store in a list then create the DataFrame
+        # According to DataFrame documentation, it is more efficient to store in a list than create the DataFrame
         headers = [
             self.SPECIALS.section,
             self.SPECIALS.status,
             self.SPECIALS.code,
             self.SPECIALS.reference,
         ]
-        varlist = self.get_variables_list()
+        varlist = self.field_names()
         if self._raw_output:
             headers.extend(varlist)
         else:
@@ -87,12 +87,12 @@ class DataFrameRecorder(BaseRecorder):
 
     @property
     def _raw_data(self) -> List[List[Any]]:
-        """Return a raw/unformatted version of the records
+        """Return a raw/unformatted version of records
 
         Returns
         -------
         List[List[Any]]
-            The records of the `watched_object` for the variables given by the `get_variables_list` method
+            Records of `watched_object` for variables given by method `field_names()`
         """
         return self.__buffer
 
@@ -102,23 +102,23 @@ class DataFrameRecorder(BaseRecorder):
         if not self.hold:
             self.__buffer.clear()
 
-    def collect_data(self) -> List[Any]:
+    def formatted_data(self) -> List[Any]:
         """Collect recorded data from watched object into a list."""
         line = []
-        for name in self.get_variables_list():
+        names = self.field_names()
+        values = self.collected_data()
+        for name, value in zip(names, values):
             try:
-                value = copy.deepcopy(self.watched_object[name])
-            except KeyError:
-                value = numpy.nan
+                line.append(copy.deepcopy(value))
             except copy.Error:
-                varname = f"{self.watched_object.name}.{name}"
+                context = self.watched_object
+                if name in context:
+                    varname = f"{context.name}.{name}"
+                else:
+                    varname = f"{context.name}[{name}]"
                 raise TypeError(
                     f"Cannot record {varname}: DataFrameRecorder objects can only capture deep-copyable variables"
                 )
-            except:
-                raise
-            line.append(value)
-
         return line
 
     def _record(self, line: List[Any]) -> None:
