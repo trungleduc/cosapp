@@ -110,12 +110,12 @@ class DSVRecorder(BaseRecorder):
 
     @property
     def _raw_data(self) -> List[List[Any]]:
-        """Return a raw/unformatted version of the records.
+        """Return a raw/unformatted version of records.
 
         Returns
         -------
         List[List[Any]]
-            The records of the `watched_object` for the variables given by the `get_variables_list` method
+            Records of `watched_object` for variables given by method `field_names()`
         """
         if not os.path.exists(self.__filepath):
             return list()
@@ -144,34 +144,33 @@ class DSVRecorder(BaseRecorder):
                 self.SPECIALS.reference,
             ]
 
-            def append(lst, base, unit):
+            def add_header(base, unit):
                 if unit and not self._raw_output:
-                    lst.append(f"{base} [{unit}]")
+                    headers.append(f"{base} [{unit}]")
                 else:
-                    lst.append(base)
+                    headers.append(base)
 
-            for name, unit in zip(
-                self.get_variables_list(), self._get_units(self.get_variables_list())
-            ):
+            varlist = self.field_names()
+            for name, unit in zip(varlist, self._get_units(varlist)):
                 value = self.watched_object[name]
                 unit = "" if self._raw_output else unit
                 if isinstance(value, numpy.ndarray) and value.ndim > 0:
                     for i in range(value.size):
                         entry = f"{name}[{i}]"
-                        append(headers, entry, unit)
+                        add_header(entry, unit)
                 elif isinstance(value, Collection) and not isinstance(value, str):
                     for i in range(len(value)):
                         entry = f"{name}[{i}]"
-                        append(headers, entry, unit)
+                        add_header(entry, unit)
                 else:
-                    append(headers, name, unit)
+                    add_header(name, unit)
 
             with open(self.__filepath, "w") as f:
                 # Write header
                 f.write(self.__delimiter.join(headers) + "\n")
 
-    def collect_data(self) -> List[Any]:
-        """Collect recorded data from watched object into a list."""
+    def formatted_data(self) -> List[Any]:
+        """Format collected data from watched object into a list."""
 
         precision = self.precision
         def fmt(value, check=True):
@@ -180,16 +179,14 @@ class DSVRecorder(BaseRecorder):
             return "{0:.{1}e}".format(value, precision)
 
         line = []
-
-        for name in self.get_variables_list():
-            value = self.watched_object[name]
+        for value in self.collected_data():
             if isinstance(value, numpy.ndarray):
                 if numpy.issubdtype(value.dtype, numpy.number):
-                    line.extend([fmt(v, check=False) for v in value.flatten()])
+                    line.extend(fmt(v, check=False) for v in value.flat)
                 else:
-                    line.extend([str(v) for v in value.flatten()])
+                    line.extend(str(v) for v in value.flat)
             elif isinstance(value, Collection) and not isinstance(value, str):
-                line.extend([fmt(v) for v in value])
+                line.extend(fmt(v) for v in value)
             else:
                 line.append(fmt(value))
 

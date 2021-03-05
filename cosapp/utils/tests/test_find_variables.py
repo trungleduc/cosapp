@@ -1,9 +1,51 @@
 import pytest
 
-from cosapp.utils.find_variables import natural_varname, make_wishlist, find_variables
-from cosapp.tests.library.systems.vectors import AllTypesSystem
+from cosapp.utils.find_variables import (
+    natural_varname,
+    make_wishlist,
+    find_variables,
+    find_system_properties,
+    get_attributes,
+)
+from cosapp.tests.library.systems import AllTypesSystem
 from cosapp.ports import Port
 from cosapp.systems import System
+
+
+class XyPort(Port):
+    def setup(self):
+        self.add_variable('x', 0.0)
+        self.add_variable('y', 1.0)
+
+
+class XyRatioPort(XyPort):
+    def setup(self):
+        super().setup()
+
+    @property
+    def xy_ratio(self):  # property matching '*_ratio' pattern
+        return self.x / self.y
+
+    def custom_ratio(self):  # method matching '*_ratio' pattern
+        return 'not a property'
+
+
+class SystemWithProps(System):
+    def setup(self):
+        self.add_input(XyRatioPort, 'in_')
+        self.add_output(XyRatioPort, 'out')
+        self.add_inward('a', 2.0)
+        self.add_property('n', 12)
+        self.add_property('const_ratio', 0.75)
+
+    def compute(self):
+        self.out.x = self.in_.x
+        self.out.y = self.in_.y * 2
+
+    @property
+    def bogus_ratio(self) -> float:
+        """Bogus property matching '*_ratio' name pattern"""
+        return self.a * self.out.xy_ratio
 
 
 @pytest.mark.parametrize("name, expected", [
@@ -148,7 +190,7 @@ def test_find_variables__excludes(excludes, expected):
         dict(includes=['*_ratio'], excludes=None, outputs=False),
         ['in_.xy_ratio', 'bogus_ratio'],
     ),
-    ( # Check that port method 'XyPort.custom_ratio()' is not captured
+    ( # Check that port method 'XyRatioPort.custom_ratio()' is not captured
         dict(includes=['custom*'], excludes=None), []
     ),
     (
@@ -161,35 +203,94 @@ def test_find_variables__excludes(excludes, expected):
     ),
 ])
 def test_find_variables_property(criteria, expected):
-    class XyPort(Port):
+    system = SystemWithProps("s")
+
+    actual = find_variables(system, **criteria)
+    assert set(actual) == set(expected)
+
+
+@pytest.mark.parametrize("criteria, expected", [
+    (
+        dict(includes='*', excludes='*.*'),
+        ['a', 'bogus_ratio'],
+    ),
+    (
+        dict(includes='*', excludes=None),
+        [
+            'a', 'in_.x', 'in_.y', 'out.x', 'out.y',
+            'in_.xy_ratio', 'out.xy_ratio', 'bogus_ratio',
+            'foo.a', 'foo.in_.x', 'foo.in_.y', 'foo.out.x', 'foo.out.y',
+            'foo.in_.xy_ratio', 'foo.out.xy_ratio', 'foo.bogus_ratio',
+            'bar.x', 'bar.y', 'bar.out.x', 'bar.out.y',
+        ],
+    ),
+])
+def test_find_variables_composite_1(criteria, expected):
+    class Bar(System):
         def setup(self):
-            self.add_variable('x', 0.0)
-            self.add_variable('y', 1.0)
-
-        @property
-        def xy_ratio(self):  # property matching '*_ratio' pattern
-            return self.x / self.y
-
-        def custom_ratio(self):  # method matching '*_ratio' pattern
-            return 'foo'
-
-    class MySystem(System):
-        def setup(self):
-            self.add_input(XyPort, 'in_')
+            self.add_inward('x', 1.0)
+            self.add_inward('y', 2.0)
             self.add_output(XyPort, 'out')
-            self.add_inward('a', 2.0)
-            self.add_property('n', 12)
-            self.add_property('const_ratio', 0.75)
 
         def compute(self):
-            self.out.x = self.in_.x
-            self.out.y = self.in_.y * 2
+            self.out.x = self.x
+            self.out.y = self.y
 
-        @property
-        def bogus_ratio(self) -> float:
-            """Bogus property matching '*_ratio' name pattern"""
-            return self.a * self.out.xy_ratio
+    top = SystemWithProps("top")
+    top.add_child(SystemWithProps("foo"))
+    top.add_child(Bar("bar"))
 
-    system = MySystem("s")
+    actual = find_variables(top, **criteria)
+    assert set(actual) == set(expected)
 
-    assert set(find_variables(system, **criteria)) == set(expected)
+
+@pytest.mark.parametrize("criteria, expected", [
+    (
+        dict(includes='*', excludes='*.*'),
+        ['a', 'b', 'c', 'd', 'e'],
+    ),
+    (
+        dict(includes='*', excludes=None),
+        [
+            'a', 'b', 'c', 'd', 'e', 'in_.x', 'out.x',
+            'foo.a', 'foo.in_.x', 'foo.in_.y', 'foo.out.x', 'foo.out.y',
+            'foo.in_.xy_ratio', 'foo.out.xy_ratio', 'foo.bogus_ratio',
+        ],
+    ),
+])
+def test_find_variables_composite_2(criteria, expected):
+    top = AllTypesSystem("top")
+    top.add_child(SystemWithProps("foo"))
+
+    actual = find_variables(top, **criteria)
+    assert set(actual) == set(expected)
+
+
+@pytest.mark.parametrize("include_const, expected", [
+    (False, {
+        'bogus_ratio', 'foo.bogus_ratio',
+    }),
+    (True, {
+        'n', 'const_ratio', 'bogus_ratio',
+        'foo.n', 'foo.const_ratio', 'foo.bogus_ratio',
+        'bar.magic_ratio',
+    }),
+])
+def test_find_system_properties(include_const, expected):
+    class Bar(System):
+        def setup(self):
+            self.add_inward('x', 1.0)
+            self.add_inward('y', 2.0)
+            self.add_output(XyPort, 'out')
+            self.add_property('magic_ratio', 0.123)
+
+        def compute(self):
+            self.out.x = self.x
+            self.out.y = self.y
+
+    top = SystemWithProps("top")
+    top.add_child(SystemWithProps("foo"))
+    top.add_child(Bar("bar"))
+
+    actual = find_system_properties(top, include_const)
+    assert actual == expected

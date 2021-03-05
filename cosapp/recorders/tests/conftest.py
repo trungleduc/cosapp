@@ -12,7 +12,7 @@ class V1dPort(Port):
 
 
 class _AllTypesSystem(System):
-    def setup(self, **kwargs):
+    def setup(self):
         self.add_input(V1dPort, "in_")
         self.add_inward("a", np.ones(3), unit="kg")
         self.add_inward("b", np.zeros(3), unit="N")
@@ -21,13 +21,50 @@ class _AllTypesSystem(System):
         self.add_outward("d", list())
         self.add_output(V1dPort, "out")
 
-    def compute(self, time_ref):
+    def compute(self):
         self.out.x = self.a * self.in_.x + self.b
         self.d = [self.c, self.e]
 
 
 @pytest.fixture(scope='function')
 def AllTypesSystem():
-    def _test_object(name, **kwargs):
-        return _AllTypesSystem(name, **kwargs)
+    def _test_object(name):
+        return _AllTypesSystem(name)
     return _test_object
+
+
+@pytest.fixture(scope='function')
+def SystemWithProps():
+    """Returns a test system with properties"""
+    class XyPort(Port):
+        def setup(self):
+            self.add_variable('x', 0.0)
+            self.add_variable('y', 1.0)
+
+        @property
+        def xy_ratio(self):  # property matching '*_ratio' pattern
+            return self.x / self.y
+
+        def custom_ratio(self):  # method matching '*_ratio' pattern
+            return 'not a property'
+
+    class SystemWithProps(System):
+        def setup(self):
+            self.add_input(XyPort, 'in_')
+            self.add_output(XyPort, 'out')
+            self.add_outward('a', 0.0)
+
+        @property
+        def bogus_ratio(self):
+            """Bogus property matching '*_ratio' name pattern"""
+            return 2 * self.in_.x
+
+        def compute(self):
+            self.out.x = self.in_.x
+            self.out.y = self.in_.y * 2
+            self.a = 0.1 * self.out.xy_ratio
+
+    def factory(name):
+        return SystemWithProps(name)
+
+    return factory

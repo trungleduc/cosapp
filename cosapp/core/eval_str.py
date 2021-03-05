@@ -252,6 +252,8 @@ class EvalString:
             )
 
         self.__str = EvalString.string(expression)  # type: str
+        if len(self.__str) == 0:
+            raise ValueError("Can't evaluate empty expressions")
 
         code = compile(self.__str, "<string>", "eval")  # type: CodeType
 

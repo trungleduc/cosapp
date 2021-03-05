@@ -82,6 +82,28 @@ class ExtensiblePort:
         owner = self._owner
         return self._name if owner is None else f"{owner.name}.{self._name}"
 
+    def full_name(self, trim_root=False) -> str:
+        """Returns full name up to root owner.
+        
+        Parameters
+        ----------
+        trim_root : bool (optional, default False)
+            Exclude root owner name if True.
+
+        Returns
+        -------
+        str
+            The port full name
+        """
+        owner = self.owner
+        path = []
+        if owner is not None:
+            path = owner.path_namelist()
+            if trim_root:
+                path = path[1:]
+        path.append(self.name)
+        return ".".join(path)
+
     @property
     def direction(self) -> PortType:
         """:obj:`PortType.IN` or :obj:`PortType.OUT` : Port direction"""

@@ -5,6 +5,7 @@ import inspect
 
 from cosapp.ports.enum import PortType, CommonPorts
 from cosapp.ports.port import ExtensiblePort, Port
+from cosapp.utils.helpers import check_arg
 
 
 def natural_varname(name: str) -> str:
@@ -41,7 +42,8 @@ def make_wishlist(wishlist: Union[str, List[str]], name="wishlist") -> List[str]
 def get_attributes(obj) -> Set[str]:
     """Returns non-callable members of an object"""
     return set(
-        m[0] for m in inspect.getmembers(obj) if not m[0].startswith("_") and not callable(m[1])
+        m[0] for m in inspect.getmembers(obj)
+        if not m[0].startswith("_") and not callable(m[1])
     )
 
 
@@ -84,6 +86,7 @@ def find_variables(
         Inward and outward variables will appear without the prefix `inwards.` or `outwards.`.
     """
     from cosapp.systems.system import System, IterativeConnector  # Local import to avoid recursion
+    check_arg(watched_object, 'watched_object', System)
 
     if not (inputs or outputs):
         # quick return, if possible
@@ -122,30 +125,69 @@ def find_variables(
         # Driver._precompute
         # Suppress duplicates INWARDS and OUTWARDS
         port = ref.mapping
-        if (
-            not is_valid(port)
-            or isinstance(port.owner, IterativeConnector)
-            or name != natural_varname(name)
-        ):
+        valid = (
+            is_valid(port)
+            and name == natural_varname(name)
+            and not isinstance(port.owner, IterativeConnector)
+        )
+        if not valid:
             continue  # skip `name`
 
         ports.add(port)
         names.add(name)
         result |= find_matches(name, watched_object[name])
     
+    # Find matches among port properties
     Port_cls_attr = get_attributes(Port)
 
     for port in ports:
         if not isinstance(port, Port):
             continue  # exclude `inwards` and `outwards` extensible ports
         port_properties = get_attributes(port) - Port_cls_attr - set(port._variables)
-        for attr in port_properties:
-            result |= find_matches(f"{port.name}.{attr}", getattr(port, attr))
+        port_name = port.full_name(trim_root=True)
+        for name in port_properties:
+            result |= find_matches(f"{port_name}.{name}", getattr(port, name))
 
-    obj_attributes = get_attributes(watched_object) - get_attributes(System)
-    if not include_const:
-        obj_attributes -= set(watched_object.properties)
-    for attr in obj_attributes:
-        result |= find_matches(attr, getattr(watched_object, attr))
+    # Find matches among system properties
+    system_properties = find_system_properties(watched_object, include_const)
+    for name in system_properties:
+        try:
+            child, attr = name.rsplit('.', maxsplit=1)
+        except ValueError:
+            owner, attr = watched_object, name
+        else:
+            owner = watched_object[child]
+        result |= find_matches(name, getattr(owner, attr))
 
-    return sorted(list(result))
+    return sorted(result)
+
+
+def find_system_properties(system, include_const=False):
+    """
+    Returns system properties, defined either as class properties
+    (with @property decorator), or with `System.add_property`.
+    The latter are excluded if optional argument `include_const`
+    is False (default).
+    """
+    from cosapp.systems.system import System  # Local import to avoid recursion
+    check_arg(system, 'system', System)
+
+    base_cls_attr = get_attributes(System)
+
+    def local_properties(system) -> set:
+        local_attr = get_attributes(system) - base_cls_attr
+        if not include_const:
+            local_attr -= set(system.properties)
+        return local_attr
+
+    def find_properties(system, head=None):
+        properties = set()
+        if head is None:
+            head = system
+        prefix = "" if system is head else f"{head.get_path_to_child(system)}."
+        properties |= set(f"{prefix}{attr}" for attr in local_properties(system))
+        for child in system.children.values():
+            properties |= find_properties(child, head)
+        return properties
+
+    return find_properties(system)

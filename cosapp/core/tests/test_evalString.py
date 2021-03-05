@@ -165,10 +165,13 @@ def test_EvalString_nonconstant_expr(eval_context, expression, expected):
     ("a = 2.0", SyntaxError),
     ("cos(pi", SyntaxError),
     ("1 + _", NameError),
+    ("1 / 0", ZeroDivisionError),
     ("foo.bar(1)", NameError),
     ("a + ['v', True]", TypeError),
     ("out.monkey", AttributeError),
     ("sub.out.q", AttributeError),
+    ("", ValueError),
+    ("  ", ValueError),
     ])
 def test_EvalString_erroneous_expr(eval_context, expression, exception):
     """Test erroneous expressions expected to raise an exception at instantiation"""
