@@ -1,7 +1,39 @@
 History
 =======
 
-0.11.3 (2020-21-16)
+0.11.4 (2021-03-08)
+---------------------
+
+New feature:
+
+* Recorders:
+  It is now possible to add evaluable expressions in recorders (MR `#27 <https://gitlab.com/cosapp/cosapp/-/merge_requests/27>`_):
+  
+  .. code:: python
+
+      point = PointMass('point')
+      driver = point.add_driver(RungeKutta(order=3, time_interval=(0, 2), dt=0.01))
+
+      recorder = driver.add_recorder(recorders.DataFrameRecorder(
+          includes=['x', 'a', 'norm(v)']),  # norm(v) will be recorded in DataFrame
+          period=0.1,
+      )
+
+Documentation
+
+* New tutorial on `SystemSurrogate` (MR `#15 <https://gitlab.com/cosapp/cosapp/-/merge_requests/15>`_).
+
+Bug fixes, minor improvements and code quality:
+
+* Initialization bug in time simulations (MR `#23 <https://gitlab.com/cosapp/cosapp/-/merge_requests/23>`_).
+* Bug in nonlinearity estimation in `NumericalSolver` (MR `#22 <https://gitlab.com/cosapp/cosapp/-/merge_requests/22>`_).
+* Do not raise `ArithmeticError` when an unknown is declared several time (MR `#18 <https://gitlab.com/cosapp/cosapp/-/merge_requests/18>`_).
+* Suppress deprecation warnings raised by `numpy` (MR `#20 <https://gitlab.com/cosapp/cosapp/-/merge_requests/20>`_ and `#24 <https://gitlab.com/cosapp/cosapp/-/merge_requests/24>`_).
+* Suppress undue warning raised by `numpy` in `NonLinearSolver` (MR `#19 <https://gitlab.com/cosapp/cosapp/-/merge_requests/19>`_).
+* Fix incompatibility between `pandas` and `xlrd` (MR `#21 <https://gitlab.com/cosapp/cosapp/-/merge_requests/21>`_).
+* Other code quality improvement (MR `#16 <https://gitlab.com/cosapp/cosapp/-/merge_requests/16>`_, `#17 <https://gitlab.com/cosapp/cosapp/-/merge_requests/17>`_, `#26 <https://gitlab.com/cosapp/cosapp/-/merge_requests/26>`_, `#27 <https://gitlab.com/cosapp/cosapp/-/merge_requests/27>`_).
+
+0.11.3 (2020-12-16)
 ---------------------
 
 New feature:
