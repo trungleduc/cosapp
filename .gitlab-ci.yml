@@ -129,11 +129,10 @@ build_doc:
   variables:
     JOB_DEP: $COSAPP_DEP jupyter_client "conda-forge::sphinx>=1.5" "nbsphinx>=0.6.0" sphinx-copybutton requests_ntlm pythonfmu
     BUILDDIR: _build
-    PYTHON_VERSION : "3.8"
+    PYTHON_VERSION : "3.9"
   script:
-    - conda create -y -n cosapp python=$PYTHON_VERSION 
+    - conda env create --name cosapp --file docs/environment.yml
     - conda activate cosapp
-    - conda install -y $JOB_DEP
     - pip install .
     # Build the documentation
     - cd docs/
@@ -181,7 +180,8 @@ deploy:
     - python -m pip install --upgrade pip
     - pip install $JOB_DEP
     - python setup.py sdist bdist_wheel
-    - twine upload dist/*.*
+    - twine upload dist/*.tar.gz
+    - twine upload dist/*.whl
   artifacts:
     paths:
       - dist/
