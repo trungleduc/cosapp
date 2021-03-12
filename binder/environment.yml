@@ -1,0 +1,8 @@
+  
+name: cosapp-environment
+channels:
+  - conda-forge
+dependencies:
+  - cosapp
+
+
