@@ -27,3 +27,10 @@ ensure the robustness of the design. CoSApp handles natively uncertain variables
 Have a look at the `introduction <https://cosapp.readthedocs.io/en/stable/tutorials/00-Introduction.html#>`_.
 
 This code is the property of Safran SA. It uses code coming from various open-source projects. See `LICENSE <https://gitlab.com/cosapp/cosapp/blob/master/LICENSE.rst>`_ file.
+
+Try it now!
+===========
+Run a Jupyter Lab instance with binder to try out CoSApp features through examples.
+
+.. image:: https://mybinder.org/badge_logo.svg
+ :target: https://mybinder.org/v2/gl/cosapp%2Fcosapp/master?urlpath=lab/tree/docs/tutorials
