@@ -5,9 +5,5 @@ channels:
   - cosapp
 dependencies:
   - cosapp
-  - cosapp_lab
-  - pyoccad
+  - pytest
   - plotly=4.14.3
-
-
-
