@@ -1,0 +1,13 @@
+  
+name: cosapp-environment
+channels:
+  - conda-forge
+  - cosapp
+dependencies:
+  - cosapp
+  - cosapp_lab
+  - pyoccad
+  - plotly=4.14.3
+
+
+
