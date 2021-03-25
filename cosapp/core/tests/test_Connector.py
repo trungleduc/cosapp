@@ -336,7 +336,7 @@ def test_Connector_remove_variables(ConnectorFactory, settings, removed, expecte
         ),
         # expected output:
         dict(conversions={'x': (1, 0), 'y': (1, 0)},
-            message="Connector source is dimensionless, but the sink has physical unit degC")
+            message="Connector source 'fake.p2.w' is dimensionless, but target 'fake.p1.y' has physical unit degC")
     ),
     (
         dict(
@@ -344,7 +344,7 @@ def test_Connector_remove_variables(ConnectorFactory, settings, removed, expecte
             port2 = XYPort('p1', PortType.IN, {'x': 1, 'y': 2}),
         ),
         dict(conversions={'v': (1, 0), 'w': (1, 0)},
-            message="Connector source has physical unit degC, but the sink is dimensionless")
+            message="Connector source 'fake.p1.y' has physical unit degC, but target 'fake.p2.w' is dimensionless")
     ),
     (
         dict(

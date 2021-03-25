@@ -229,7 +229,6 @@ class Connector:
         UnitError
             If unit conversion from source to sink is not possible
         """
-
         def update_one_connection(key: str) -> None:
             """Update the unit converter of the connected key.
 
@@ -239,19 +238,22 @@ class Connector:
                 Name of the connected variable for which the unit converter should be updated.
             """
             source_name = self.variable_mapping[key]
-            source_unit = self.source.get_details(source_name).unit
-            target_unit = self.sink.get_details(key).unit
+            origin = self.source.get_details(source_name)
+            target = self.sink.get_details(key)
             # Get the conversion between unit and check it is valid
-            converter = units.get_conversion(source_unit, target_unit)
+            converter = units.get_conversion(origin.unit, target.unit)
             if converter is None:
                 # Print a warning if one hand of the connexion is a valid unit but not the other one
-                if units.is_valid_units(source_unit):
+                message = lambda origin_status, target_status: (
+                    f"Connector source {origin.full_name!r} {origin_status}, but target {target.full_name!r} {target_status}."
+                )
+                if units.is_valid_units(origin.unit):
                     logger.warning(
-                        f"Connector source has physical unit {source_unit}, but the sink is dimensionless."
+                        message(f"has physical unit {origin.unit}", "is dimensionless")
                     )
-                elif units.is_valid_units(target_unit):
+                elif units.is_valid_units(target.unit):
                     logger.warning(
-                        f"Connector source is dimensionless, but the sink has physical unit {target_unit}."
+                        message("is dimensionless", f"has physical unit {target.unit}")
                     )
 
                 if is_numerical(self.sink[key]):
@@ -291,36 +293,25 @@ class Connector:
                 except TypeError:
                     setattr(sink, key, copy.deepcopy(target))
 
-    def to_dict(self) -> Dict[str, Union[str, Tuple[Dict[str, str], str]]]:
-        """Convert this connector to a dictionary.
+    def to_dict(self) -> Dict[str, Union[Tuple[str, str], Tuple[str, str, Dict[str, str]]]]:
+        """Convert connector to a single-key dictionary.
 
-        The dictionary returned has the following structure
-        Dict[str, Tuple[Dict[str, str], str]]::
+        The key is the connector name; the associated value
+        depends on the variable name mapping.
 
-           {
-             port_name: (variable mapping, source name)
-           }
+        If the mapping is complete, with identical names,
+        the name mapping is omitted, and the output
+        dictionary is formatted as:
+            {name: (target_name, source_name)}
 
-        Or if the mapping is complete with the same name::
-
-           {
-             port_name: source name
-           }
+        Otherwise, it is formatted as:
+            {name: (target_name, source_name, name_mapping)}
 
         Returns
         -------
         dict
             Dictionary representing this connector
         """
-        tmp = dict()
-
-        target = self.sink.contextual_name
-        if self.sink.owner is self.source.owner.parent:
-            target = self.sink.name
-        origin = self.source.contextual_name
-        if self.source.owner is self.sink.owner.parent:
-            origin = self.source.name
-
         # If the mapping is full and with the same nomenclature
         same_nomenclature = False
         if len(self._mapping) == len(self.source) == len(self.sink):
@@ -330,9 +321,32 @@ class Connector:
                     same_nomenclature = False
                     break
 
+        target, origin = self.port_names()
         if same_nomenclature:
-            tmp[self.name] = (target, origin)
+            info = (target, origin)
         else:
-            tmp[self.name] = (target, origin, self._mapping.copy())
+            info = (target, origin, self._mapping.copy())
 
-        return tmp
+        return {self.name: info}
+
+    def port_names(self) -> Tuple[str, str]:
+        """Returns source and sink contextual names as a str tuple.
+
+        Returns
+        -------
+        tuple
+            (source_name, sink_name) tuple
+        """
+        source, sink = self.source, self.sink
+
+        if source.owner is sink.owner.parent:
+            origin = source.name
+        else:
+            origin = source.contextual_name
+
+        if sink.owner is source.owner.parent:
+            target = sink.name
+        else:
+            target = sink.contextual_name
+        
+        return target, origin
