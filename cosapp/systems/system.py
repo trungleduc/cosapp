@@ -2484,7 +2484,7 @@ class System(Module, TimeObserver):
         dict_repr['$schema'] = "0-3-0/system.schema.json"  # Add self referencing to system JSON version - provision
         return json.dumps(dict_repr, indent=indent, sort_keys=sort_keys, cls=JSONEncoder)
 
-    def to_d3(self, show: bool = True, size: int = 300) -> "IPython.display.IFrame":
+    def to_d3(self, show=True, size=300) -> "IPython.display.IFrame":
         """Returns the hierarchical representation of this system in HTML format.
 
         Returns
@@ -2495,7 +2495,7 @@ class System(Module, TimeObserver):
         from cosapp.tools.views.d3js import to_d3
         return to_d3(self, show, size)
 
-    def to_html(self, filename: str, embeddable: bool = False) -> None:
+    def to_html(self, filename: str, embeddable=False) -> None:
         """Save the `System` as HTML using vis.JS library.
 
         Parameters
@@ -2505,8 +2505,9 @@ class System(Module, TimeObserver):
         embeddable: bool, optional
             Is the HTML to be embedded in an existing page? Default: False
         """
-        from cosapp.tools.views.visjs import to_visjs
-        to_visjs(self, filename, embeddable)
+        from cosapp.tools.views.visjs import VisJsRenderer
+        renderer = VisJsRenderer(self, embeddable)
+        renderer.to_file(filename)
 
     def _repr_html_(self) -> str:
         """Returns the representation of this system in HTML format.
@@ -2517,10 +2518,10 @@ class System(Module, TimeObserver):
             HTML formatted representation
         """
         # TODO unit tests
-        temp_name = f"{self.name}.html"
-        self.to_html(temp_name)
+        filename = f"{self.name}.html"
+        self.to_html(filename)
         from IPython.display import IFrame
-        return IFrame(temp_name, "810px", "650px")._repr_html_()
+        return IFrame(filename, "810px", "650px")._repr_html_()
 
     def _repr_markdown_(self) -> str:
         """Returns the representation of this system attributes in Markdown format.
