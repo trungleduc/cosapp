@@ -23,7 +23,7 @@ def test_RungeKutta_init_default():
     assert driver.dt is None
     assert driver.time_interval is None
     assert driver.order > 1
-    assert re.match("Explicit order-. Runge-Kutta time driver", driver.name)
+    assert driver.name == "RK"
 
 
 @pytest.mark.parametrize("settings, expected", [
@@ -78,21 +78,6 @@ def test_RungeKutta_order(order, expected):
             driver.order = order
 
 
-@pytest.mark.parametrize("order, name, expected", [
-    ((2, 3), "", dict(original="Explicit order-2 Runge-Kutta time driver", new="Explicit order-3 Runge-Kutta time driver")),
-    ((4, 2), "", dict(original="Explicit order-4 Runge-Kutta time driver", new="Explicit order-2 Runge-Kutta time driver")),
-    ((2, 3), "Runge-Kutta", dict(original="Runge-Kutta")),
-])
-def test_RungeKutta_name(order, name, expected):
-    """Check that default driver name changes with order"""
-    original_name = expected["original"]
-    
-    driver = RungeKutta(name=name, order=order[0])
-    assert driver.name == original_name
-    driver.order = order[1]
-    assert driver.name == expected.get("new", original_name)
-
-
 @pytest.mark.parametrize("settings, tol", [
     (dict(dt=1e-2, order=2, time_interval=[0, 1]), 1e-4),
     (dict(dt=1e-2, order=3, time_interval=[0, 1]), 1e-7),
@@ -136,7 +121,7 @@ def test_RungeKutta_twoTanks(two_tank_case, two_tank_solution, dt):
         }
     )
     
-    recorder = driver.add_recorder(recorders.DataFrameRecorder(includes='tank?.height'), period=0.1)
+    driver.add_recorder(recorders.DataFrameRecorder(includes='tank?.height'), period=0.1)
     assert driver.recording_period == 0.1
 
     system.run_drivers()
@@ -145,12 +130,12 @@ def test_RungeKutta_twoTanks(two_tank_case, two_tank_solution, dt):
     assert system.tank2.height > 1
     assert system.tank1.height == pytest.approx(system.tank2.height, rel=1e-3)
 
-    data = recorder.export_data()
+    data = driver.recorder.export_data()
     assert len(data) == 51
     solution = two_tank_solution(system, init)
     assert solution.characteristic_time == pytest.approx(0.5766040318109212)
     assert driver.dt < solution.characteristic_time
-    time = np.array(data['Reference'], dtype=float)
+    time = np.asarray(data['time'])
     error = 0
     for t, h1 in zip(time, data['tank1.height']):
         exact = solution(t)
@@ -185,7 +170,7 @@ def test_RungeKutta_scalar_ode(scalar_ode_case, case, settings, tol):
     """Integration of simple scalar ODEs of the kind df/dt = F(t)"""
     settings['time_interval'] = case.get('time_interval', [0, 5])
     ode, driver = scalar_ode_case(RungeKutta, **settings)
-    recorder = driver.add_recorder(recorders.DataFrameRecorder(includes='f'), period=0.01)
+    driver.add_recorder(recorders.DataFrameRecorder(includes='f'), period=0.01)
 
     driver.set_scenario(
         init = {'f': case['init']},
@@ -193,8 +178,8 @@ def test_RungeKutta_scalar_ode(scalar_ode_case, case, settings, tol):
     )
     ode.run_drivers()
     # Retrieve recorded data and check accuracy
-    data = recorder.export_data()
-    time = np.asarray(data['Reference'], dtype=float)
+    data = driver.recorder.export_data()
+    time = np.asarray(data['time'])
     result = np.asarray(data['f'], dtype=float)
     solution = case['solution']
     error = np.array([rel_error(num, solution(t)) for (t, num) in zip(time, result)])
@@ -222,7 +207,7 @@ def test_RungeKutta_scalar_ode_limited_dt(settings, expected):
     settings['record_dt'] = True
     ode = ExpOde('ode')
     driver = ode.add_driver(RungeKutta(**settings))
-    recorder = driver.add_recorder(recorders.DataFrameRecorder(includes=['y', 'z']), period=None)
+    driver.add_recorder(recorders.DataFrameRecorder(includes=['y', 'z']), period=None)
 
     driver.set_scenario(
         init = {'y': 1, 'z': 1},
@@ -230,8 +215,8 @@ def test_RungeKutta_scalar_ode_limited_dt(settings, expected):
     )
     ode.run_drivers()
     # Retrieve recorded data and check accuracy
-    data = recorder.export_data()
-    times = np.asarray(data['Reference'], dtype=float)
+    data = driver.recorder.export_data()
+    times = np.asarray(data['time'])
     ys = np.asarray(data['y'], dtype=float)
     zs = np.asarray(data['z'], dtype=float)
     # Check that y and y values are identical
@@ -253,7 +238,7 @@ def test_RungeKutta_scalar_ode_limited_dt(settings, expected):
 ])
 def test_RungeKutta_vector_ode(vector_ode_case, settings, tol):
     ode, driver = vector_ode_case(RungeKutta, **settings, time_interval=(0, 5))
-    recorder = driver.add_recorder(recorders.DataFrameRecorder(includes='v'), period=0.1)
+    driver.add_recorder(recorders.DataFrameRecorder(includes='v'), period=0.1)
 
     x0 = np.array([0.2, 1.2, -3.14])
     driver.set_scenario(
@@ -263,8 +248,8 @@ def test_RungeKutta_vector_ode(vector_ode_case, settings, tol):
 
     ode.run_drivers()
     # Retrieve recorded data and check accuracy
-    data = recorder.export_data()
-    time = np.asarray(data['Reference'], dtype=float)
+    data = driver.recorder.export_data()
+    time = np.asarray(data['time'])
     solution = lambda t, x0: np.array([t**2, np.log(1 + t), 1 - np.exp(-t)]) + x0
     result = np.asarray([value for value in data['v']])
     error = np.zeros_like(ode.v)
@@ -282,7 +267,7 @@ def test_RungeKutta_point_mass(point_mass_case, point_mass_solution, order, dt, 
     settings = dict(order=order, time_interval=(0, 2), dt=dt)
     system, driver = point_mass_case(RungeKutta, **settings)
 
-    recorder = driver.add_recorder(recorders.DataFrameRecorder(includes=['x', 'v', 'a']), period=0.1)
+    driver.add_recorder(recorders.DataFrameRecorder(includes=['x', 'v', 'a']), period=0.1)
 
     x0 = [-1., 0., 10]
     v0 = [8, 0, 9.5]
@@ -293,8 +278,8 @@ def test_RungeKutta_point_mass(point_mass_case, point_mass_solution, order, dt, 
 
     system.run_drivers()
 
-    data = recorder.export_data()
-    time = np.array(data['Reference'], dtype=float)
+    data = driver.recorder.export_data()
+    time = np.asarray(data['time'])
     solution = point_mass_solution(system, v0, x0)
     error = np.zeros(3)
     for t, x in zip(time, data['x']):
@@ -383,7 +368,7 @@ def test_RungeKutta_pointMassWithPorts(pointMassWithPorts_case, point_mass_solut
     system, driver = pointMassWithPorts_case(RungeKutta, **settings)
 
     includes = ['pos*.x', 'kin*.v', 'a']
-    recorder = driver.add_recorder(recorders.DataFrameRecorder(includes=includes), period=0.1)
+    driver.add_recorder(recorders.DataFrameRecorder(includes=includes), period=0.1)
 
     x0 = [-1., 0., 10]
     v0 = [8, 0, 9.5]
@@ -394,8 +379,8 @@ def test_RungeKutta_pointMassWithPorts(pointMassWithPorts_case, point_mass_solut
 
     system.run_drivers()
 
-    data = recorder.export_data()
-    time = np.asarray(data['Reference'], dtype=float)
+    data = driver.recorder.export_data()
+    time = np.asarray(data['time'])
     traj = np.asarray(data['position.x'])
     solution = point_mass_solution(system, v0, x0)
     error = np.zeros(3)
@@ -427,7 +412,7 @@ def test_RungeKutta_pointMassWithPorts_pulling(point_mass_solution, order, dt, t
     system, driver = make_case(RungeKutta, **settings)
 
     includes = ['*.x', '*.v', '*.a']
-    recorder = driver.add_recorder(recorders.DataFrameRecorder(includes=includes), period=0.1)
+    driver.add_recorder(recorders.DataFrameRecorder(includes=includes), period=0.1)
 
     x0 = [-1., 0., 10]
     v0 = [8, 0, 9.5]
@@ -438,8 +423,8 @@ def test_RungeKutta_pointMassWithPorts_pulling(point_mass_solution, order, dt, t
 
     system.run_drivers()
 
-    data = recorder.export_data()
-    time = np.asarray(data['Reference'], dtype=float)
+    data = driver.recorder.export_data()
+    time = np.asarray(data['time'])
     traj = np.asarray(data['pos.x'])
     solution = point_mass_solution(system.point, v0, x0)
     error = np.zeros(3)
@@ -478,12 +463,12 @@ def test_RungeKutta_rate(rate_case_1, dt, tol):
 
     driver.set_scenario(values={'k': 1.9, 'U': 'exp(k * t)'})
 
-    recorder = driver.add_recorder(recorders.DataFrameRecorder(includes=['dU_dt']), period=0.1)
+    driver.add_recorder(recorders.DataFrameRecorder(includes=['dU_dt']), period=0.1)
 
     system.run_drivers()
 
-    data = recorder.export_data()
-    time = np.asarray(data['Reference'], dtype=float)
+    data = driver.recorder.export_data()
+    time = np.asarray(data['time'])
     result = np.asarray(data['dU_dt'], dtype=float)
     solution = lambda t: system.k * np.exp(system.k * t)
     error = 0
@@ -515,7 +500,7 @@ def test_RungeKutta_oscillator(oscillator_case, oscillator_solution, parameters,
         values = values,
     )
 
-    recorder = driver.add_recorder(recorders.DataFrameRecorder(includes=['x', 'v', 'a']), period=0.05)
+    driver.add_recorder(recorders.DataFrameRecorder(includes=['x', 'v', 'a']), period=0.05)
     system.run_drivers()
 
     if auto_dt:  # time step deduced from system
@@ -524,8 +509,8 @@ def test_RungeKutta_oscillator(oscillator_case, oscillator_solution, parameters,
         assert driver.dt == settings['dt']
 
     solution = oscillator_solution(system, x0, v0)
-    data = recorder.export_data()
-    time = np.array(data['Reference'], dtype=float)
+    data = driver.recorder.export_data()
+    time = np.asarray(data['time'])
     x = np.asarray(data['x'])
     error = 0
     for i, t in enumerate(time):
@@ -555,7 +540,7 @@ def test_RungeKutta_gaussian(gaussian_ode, parameters, settings, expected):
     ode = gaussian_ode
     driver = ode.make_case(RungeKutta, values=parameters.copy(), init=dict(f=f0), **settings)
 
-    recorder = driver.add_recorder(
+    driver.add_recorder(
         # recorders.DSVRecorder(f'Gaussian_RK{driver.order}.csv', includes='f'),
         recorders.DataFrameRecorder(includes='f'),
         period=period
@@ -563,8 +548,8 @@ def test_RungeKutta_gaussian(gaussian_ode, parameters, settings, expected):
 
     ode.run_drivers()
     # Retrieve recorded data and check accuracy
-    data = recorder.export_data()
-    time = np.asarray(data['Reference'], dtype=float)
+    data = driver.recorder.export_data()
+    time = np.asarray(data['time'])
     result = np.asarray(data['f'], dtype=float)
     t0 = driver.time_interval[0]
     exact = ode.solution(time, init=(t0, f0))

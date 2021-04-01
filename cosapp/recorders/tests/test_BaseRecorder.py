@@ -166,7 +166,7 @@ def test_BaseRecorder_excludes():
         recorder.excludes = 'dummy'
 
 
-def test_BaseRecorder_get_variables_list(AllTypesSystem):
+def test_BaseRecorder_field_names(AllTypesSystem):
     recorder = BaseRecorder()
     assert recorder.field_names() == list()
 
@@ -199,7 +199,7 @@ def test_BaseRecorder_get_variables_list(AllTypesSystem):
     (['sub.*', '*d', 'a'], ['a', 'd', 'sub.in_.x', 'sub.a', 'sub.b', 'sub.c', 'sub.e', 'sub.d', 'sub.out.x']),
     ('banana', []),
 ])
-def test_BaseRecorder_get_variables_list__includes(AllTypesSystem, includes, expected):
+def test_BaseRecorder_field_names__includes(AllTypesSystem, includes, expected):
     s = AllTypesSystem('sub')
     t = AllTypesSystem('top')
     t.add_child(s)
@@ -236,7 +236,7 @@ def test_BaseRecorder_get_variables_list__includes(AllTypesSystem, includes, exp
                 'sub.in_.x', 'sub.a', 'sub.b', 'sub.c', 'sub.e',
                 'sub.d', 'sub.out.x']),
 ])
-def test_BaseRecorder_get_variables_list__excludes(AllTypesSystem, excludes, expected):
+def test_BaseRecorder_field_names__excludes(AllTypesSystem, excludes, expected):
     s = AllTypesSystem('sub')
     t = AllTypesSystem('top')
     t.add_child(s)
@@ -265,7 +265,7 @@ def test_BaseRecorder_get_variables_list__excludes(AllTypesSystem, excludes, exp
     (dict(includes=['sub.a +']), []),    # expressions with syntax errors should be filtered out
     (dict(includes=['2 * sub.?']), []),  # can't combine mathematical expression and search pattern
 ])
-def test_BaseRecorder_get_variables_list_expressions(AllTypesSystem, SystemWithProps, ctor, expected):
+def test_BaseRecorder_field_names_expressions(AllTypesSystem, SystemWithProps, ctor, expected):
     """Test inclusion and exclusion patterns involving properties and evaluable expressions"""
     top = AllTypesSystem('top')
     sub = SystemWithProps('sub')
@@ -275,6 +275,58 @@ def test_BaseRecorder_get_variables_list_expressions(AllTypesSystem, SystemWithP
     assert recorder.watched_object is top
 
     assert set(recorder.field_names()) == set(expected)
+    # Test `in` operator:
+    assert all(field in recorder for field in expected)
+
+
+@pytest.mark.parametrize("info, expected", [
+    (dict(includes=None, excludes=None), list('bcde')),
+    (dict(includes='?'), list('bcde')),
+    (dict(includes='a'), list('bcde')),
+    (dict(includes=['x', 'y'], excludes='b'), list('cde')),
+    (
+        dict(includes='sub.*', excludes='*_ratio'),
+        list('bcde') + ['sub.a', 'sub.in_.x', 'sub.in_.y', 'sub.out.x', 'sub.out.y'],
+    ),
+    (
+        dict(includes='*_ratio'),
+        list('bcde') + ['sub.in_.xy_ratio', 'sub.out.xy_ratio', 'sub.bogus_ratio'],
+    ),
+    (
+        dict(includes=['*_ratio'], excludes=['*bogus*']),
+        list('bcde') + ['sub.in_.xy_ratio', 'sub.out.xy_ratio'],
+    ),
+    (dict(includes=['sub.a']), list('bcde') + ['sub.a']),
+    (dict(includes=['sub.?'], excludes='sub.a'), list('bcde')),
+    (dict(includes=['sub.?'], excludes='sub.b'), list('bcde') + ['sub.a']),
+    (dict(includes=['a[-1]']), list('bcde') + ['a[-1]']),
+    (dict(includes=['a[-1]'], excludes='?'), ['a[-1]']),
+    (dict(includes=['a[-1]', '2 * a + sub.out.y'], excludes='?'), ['a[-1]', '2 * a + sub.out.y']),
+])
+def test_BaseRecorder_extend(AllTypesSystem, SystemWithProps, info, expected):
+    """Test factory `extend`"""
+    top = AllTypesSystem('top')
+    sub = SystemWithProps('sub')
+    top.add_child(sub)
+
+    recorder = BaseRecorder(includes='?', excludes='a')
+    recorder.watched_object = top
+    assert recorder.watched_object is top
+    assert set(recorder.field_names()) == set('bcde')
+
+    # Create extended recorder
+    newrec = BaseRecorder.extend(recorder, **info)
+    assert isinstance(newrec, BaseRecorder)
+    assert newrec.watched_object is top
+    assert set(newrec.field_names()) == set(expected)
+    for attr in (
+        'section',
+        'precision',
+        'hold',
+        '_raw_output',
+        '_numerical_only',
+    ):
+        assert getattr(newrec, attr) == getattr(recorder, attr), f"attribute {attr!r}"
 
 
 def test_BaseRecorder__get_units(AllTypesSystem):

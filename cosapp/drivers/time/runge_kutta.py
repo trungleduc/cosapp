@@ -11,9 +11,9 @@ class RungeKutta(ExplicitTimeDriver):
     https://en.wikipedia.org/wiki/List_of_Runge%E2%80%93Kutta_methods
     """
 
-    __slots__ = ('__fracs', '__coefs', '__buffer', '__init_name')
+    __slots__ = ('__fracs', '__coefs', '__buffer')
 
-    def __init__(self, name="", owner: "Optional[cosapp.systems.System]" = None, order: int = 2, **options):
+    def __init__(self, name="RK", owner: "Optional[cosapp.systems.System]" = None, order=2, **options):
         """Initialization of the driver
 
         Parameters
@@ -26,21 +26,12 @@ class RungeKutta(ExplicitTimeDriver):
             Optional keywords arguments; may contain time step and interval, with keys `dt` and `time_interval`
         """
         check_arg(name, "name", str)
-        super().__init__("temp", owner, **options)
-        self.__init_name = self._name_check(name) if len(name) > 0 else name
+        name = self._name_check(name)
+        super().__init__(name, owner, **options)
         self.__fracs = None
         self.__coefs = None
         self.__buffer = None
         self.order = order
-
-    @property
-    def algo_info(self) -> str:
-        """str: Short description of driver's algorithm"""
-        return f"Explicit order-{self.order} Runge-Kutta time driver"
-
-    @property
-    def name(self) -> str:
-        return self.__init_name or self.algo_info
 
     @property
     def order(self) -> int:

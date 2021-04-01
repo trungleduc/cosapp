@@ -8,7 +8,7 @@ from typing import Union, List, Optional, NamedTuple, Any
 from cosapp.core.signal import Signal
 from cosapp.core.eval_str import EvalString
 from cosapp.utils.helpers import is_numerical, check_arg
-from cosapp.utils.find_variables import make_wishlist, find_variables
+from cosapp.utils.find_variables import SearchPattern, make_wishlist, find_variables
 
 SpecialColumns = NamedTuple(
     "SpecialColumns",
@@ -65,9 +65,9 @@ class BaseRecorder(abc.ABC):
     paused = False  # type: bool
 
     def __init__(self,
-        includes: Union[str, List[str]] = "*",
-        excludes: Optional[Union[str, List[str]]] = None,
-        # metadata: Optional[Union[str, List[str]]] = None,  # TODO Fred
+        includes: SearchPattern = "*",
+        excludes: Optional[SearchPattern] = None,
+        # metadata: Optional[SearchPattern] = None,  # TODO?
         numerical_only = False,
         section = "",
         precision = 9,
@@ -99,6 +99,31 @@ class BaseRecorder(abc.ABC):
             name="cosapp.recorders.recorder.BaseRecorder.state_recorded",
         )
         self.cleared = Signal(name="cosapp.recorders.recorder.BaseRecorder.cleared")
+
+    @classmethod
+    def extend(cls, recorder, includes: SearchPattern=[], excludes: SearchPattern=[]) -> "BaseRecorder":
+        """
+        Factory returning a new recorder, with similar attributes as
+        `recorder`, but extended `includes` and `excludes` fields.
+
+        Parameters
+        ----------
+        includes : str, list of str, or None, optional
+            Variables patterns extending `recorder` inclusion patterns; default `[]` (i.e. no change).
+        excludes : str, list of str, or None, optional
+            Variables patterns extending `recorder` exclusion patterns; default `[]` (i.e. no change).
+        """
+        new = cls(
+            recorder.includes + make_wishlist(includes, "includes"),
+            recorder.excludes + make_wishlist(excludes, "excludes"),
+            recorder._numerical_only,
+            recorder.section,
+            recorder.precision,
+            recorder.hold,
+            recorder._raw_output,
+        )
+        new.watched_object = recorder.watched_object
+        return new
 
     @property
     def watched_object(self) -> "Optional[cosapp.core.module.Module]":
@@ -204,6 +229,9 @@ class BaseRecorder(abc.ABC):
         if self.__variables is None and self.watched_object is not None:
             self.__update_varlist()
         return self.__variables or list()
+
+    def __contains__(self, field: str) -> bool:
+        return field in self.field_names()
 
     def __update_varlist(self) -> None:
         """Update the list of fields to be recorded"""
