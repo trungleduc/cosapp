@@ -1,7 +1,7 @@
 import pytest
 
 import numpy as np
-from cosapp.drivers import EulerExplicit, NonLinearSolver, RunSingleCase
+from cosapp.drivers import EulerExplicit, NonLinearSolver
 import cosapp.recorders as recorders
 
 
@@ -10,7 +10,7 @@ def test_EulerExplicit_init_default():
     assert driver.owner is None
     assert driver.dt is None
     assert driver.time_interval is None
-    assert driver.name == "Explicit Euler time driver"
+    assert driver.name == "Euler"
 
 
 def test_EulerExplicit_ode_solve_1(ode_case_1):
@@ -56,8 +56,8 @@ def test_EulerExplicit_twoTanks(two_tank_case, two_tank_solution, dt):
     assert driver.scenario.context is system
     assert driver.scenario.name == 'run'
     
-    recorder = driver.add_recorder(recorders.DataFrameRecorder(includes='tank?.height'), period=0.1)
-    # recorder = driver.add_recorder(recorders.DSVRecorder('twoTanks_Euler.csv', includes=['tank?.height', ]), period=0.1)
+    driver.add_recorder(recorders.DataFrameRecorder(includes='tank?.height'), period=0.1)
+    # driver.add_recorder(recorders.DSVRecorder('twoTanks_Euler.csv', includes=['tank?.height', ]), period=0.1)
     assert driver.recording_period == 0.1
 
     system.run_drivers()
@@ -66,11 +66,11 @@ def test_EulerExplicit_twoTanks(two_tank_case, two_tank_solution, dt):
     assert system.tank2.height > 1
     assert system.tank1.height == pytest.approx(system.tank2.height, rel=1e-3)
 
-    df = recorder.export_data()
+    df = driver.recorder.export_data()
     assert len(df) == 51
     solution = two_tank_solution(system, init)
     assert solution.characteristic_time == pytest.approx(0.5766040318109212)
-    time = np.array(df['Reference'], dtype=float)
+    time = np.asarray(df['time'])
     error = 0
     for t, h1 in zip(time, df['tank1.height']):
         exact = solution(t)

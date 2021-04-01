@@ -113,10 +113,10 @@ def test_DataframeRecorder_record_properties(SystemWithProps):
     s.run_drivers()
     df = driver.recorder.export_data()
     headers = ["Section", "Reference", "Status", "Error code"]
-    headers.extend(['a', 'in_.xy_ratio', 'out.xy_ratio', 'bogus_ratio'])
+    headers.extend(['time', 'a', 'in_.xy_ratio', 'out.xy_ratio', 'bogus_ratio'])
     assert set(df.columns) == set(headers)
     
-    time = np.asarray(df['Reference'], dtype=float)
+    time = np.asarray(df['time'])
     out_xy_ratio = np.asarray(df['out.xy_ratio'])
     assert out_xy_ratio == pytest.approx(np.cos(np.pi * time) / (2 + np.sin(2 * np.pi * time)))
     assert np.asarray(df['a']) == pytest.approx(0.1 * out_xy_ratio)
@@ -140,10 +140,10 @@ def test_DataframeRecorder_record_expressions(SystemWithProps):
     s.run_drivers()
     df = driver.recorder.export_data()
     headers = ["Section", "Reference", "Status", "Error code"]
-    headers.extend(['a', '-2 * a + out.y', 'sin(pi * t)', 'bogus_ratio'])
+    headers.extend(['time', 'a', '-2 * a + out.y', 'sin(pi * t)', 'bogus_ratio'])
     assert set(df.columns) == set(headers)
     
-    time = np.asarray(df['Reference'], dtype=float)
+    time = np.asarray(df['time'])
     exact = {
         'a': lambda t: 0.1 * np.cos(np.pi * t) / (2 + np.sin(2 * np.pi * t)),
         'out.y': lambda t: 2 + np.sin(2 * np.pi * t),

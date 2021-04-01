@@ -7,6 +7,8 @@ from cosapp.ports.enum import PortType, CommonPorts
 from cosapp.ports.port import ExtensiblePort, Port
 from cosapp.utils.helpers import check_arg
 
+SearchPattern = Union[str, List[str]]
+
 
 def natural_varname(name: str) -> str:
     """
@@ -20,7 +22,7 @@ def natural_varname(name: str) -> str:
     return name
 
 
-def make_wishlist(wishlist: Union[str, List[str]], name="wishlist") -> List[str]:
+def make_wishlist(wishlist: SearchPattern, name="wishlist") -> List[str]:
     ok = True
     if isinstance(wishlist, str):
         wishlist = [wishlist]
@@ -34,7 +36,7 @@ def make_wishlist(wishlist: Union[str, List[str]], name="wishlist") -> List[str]
         raise TypeError(
             f"{name!r} must be a string, or a sequence of strings; got {wishlist}."
         )
-    # Filter out 'inwards' and 'outwards' in wishlist
+    # Filter out 'inwards.' and 'outwards.' in wishlist
     filtered = set(natural_varname(name) for name in wishlist)
     return list(filtered)
 
@@ -49,9 +51,9 @@ def get_attributes(obj) -> Set[str]:
 
 def find_variables(
     watched_object: "cosapp.systems.System",
-    includes: List[str],
-    excludes: List[str],
-    advanced_filter: Callable[[Any], bool] = lambda x: True,
+    includes: SearchPattern,
+    excludes: SearchPattern,
+    advanced_filter: Callable[[Any], bool] = lambda any: True,
     inputs: bool = True,
     outputs: bool = True,
     include_const: bool = False,
@@ -64,9 +66,9 @@ def find_variables(
     ----------
     watched_object : cosapp.systems.System
         Object that owns the variables searched
-    includes : list of str
+    includes : str or List[str]
         Variables matching these patterns will be included
-    excludes : list of str
+    excludes : str or List[str]
         Variables matching these patterns will be excluded
     advanced_filter : Callable[[Any], bool]
         Function taking the variable as input and returning an acceptance criteria (True if variable is valid)
@@ -162,7 +164,7 @@ def find_variables(
     return sorted(result)
 
 
-def find_system_properties(system, include_const=False):
+def find_system_properties(system, include_const=False) -> Set[str]:
     """
     Returns system properties, defined either as class properties
     (with @property decorator), or with `System.add_property`.

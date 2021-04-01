@@ -259,6 +259,7 @@ def test_ExplicitTimeDriver_ode_add_scenario(ode_case_1):
     assert driver.scenario.name == "final"
     assert driver.scenario.context is ode
 
+
 @pytest.mark.parametrize("driver_settings, period, expected", [
     (dict(), None, dict(period=None)),
     (dict(), 0.1, dict(period=0.1)),
@@ -275,6 +276,7 @@ def test_ExplicitTimeDriver_ode_add_scenario(ode_case_1):
 def test_ExplicitTimeDriver_add_recorder(two_tank_case, driver_settings, period, expected):
     """Test `add_recorder` method before driver execution"""
     system, driver = two_tank_case(ExplicitTimeDriver, **driver_settings)
+    assert driver.recorder is None
 
     rec_options = dict(includes='tank?.height')
     error = expected.get('error', None)
@@ -282,6 +284,9 @@ def test_ExplicitTimeDriver_add_recorder(two_tank_case, driver_settings, period,
     if error is None:
         driver.add_recorder(recorders.DataFrameRecorder(**rec_options), period)
         assert driver.recording_period == expected['period']
+        assert driver.recorder is not None
+        assert 'time' in driver.recorder.field_names()
+
     else:
         pattern = expected.get('match', None)
         with pytest.raises(error, match=pattern):
@@ -363,7 +368,7 @@ def test_ExplicitTimeDriver_rate(rate_case_1, dt, tol):
     solution = lambda t: np.exp(system.k * t) * system.k
 
     data = recorder.export_data()
-    time = np.asarray(data['Reference'], dtype=float)
+    time = np.asarray(data['time'])
     solution = lambda t: system.k * np.exp(system.k * t)
     error = 0
     for t, dU_dt in zip(time, data['dU_dt']):
@@ -428,7 +433,7 @@ def test_ExplicitTimeDriver_recorded_times(two_tank_case, options, recorder_peri
     assert period == expected['period']
     t0, tn = solver.time_interval
     data = recorder.export_data()
-    time = np.asarray(data['Reference'], dtype=float)
+    time = np.asarray(data['time'])
     if period is not None:
         assert time == pytest.approx(np.arange(t0, tn + period / 2, period), abs=1e-12)
 

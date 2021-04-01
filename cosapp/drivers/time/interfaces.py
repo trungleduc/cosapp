@@ -131,6 +131,9 @@ class ExplicitTimeDriver(Driver):
 
     def add_recorder(self, recorder: BaseRecorder, period: Number = None) -> BaseRecorder:
         """Add an internal data recorder storing the time evolution of values of interest"""
+        if 'time' not in recorder:
+            cls = type(recorder)
+            recorder = cls.extend(recorder, includes='time')
         super().add_recorder(recorder)
         if period is not None:
             self.recording_period = period
@@ -175,7 +178,7 @@ class ExplicitTimeDriver(Driver):
             eps = min(1e-8, dt / 100)
             must_record = lambda t, t_record: abs(t - t_record) < eps
             record = lambda : self._recorder.record_state(
-                round(self.time, 15), self.status, self.error_code)
+                float(f"{self.time:.14e}"), self.status, self.error_code)
             t_record = numpy.inf if record_all else t0
 
         recorded_dt = []
