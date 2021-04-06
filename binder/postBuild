@@ -1,3 +1,4 @@
+pip install .
 jupyter labextension install jupyterlab-plotly@4.14.3 --no-build
 jupyter labextension install plotlywidget@4.14.3 --no-build
 jupyter lab build
