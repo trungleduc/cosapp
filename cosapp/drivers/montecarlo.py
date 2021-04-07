@@ -161,9 +161,10 @@ class MonteCarlo(AbstractSetOfCases):
         for child in self.children.values():
             if isinstance(child, AbstractSolver):
                 self.solver = child
+                break
 
         if self.solver:
-            self.reference_case_solution = child.save_solution()
+            self.reference_case_solution = self.solver.save_solution()
 
         self._build_cases()
 
