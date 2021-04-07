@@ -1,6 +1,6 @@
 import logging
 from collections import OrderedDict
-from typing import Any, Iterable, List, Optional, Set, Union
+from typing import Any, Iterable, List, Optional, Union
 
 import numpy
 
@@ -152,23 +152,21 @@ class MonteCarlo(AbstractSetOfCases):
 
     def _precompute(self):
         """Save reference and build cases."""
-        n_input = len(self.random_variables)
-        n_output = len(self.responses)
-
         self.run_children()
 
         self.solver = None
         for child in self.children.values():
             if isinstance(child, AbstractSolver):
                 self.solver = child
-
-        if self.solver:
-            self.reference_case_solution = child.save_solution()
+                self.reference_case_solution = child.save_solution()
+                break
 
         self._build_cases()
 
         if self.linear:  # precompute linear system
-            if len(self.responses) == 0:
+            n_input = len(self.random_variables)
+            n_output = len(self.responses)
+            if n_output == 0:
                 raise ValueError("You need to define response variables to use MonteCarlo linear mode.")
             self.X0 = numpy.zeros(n_input)
             self.Y0 = numpy.zeros(n_output)
