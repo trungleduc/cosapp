@@ -20,6 +20,7 @@ from cosapp.tests.library.systems import (
     Multiply4,
     MultiplySystem2,
 )
+from cosapp.utils.testing import no_exception
 
 
 class SimpleCentered(System):
@@ -530,3 +531,30 @@ def test_MonteCarlo_multipts_iterative_non_linear_linearized():
     # Check that the design variables are impacted
     assert run1[("mult2.K1", "std")] != pytest.approx(0.0, abs=1e-3)
     assert run2[("mult2.K1", "std")] != pytest.approx(0.0, abs=1e-3)
+
+
+def test_MonteCarlo_embedded_solver():
+    """
+    Test case exposing bug reported in https://gitlab.com/cosapp/cosapp/-/issues/44
+
+    Same as `test_MonteCarlo_run_driver_perturbation_combined`,
+    with a NonLinearSolver child added before the RunOnce child.
+
+    Note:
+        Values are not tested, as the only behaviour tested is
+        the absence of exception during `run_drivers`.
+    """
+    s = MultiplySystem2("s")
+    s.run_once()
+    s.mult1.p_in.get_details("x").distribution = Normal(best=0.1, worst=-0.1)
+    s.mult2.p_in.get_details("x").distribution = Normal(best=0.2, worst=-0.2)
+
+    mc = s.add_driver(MonteCarlo("mc"))
+    mc.add_child(NonLinearSolver('solver'))
+    mc.add_child(RunOnce("runonce"))  # last mc child is *not* a solver
+
+    mc.add_random_variable({"mult1.p_in.x", "mult2.p_in.x"})
+    mc.draws = 10
+
+    with no_exception():
+        s.run_drivers()
