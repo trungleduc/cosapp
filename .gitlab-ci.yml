@@ -5,15 +5,15 @@ stages:
   - deploy
 
 variables:
-  COSAPP_DEP:  jsonschema ipython jinja2 watchdog openpyxl ipykernel nbconvert ipywidgets plotly pytest pyfmi scipy pandas packaging typing pythonfmu~=0.6.0
+  COSAPP_DEP: jsonschema ipython jinja2 watchdog openpyxl ipykernel nbconvert ipywidgets plotly pytest pyfmi scipy pandas packaging typing pythonfmu~=0.6.0
   USER: "cosapp_test"
 
 # Test script for all OS
 .test_script:
   script:  
-    - conda create -y -n cosapp python=$PYTHON_VERSION 
+    - mamba create -y -n cosapp python=$PYTHON_VERSION
     - conda activate cosapp
-    - conda install -y $COSAPP_DEP
+    - mamba install -y $COSAPP_DEP
     - pip install . --trusted-host=files.pythonhosted.org
     - python -m pytest 
   
@@ -46,6 +46,8 @@ variables:
     - conda init bash
     - source $HOME/.bashrc
     - mkdir -p $HOME/.cosapp.d
+    - conda activate
+    - conda install -y mamba -c conda-forge
 
 # default linux job parameters
 .linux_env:
@@ -61,13 +63,6 @@ variables:
     - ".linux_common_env"
   stage: deploy
 
-linux_py36:
-    extends: 
-     - ".linux_env"
-     - ".test_script"
-    variables:
-      PYTHON_VERSION: "3.6" 
-
 linux_py37:
     extends: 
      - ".linux_env"
@@ -76,14 +71,21 @@ linux_py37:
       PYTHON_VERSION: "3.7" 
 
 linux_py38:
+    extends: 
+     - ".linux_env"
+     - ".test_script"
+    variables:
+      PYTHON_VERSION: "3.8" 
+
+linux_py39:
   extends: 
     - ".linux_env"
   variables:
-    PYTHON_VERSION: "3.8" 
+    PYTHON_VERSION: "3.9" 
   script:
-    - conda create -y -n cosapp python=$PYTHON_VERSION 
+    - mamba create -y -n cosapp python=$PYTHON_VERSION
     - conda activate cosapp
-    - conda install -y $COSAPP_DEP coverage
+    - mamba install -y $COSAPP_DEP coverage
     - pip install .
     - coverage erase
     - coverage run -m pytest -ra
@@ -99,13 +101,6 @@ linux_py38:
    - tags
    - merge_requests
 
-# windows_py36:
-#     extends: 
-#      - ".windows_env"
-#      - ".test_script"
-#     variables:
-#       PYTHON_VERSION: "3.6"
-
 # windows_py37:
 #     extends: 
 #      - ".windows_env"
@@ -120,6 +115,13 @@ linux_py38:
 #     variables:
 #       PYTHON_VERSION: "3.8"
 
+# windows_py39:
+#     extends: 
+#      - ".windows_env"
+#      - ".test_script"
+#     variables:
+#       PYTHON_VERSION: "3.9"
+
 
 #Deployment jobs
 build_doc:
@@ -131,7 +133,7 @@ build_doc:
     BUILDDIR: _build
     PYTHON_VERSION : "3.9"
   script:
-    - conda env create --name cosapp --file docs/environment.yml
+    - mamba env create --name cosapp --file docs/environment.yml
     - conda activate cosapp
     - pip install .
     # Build the documentation
@@ -153,11 +155,11 @@ build_pkg:
     - ".linux_env"
   variables:
     JOB_DEP: conda-build conda-verify
-    PYTHON_VERSION : "3.8"
+    PYTHON_VERSION : "3.9"
   script:
-    - conda create -y -n cosapp python=$PYTHON_VERSION 
+    - mamba create -y -n cosapp python=$PYTHON_VERSION
     - conda activate cosapp
-    - conda install -y $JOB_DEP
+    - mamba install -y $JOB_DEP
     - python setup.py sdist bdist_wheel
     - conda build -c conda-forge --no-test --output-folder ./dist conda.recipe
   artifacts:
