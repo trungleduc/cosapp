@@ -85,7 +85,8 @@ def check_arg(
     arg: Any,
     argname: str,
     dtype: Union[Type, Iterable[Type]],
-    value_ok: Callable[[Any], bool] = None
+    value_ok: Callable[[Any], bool] = None,
+    stack_shift: int = 0,
 ):
     """
     Utility function for argument type and value validation.
@@ -103,10 +104,10 @@ def check_arg(
     >>> check_arg(-0.12, 'my_var', float, value_ok = lambda x: x > 0)
     raises ValueError, as first argument is not strictly positive
     """
-
     def get_caller():
+        level = 3 + max(0, stack_shift)
         stack = inspect.stack()
-        return stack[3] if len(stack) > 3 else stack[-1]
+        return stack[level] if len(stack) > level else stack[-1]
 
     def get_context(caller):
         try:

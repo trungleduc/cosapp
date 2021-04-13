@@ -13,9 +13,31 @@ from cosapp.utils.testing import assert_keys
 
 fake = System('fake')
 
+class PortWithNoOwner(Port):
+    def setup(self):
+        self.add_variable('a')
+        self.add_variable('x', unit='m')
+
 class APort(Port):
     def setup(self):
         self.add_variable('a')
+        self.owner = fake
+
+class AbcPort(Port):
+    def setup(self):
+        self.add_variable('a', 1.0, unit='mm')
+        self.add_variable('b', 1.0, unit='K')
+        self.add_variable('c', 1.0)
+        self.owner = fake
+
+class AbcdPort(Port):
+    """Compatible with AbcPort, with extra variable 'd'."""
+    def setup(self):
+        self.add_variable('a', 1.0, unit='inch')
+        self.add_variable('b', 1.0, unit='degF')
+        self.add_variable('c', 1.0)
+        self.add_variable('d', 1.0)
+        self.owner = fake
 
 class XPort(Port):
     def setup(self):
@@ -158,7 +180,7 @@ def ConnectorFactory():
             port2 = P('p2', PortType.OUT, {'v': 2, 'w': 4}),
             mapping = lambda p1, p2: ['v', 'foo'],
         ),
-        dict(error=ConnectorError, match=r"Source port .* has no variable 'foo'")
+        dict(error=ConnectorError, match="variable 'foo' does not exist in port P")
     ),
     (
         dict(
@@ -166,7 +188,15 @@ def ConnectorFactory():
             port2 = P('p2', PortType.OUT, {'v': 2, 'w': 4}),
             mapping = lambda p1, p2: {'x': 'v', 'foo': 'w'},
         ),
-        dict(error=ConnectorError, match=r"Sink port .* has no variable 'foo'")
+        dict(error=ConnectorError, match="variable 'foo' does not exist in port XYPort")
+    ),
+    (
+        dict(
+            port1 = AbcPort('p1', PortType.IN),
+            port2 = AbcdPort('p2', PortType.OUT),
+            mapping = lambda p1, p2: None,
+        ),
+        dict(mapping={k: k for k in list('abc')}, conversions={'a': (25.4, 0), 'b': (5/9, 459.67), 'c': (1, 0)})
     ),
     (
         dict(
@@ -184,9 +214,34 @@ def ConnectorFactory():
         ),
         dict(error=UnitError, match="Unit m is not compatible with kg")
     ),
+    (
+        dict(
+            port1 = XPort('p1', PortType.IN),
+            port2 = PortWithNoOwner('p2', PortType.OUT),
+            mapping = lambda p1, p2: {'x': 'a'},
+        ),
+        dict(error=ConnectorError, match="Source owner is undefined")
+    ),
+    (
+        dict(
+            port1 = PortWithNoOwner('p1', PortType.OUT),
+            port2 = XPort('p2', PortType.IN),
+            mapping = lambda p1, p2: {'a': 'x'},
+        ),
+        dict(error=ConnectorError, match="Sink owner is undefined")
+    ),
+    (
+        dict(port1={'p1': PortType.OUT}, port2=XPort('p2', PortType.IN)),
+        dict(error=TypeError, match="sink")
+    ),
+    (
+        dict(port2={'p2': PortType.IN}, port1=XPort('p1', PortType.OUT)),
+        dict(error=TypeError, match="source")
+    ),
 ])
 def test_Connector__init__(ConnectorFactory, settings, expected):
     error = expected.get('error', None)
+
     if error is None:
         c = ConnectorFactory(**settings)
         assert c.name == settings.get('name', 'p2_to_p1')
@@ -198,11 +253,19 @@ def test_Connector__init__(ConnectorFactory, settings, expected):
             { var: (1, 0) for var in expected['mapping']})
         assert_keys(c._unit_conversions, *conversions.keys())
         for var, values in conversions.items():
-            assert c._unit_conversions[var] == pytest.approx(values, rel=1e-15)
+            assert c._unit_conversions[var] == pytest.approx(values, rel=1e-15), f"var = {var!r}"
+
     else:
         pattern = expected.get('match', None)
         with pytest.raises(error, match=pattern):
             c = ConnectorFactory(**settings)
+
+
+def test_Connector_empty():
+    port1 = XYZPort('p1', PortType.IN)
+    port2 = AbcPort('p2', PortType.OUT)
+    c = Connector('p2_p1', port1, port2)
+    assert c.variable_mapping == dict()
 
 
 @pytest.mark.parametrize("ptype", PortType)
@@ -226,10 +289,10 @@ def test_Connector_name():
 @pytest.mark.parametrize("port, expected", [
     (XPort("p3", PortType.IN, {'x': 1}), dict(error=None)),
     (XPort("p3", PortType.OUT, {'x': 1}), dict(error=None)),
-    (APort("p3", PortType.IN, {'a': 2}), dict(error=AttributeError, match="variable x does not exist in port APort")),
-    (APort("p3", PortType.OUT, {'a': 2}), dict(error=AttributeError, match="variable x does not exist in port APort")),
-    (XYPort("p3", PortType.IN, {'x': 1, 'y': 2}), dict(error=TypeError, match="not the same variables")),
-    (XYPort("p3", PortType.OUT, {'x': 1, 'y': 2}), dict(error=TypeError, match="not the same variables")),
+    (APort("p3", PortType.IN, {'a': 2}), dict(error=ConnectorError, match="variable 'x' does not exist in port APort")),
+    (APort("p3", PortType.OUT, {'a': 2}), dict(error=ConnectorError, match="variable 'x' does not exist in port APort")),
+    (XYPort("p3", PortType.IN, {'x': 1, 'y': 2}), dict(error=None)),
+    (XYPort("p3", PortType.OUT, {'x': 1, 'y': 2}), dict(error=None)),
     ("p3", dict(error=TypeError, match="should be ExtensiblePort")),
     ({'x': 1}, dict(error=TypeError, match="should be ExtensiblePort")),
 ])
@@ -251,6 +314,81 @@ def test_Connector_source_sink(attr, port, expected):
         pattern = expected.get("match", None)
         with pytest.raises(error, match=pattern):
             setattr(c, attr, port)
+
+
+@pytest.mark.parametrize("attr, port, expected", [
+    ('source', AbcPort('p3', PortType.IN), dict(error=None)),
+    ('source', AbcdPort('p3', PortType.IN), dict(error=None)),  # source has extra variables `c` and `d` - OK
+    ('source', PortWithNoOwner('p3', PortType.IN), dict(error=ConnectorError, match="owner is undefined")),
+    ('source', XPort('p3', PortType.IN), dict(error=ConnectorError, match="variable 'a' does not exist in port XPort")),
+    ('source', APort('p3', PortType.IN), dict(error=ConnectorError, match="variable 'b' does not exist in port APort")),
+    ('sink', XYPort('p3', PortType.IN), dict(error=None)),
+    ('sink', XYZPort('p3', PortType.IN), dict(error=None)),  # sink has extra variable `z` - OK
+    ('sink', PortWithNoOwner('p3', PortType.IN), dict(error=ConnectorError, match="owner is undefined")),
+    ('sink', XPort('p3', PortType.IN), dict(error=ConnectorError, match="variable 'y' does not exist in port XPort")),
+    ('sink', APort('p3', PortType.IN), dict(error=ConnectorError, match="variable 'x' does not exist in port APort")),
+])
+def test_Connector_source_sink_mapping(attr, port, expected):
+    """
+    Test 'source' and 'sink' setters in partial connector AbcdPort -> XYPort,
+    with mapping {'x': 'a', 'y': 'b'}
+    """
+    p1 = XYPort('p1', PortType.IN, {'x': -2, 'y': 0})
+    p2 = AbcPort('p2', PortType.OUT, {'a': 1, 'b': 100, 'c': 0})
+    c = Connector('p2_to_p1', p1, p2, {'x': 'a', 'y': 'b'})
+    assert c.source is p2
+    assert c.sink is p1
+
+    error = expected.get("error", None)
+
+    if error is None:
+        setattr(c, attr, port)
+        assert getattr(c, attr) is port
+
+    else:
+        pattern = expected.get("match", None)
+        with pytest.raises(error, match=pattern):
+            setattr(c, attr, port)
+
+
+def test_Connector_source_unit():
+    """Check that changing 'source' updates the conversion table"""
+    p1 = XYPort('p1', PortType.IN, {'x': -2, 'y': 0})
+    p2 = AbcPort('p2', PortType.OUT, {'a': 1, 'b': 100, 'c': 0})
+    c = Connector('p2_to_p1', p1, p2, {'x': 'a', 'y': 'b'})
+    assert c.source is p2
+    assert c.sink is p1
+    conversion = c._unit_conversions
+    assert_keys(conversion, 'x', 'y')
+    assert conversion['x'] == pytest.approx((1e-3, 0), rel=1e-14)
+    assert conversion['y'] == pytest.approx((1, -273.15), rel=1e-14)
+
+    # Change source
+    c.source = port = AbcdPort('port', PortType.IN)
+
+    assert c.source is port
+    assert conversion['x'] == pytest.approx((0.0254, 0), rel=1e-14)
+    assert conversion['y'] == pytest.approx((5/9, -32), rel=1e-14)
+
+
+def test_Connector_sink_unit():
+    """Check that changing 'sink' updates the conversion table"""
+    p1 = XYPort('p1', PortType.IN, {'x': -2, 'y': 0})
+    p2 = AbcPort('p2', PortType.OUT, {'a': 1, 'b': 100, 'c': 0})
+    c = Connector('p2_to_p1', p1, p2, {'x': 'a', 'y': 'b'})
+    assert c.source is p2
+    assert c.sink is p1
+    conversion = c._unit_conversions
+    assert_keys(conversion, 'x', 'y')
+    assert conversion['x'] == pytest.approx((1e-3, 0), rel=1e-14)
+    assert conversion['y'] == pytest.approx((1, -273.15), rel=1e-14)
+
+    # Change source
+    c.sink = port = XYImperialPort('port', PortType.IN)
+
+    assert c.sink is port
+    assert conversion['x'] == pytest.approx((1/304.8, 0), rel=1e-14)
+    assert conversion['y'] == pytest.approx((1.8, -2298.35 / 9), rel=1e-14)
 
 
 @pytest.mark.parametrize("settings, expected", [
