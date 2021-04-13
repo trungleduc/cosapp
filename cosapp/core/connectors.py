@@ -4,7 +4,7 @@ Classes connecting `Port` of foreign `System` to transfer variable values.
 import copy
 import logging
 import weakref
-from typing import Callable, Dict, List, Optional, Tuple, Union
+from typing import Callable, Dict, Iterable, List, Optional, Tuple, Union
 
 from cosapp.ports import units
 from cosapp.ports.port import ExtensiblePort, PortType
@@ -80,43 +80,27 @@ class Connector:
         ConnectorError
             If the connection between the `source` and the `sink` is not possible to establish.
         """
+        self.__check_port(sink, 'sink')
+        self.__check_port(source, 'source')
         self._name = name  # type: str
-
-        if not source.owner:
-            raise ConnectorError("Source owner is undefined.")
-
-        if not sink.owner:
-            raise ConnectorError("Sink owner is undefined.")
 
         if source is sink:
             raise ConnectorError("Source and sink cannot be the same object.")
 
-        self._source = weakref.ref(source)  # type: ExtensiblePort
-        self._sink = weakref.ref(sink)  # type: ExtensiblePort
-
         # Generate mapping dictionary
         if mapping is None:
-            mapping = dict([(v, v) for v in sink if v in source])
+            mapping = dict((v, v) for v in sink if v in source)
         elif isinstance(mapping, str):
-            mapping = dict([(mapping, mapping)])
+            mapping = {mapping: mapping}
         elif not isinstance(mapping, dict):
             mapping = dict(zip(mapping, mapping))
 
         self._mapping = mapping  # type: Dict[str, str]
-
-        # Validate the connection based on variable attributes
-        for target, origin in self._mapping.items():
-            if origin not in self.source:
-                raise ConnectorError(
-                    f"Source port {self.source} has no variable '{origin}'"
-                )
-            if target not in self.sink:
-                raise ConnectorError(
-                    f"Sink port {self.source} has no variable '{target}'"
-                )
+        self._source = self.__get_port(source, sink=False, check=False)  # type: weakref.ReferenceType[ExtensiblePort]
+        self._sink = self.__get_port(sink, sink=True, check=False)  # type: weakref.ReferenceType[ExtensiblePort]
 
         self._unit_conversions = dict(
-            [(name, None) for name in self._mapping]
+            (name, None) for name in self._mapping
         )  # type: Dict[str, Optional[Tuple[float, float]]]
 
         self.update_unit_conversion()
@@ -140,20 +124,8 @@ class Connector:
 
     @source.setter
     def source(self, port: ExtensiblePort) -> None:
-        check_arg(port, 'source', ExtensiblePort)
-
-        if len(self.source) != len(port):
-            raise TypeError(
-                f"New port {port} has not the same variables as the source {self.source}."
-            )
-
-        for variable in self.source:
-            if variable not in port:
-                raise AttributeError(
-                    f"Source variable {variable} does not exist in port {port}."
-                )
-
-        self._source = weakref.ref(port)
+        self._source = self.__get_port(port, sink=False, check=True)
+        self.update_unit_conversion()
 
     @property
     def sink(self) -> ExtensiblePort:
@@ -162,25 +134,46 @@ class Connector:
 
     @sink.setter
     def sink(self, port: ExtensiblePort) -> None:
-        check_arg(port, 'sink', ExtensiblePort)
+        self._sink = self.__get_port(port, sink=True, check=True)
+        self.update_unit_conversion()
 
-        if len(self.sink) != len(port):
-            raise TypeError(
-                f"New port {port} has not the same variables as the sink {self.sink}."
-            )
+    def __get_port(self, port: ExtensiblePort, sink: bool, check=True) -> "weakref.ref[ExtensiblePort]":
+        """Returns a weakref to `port`, after compatibility check with internal mapping."""
+        if sink:
+            name = 'sink'
+            variables = self.sink_variables()
+        else:
+            name = 'source'
+            variables = self.source_variables()
 
-        for variable in self.sink:
+        if check:
+            self.__check_port(port, name)
+
+        for variable in variables:
             if variable not in port:
-                raise AttributeError(
-                    f"Sink variable {variable} does not exist in port {port}."
+                raise ConnectorError(
+                    f"{name.title()} variable {variable!r} does not exist in port {port}."
                 )
+        
+        return weakref.ref(port)
 
-        self._sink = weakref.ref(port)
+    @staticmethod
+    def __check_port(port: ExtensiblePort, name: str) -> None:
+        check_arg(port, name, ExtensiblePort, stack_shift=1)
+
+        if not port.owner:
+            raise ConnectorError(f"{name.title()} owner is undefined.")
 
     @property
     def variable_mapping(self) -> Dict[str, str]:
         """Dict[str, str] : Variable name mapping between the sink (key) and the source (value)."""
         return self._mapping
+
+    def sink_variables(self) -> Iterable:
+        return self._mapping.keys()
+
+    def source_variables(self) -> Iterable:
+        return self._mapping.values()
 
     def set_perturbation(self, name: str, value: float) -> None:
         """Add a perturbation on a connector.
@@ -193,7 +186,7 @@ class Connector:
             Perturbation value
         """
         if self._unit_conversions[name] is None:
-            ValueError(f"'{name}' does not have a numerical type.")
+            ValueError(f"{name!r} does not have a numerical type.")
 
         s, a = self._unit_conversions[name]
         self._unit_conversions[name] = s, a + value
@@ -229,6 +222,9 @@ class Connector:
         UnitError
             If unit conversion from source to sink is not possible
         """
+        source, sink = self.source, self.sink
+        mapping = self.variable_mapping
+
         def update_one_connection(key: str) -> None:
             """Update the unit converter of the connected key.
 
@@ -237,9 +233,9 @@ class Connector:
             key : str
                 Name of the connected variable for which the unit converter should be updated.
             """
-            source_name = self.variable_mapping[key]
-            origin = self.source.get_details(source_name)
-            target = self.sink.get_details(key)
+            source_name = mapping[key]
+            origin = source.get_details(source_name)
+            target = sink.get_details(key)
             # Get the conversion between unit and check it is valid
             converter = units.get_conversion(origin.unit, target.unit)
             if converter is None:
@@ -256,7 +252,7 @@ class Connector:
                         message("is dimensionless", f"has physical unit {target.unit}")
                     )
 
-                if is_numerical(self.sink[key]):
+                if is_numerical(sink[key]):
                     converter = (1.0, 0.0)
 
             self._unit_conversions[key] = converter
