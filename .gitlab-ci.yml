@@ -63,13 +63,6 @@ variables:
     - ".linux_common_env"
   stage: deploy
 
-linux_py36:
-    extends: 
-     - ".linux_env"
-     - ".test_script"
-    variables:
-      PYTHON_VERSION: "3.6" 
-
 linux_py37:
     extends: 
      - ".linux_env"
@@ -78,10 +71,17 @@ linux_py37:
       PYTHON_VERSION: "3.7" 
 
 linux_py38:
+    extends: 
+     - ".linux_env"
+     - ".test_script"
+    variables:
+      PYTHON_VERSION: "3.8" 
+
+linux_py39:
   extends: 
     - ".linux_env"
   variables:
-    PYTHON_VERSION: "3.8" 
+    PYTHON_VERSION: "3.9" 
   script:
     - mamba create -y -n cosapp python=$PYTHON_VERSION
     - conda activate cosapp
@@ -101,13 +101,6 @@ linux_py38:
    - tags
    - merge_requests
 
-# windows_py36:
-#     extends: 
-#      - ".windows_env"
-#      - ".test_script"
-#     variables:
-#       PYTHON_VERSION: "3.6"
-
 # windows_py37:
 #     extends: 
 #      - ".windows_env"
@@ -121,6 +114,13 @@ linux_py38:
 #      - ".test_script"
 #     variables:
 #       PYTHON_VERSION: "3.8"
+
+# windows_py39:
+#     extends: 
+#      - ".windows_env"
+#      - ".test_script"
+#     variables:
+#       PYTHON_VERSION: "3.9"
 
 
 #Deployment jobs
@@ -155,7 +155,7 @@ build_pkg:
     - ".linux_env"
   variables:
     JOB_DEP: conda-build conda-verify
-    PYTHON_VERSION : "3.8"
+    PYTHON_VERSION : "3.9"
   script:
     - mamba create -y -n cosapp python=$PYTHON_VERSION
     - conda activate cosapp
