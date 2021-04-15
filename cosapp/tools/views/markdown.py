@@ -16,9 +16,7 @@ def port_to_md(port: ExtensiblePort) -> str:
     str
         Markdown formatted representation
     """
-    return "\n".join([
-        f"- {value!r}" for value in port.get_details().values()
-    ])
+    return "\n".join(f"- {value!r}" for value in port.get_details().values())
 
 
 def system_to_md(system: System) -> str:
@@ -40,16 +38,16 @@ def system_to_md(system: System) -> str:
 
     if len(system.children) > 0:
         doc.extend(["", "### Child components", ""])
-        for name, child in system.children.items():
-            doc.append(f"- `{name}`: {type(child).__name__}")
+        doc.extend(f"- `{name}`: {type(child).__name__}"
+            for name, child in system.children.items())
 
     if hasattr(system, 'residues') and len(system.residues) > 0:
         doc.extend(["", "### Residues", ""])
-        doc.append(", ".join([f"`{key}`" for key in system.residues]))
+        doc.append(", ".join(f"`{key}`" for key in system.residues))
 
     common_inputs = [System.INWARDS]
     common_outputs = [System.OUTWARDS]
-    has_ports = len(system.inputs) + len(system.outputs) > len(common_inputs) + len(common_outputs)
+    has_ports = len(system.inputs) > len(common_inputs) or len(system.outputs) > len(common_outputs)
 
     if has_ports:
         doc.extend(["", "### Ports", ""])
@@ -60,7 +58,7 @@ def system_to_md(system: System) -> str:
             doc.extend(["", f"#### {header.title()}", ""])
             for name, port in filter(lambda item: item[0] not in common_ports, port_dict.items()):
                 doc.append(f"- `{name}`:")
-                doc.extend([f"  {line}" for line in port_to_md(port).splitlines()])
+                doc.extend(f"  {line}" for line in port_to_md(port).splitlines())
 
         dump_port_data("inputs", system.inputs, common_inputs)
         dump_port_data("outputs", system.outputs, common_outputs)
