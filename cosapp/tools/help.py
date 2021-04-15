@@ -1,22 +1,20 @@
 """
 Tool to print the description of a CoSApp object.
 """
-from typing import Union, Any
+from typing import Union
 
 from cosapp.core.module import Module
 from cosapp.ports.enum import PortType
 from cosapp.ports.port import ExtensiblePort, Port
-from cosapp.drivers.driver import Driver
 from cosapp.systems.system import System
 
 
 class DocDisplay:
-    """Helper class to print nicely information about CoSApp classes.
-    """
+    """Helper class to print nicely information about CoSApp classes."""
 
-    # TODO unit tests + improve to have more common code with cosapp.notebook.display_doc & get_list_out/inputs
+    # TODO unit tests
 
-    def __init__(self, object_type: Union[type, Any]):
+    def __init__(self, obj: Union[type, ExtensiblePort, Module]):
         """DocDisplay constructor.
 
         Documentation can only be built for object of type :py:class:`~cosapp.drivers.driver.Driver`,
@@ -24,22 +22,20 @@ class DocDisplay:
 
         Parameters
         ----------
-        object_type : Any
-            Class type of the object to display.
+        obj: ExtensiblePort or Module class, or instance thereof
+            Class type of the object to display, or instance of such class.
         """
-        if not (
-            isinstance(object_type, (ExtensiblePort, Module))
-            or issubclass(object_type, (ExtensiblePort, Module))
-        ):
+        supported = (ExtensiblePort, Module)
+        if not (isinstance(obj, supported) or issubclass(obj, supported)):
             raise TypeError("Only Driver, Port and System are supported for display.")
 
-        if isinstance(object_type, type):  # Instantiate an object
-            if issubclass(object_type, Port):
-                object_type = object_type("dummy", PortType.OUT)
+        if isinstance(obj, type):  # Instantiate an object
+            if issubclass(obj, Port):
+                obj = obj("dummy", PortType.OUT)
             else:
-                object_type = object_type("dummy")
+                obj = obj("dummy")
 
-        self._obj = object_type
+        self._obj = obj
 
     def __repr__(self) -> str:
         """Returns the documentation of the class given to this constructor
@@ -61,47 +57,44 @@ class DocDisplay:
         str
             Documentation markdown formatted string.
         """
-        object_type = type(self._obj)
+        obj = self._obj
+        obj_type = type(self._obj)
 
         indent = 0
-        stripped_doc = [f"Class: {object_type.__name__}", ""]
-        if object_type.__doc__:
-            stripped_doc.extend(["  Documentation", ""])
-            for l in object_type.__doc__.split("\n"):
+        doc = [f"## Class: {obj_type.__name__}", ""]
+        if obj_type.__doc__:
+            doc.extend(["### Documentation", ""])
+            for line in obj_type.__doc__.split("\n"):
                 if indent == 0:
-                    stripped_l = l.lstrip()
-                    if len(stripped_l):
-                        indent = len(l) - len(stripped_l)
+                    stripped = line.lstrip()
+                    if len(stripped) > 0:
+                        indent = len(line) - len(stripped)
                 else:
-                    stripped_l = l[indent:]
-                stripped_doc.append(stripped_l)
+                    stripped = line[indent:]
+                doc.append(stripped)
 
-        if isinstance(self._obj, Module):
-            if isinstance(self._obj, System):
-                self._obj.run_once()
-            stripped_doc.append(self._obj._repr_markdown_())
+        if isinstance(obj, Module):
+            if isinstance(obj, System):
+                obj.run_once()
+            doc.append(obj._repr_markdown_())
 
-        elif isinstance(self._obj, Port):
-            if len(self._obj):
-                stripped_doc.extend(["", "  Variables", ""])
-                stripped_doc.append(self._obj._repr_markdown_())
+        elif isinstance(obj, Port):
+            if len(obj) > 0:
+                doc.extend(["", "###  Variables", ""])
+                doc.append(obj._repr_markdown_())
 
-        return "\n".join(stripped_doc)
+        return "\n".join(doc)
 
-    @staticmethod
-    def display_doc(object_type: Union[type, Any]) -> "DocDisplay":
+    @classmethod
+    def display_doc(cls, obj: Union[type, ExtensiblePort, Port]) -> "DocDisplay":
         """Display information for `Driver`, `System` or `Port` in a Jupyter notebook.
 
         Parameters
         ----------
-        object_type : Any
+        obj: Any
             Object of interest
         """
-        return DocDisplay(object_type)
+        return cls(obj)
 
 
-try:
-    # If cosapp.notebook package is available use it
-    from cosapp.notebook import display_doc
-except ImportError:
-    display_doc = DocDisplay.display_doc
+display_doc = DocDisplay.display_doc
