@@ -6,7 +6,6 @@ from typing import Union
 from cosapp.core.module import Module
 from cosapp.ports.enum import PortType
 from cosapp.ports.port import ExtensiblePort, Port
-from cosapp.systems.system import System
 
 
 class DocDisplay:
@@ -74,8 +73,6 @@ class DocDisplay:
                 doc.append(stripped)
 
         if isinstance(obj, Module):
-            if isinstance(obj, System):
-                obj.run_once()
             doc.append(obj._repr_markdown_())
 
         elif isinstance(obj, Port):
