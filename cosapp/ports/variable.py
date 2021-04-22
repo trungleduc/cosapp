@@ -344,7 +344,7 @@ class Variable:
         return self.name
 
     def __repr__(self) -> str:
-        msg = {"name": self.name, "unit": f" {self.unit}" if self.unit else ""}
+        msg = {"name":f"**{self.name}**" , "unit": f" {self.unit}" if self.unit else ""}
         value = self.value
         try:
             msg["value"] = f"{value:.5g}"
@@ -372,9 +372,9 @@ class Variable:
         else:
             msg["max_valid"] = f" &#10206; {max_valid:.5g}"
         if self.description:
-            msg["description"] = f" # {self.description}"
+            msg["description"] = f" | {self.description}"
         else:
-            msg["description"] = ""
+            msg["description"] = " |"
 
         scope_format = {
             Scope.PRIVATE: " &#128274;&#128274; ",

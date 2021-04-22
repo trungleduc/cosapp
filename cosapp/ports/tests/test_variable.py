@@ -525,7 +525,7 @@ def test_Variable___str__(port):
 
 @pytest.mark.parametrize("data, expected", [
     (
-        get_args(), "var1 &#128274;&#128274; : 2"
+        get_args(), "**var1** &#128274;&#128274; : 2 |"
     ),(
         get_args (unit="kg",
         dtype=float,
@@ -536,7 +536,7 @@ def test_Variable___str__(port):
         desc="I'm a dummy donkey.",
         scope=Scope.PROTECTED,
         distribution=Uniform(1.0, 4.0, 0.2)),
-        "var1 &#128274; : 2 kg;  &#10647; -4 &#10205; -2 &#10205;  value  &#10206; 0 &#10206; 1 &#10648;  # I'm a dummy donkey."
+        "**var1** &#128274; : 2 kg;  &#10647; -4 &#10205; -2 &#10205;  value  &#10206; 0 &#10206; 1 &#10648;  | I'm a dummy donkey."
     )
 ])
 def test_Variable___repr__(port, data, expected):
