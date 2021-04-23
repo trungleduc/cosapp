@@ -5,7 +5,7 @@ import logging
 import re
 import numpy as np
 
-import cosapp.recorders as recorders
+from cosapp.recorders import DataFrameRecorder
 from cosapp.drivers.time import interfaces
 from cosapp.drivers.time.interfaces import ExplicitTimeDriver
 from cosapp.systems import System
@@ -282,7 +282,7 @@ def test_ExplicitTimeDriver_add_recorder(two_tank_case, driver_settings, period,
     error = expected.get('error', None)
 
     if error is None:
-        driver.add_recorder(recorders.DataFrameRecorder(**rec_options), period)
+        driver.add_recorder(DataFrameRecorder(**rec_options), period)
         assert driver.recording_period == expected['period']
         assert driver.recorder is not None
         assert 'time' in driver.recorder.field_names()
@@ -290,7 +290,7 @@ def test_ExplicitTimeDriver_add_recorder(two_tank_case, driver_settings, period,
     else:
         pattern = expected.get('match', None)
         with pytest.raises(error, match=pattern):
-            driver.add_recorder(recorders.DataFrameRecorder(**rec_options), period)
+            driver.add_recorder(DataFrameRecorder(**rec_options), period)
 
 
 @pytest.mark.parametrize("driver_settings, period, expected", [
@@ -308,7 +308,7 @@ def test_ExplicitTimeDriver_recorder(ode_case_1, caplog, driver_settings, period
     """Test recorder behaviour during driver execution, assuming `add_recorder` is correct"""
     system, driver = ode_case_1(ExplicitTimeDriver, **driver_settings)
 
-    driver.add_recorder(recorders.DataFrameRecorder(includes='*'), period)
+    driver.add_recorder(DataFrameRecorder(includes='*'), period)
     driver.set_scenario(init={'f': 0}, values={'tau': 0.5})
 
     error = expected.get('error', None)
@@ -361,20 +361,15 @@ def test_ExplicitTimeDriver_rate(rate_case_1, dt, tol):
     driver.set_scenario(
         values = {'k': 1.5, 'U': 'exp(k * t)'}
     )
-
-    recorder = driver.add_recorder(recorders.DataFrameRecorder(includes=['dU_dt']), period=0.1)
+    driver.add_recorder(DataFrameRecorder(includes=['dU_dt']), period=0.1)
 
     system.run_drivers()
-    solution = lambda t: np.exp(system.k * t) * system.k
 
-    data = recorder.export_data()
+    data = driver.recorder.export_data()
     time = np.asarray(data['time'])
-    solution = lambda t: system.k * np.exp(system.k * t)
-    error = 0
-    for t, dU_dt in zip(time, data['dU_dt']):
-        exact = solution(t)
-        error = max(error, rel_error(dU_dt, exact))
-    assert error < tol
+    exact = system.k * np.exp(system.k * time)
+    error = rel_error(data['dU_dt'], exact)
+    assert error.max() < tol
 
 
 def test_ExplicitTimeDriver_rate_no_initial_value():
@@ -402,11 +397,11 @@ def test_ExplicitTimeDriver_rate_no_initial_value():
         }
     )
 
-    recorder = driver.add_recorder(recorders.DataFrameRecorder(includes=['dU_dt']))
+    driver.add_recorder(DataFrameRecorder(includes=['dU_dt']))
 
     system.run_drivers()
 
-    data = recorder.export_data()
+    data = driver.recorder.export_data()
     result = np.asarray(data['dU_dt'], dtype=float)
     assert system.k == -3.6
     assert result[0] == system.k
@@ -423,16 +418,16 @@ def test_ExplicitTimeDriver_rate_no_initial_value():
 def test_ExplicitTimeDriver_recorded_times(two_tank_case, options, recorder_period, expected):
     driver_settings = dict(dt=1e-1, time_interval=[0, 1])
     driver_settings.update(options)
-    system, solver = two_tank_case(ExplicitTimeDriver, **driver_settings)
+    system, driver = two_tank_case(ExplicitTimeDriver, **driver_settings)
 
-    recorder = solver.add_recorder(
-        recorders.DataFrameRecorder(includes='tank1.height'), recorder_period)
+    driver.add_recorder(DataFrameRecorder(includes='tank1.height'), recorder_period)
 
     system.run_drivers()
-    period = solver.recording_period
+
+    period = driver.recording_period
     assert period == expected['period']
-    t0, tn = solver.time_interval
-    data = recorder.export_data()
+    t0, tn = driver.time_interval
+    data = driver.recorder.export_data()
     time = np.asarray(data['time'])
     if period is not None:
         assert time == pytest.approx(np.arange(t0, tn + period / 2, period), abs=1e-12)
