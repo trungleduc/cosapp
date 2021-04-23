@@ -365,30 +365,36 @@ class Variable:
             self.valid_range if self.valid_range is not None else (None, None)
         )
         min_limit, max_limit = self.limits if self.limits is not None else (None, None)
+        
+        left_bracket = "&#10647;"
+        left_arrow = "&#10205;"
+        right_arrow = "&#10206;"
+        right_bracket = "&#10648;"
+        lock_icon = "&#128274;"
         if min_limit is None or numpy.all(numpy.isinf(min_limit)):
             msg["min_limit"] = ""
         else:
-            msg["min_limit"] = f" &#10647; {min_limit:.5g} &#10205; "
+            msg["min_limit"] = f" {left_bracket} {min_limit:.5g} {left_arrow} "
         if max_limit is None or numpy.all(numpy.isinf(max_limit)):
             msg["max_limit"] = ""
         else:
-            msg["max_limit"] = f" &#10206; {max_limit:.5g} &#10648; "
+            msg["max_limit"] = f" {right_arrow} {max_limit:.5g} {right_bracket} "
         if min_valid is None or min_limit == min_valid or numpy.all(numpy.isinf(min_valid)):
             msg["min_valid"] = ""
         else:
-            msg["min_valid"] = f"{min_valid:.5g} &#10205; "
+            msg["min_valid"] = f"{min_valid:.5g} {left_arrow} "
         if max_valid is None or max_limit == max_valid or numpy.all(numpy.isinf(max_valid)):
             msg["max_valid"] = ""
         else:
-            msg["max_valid"] = f" &#10206; {max_valid:.5g}"
+            msg["max_valid"] = f" {right_arrow} {max_valid:.5g}"
         if self.description:
             msg["description"] = f" | {self.description}"
         else:
             msg["description"] = " |"
 
         scope_format = {
-            Scope.PRIVATE: " &#128274;&#128274; ",
-            Scope.PROTECTED: " &#128274; ",
+            Scope.PRIVATE: f" {lock_icon*2} ",
+            Scope.PROTECTED: f" {lock_icon} ",
             Scope.PUBLIC: "",
         }
         msg["scope"] = scope_format[self.scope]
