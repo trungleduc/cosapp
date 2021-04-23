@@ -54,7 +54,7 @@ variables:
   extends: 
     - ".linux_common_env"
   tags: 
-    - cosapp_docker
+    - cosapp_runner
   stage: test
 
 # Deployment env (runs on public runner)
