@@ -17,7 +17,7 @@ def port_to_md(port: ExtensiblePort) -> str:
     str
         Markdown formatted representation
     """
-    return "\n".join(f" {value!r}" for value in port.get_details().values())
+    return "\n".join(f" {value._repr_markdown_()}" for value in port.get_details().values())
 
 
 def port_to_md_table(port: ExtensiblePort) -> List[str]:
@@ -35,7 +35,7 @@ def port_to_md_table(port: ExtensiblePort) -> List[str]:
     """
     doc = ["<div style='margin-left:25px'>"]
     doc.extend(["", "<!-- -->|<!-- --> ", "---|---"])
-    doc.extend(f"  {value!r}" for value in port.get_details().values())
+    doc.extend(f"  {value._repr_markdown_()}" for value in port.get_details().values())
     doc.extend(["</div>", ""])
     return doc
 

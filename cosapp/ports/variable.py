@@ -344,6 +344,16 @@ class Variable:
         return self.name
 
     def __repr__(self) -> str:
+        return self._repr_markdown_()
+        
+    def _repr_markdown_(self) -> str:
+        """Returns the representation of this variable in Markdown format.
+
+        Returns
+        -------
+        str
+            Markdown formatted representation
+        """
         msg = {"name":f"**{self.name}**" , "unit": f" {self.unit}" if self.unit else ""}
         value = self.value
         try:
@@ -394,8 +404,9 @@ class Variable:
             "{name}{scope}: {value!s}{unit}"
             "{separator}{min_limit}{min_valid}{range}{max_valid}{max_limit}"
             "{description}".format(**msg)
-        )
-
+        )  
+        
+        
     def __json__(self) -> Dict[str, Any]:
         """JSONable dictionary representing a variable.
         
