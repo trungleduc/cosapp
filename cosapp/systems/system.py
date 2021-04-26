@@ -1157,33 +1157,33 @@ class System(Module, TimeObserver):
         Dict[str, Validity] or Validity
             (Dictionary of) the variable(s) value validity
         """
+        def plain_check(name) -> Union[Dict[str, Validity], Validity]:
+            """Internal version with no attribute check"""
+            obj = getattr(self, name)
+            if isinstance(obj, (System, ExtensiblePort)):
+                return obj.check()
+            else:
+                ref = self.name2variable[name]
+                return ref.mapping.check(ref.key)
+
         # TODO unit tests
         if name is None:
-            validity = dict()
-
             def get_variables(object_name: str) -> bool:
                 if isinstance(self[object_name], (System, ExtensiblePort)):
                     return False
                 elif "." in object_name:
-                    owner_name, _ = object_name.rsplit(".", maxsplit=1)
-                    owner = self[owner_name]
-                    return isinstance(
-                        owner, ExtensiblePort
-                    )  # Only valid owner is a port
+                    owner_name = object_name.rsplit(".", maxsplit=1)[0]
+                    return isinstance(self[owner_name], ExtensiblePort)
                 else:  # Shortcut to inwards or outwards => not taken
                     return False
 
-            for obj_name in filter(get_variables, self.name2variable):
-                validity[obj_name] = self.check(obj_name)
-            return validity
+            return {
+                name: plain_check(name)
+                for name in filter(get_variables, self.name2variable)
+            }
 
         elif name in self:
-            obj = self[name]
-            if isinstance(obj, (System or ExtensiblePort)):
-                return obj.check()
-            else:
-                reference = self.name2variable[name]
-                return reference.mapping.check(reference.key)
+            return plain_check(name)
 
         else:
             raise AttributeError(f"Variable {name} does not exist in System {self.name}")

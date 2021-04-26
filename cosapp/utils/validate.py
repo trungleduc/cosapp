@@ -1,12 +1,13 @@
 from typing import Dict, Tuple
 
-def validate(model: "Module") -> Tuple[Dict[str, str], Dict[str, str]]:
-    """Check the validity of the provided `Module`.
+
+def validate(model: "System") -> Tuple[Dict[str, str], Dict[str, str]]:
+    """Check the validity of the provided `System`.
     
     Parameters
     ----------
-    model : cosapp.core.Module
-        The module to be validated
+    model : cosapp.systems.System
+        The system to be validated
 
     Returns
     -------
@@ -25,8 +26,8 @@ def validate(model: "Module") -> Tuple[Dict[str, str], Dict[str, str]]:
             return str(value)
 
     def msg_dict(level) -> Dict[str, str]:
-        def validity_filter(inputs) -> bool:
-            name, validity = inputs
+        def validity_filter(items) -> bool:
+            name, validity = items
             # Second condition below filters inwards and outwards in short name
             return validity == level and "." in name
         output = dict()
