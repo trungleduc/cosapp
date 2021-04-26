@@ -1,5 +1,6 @@
 import logging
 
+from typing import Optional
 from cosapp.utils.validate import validate
 from cosapp.drivers.optionaldriver import OptionalDriver
 
@@ -17,42 +18,39 @@ class ValidityCheck(OptionalDriver):
     ----------
     name : str
         Name of the driver
-    owner : System, optional
-        :py:class:`~cosapp.systems.system.System` to which this driver belong; default None
+    owner : System
+        :py:class:`~cosapp.systems.system.System` to which this driver belong
     **kwargs : Any
         Keyword arguments will be used to set driver options
     """
     
-    __slots__ = ('warnings', 'errors', )
+    __slots__ = tuple()
 
-    def __init__(
-        self, name: str, owner: "Optional[cosapp.systems.System]" = None, **kwargs
-    ) -> None:
+    def __init__(self, name: str, owner: Optional["cosapp.systems.System"] = None, **kwargs) -> None:
         """Initialize a driver
 
         Parameters
         ----------
-        name: str, optional
-            Name of the `Module`
+        name: str
+            Name of the `Driver`
         owner : System, optional
-            :py:class:`~cosapp.systems.system.System` to which this driver belong; default None
+            :py:class:`~cosapp.systems.system.System` to which this driver belongs; default None
         **kwargs : Dict[str, Any]
             Optional keywords arguments
         """
         super().__init__(name, owner, **kwargs)
-        self.warnings = dict()  # type: Dict[str, str]
-        self.errors = dict()  # type: Dict[str, str]
 
     def compute(self) -> None:
-        """Report in the log the validity status for all variables of the driver `System` owner
-        (and its children).
+        """Report in the log the validity status for all variables
+        recursively collected in owner `System` and its children.
         """
+        warnings, errors = validate(self.owner)
+
         def message(log_dict):
-            return "\n" + "\n\t".join([f"{key}{msg}" for key, msg in log_dict.items()])
-        self.warnings, self.errors = validate(self.owner)
+            return "\n" + "\n\t".join(f"{key}{msg}" for key, msg in log_dict.items())
 
-        if self.warnings:
-            logger.warning(message(self.warnings))
+        if warnings:
+            logger.warning(message(warnings))
 
-        if self.errors:
-            logger.error(message(self.errors))
+        if errors:
+            logger.error(message(errors))
