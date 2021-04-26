@@ -1047,7 +1047,7 @@ class System(Module, TimeObserver):
             Expression of the quantity of interest whose rate will be computed.
             The type and unit of the rate are deduced from `source`.
         desc : str, optional
-            Variable description; default None        
+            Variable description; default None
         initial_value : Number/array, or evaluable expression (str), optional.
             Initial value of the rate (otherwise unknown, as rates are only updated from the first time step on).
             If specified, it must be consistent with the type of source (scalar vs. array).
@@ -1061,14 +1061,9 @@ class System(Module, TimeObserver):
         check_arg(name, "name", str)
         self.__check_attr(name, f"cannot add rate {name!r};")
 
-        _, value, dtype = TimeDerivative.source_type(source, self)
+        _, src_value, dtype = TimeDerivative.source_type(source, self)
 
-        if isinstance(value, numpy.ndarray):
-            cast = lambda x: numpy.array(x)
-        else:
-            cast = lambda x: x
-
-        def numerical_value(expression):
+        def cast(expression):
             if expression is None:
                 return None
             if isinstance(expression, str):
@@ -1077,12 +1072,16 @@ class System(Module, TimeObserver):
                 value = expression.eval()
             else:
                 value = expression
-            return cast(value)
+            if isinstance(src_value, numpy.ndarray):
+                value = numpy.asarray(value)
+            return value
 
-        if initial_value is not None and isinstance(value, numpy.ndarray):
-            # If given, `initial_value` must conform to `value.shape`
-            num_val = numerical_value(initial_value)
-            check_arg(numpy.asarray(num_val), 'initial_value', numpy.ndarray, lambda array: array.shape == value.shape)
+        if initial_value is not None and isinstance(src_value, numpy.ndarray):
+            # If provided, `initial_value` must conform to `value.shape`
+            check_arg(
+                cast(initial_value), 'initial_value', numpy.ndarray,
+                value_ok = lambda array: (numpy.shape(array) == src_value.shape),
+            )
 
         if name in self:
             _, container, key = self.name2variable[name]
@@ -1093,15 +1092,15 @@ class System(Module, TimeObserver):
                 )
             # Check that existing inward is compatible with requested rate
             declared_value = container[key]
-            if isinstance(value, numpy.ndarray):
-                ok = (numpy.shape(declared_value) == value.shape)
+            if isinstance(src_value, numpy.ndarray):
+                ok = (numpy.shape(declared_value) == src_value.shape)
             else:
                 ok = is_number(declared_value)
             if not ok:
                 raise TypeError(
                     "Type incompatibility: {} {!r} cannot be the time derivative of {} {}".format(
                         type(declared_value).__name__, name, dtype.__name__, source))
-            self[name] = numerical_value(initial_value)
+            self[name] = cast(initial_value)
 
         else:  # Create new inward on the fly
             logger.info(f"Creation of new time-dependent inward {name!r} within system {self.name!r}")
@@ -1109,8 +1108,13 @@ class System(Module, TimeObserver):
             if desc is None:
                 str_der = self.str_der(1)
                 desc = str_der(source)
-
-            value = numerical_value(initial_value)
+            
+            if initial_value is None:
+                value = None
+                dtype = (dtype, type(None))
+            else:
+                value = cast(initial_value)
+            
             self.add_inward(name, value=value, desc=desc, dtype=dtype)
 
         self._math.add_rate(name, source, initial_value)

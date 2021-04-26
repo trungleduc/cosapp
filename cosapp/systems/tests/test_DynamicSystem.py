@@ -2,6 +2,7 @@ import pytest
 
 import numpy as np
 from cosapp.systems import System
+from cosapp.utils.testing import not_raised
 
 
 def test_DynamicSystem_add_transient(funky):
@@ -158,6 +159,17 @@ def test_DynamicSystem_add_rate(jazzy):
     assert 'dB_dt' in jazzy
     assert 'dH_dt' in jazzy
     assert 'sub.dB_dt' in jazzy
+    assert jazzy.sub.dB_dt is None
+
+    with not_raised(TypeError):
+        # with no initial value specified, rate value can be None
+        jazzy.sub.dB_dt = None
+
+    with not_raised(TypeError):
+        jazzy.sub.dB_dt = np.zeros_like(jazzy.brass.x)
+
+    with pytest.raises(TypeError):
+        jazzy.sub.dB_dt = 0.0
 
     # Check that transients cannot be added outside `setup`
     with pytest.raises(AttributeError):
@@ -171,7 +183,7 @@ def test_DynamicSystem_add_rate(jazzy):
             self.add_rate('bass', source='drums[0]')  # 'bass' already declared in base class
 
     with pytest.raises(ValueError, match="oops.bass already exists"):
-        erroneous = ErroneousSystem('oops')
+        ErroneousSystem('oops')
 
     # Check that initial value is compatible with source
     class ErroneousSystem(System):
@@ -180,7 +192,7 @@ def test_DynamicSystem_add_rate(jazzy):
             self.add_rate('dx_dt', source='x', initial_value=np.ones((2, 3)))
 
     with pytest.raises(ValueError):
-        erroneous = ErroneousSystem('oops')
+        ErroneousSystem('oops')
 
     # Check that initial value is compatible with source
     class ErroneousSystem(System):
@@ -189,18 +201,32 @@ def test_DynamicSystem_add_rate(jazzy):
             self.add_rate('dx_dt', source='x', initial_value=1)
 
     with pytest.raises(ValueError):
-        erroneous = ErroneousSystem('oops')
+        ErroneousSystem('oops')
 
     class Bogus(System):
         def setup(self):
             self.add_inward('x', np.ones(3))
+            self.add_inward('y', np.ones(3))
+            self.add_inward('z', 0.0)
             self.add_rate('dx_dt', source='x', initial_value=[1, 2, 3])
-            self.add_rate('dy_dt', source='x**2', initial_value='2 * x')
+            self.add_rate('ds_dt', source='x**2', initial_value='2 * x')
+            # Rates declared with no initial value:
+            # Check that type inferrence accounts for `source`
+            self.add_rate('dy_dt', source='y')
+            self.add_rate('dz_dt', source='z')
     
     bogus = Bogus('ok')
     assert bogus.x == pytest.approx([1, 1, 1])
     assert bogus.dx_dt == pytest.approx([1, 2, 3])
-    assert bogus.dy_dt == pytest.approx(np.full(3, 2))
+    assert bogus.ds_dt == pytest.approx(np.full(3, 2))
+    # Check that type inferrence accounts for `source`
+    # https://gitlab.com/cosapp/cosapp/-/issues/49
+    assert bogus.dy_dt is None
+    assert bogus.dz_dt is None
+    with not_raised(TypeError):
+        bogus.dy_dt = np.zeros_like(bogus.y)
+    with not_raised(TypeError):
+        bogus.dz_dt = 0.0
 
 
 def test_DynamicSystem_rates(funky, groovy, jazzy):
