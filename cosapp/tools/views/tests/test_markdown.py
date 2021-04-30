@@ -109,15 +109,16 @@ def test_markdown():
 @pytest.mark.parametrize(
     "PortCls, expected",
     [
-        (DummyPort, " **a**: 1 |\n **b**: 2 |"),
-        (DummyPortWithDesc, " **foo**: 1 | Foo variable\n **bar**: 2 | Bar variable"),
+        (DummyPort, "  **a**: 1 |\n  **b**: 2 |"),
+        (DummyPortWithDesc, "  **foo**: 1 | Foo variable\n  **bar**: 2 | Bar variable"),
     ],
 )
 def test_port_to_md(PortCls: Port, expected):
     p = PortCls("p", PortType.IN)
     ret = port_to_md(p)
-    print(ret)
-    assert ret == expected
+    header = "<div style='margin-left:25px'>\n\n<!-- -->|<!-- --> \n---|---\n"
+    footer = "\n</div>\n"
+    assert ret == f"{header}{expected}{footer}"
 
 
 @pytest.mark.parametrize(

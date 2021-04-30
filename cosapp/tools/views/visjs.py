@@ -1,14 +1,17 @@
 """Build a VISjs view of a System."""
-import os, io
+
+import os
 from typing import Dict, List, Optional, Tuple, Union
 
-from cosapp.ports.port import ExtensiblePort
 from cosapp.drivers import Driver
+from cosapp.ports.port import ExtensiblePort
 from cosapp.systems import System
-from cosapp.utils.helpers import check_arg
+from cosapp.tools import templates
+
+from .baseRenderer import BaseRenderer
 
 
-class VisJsRenderer:
+class VisJsRenderer(BaseRenderer):
     """
     Utility class to export a system as HTML using vis.JS library.
 
@@ -20,12 +23,10 @@ class VisJsRenderer:
         Is the HTML to be embedded in an existing page? Default: False
     """
 
-    __globals = dict()
+    __globals = None
 
     def __init__(self, system: System, embeddable=False):
-        check_arg(system, 'system', System)
-        self.system = system
-        self.embeddable = embeddable
+        super().__init__(system, embeddable)
 
     def get_data(self, focus_system: Optional[System] = None) -> Dict:
         """Convert the `System` in a dictionary with 4 keys: title, nodes, edges and groups.
@@ -71,7 +72,7 @@ class VisJsRenderer:
 
                 Returns
                 -------
-                tuple (List[Dict], Dict[Union['Module', 'ExtensiblePort'], int], int)
+                tuple (List[Dict], Dict[Union["Module", "ExtensiblePort"], int], int)
                     The first is the mapping between each involved system or port and an unique id,
                     the second is the latest used id and
                     the third index is the list of edges (one per connector).
@@ -132,7 +133,7 @@ class VisJsRenderer:
 
                     Returns
                     -------
-                    tuple (List[Dict], Dict[Union['System', 'ExtensiblePort'], int], int)
+                    tuple (List[Dict], Dict[Union["System", "ExtensiblePort"], int], int)
                         The first index is the list of edges (one per connector),
                         the second is the mapping between each involved system or port and an unique id and
                         the third is the latest used id.
@@ -332,55 +333,37 @@ class VisJsRenderer:
         return visjs_data(self.system, focus_system)
 
     def html_content(self) -> str:
-        """Returns vis.JS HTML content of renderer's system as a character string."""
-        common = self.get_globals()
-
+        """Returns vis.JS HTML content of renderer"s system as a character string."""
+        
         elements = self.get_data()
-        elements["visJS"] = common['js']
-        elements["visCSS"] = common['css']
-
-        template = common['template']
+        common = self.get_globals()
+        elements["visJS"] = common["visJS"]
+        elements["visCSS"] = common["visCSS"]
+        html_begin_tags = common["html_begin_tags"]
+        html_end_tags = common["html_end_tags"]
+        template = common["template"]
+        
         content = template.render(elements)
-        html_begin_tags = common['html_begin_tags']
-        html_end_tags = common['html_end_tags']
         if not self.embeddable:
             html_begin_tags = html_begin_tags.replace("{{title}}", elements["title"])
             content = html_begin_tags + content + html_end_tags
 
         return content
 
-    def dump(self, fstream: io.RawIOBase) -> None:
-        """Dump HTML content into writable fstream"""
-        rendered_html = self.html_content()
-        fstream.write(rendered_html)
-
-    def to_file(self, filename: str) -> None:
-        """Dump HTML content into text file `filename`"""
-        with open(filename, "w", encoding="utf-8") as fp:
-            self.dump(fp)
-
     @classmethod
-    def get_globals(cls) -> Dict:
-        """Returns a dict containing class-wide environment and HTML data"""
-        common = cls.__globals
-
-        if len(common) > 0:
-            return common
-
-        common['html_begin_tags'] = """<!DOCTYPE html>
-            <html>
-            <head>
-            <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-            <title>{{title}}</title>
-            </head>
-            <body>\n
+    def html_resources(cls) -> Dict[str, str]:
         """
-        common['html_end_tags'] = """
-            </body>
-            </html>
-        """
-        from cosapp.tools import templates
+        Return a dictionary of two keys.
 
+        - `visJS` key holds the content of vis.js library.
+        - `visCSS` key holds the css style of plot.
+
+        Returns
+        -------
+        Dict[str, Dict]
+            The necessary resources to render Jinja template
+        """
+        
         ressource_dir = os.path.dirname(os.path.abspath(templates.__file__))
         libs_dir = os.path.join(ressource_dir, "lib")
 
@@ -389,9 +372,18 @@ class VisJsRenderer:
         with open(os.path.join(libs_dir, "vis.min.css"), "rb") as f:
             vis_css = f.read().decode("utf-8")
 
-        common['js'] = vis_js
-        common['css'] = vis_css
+        return {"visJS": vis_js, "visCSS": vis_css}
+    
+    @classmethod
+    def html_template(cls) -> "Template":
+        """
+        Return the Jinja template used to create HTML file.
 
+        Returns
+        -------
+        Template
+
+        """
         try:
             from jinja2 import Environment, PackageLoader
         except ImportError:
@@ -402,9 +394,15 @@ class VisJsRenderer:
             trim_blocks=True,
             lstrip_blocks=True,
         )
-        common['template'] = env.get_template("system_repr.html")
-
-        return common
+        template = env.get_template("system_repr.html")
+        return template
+    
+    @classmethod
+    def get_globals(cls):
+        cg = cls.__globals
+        if cg is None:
+            cg = super().get_globals()
+        return cg
 
 
 def visjs_html(system: System, embeddable=False) -> str:
@@ -414,8 +412,7 @@ def visjs_html(system: System, embeddable=False) -> str:
     ----------
     system : System
         System to export
-    filename : str
-        Filename to write to
+
     embeddable: bool, optional
         Is the HTML to be embedded in an existing page? Default: False
     """

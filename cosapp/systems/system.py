@@ -2488,7 +2488,7 @@ class System(Module, TimeObserver):
         dict_repr['$schema'] = "0-3-0/system.schema.json"  # Add self referencing to system JSON version - provision
         return json.dumps(dict_repr, indent=indent, sort_keys=sort_keys, cls=JSONEncoder)
 
-    def to_d3(self, show=True, size=300) -> "IPython.display.IFrame":
+    def to_d3(self, show=True, size=435) -> "IPython.display.IFrame":
         """Returns the hierarchical representation of this system in HTML format.
 
         Returns

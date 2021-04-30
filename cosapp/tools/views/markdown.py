@@ -17,7 +17,7 @@ def port_to_md(port: ExtensiblePort) -> str:
     str
         Markdown formatted representation
     """
-    return "\n".join(f" {value._repr_markdown_()}" for value in port.get_details().values())
+    return "\n".join(port_to_md_table(port))
 
 
 def port_to_md_table(port: ExtensiblePort) -> List[str]:
