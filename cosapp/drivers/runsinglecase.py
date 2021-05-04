@@ -61,7 +61,7 @@ class RunSingleCase(IterativeCase):
         self.__case_values = []  # type: List[AssignString]
             # desc="List of assignments 'lhs <- rhs' to perform in the present case.")
         self.owner = owner
-        self.offdesign = MathematicalProblem(self.name + "- offdesign", self.owner)  # type: MathematicalProblem
+        self.offdesign = MathematicalProblem(f"{self.name} - offdesign", self.owner)  # type: MathematicalProblem
             # desc="Additional mathematical problem to solve for on this case only.")
         self.problem = None  # type: Optional[MathematicalProblem]
             # desc='Full mathematical problem to be solved on this case.'
@@ -83,6 +83,8 @@ class RunSingleCase(IterativeCase):
             self.problem.unknowns[name] = unknown
         for name, residue in self.design.residues.items():
             self.problem.residues[full_name(name)] = residue
+        for name, residue in self.design.get_target_residues().items():
+            self.problem.residues[full_name(name)] = residue
         # Add off-design equations
         for name, unknown in self.offdesign.unknowns.items():
             if name in self.problem.unknowns:
@@ -93,6 +95,8 @@ class RunSingleCase(IterativeCase):
             if fullname in self.problem.residues:
                 raise_ValueError("equation", name)
             self.problem.residues[fullname] = residue
+        for name, residue in self.offdesign.get_target_residues().items():
+            self.problem.residues[full_name(name)] = residue
         # Get common off-design problem to be solved on each case
         common_system = self.owner.get_unsolved_problem()
         # Add common off-design equations taken into account switch in frozen status
@@ -131,15 +135,16 @@ class RunSingleCase(IterativeCase):
         self.problem = None
 
     @IterativeCase.owner.setter
-    def owner(self, value: Optional[System]) -> None:
+    def owner(self, owner: Optional[System]) -> None:
         # Trick to call super setter (see: https://bugs.python.org/issue14965)
-        if self.owner is not value:
+        if self.owner is not owner:
             if self.owner is not None:
                 logger.warning(
                     f"System owner of Driver {self.name!r} has changed. Design and offdesign equations have been cleared."
                 )
-            self.offdesign = MathematicalProblem(self.offdesign.name, value)
-        super(RunSingleCase, RunSingleCase).owner.__set__(self, value)
+            self.offdesign = MathematicalProblem(self.offdesign.name, owner)
+        cls = self.__class__
+        super(cls, cls).owner.__set__(self, owner)
 
     def get_problem(self) -> MathematicalProblem:
         """Returns the full mathematical for the case.

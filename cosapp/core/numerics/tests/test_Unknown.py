@@ -55,7 +55,7 @@ class TestUnknown:
             unknown = Unknown(system, name, **options)
             assert unknown.context is system
             assert unknown.name == expected.get('name', name)
-            assert unknown.port == expected['port']
+            assert unknown.port is system[expected['port']]
             assert unknown.lower_bound == get_expected('lower_bound', -np.inf)
             assert unknown.upper_bound == get_expected('upper_bound', np.inf)
             assert unknown.max_abs_step == get_expected('max_abs_step', np.inf)

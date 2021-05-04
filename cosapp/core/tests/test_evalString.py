@@ -151,28 +151,33 @@ def test_EvalString_with_constants(eval_context, expression, expected):
     ("9 + sub.in_.q / 10", 9.5),
     ("9 + sin(sub.in_.q / 11)", 9 + math.sin(5 / 11)),
     ("out.q - sub.in_.q", -4.5),
+    ("out. q - sub.in_ .  q", -4.5),
     ("concatenate((x, [-a, sub.in_.q]))", [0.1, -0.2, -3.14, -2, 5]),
-    ])
+    ("len(out)", 1),
+])
 def test_EvalString_nonconstant_expr(eval_context, expression, expected):
     """Test expressions expected to be interpreted as non-constant"""
     s = EvalString(expression, eval_context)
     assert s.eval_context is eval_context
     assert not s.constant
-    assert s.eval() == pytest.approx(expected)
+    assert s.eval() == pytest.approx(expected, rel=1e-12)
 
 
 @pytest.mark.parametrize("expression, exception", [
     ("a = 2.0", SyntaxError),
     ("cos(pi", SyntaxError),
+    ("a + .  5", SyntaxError),
     ("1 + _", NameError),
     ("1 / 0", ZeroDivisionError),
     ("foo.bar(1)", NameError),
     ("a + ['v', True]", TypeError),
     ("out.monkey", AttributeError),
     ("sub.out.q", AttributeError),
+    ("sub.in_.", SyntaxError),
+    ("sub.in_..", SyntaxError),
     ("", ValueError),
     ("  ", ValueError),
-    ])
+])
 def test_EvalString_erroneous_expr(eval_context, expression, exception):
     """Test erroneous expressions expected to raise an exception at instantiation"""
     with pytest.raises(exception):
@@ -186,11 +191,13 @@ def test_EvalString_erroneous_expr(eval_context, expression, exception):
     (1.3, "1.3"),
     ([0.1, 0.2, 0.3], "[0.1, 0.2, 0.3]"),
     (np.r_[0.1, 0.2, 0.3], "array([0.1, 0.2, 0.3])"),
-    ])
+    ("g * cos(pi * x) + sub.z", "g * cos(pi * x) + sub.z"),
+    ("out. q - sub.in_   .  q  -  sub   .z * .5", "out.q - sub.in_.q  -  sub.z * .5"),
+])
 def test_EvalString_str_repr(eval_context, expression, expected):
     s = EvalString(expression, eval_context)
     assert str(s) == expected
-    assert repr(s) == expected.join("''")  # Note: same behaviour for built-in Python strings
+    assert repr(s) == repr(expected)  # same repr as built-in Python strings
 
 
 @pytest.mark.parametrize("expression, patterns, results", [
@@ -199,7 +206,7 @@ def test_EvalString_str_repr(eval_context, expression, expected):
     ("x", ["x", "Y", "foo"], [True, False, False]),
     ("[a, 2]", ["a", "2", "1", "foo"], [True, True, False, False]),
     ("[1, 2]", ["a", "2", "1", "1, 2"], [False, True, True, True]),
-    ])
+])
 def test_EvalString_contains(eval_context, expression, patterns, results):
     """Test expressions expected to be interpreted as non-constant"""
     s = EvalString(expression, eval_context)
@@ -228,8 +235,36 @@ def test_EvalString_multiple_eval(eval_context, var):
     (np.array([0, 0, 0], dtype=float), "array([0., 0., 0.])"),
     (np.ones(2, dtype=int), "array([1, 1])"),
     (None, "None"),
-    ])
+    ("out. q - sub.in_   .  q  -  sub   .z * .5", "out.q - sub.in_.q  -  sub.z * .5"),
+])
 def test_EvalString_string(eval_context, expression, expected):
     assert EvalString.string(expression) == expected
     s = EvalString(expression, eval_context)
     assert EvalString.string(s) == expected
+
+
+@pytest.mark.parametrize("expression, expected", [
+    ("norm(x, inf)", {'x'}),
+    ("g * cos(pi * x)", {'x', 'g'}),
+    ("g * cos(pi * x) + sub.z", {'x', 'g', 'sub'}),
+    ("g * cos(pi * x) + sub.z + out.q", {'x', 'g', 'sub', 'out'}),
+    ("g * cos(pi * x) / out.q + sub.z * sub.in_.q + out.q", {'x', 'g', 'sub', 'out'}),
+])
+def test_EvalString_locals(eval_context, expression, expected):
+    e = EvalString(expression, eval_context)
+    assert set(e.locals) == expected
+
+
+@pytest.mark.parametrize("expression, expected", [
+    ("norm(x, inf)", {'x'}),
+    ("g * cos(pi * x)", {'x'}),
+    ("g * cos(pi * x) + sub.z", {'x', 'sub.z'}),
+    ("g * cos(pi * x) / out.q + sub.z * sub.in_.q + out.q", {'x', 'sub.z', 'sub.in_.q', 'out.q'}),
+    ("(g * cos(pi * x), out.q, sub.z, sub.in_.q, 2 * out.q)", {'x', 'sub.z', 'sub.in_.q', 'out.q'}),
+    ("out.q + sub.z * sub.in_.q + B52.in_.q", {'sub.z', 'sub.in_.q', 'out.q', 'B52.in_.q'}),
+    ("out. q + sub  .z * sub . in_.q + out  . q", {'sub.z', 'sub.in_.q', 'out.q'}),
+    ("len(out)", set()),
+])
+def test_EvalString_variables(eval_context, expression, expected):
+    e = EvalString(expression, eval_context)
+    assert e.variables() == expected

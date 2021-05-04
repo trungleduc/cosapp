@@ -1,6 +1,6 @@
 from abc import abstractmethod
 from numbers import Number
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Dict, Optional, Tuple, Set, Union
 from collections.abc import Collection
 
 import numpy
@@ -14,9 +14,9 @@ class AbstractResidue:
 
     Parameters
     ----------
-    context : cosapp.core.module.Module
+    - context : cosapp.core.module.Module
         CoSApp Module in which this residue is defined
-    name : str
+    - name : str
         Residue name
     """
 
@@ -45,21 +45,21 @@ class AbstractResidue:
         return f"{type(self).__qualname__}({self._name}): {self._value!s}"
 
     def _get_zeros_rhs(self, lhs: Union[str, Number, numpy.ndarray]) -> Union[str, Number, numpy.ndarray]:
-        """Generate the default zeroed right hand side of the residue equation.
+        """Generate the default zeroed right-hand side of the residue equation.
 
-        The default right hand side is a zero value or vector. If the left
+        The default right-hand side is a zero value or vector. If the left
         hand side is defined by a string to be evaluated, the right hand
         side will be expressed as a string to evaluate.
 
         Attributes
         ----------
         lhs : str
-            Left hand side of the residue equation
+            Left-hand side of the residue equation
 
         Returns
         -------
         Union[str, Number, numpy.ndarray]
-            Default zeroed right hand side
+            Default zeroed right-hand side
         """
         if isinstance(lhs, str):
             lhs_evaluated = EvalString(lhs, self.context).eval()
@@ -125,25 +125,25 @@ class AbstractResidue:
 class Residue(AbstractResidue):
     """Classical residue definition based on an equality equation
 
-    Left hand side = Right hand side
+    Left-hand side == Right-hand side
 
-    The right hand side is assumed null if not specified.
+    The right-hand side is assumed null if not specified.
 
     The residue can be defined by providing directly the numerical values
-    of the left and right hand sides. An alternative is to provide an string
+    of the left and right-hand sides. An alternative is to provide an string
     expression to be evaluated.
 
     Parameters
     ----------
-    context : cosapp.systems.System
-        CoSApp System to which this residue is linked
-    lhs : Number or numpy.ndarray or str
-        Left hand side of the equation.
-    rhs : Number or numpy.ndarray or str or None, optional
-        Right hand side of the equation; default None (i.e. equals zeros).
-    name : str or None, optional
+    - context : cosapp.systems.System
+        CoSApp System to which residue is linked
+    - lhs : Number or numpy.ndarray or str
+        Left-hand side of the equation.
+    - rhs : Number or numpy.ndarray or str or None, optional
+        Right-hand side of the equation; default None (i.e. equals zeros).
+    - name : str or None, optional
         Residue name; default None (built from lhs and rhs)
-    reference: Number or numpy.ndarray or None
+    - reference: Number or numpy.ndarray or None
         Reference value to normalized the residue; default is unity
     """
 
@@ -156,10 +156,10 @@ class Residue(AbstractResidue):
 
         Parameters
         ----------
-        left : float or list of float or numpy.ndarray
-            Left hand side of the equation
-        right : float or list of float or numpy.ndarray or None (default)
-            Right hand side of the equation if not None
+        - left : float or list of float or numpy.ndarray
+            Left-hand side of the equation
+        - right : float or list of float or numpy.ndarray or None (default)
+            Right-hand side of the equation if not None
 
         Returns
         -------
@@ -184,11 +184,11 @@ class Residue(AbstractResidue):
 
         Parameters
         ----------
-        lhs : Number or list of float or numpy.ndarray
-            Left hand side of the equation
-        rhs : Number or list of float or numpy.ndarray
-            Right hand side of the equation
-        reference : Number or list of float or numpy.ndarray or "norm"
+        - lhs : Number or list of float or numpy.ndarray
+            Left-hand side of the equation
+        - rhs : Number or list of float or numpy.ndarray
+            Right-hand side of the equation
+        - reference : Number or list of float or numpy.ndarray or "norm"
             Reference value to normalize the equation with; default is unity
 
         Returns
@@ -208,16 +208,15 @@ class Residue(AbstractResidue):
         reference: Union[Number, Collection, numpy.ndarray, str] = 1,
         # tolerance: Optional[float] = 1e-6, # TODO ?
     ):
-        """
-        Initialization parameters:
+        """Initialization parameters:
         ----------
-        context : cosapp.systems.System
+        - context : cosapp.systems.System
             CoSApp System to which this residue is linked
-        equation : str
+        - equation : str
             Equation of the kind 'hls == 'rhs', defining residue lhs - rhs.
-        name : str or None, optional
+        - name : str or None, optional
             Residue name; default None (built from equation)
-        reference : Number, numpy.ndarray or "norm", optional
+        - reference : Number, numpy.ndarray or "norm", optional
             Reference value(s) used to normalize the equation; default is 1.
             If value is "norm", actual reference value is estimated from order of magnitude.
         """
@@ -245,8 +244,7 @@ class Residue(AbstractResidue):
 
     @staticmethod
     def split_equation(equation: str) -> Tuple[str, str]:
-        """
-        Parses and splits an equation of the kind 'lhs == rhs'.
+        """Parses and splits an equation of the kind 'lhs == rhs'.
         Returns string tuple (lhs, rhs).
         """
         eqsign = "=="
@@ -259,8 +257,7 @@ class Residue(AbstractResidue):
         return lhs, rhs
 
     def __set_equation(self, equation: str) -> None:
-        """
-        Checks that the two sides of an equation of the kind 'lhs == rhs' are compatible,
+        """Checks that the two sides of an equation of the kind 'lhs == rhs' are compatible,
         and that residue (lhs - rhs) is not trivially constant.
         Left- and right-hand sides are finally stored as two evaluable expressions (EvalString).
         """
@@ -325,3 +322,71 @@ class Residue(AbstractResidue):
             "name": self.name,
             "reference": str(ref)
         }
+
+
+class DeferredResidue:
+    """Class representing a residue whose left-hand side evaluation is deferred.
+
+    The right-hand side of the residue is a targetted quantity.
+    Upon request, a Residue object is generated, with lhs = value(target).
+
+    Parameters
+    ----------
+    - context : cosapp.systems.System
+        CoSApp System to which residue is linked.
+    - target : str
+        Targetted quantity, and left-hand side of the equation.
+    - reference: Number or numpy.ndarray or None
+        Reference value to normalize the residue; default is unity.
+    - variables: Set[str]
+        Names of variables involved in the residue
+    """
+    def __init__(self, context: "System", target: str, reference=1.0):
+        from cosapp.systems import System
+        check_arg(context, "context", System)
+        check_arg(target, "target", str)
+        self.__context = context
+        self.reference = reference
+        self.target = target
+
+    @property
+    def context(self) -> "System":
+        """System: evaluation context of residue"""
+        return self.__context
+
+    @property
+    def target(self) -> str:
+        """str: targetted quantity"""
+        return str(self.__lhs)
+
+    @target.setter
+    def target(self, target: str) -> None:
+        """Set targetted expression"""
+        lhs = EvalString(target, self.context)
+        if lhs.constant:
+            raise ValueError(f"Targetted expression {lhs!r} appears to be constant")
+        self.__lhs = lhs
+        self.__vars = lhs.variables()
+
+    @property
+    def variables(self) -> Set[str]:
+        """Set[str]: names of variables involved in residue"""
+        return self.__vars
+
+    def target_value(self) -> Any:
+        """Evaluates and returns current value of target"""
+        return self.__lhs.eval()
+
+    def equation(self) -> str:
+        """Returns target equation with updated lhs value"""
+        return f"{self.target} == {self.target_value()!r}"
+
+    def make_residue(self, reference=None) -> Residue:
+        """Generates the residue corresponding to equation 'target == value(target)'"""
+        if reference is None:
+            reference = self.reference
+        return Residue(self.context, self.equation(), reference=reference)
+
+    def __repr__(self) -> str:
+        clsname = self.__class__.__name__
+        return f"{clsname}({self.context.name}, {self.target}, reference={self.reference})"

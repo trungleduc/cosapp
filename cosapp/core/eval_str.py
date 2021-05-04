@@ -3,11 +3,10 @@ Module handling the execution of code provided as string by the user.
 
 This code is inspired from the OpenMDAO module openmdao.components.exec_comp.
 """
+import re
 import numpy
 from numbers import Number
-from typing import Any, Dict, Iterable, Optional, Tuple, Union, Callable
-
-from cosapp.utils.helpers import check_arg
+from typing import Any, Dict, Iterable, Optional, Tuple, Union, Callable, Set
 
 
 class ContextLocals(dict):
@@ -262,6 +261,8 @@ class EvalString:
         self.__locals = local_dict = ContextLocals(context)  # type: ContextLocals
         value = eval(code, global_dict, local_dict)
         
+        self.__vars = None  # type: Set[str]
+        
         constants = context.properties
         self.__constant = set(local_dict).issubset(constants)  # type: bool
 
@@ -291,7 +292,9 @@ class EvalString:
         array([0.1, 0.2])
         """
         if isinstance(expression, str):
-            return expression.strip()
+            # Include a substitution pass to make sure that no spaces are left
+            # between objects and attributes, that is "foo.bar" instead of "foo .  bar"
+            return re.sub("(?![0-9]) *\. *(?![0-9])", ".", expression.strip())
         elif isinstance(expression, EvalString):
             return str(expression)
         else:
@@ -342,6 +345,29 @@ class EvalString:
             The result of the expression evaluation.
         """
         return self.__eval()
+
+    def variables(self) -> Set[str]:
+        """Extracts all variables required for the evaluation of the expression
+        
+        Returns
+        -------
+        Set[str]:
+            Variable names as a set of strings
+        """
+        if self.__vars is None:
+            from cosapp.systems import System
+            from cosapp.ports.port import ExtensiblePort
+            names = set()
+            expression = str(self)
+            for key, obj in self.__locals.items():
+                if isinstance(obj, (System, ExtensiblePort)):
+                    names |= set(f"{key}{tail}"
+                        for tail in re.findall(f"{key}(\.[\w\.]*)+", expression)
+                    )
+                else:
+                    names.add(key)
+            self.__vars = names - set(self.eval_context.properties)
+        return self.__vars
 
 
 class AssignString:
@@ -435,6 +461,16 @@ class AssignString:
         """Returns the shape of the assigned object (lhs) if it is an array, else None."""
         return self.__shape
 
+    def variables(self) -> Set[str]:
+        """Extracts all variables required for the assignment
+        
+        Returns
+        -------
+        Set[str]:
+            Variable names as a set of strings
+        """
+        return self.__sides.variables()
+
     def __str__(self) -> str:
         return " = ".join(self.__raw_sides)
 
@@ -442,7 +478,7 @@ class AssignString:
         cls_name = self.__class__.__qualname__
         return "{}({!r}, {!r}, {})".format(cls_name, *self.__raw_sides, self.__context.name)
 
-    def __check_size(self, array):
+    def __check_size(self, array) -> None:
         """Checks if `array` is shape-compatible with lhs."""
         shape = self.__shape
         if numpy.shape(array) != shape:

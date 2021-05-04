@@ -1,13 +1,17 @@
 import logging
 from collections import OrderedDict
 from numbers import Number
-from typing import Any, Dict, Iterable, Optional, Sequence, Union, Tuple
+from typing import (
+    Any, Dict, Iterable, Optional,
+    Sequence, Union, Tuple, List,
+    Set, Callable, NamedTuple,
+)
 
 import numpy
 
 from cosapp.core.variableref import VariableReference
 from cosapp.core.numerics.boundary import Unknown, TimeUnknown, TimeDerivative
-from cosapp.core.numerics.residues import Residue
+from cosapp.core.numerics.residues import Residue, DeferredResidue
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +56,33 @@ class SolverResults:
         self.trace = list()  # type: List[Dict[str, Any]]
 
 
+class WeakDeferredResidue(NamedTuple):
+    deferred: DeferredResidue
+    weak: bool = False
+
+    @property
+    def target(self) -> str:
+        """str: targetted quantity"""
+        return self.deferred.target
+
+    @property
+    def variables(self) -> Set[str]:
+        """Set[str]: names of variables involved in residue"""
+        return self.deferred.variables
+
+    def target_value(self) -> Any:
+        """Evaluates and returns current value of target"""
+        return self.deferred.target_value()
+
+    def equation(self) -> str:
+        """Returns target equation with updated lhs value"""
+        return self.deferred.equation()
+
+    def make_residue(self, reference=None) -> Residue:
+        """Generates the residue corresponding to equation 'target == value(target)'"""
+        return self.deferred.make_residue(reference)
+
+
 class MathematicalProblem:
     """Container object for unknowns and equations.
 
@@ -71,6 +102,7 @@ class MathematicalProblem:
         self._residues = OrderedDict()  # type: Dict[str, Residue]
         self._transients = OrderedDict()  # type: Dict[str, TimeUnknown]
         self._rates = OrderedDict()  # type: Dict[str, TimeDerivative]
+        self._targets = list()  # type: List[WeakDeferredResidue]
 
     def __str__(self) -> str:
         msg = ""
@@ -163,14 +195,13 @@ class MathematicalProblem:
                 names.append(name)
         return tuple(names)
 
-    def add_unknown(
-            self,
-            name: Union[str, Iterable[Union[dict, str, Unknown]]],
-            max_abs_step: Number = numpy.inf,
-            max_rel_step: Number = numpy.inf,
-            lower_bound: Number = -numpy.inf,
-            upper_bound: Number = numpy.inf,
-            mask: Optional[numpy.ndarray] = None,
+    def add_unknown(self,
+        name: Union[str, Iterable[Union[dict, str, Unknown]]],
+        max_abs_step: Number = numpy.inf,
+        max_rel_step: Number = numpy.inf,
+        lower_bound: Number = -numpy.inf,
+        upper_bound: Number = numpy.inf,
+        mask: Optional[numpy.ndarray] = None,
     ) -> "MathematicalProblem":
         """Add unknown variables.
 
@@ -197,9 +228,10 @@ class MathematicalProblem:
         MathematicalProblem
             The modified MathematicalSystem
         """
+        self.__check_context("unknowns")
+        context = self.context
 
         def add_unknown(
-            context: 'cosapp.systems.System',
             name: str,
             max_abs_step: Number = numpy.inf,
             max_rel_step: Number = numpy.inf,
@@ -237,15 +269,14 @@ class MathematicalProblem:
             else:
                 self._unknowns[unknown.name] = unknown
 
-        if self.context is None:
-            raise AttributeError("Owner System is required to define unknowns.")
+        params = (max_abs_step, max_rel_step, lower_bound, upper_bound, mask)
 
         if isinstance(name, str):
-            add_unknown(self.context, name, max_abs_step, max_rel_step, lower_bound, upper_bound, mask)
+            add_unknown(name, *params)
         else:
             for unknown in name:
                 if isinstance(unknown, Unknown):
-                    current_to_context = self.context.get_path_to_child(unknown.context)
+                    current_to_context = context.get_path_to_child(unknown.context)
                     new_name = f"{current_to_context}.{name}" if current_to_context else unknown.name
                     if new_name in self._unknowns:
                         logger.warning(
@@ -254,9 +285,9 @@ class MathematicalProblem:
                         )
                     self._unknowns[new_name] = unknown
                 elif isinstance(unknown, str):
-                    add_unknown(self.context, unknown, max_abs_step, max_rel_step, lower_bound, upper_bound, mask)
+                    add_unknown(unknown, *params)
                 else:
-                    add_unknown(self.context, **unknown)
+                    add_unknown(**unknown)
 
         return self
 
@@ -285,13 +316,12 @@ class MathematicalProblem:
         MathematicalProblem
             The modified MathematicalSystem
         """
-
-        if self.context is None:
-            raise AttributeError("Owner System is required to define equations.")
+        self.__check_context("equations")
+        context = self.context
 
         def add_residue(equation, name=None, reference=1):
             """Add residue from equation."""
-            residue = Residue(self.context, equation, name, reference)
+            residue = Residue(context, equation, name, reference)
             self._residues[residue.name] = residue
 
         if isinstance(equation, str):
@@ -306,6 +336,66 @@ class MathematicalProblem:
                     add_residue(*eq)
 
         return self
+
+    def add_target(self,
+        expression: str,
+        reference: Union[Number, numpy.ndarray, str] = 1,
+        weak = False,
+    ) -> "MathematicalProblem":
+        """Add deferred equation.
+
+        Parameters
+        ----------
+        expression: str
+            Targetted expression
+        reference : Number, numpy.ndarray or "norm", optional
+            Reference value(s) used to normalize the (deferred) equation; default is 1.
+            If value is "norm", actual reference value is estimated from order of magnitude.
+        weak: bool, optional
+            If True, the target is disregarded if the corresponding variable is connected; default is `False`.
+
+        Returns
+        -------
+        MathematicalProblem
+            The modified MathematicalSystem
+        """
+        self.__check_context("targets")
+        context = self.context
+
+        def register(name, reference=1):
+            deferred = DeferredResidue(context, name, reference)
+            if len(deferred.variables) > 1:
+                raise NotImplementedError(
+                    f"Targets are only supported for single variables; got {deferred.variables}"
+                )
+            self._targets.append(WeakDeferredResidue(deferred, weak))
+
+        if isinstance(expression, str):
+            register(expression, reference)
+        else:
+            for target in expression:
+                register(target)
+
+        return self
+
+    def get_target_equations(self) -> List[str]:
+        return [deferred.equation() for deferred in self._targets]
+
+    def get_target_residues(self) -> Dict[str, Residue]:
+        return dict(
+            (self.target_key(deferred), deferred.make_residue())
+            for deferred in self._targets
+        )
+
+    @staticmethod
+    def target_key(deferred: WeakDeferredResidue) -> str:
+        """Returns dict key to be used for deferred residue `deferred`"""
+        return f"Target[{deferred.target}]"
+
+    @property
+    def deferred_residues(self) -> List[DeferredResidue]:
+        """List[DeferredResidue]: List of deferred residues defined for this system."""
+        return self._targets
 
     @property
     def transients(self) -> Dict[str, TimeUnknown]:
@@ -339,9 +429,7 @@ class MathematicalProblem:
         MathematicalProblem
             The modified MathematicalSystem
         """
-
-        if self.context is None:
-            raise AttributeError("Owner System is required to define time-dependent unknowns.")
+        self.__check_context("transient unknowns")
 
         if name in self._transients:
             raise ArithmeticError(f"Variable {name!r} is already defined as a time-dependent unknown of {self.name!r}.")
@@ -369,9 +457,7 @@ class MathematicalProblem:
         MathematicalProblem
             The modified MathematicalSystem
         """
-
-        if self.context is None:
-            raise AttributeError("Owner System is required to define a time derivative.")
+        self.__check_context("rates")
 
         if name in self._rates:
             raise ArithmeticError(f"Variable {name!r} is already defined as a time-dependent unknown of {self.name!r}.")
@@ -379,7 +465,30 @@ class MathematicalProblem:
         self._rates[name] = TimeDerivative(self.context, name, source, initial_value)
         return self
 
-    def extend(self, other: 'MathematicalProblem', copy: bool = True) -> 'MathematicalProblem':
+    def __check_context(self, name: str):
+        if self.context is None:
+            raise AttributeError(f"Owner System is required to define {name}.")
+
+    @staticmethod
+    def residue_naming(system1, system2) -> Tuple[Callable[[str], str], Callable[[str], str]]:
+        """Returns name mapping functions for variables and residues,
+        based on contexts `system1` and `system2`.
+        Each function maps a str to a str.
+
+        Returns
+        -------
+        var_name, res_name: tuple of Callable[[str], str]
+            Variable and residue name functions.
+        """
+        if system1 is not system2:
+            path = system1.get_path_to_child(system2)
+            var_name = lambda name: f"{path}.{name}"
+            res_name = lambda name: var_name(name if name.endswith(')') else name.join('()'))
+        else:
+            var_name = res_name = lambda name: name
+        return var_name, res_name
+
+    def extend(self, other: "MathematicalProblem", copy=True) -> "MathematicalProblem":
         """Extend the current mathematical system with the other one.
 
         Parameters
@@ -394,27 +503,27 @@ class MathematicalProblem:
         MathematicalProblem
             The resulting mathematical system
         """
-        current_to_context = self.context.get_path_to_child(other.context)
+        if other is self and not copy:
+            return self  # quick return
 
-        if len(current_to_context) > 0:
-            full_path = lambda name: f"{current_to_context}.{name}"
-            residue_fullname = lambda name: full_path(name if name.endswith(')') else name.join('()'))
-        else:
-            full_path = residue_fullname = lambda name: name
+        var_name, residue_name = self.residue_naming(self.context, other.context)
 
         get = (lambda obj: obj.copy()) if copy else (lambda obj: obj)
 
-        def connect(self_dict, other_dict, get_fullname):
+        def transfer(self_dict, other_dict, get_fullname):
             for name, elem in other_dict.items():
                 fullname = get_fullname(name)
                 if fullname in self_dict:
                     raise ValueError(f"{fullname!r} already exists in system {self.name!r}.")
                 self_dict[fullname] = get(elem)
 
-        connect(self._unknowns, other.unknowns, full_path)
-        connect(self._residues, other.residues, residue_fullname)
-        connect(self._transients, other.transients, full_path)
-        connect(self._rates, other.rates, full_path)
+        transfer(self._unknowns, other.unknowns, var_name)
+        transfer(self._residues, other.residues, residue_name)
+        transfer(self._transients, other.transients, var_name)
+        transfer(self._rates, other.rates, var_name)
+
+        for deferred in other._targets:
+            self.add_target(var_name(deferred.target))
 
         return self
 
@@ -435,8 +544,7 @@ class MathematicalProblem:
             The duplicated mathematical problem.
         """
         new = MathematicalProblem(self.name, self.context)
-        new.extend(self)
-        return new
+        return new.extend(self, copy=True)
 
     def to_dict(self) -> Dict[str, Any]:
         """Returns a JSONable representation of the mathematical problem.

@@ -53,12 +53,14 @@ def test_Boundary___init__(args, kwargs, attributes):
     a = ASyst('a')
     x = Boundary(a, *args, **kwargs)
     # Set of expected attributes:
-    expected = dict(port='inwards', variable='', name=None, mask=None, default_value=None)
+    expected = dict(variable='', name=None, mask=None, default_value=None)
     expected.update(attributes)
+    portname = expected.pop('port', 'inwards')
     if expected['name'] is None:
-        expected['name'] = f"{expected['port']}.{expected['variable']}"
+        expected['name'] = f"{portname}.{expected['variable']}"
     # Test object attributes:
     assert x.context is a
+    assert x.port is a[portname]
     if x.mask is not None:
         assert isinstance(x.mask, np.ndarray)
     mask = expected.pop('mask')
