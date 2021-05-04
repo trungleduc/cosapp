@@ -1,12 +1,13 @@
 from numbers import Number
-from typing import Any, Dict, List, Optional, Union, Tuple
+from typing import Any, Dict, Optional, Union, Tuple
+from types import SimpleNamespace
 
 import abc
 import numpy
 
 from cosapp.core.eval_str import EvalString
 from cosapp.core.variableref import VariableReference
-from cosapp.ports.enum import PortType, CommonPorts
+from cosapp.ports.enum import PortType
 from cosapp.ports.exceptions import ScopeError
 from cosapp.utils.parsing import get_indices
 from cosapp.utils.helpers import check_arg
@@ -34,16 +35,12 @@ class Boundary:
         **kwargs
     ):
         super().__init__(**kwargs)  # for collaborative inheritance
-        fullpath, mask = Boundary.parse(context, name, mask)
+        self.__info = info = Boundary.parse(context, name, mask)
 
-        self._mask = None  # type: Optional[numpy.ndarray]
         self._context = context  # type: cosapp.systems.System
-        self._port = Boundary.portname(fullpath)  # type: str
-        self._name = Boundary.fullname(fullpath)  # type: str
-        self.__var = Boundary.varname(fullpath)  # type: str
         self._default_value = None  # type: Union[Number, numpy.ndarray, None]
 
-        self.mask = mask
+        self.mask = info.mask
         self.set_default_value(default, self.mask)
 
     @staticmethod
@@ -51,25 +48,24 @@ class Boundary:
         context: "cosapp.systems.System",
         name: str,
         mask: Optional[numpy.ndarray] = None
-    ) -> Tuple[str, str, str, numpy.ndarray]:
+    ) -> SimpleNamespace:
         """
         Parse port and variable name from a name and its evaluation context.
         Also checks that the variable belongs to an input port.
 
         Parameters
         ----------
-        context : cosapp.systems.System
+        - context : cosapp.systems.System
             System in which the boundary is defined.
-        name : str
+        - name : str
             Name of the boundary
-        mask : numpy.ndarray[bool] or None, optional
+        - mask : numpy.ndarray[bool] or None, optional
             Mask to apply on the variable; default is None (i.e. no mask)
 
         Returns
         -------
-        tuple(full_path, mask)
-            where full_path is a list of strings describing the full path of 
-            the variable, and mask the array like mask to apply on the variable.
+        info: SimpleNameSpace
+            Structure containing fields `varname`, `fullname`, `port` and `mask`.
         """
         if not isinstance(name, str):
             raise TypeError(f"Variable name {type(name).__qualname__!r} is not a string.")
@@ -79,103 +75,66 @@ class Boundary:
         container = Boundary.container(context, var_name)
 
         # Force port name to be included in unknown name
-        split_name = var_name.split(".")
-        if len(split_name) < 2 or split_name[-2] != container.name:
-            split_name.insert(-1, container.name)
+        fullpath = var_name.split(".")
+        if len(fullpath) < 2 or fullpath[-2] != container.name:
+            fullpath.insert(-1, container.name)
+        portname = ".".join(fullpath[:-1])
 
-        mask = mask if mask is not None else auto_mask
-
-        return (split_name, mask)
-
-    @staticmethod
-    def portname(fullpath: List[str]) -> str:
-        """Extract the port name from a variable fullpath
-        
-        Parameters
-        ----------
-        fullpath : List[str]
-            The variable fullpath
-        
-        Returns
-        -------
-        str
-            The port name
-        """
-        return ".".join(fullpath[:-1])
+        return SimpleNamespace(
+            varname = fullpath[-1],
+            fullname = ".".join(fullpath),
+            port = context[portname],
+            mask = mask if mask is not None else auto_mask,
+        )
 
     @staticmethod
-    def fullname(fullpath: List[str]) -> str:
-        """Returns the full name from a variable fullpath
-        
-        Parameters
-        ----------
-        fullpath : List[str]
-            The variable fullpath
-        
-        Returns
-        -------
-        str
-            The full name
+    def container(system: "cosapp.systems.System", name: str) -> "ExtensiblePort":
         """
-        return ".".join(fullpath)
-
-    @staticmethod
-    def varname(fullpath: List[str]) -> str:
-        """Extract the variable name from a variable fullpath
-        
-        Parameters
-        ----------
-        fullpath : List[str]
-            The variable fullpath
-        
-        Returns
-        -------
-        str
-            The variable name
-        """
-        return fullpath[-1]
-
-    @staticmethod
-    def container(context: "cosapp.systems.System", name: str) -> "cosapp.systems.VariableReference":
-        """
-        Checks that a given variable can be used as a boundary; if so, returns the variable container.
+        Checks that variable `name` is a valid boundary in `system`.
+        If so, returns the container port. Raises an exception otherwise.
 
         Parameters
         ----------
-        context : cosapp.systems.System
+        - system: cosapp.systems.System
             System in which a boundary may be defined.
-        name : str
+        - name: str
             Name of the variable to check
         
         Returns
         -------
-        cosapp.systems.VariableReference
-            Variable container, if the variable is found valid (raises an exception otherwise)
+        - container: ExtensiblePort
+            Port containing the variable, if the latter is found valid (raises an exception otherwise)
+
+        Raises
+        ------
+        - `AttributeError` if name is not found in system
+        - `TypeError` if container is a sub-system (not a port)
+        - `ValueError` if container is an output port
+        - `ScopeError` if container port does not belong to system
         """
         from cosapp.ports.port import ExtensiblePort
-        if name not in context:
+        if name not in system:
             raise AttributeError(
-                f"Variable {name!r} is not present in object {context.name!r}."
+                f"Variable {name!r} is not present in {system.name!r}."
             )
 
-        _, container, key = context.name2variable[name]
+        _, container, key = system.name2variable[name]
         if not isinstance(container, ExtensiblePort):
             raise TypeError(
-                "Only variables can be used in mathematical algorithms; got {!r} in {!r}".format(
-                    name, context.name)
+                f"Only variables can be used in mathematical algorithms; got {name!r} in {system.name!r}"
             )
 
         if container.direction != PortType.IN:
+            path =  f"{system.name}.{container.name}"
             raise ValueError(
-                "Only variables in input ports can be used as boundaries; got {!r} in '{}.{}'.".format(
-                    name, context.name, container.name)
+                f"Only variables in input ports can be used as boundaries; got {name!r} in {path!r}."
             )
 
         # Test if the type and scoping are compatible with the boundary status
         try:
-            container.validate(key, context[name])
+            container.validate(key, system[name])
         except ScopeError:  # Type error should still be raised
-            if context is not container.owner:
+            if system is not container.owner:
                 # Only owner can set its variables
                 raise ScopeError(
                     f"Trying to set variable {name!r} out of your scope through a boundary."
@@ -186,7 +145,7 @@ class Boundary:
         return str(self.default_value)
 
     def __repr__(self) -> str:
-        return f"{self._name} := {self!s}"
+        return f"{self.name} := {self!s}"
 
     @property
     def context(self) -> "cosapp.systems.System":
@@ -194,24 +153,24 @@ class Boundary:
         return self._context
 
     @property
-    def port(self) -> str:
-        """str : Name of the port containing the boundary."""
-        return self._port
+    def port(self) -> "ExtensiblePort":
+        """ExtensiblePort: port containing the boundary."""
+        return self.__info.port
 
     @property
     def name(self) -> str:
         """str : Contextual name of the boundary."""
-        return self._name
+        return self.__info.fullname
 
     @property
     def variable(self) -> str:
         """str : name of the variable accessed by the boundary."""
-        return self.__var
+        return self.__info.varname
 
     @property
     def mask(self) -> Optional[numpy.ndarray]:
         """numpy.ndarray or None : Mask of the values in the vector boundary."""
-        return self._mask
+        return self.__info.mask
 
     @mask.setter
     def mask(self, mask: Union[None, numpy.ndarray]) -> None:
@@ -234,7 +193,7 @@ class Boundary:
                         mask.shape, self.name, value_array.shape
                     )
                 )
-        self._mask = mask
+        self.__info.mask = mask
 
     @property
     def value(self) -> Union[Number, numpy.ndarray]:
@@ -467,7 +426,7 @@ class Unknown(Boundary):
             lower_bound=self.lower_bound,
             upper_bound=self.upper_bound,
         )
-        new._mask = None if self.mask is None else self.mask.copy()
+        new.mask = None if self.mask is None else self.mask.copy()
         return new
 
     def to_dict(self) -> Dict[str, Any]:

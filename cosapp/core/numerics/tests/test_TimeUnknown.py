@@ -89,7 +89,7 @@ def test_TimeUnknown___init__(ctor_data, state, expected):
     if error is None:
         u = TimeUnknown(a, **ctor_data)
         assert u.context is a
-        assert u.port == expected.get('port', 'inwards')
+        assert u.port is a[expected.get('port', 'inwards')]
         assert u.name == expected['name']
         assert u.d_dt == expected['d_dt']
         assert isinstance(u.value, expected.get('dtype', Number))

@@ -27,6 +27,7 @@ class Bogus(System):
         self.add_outward('b', 0.5)
 
         self.add_child(FooBar('sub'))
+        self.add_child(FooBar('B52'))
         self.add_output(BogusPort, 'out', variables={'q': 0.5})
 
 @pytest.fixture(scope="function")

@@ -19,6 +19,8 @@ class BogusPort(Port):
 
 class SystemA(System):
     def setup(self):
+        self.add_property('n', 12)
+
         self.add_input(BogusPort, 'in_')
         self.add_inward('a', 1.)
         self.add_inward('b', [1., 2.])
@@ -236,6 +238,61 @@ def test_MathematicalProblem_add_equation(test_objects, args_kwargs, expected):
 
 @pytest.mark.parametrize("args_kwargs, expected", [
     (
+        get_args('g'),
+        dict(equations=['g == 3.5']),
+    ),
+    (
+        get_args('g', reference=10),
+        dict(equations=['g == 3.5'], reference=10),
+    ),
+    (
+        get_args('g - 1'),
+        dict(equations=['g - 1 == 2.5']),
+    ),
+    (
+        get_args('n * g'),
+        dict(equations=['n * g == 42.0']),
+    ),
+    (
+        get_args('cos(pi * g / 3.5)'),
+        dict(equations=['cos(pi * g / 3.5) == -1.0']),
+    ),
+    (
+        get_args('a'),
+        dict(equations=['a == 1.0']),
+    ),
+    (
+        get_args('a * g'),
+        dict(error=NotImplementedError, equations=['a * g == 3.5']),
+    ),
+])
+def test_MathematicalProblem_add_target(test_objects, args_kwargs, expected):
+    context, problem = test_objects
+    args, kwargs = args_kwargs
+    error = expected.get('error', None)
+
+    if error is None:
+        problem.add_target(*args, **kwargs)
+
+        equations = problem.get_target_equations()
+        residues = problem.get_target_residues()
+        assert equations == expected['equations']
+        assert len(residues) == 1
+
+        for name, residue in residues.items():
+            message = f"residue {name!r}"
+            assert isinstance(residue, Residue), message
+            assert residue.context is context, message
+            assert residue.reference == kwargs.get('reference', 1), message
+            assert residue.value == pytest.approx(0, abs=1e-15), message
+
+    else:
+        with pytest.raises(error, match=expected.get('match', None)):
+            problem.add_target(*args, **kwargs)
+
+
+@pytest.mark.parametrize("args_kwargs, expected", [
+    (
         get_args('a'),
         {
             'inwards.a': dict(),
@@ -396,6 +453,12 @@ def test_MathematicalProblem_extend():
 
     # Test default extension (should copy unknowns and residues)
     r, s, m, n = local_test_objects()
+    
+    extended = m.extend(m, copy=False)
+    assert extended is m
+
+    with pytest.raises(ValueError):
+        m.extend(m, copy=True)
 
     with pytest.raises(ValueError, match=r".* is not a child of .*\."):
         m.extend(n)

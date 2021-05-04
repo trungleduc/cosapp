@@ -112,7 +112,7 @@ def test_TimeDerivative___init__(bogus, ctor_data, state, expected):
             bogus[var] = value
         # check TimeDerivative object
         assert der.context is bogus
-        assert der.port == expected['port']
+        assert der.port is bogus[expected['port']]
         assert der.name == expected['name']
         # assert der.desc == expected['desc']
         assert der.source == pytest.approx(expected['source'], rel=1e-14)

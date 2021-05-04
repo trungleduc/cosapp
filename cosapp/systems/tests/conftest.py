@@ -39,7 +39,7 @@ def DummyFactory():
         (option, "add_" + option[:-1])
         for option in ("inputs", "outputs", "inwards", "outwards",
             "transients", "rates", "unknowns", "equations",
-            "design_methods")
+            "targets", "design_methods")
     )
     mapping["properties"] = "add_property"
 
@@ -61,7 +61,6 @@ def DummyFactory():
                         getattr(self, method)(*args, **kwargs)
         return PrototypeSystem(name, **options)
     return Factory
-
 
 
 class FunkySystem(System):

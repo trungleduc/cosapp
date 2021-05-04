@@ -1,12 +1,9 @@
 import pytest
 from unittest import mock
 
-import os
-import sys
 import logging
 import re
 from io import StringIO
-from pathlib import Path
 from collections import OrderedDict
 
 import numpy as np
@@ -20,7 +17,7 @@ from cosapp.core.numerics.boundary import Unknown
 from cosapp.core.numerics.residues import Residue
 from cosapp.ports.port import ExtensiblePort, Port, PortType, Scope, Validity
 from cosapp.ports.units import UnitError
-from cosapp.drivers import Driver, RunOnce
+from cosapp.drivers import Driver, RunOnce, NonLinearSolver
 from cosapp.systems import system as system_module
 from cosapp.systems import System
 from cosapp.systems.system import VariableReference, IterativeConnector
@@ -1479,7 +1476,7 @@ def test_System_add_unknowns(DummyFactory):
     unknown = m.get_unsolved_problem().unknowns["inwards.K1"]
     assert isinstance(unknown, Unknown)
     assert unknown.name == "inwards.K1"
-    assert unknown.port == "inwards"
+    assert unknown.port is m.inwards
     assert unknown.max_rel_step == 0.01
     assert unknown.max_abs_step == np.inf
     assert unknown.lower_bound == -10
@@ -1499,7 +1496,7 @@ def test_System_add_unknowns(DummyFactory):
     unknown = m.get_unsolved_problem().unknowns["p_in.x"]
     assert isinstance(unknown, Unknown)
     assert unknown.name == "p_in.x"
-    assert unknown.port == "p_in"
+    assert unknown.port is m.p_in
     assert unknown.max_rel_step == 0.1
     assert unknown.max_abs_step == 1e6
     assert unknown.lower_bound == 0
@@ -1585,6 +1582,289 @@ def test_System_design(DummyFactory):
     a = DummyFactory("a", design_methods=get_args("method1"))
     with pytest.raises(KeyError):
         a.design("method2")
+
+
+def test_System_add_target(DummyFactory):
+    s = DummyFactory('s',
+        inwards = [get_args('x', 1.0), get_args('y', 0.0)],
+        outwards = get_args('z', 0.0),
+        targets = get_args('z'),
+    )
+    s.z = 1.5
+
+    offdesign = s.get_unsolved_problem()
+    assert offdesign.shape == (0, 1)
+    assert set(offdesign.residues) == {"Target[z]"}
+    assert offdesign.residues["Target[z]"].equation == "z == 1.5"
+
+    with pytest.raises(AttributeError, match="`add_target` cannot be called outside `setup`"):
+        s.add_target('x')
+
+
+def test_System_add_target_error(DummyFactory):
+    """Checks that declaring a target on a non-existing variable raises `NameError`"""
+    with pytest.raises(NameError, match="'foo' is not defined"):
+        DummyFactory('oops',
+            outwards = get_args('y', 0.0),
+            inwards = get_args('x', 1.0),
+            targets = get_args('foo'),
+        )
+
+
+def test_System_add_target_offdesign():
+    """Use of `add_target` in off-design mode"""
+    class SystemWithTarget(System):
+        def setup(self):
+            self.add_inward('x', 1.0)
+            self.add_inward('y', 1.0)
+            self.add_outward('z', 1.0)
+
+            self.add_unknown('y').add_target('z')
+
+        def compute(self):
+            self.z = self.x * self.y**2
+
+    s = SystemWithTarget('s')
+    s.z = 1.5
+
+    offdesign = s.get_unsolved_problem()
+    assert offdesign.shape == (1, 1)
+    assert set(offdesign.residues) == {"Target[z]"}
+    assert offdesign.residues["Target[z]"].equation == "z == 1.5"
+
+    s.add_driver(NonLinearSolver('solver', tol=1e-9))
+
+    s.x = 0.5
+    s.y = 0.0
+    s.z = 2.0  # dynamically set target
+    s.run_drivers()
+    assert s.z == pytest.approx(2)
+    assert s.y == pytest.approx(2)
+
+    s.z = 4.0
+    s.run_drivers()
+    assert s.z == pytest.approx(4)
+    assert s.y == pytest.approx(np.sqrt(8))
+
+    s.x = 1.0
+    s.z = 4.0
+    s.run_drivers()
+    assert s.z == pytest.approx(4)
+    assert s.y == pytest.approx(2)
+
+
+def test_System_add_target_design():
+    """Use of `add_target` in a design method"""
+    class SystemWithTarget(System):
+        def setup(self):
+            self.add_inward('x', 1.0)
+            self.add_inward('y', 1.0)
+            self.add_outward('z', 1.0)
+
+            design = self.add_design_method('target_z')
+            design.add_unknown('y').add_target('z')
+
+        def compute(self):
+            self.z = self.x * self.y**2
+
+    s = SystemWithTarget('s')
+
+    offdesign = s.get_unsolved_problem()
+    assert offdesign.shape == (0, 0)
+
+    solver = s.add_driver(NonLinearSolver('solver', tol=1e-9))
+    solver.runner.design.extend(s.design('target_z'))
+
+    s.x = 0.5
+    s.y = 0.5
+    s.z = 2.0  # set target
+    s.run_drivers()
+    assert s.z == pytest.approx(2)
+    assert s.y == pytest.approx(2)
+    assert solver.problem.shape == (1, 1)
+
+    s.z = 4.0  # dynamically set new target
+    s.run_drivers()
+    assert s.z == pytest.approx(4)
+    assert s.y == pytest.approx(np.sqrt(8))
+
+
+def test_System_add_target_array():
+    """Use of `add_target` in a design method, with an array variable"""
+    class SystemWithTarget(System):
+        def setup(self):
+            self.add_inward('x', 1.0)
+            self.add_inward('y', 1.0)
+            self.add_outward('z', np.zeros(2))
+
+            design = self.add_design_method('target_z')
+            design.add_unknown(['x', 'y']).add_target('z')
+
+        def compute(self):
+            self.z[:] = [self.x * self.y**2, self.y / self.x]
+
+    s = SystemWithTarget('s')
+
+    offdesign = s.get_unsolved_problem()
+    assert offdesign.shape == (0, 0)
+
+    solver = s.add_driver(NonLinearSolver('solver', tol=1e-9, factor=0.5))
+    solver.runner.design.extend(s.design('target_z'))
+
+    s.x = 1.0
+    s.y = 1.0
+    s.z = np.r_[2.0, 4.0]  # set target
+    s.run_drivers()
+    assert s.x == pytest.approx(0.5)
+    assert s.y == pytest.approx(2)
+    assert s.z == pytest.approx([2, 4])
+    assert solver.problem.shape == (2, 2)
+
+    s.z = np.r_[-4.0, 0.25]  # dynamically set new target
+    s.run_drivers()
+    assert solver.problem.shape == (2, 2)
+    assert s.x == pytest.approx(-4)
+    assert s.y == pytest.approx(-1)
+    assert s.z == pytest.approx([-4, 0.25])
+
+
+def test_System_add_target_expression():
+    """Use of `add_target` in a design method, with an evaluable expression"""
+    class SystemWithTarget(System):
+        def setup(self):
+            self.add_inward('x', 1.0)
+            self.add_inward('y', 1.0)
+            self.add_outward('z', 1.0)
+
+            design = self.add_design_method('target_z')
+            design.add_unknown('y').add_target('abs(z)')
+
+        def compute(self):
+            self.z = self.x * self.y**2
+
+    s = SystemWithTarget('s')
+
+    offdesign = s.get_unsolved_problem()
+    assert offdesign.shape == (0, 0)
+
+    solver = s.add_driver(NonLinearSolver('solver', tol=1e-9))
+    solver.runner.design.extend(s.design('target_z'))
+
+    s.x = -0.5
+    s.y = 0.5
+    s.z = 2.0
+    s.run_drivers()
+    assert s.x == -0.5
+    assert s.y == pytest.approx(2)
+    assert s.z == pytest.approx(-2)
+
+    s.z = 4.0
+    s.run_drivers()
+    assert s.x == -0.5
+    assert s.y == pytest.approx(np.sqrt(8))
+    assert s.z == pytest.approx(-4)
+
+    s.x = 0.5
+    s.z = -1.0
+    s.run_drivers()
+    assert s.x == 0.5
+    assert s.y == pytest.approx(np.sqrt(2))
+    assert s.z == pytest.approx(1)
+
+
+def test_System_add_target_composite():
+    """Use of `add_target` in a composite system"""
+    class SubSystem(System):
+        def setup(self):
+            self.add_inward('x', 1.0)
+            self.add_inward('y', 1.0)
+            self.add_outward('z', 1.0)
+
+        def compute(self):
+            self.z = self.x * self.y**2
+
+    class TopSystem(System):
+        def setup(self):
+            self.add_child(SubSystem('sub'))
+
+            design = self.add_design_method('target_z')
+            design.add_unknown('sub.y').add_target('sub.z')
+
+    top = TopSystem('top')
+
+    offdesign = top.get_unsolved_problem()
+    assert offdesign.shape == (0, 0)
+
+    solver = top.add_driver(NonLinearSolver('solver', tol=1e-9))
+    solver.runner.design.extend(top.design('target_z'))
+
+    top.sub.x = 0.5
+    top.sub.y = 0.5
+    top.sub.z = 2.0  # set target
+    top.run_drivers()
+    assert top.sub.z == pytest.approx(2)
+    assert top.sub.y == pytest.approx(2)
+    assert solver.problem.shape == (1, 1)
+
+    top.sub.z = 4.0  # dynamically set new target
+    top.run_drivers()
+    assert top.sub.z == pytest.approx(4)
+    assert top.sub.y == pytest.approx(np.sqrt(8))
+
+
+@pytest.mark.parametrize("weak", [True, False])
+def test_System_add_target_weak(weak):
+    """Use of `add_target` with `weak` option"""
+    class SystemA(System):
+        def setup(self):
+            self.add_inward('x', 1.0)
+            self.add_inward('y', 1.0)
+            self.add_outward('z', 1.0)
+
+            self.add_unknown('y').add_target('z', weak=weak)
+
+        def compute(self):
+            self.z = self.x * self.y**2
+
+    class SystemB(System):
+        def setup(self):
+            self.add_inward('u', 0.0)
+            self.add_outward('v', 0.0)
+
+        def compute(self):
+            self.v = 2 * self.u
+
+    class TopSystem(System):
+        def setup(self):
+            a = self.add_child(SystemA('a'))
+            b = self.add_child(SystemB('b'))
+
+            self.connect(a.outwards, b.inwards, {'z': 'u'})
+
+    top = TopSystem('top')
+
+    offdesign = top.get_unsolved_problem()
+    assert set(offdesign.unknowns) == {'a.inwards.y'}
+
+    if weak:
+        # Weak target: residue is suppressed due to a.z -> b.u connection
+        assert len(offdesign.residues) == 0
+
+    else:
+        # Strong target: residue is maintained despite connection
+        assert len(offdesign.residues) == 1
+
+        solver = top.add_driver(NonLinearSolver('solver', tol=1e-9))
+
+        top.a.x = 0.5
+        top.a.y = 0.5
+        top.a.z = 2.0  # set target
+        top.run_drivers()
+        assert top.a.x == 0.5
+        assert top.a.y == pytest.approx(2)
+        assert top.a.z == pytest.approx(2)
+        assert top.b.u == top.a.z
+        assert solver.problem.shape == (1, 1)
 
 
 @pytest.mark.parametrize("ctor_data, expected_data", [

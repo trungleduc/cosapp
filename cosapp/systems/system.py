@@ -1244,20 +1244,22 @@ class System(Module, TimeObserver):
         MathematicalProblem
             The unsolved mathematical problem
         """
-        new = MathematicalProblem('off-design', self)
+        problem = MathematicalProblem('off-design', self)
 
         for name in ('residues', 'unknowns', 'transients', 'rates'):
-            var_dict = getattr(new, name)
+            var_dict = getattr(problem, name)
             var_dict.update(getattr(self._math, name))
+
+        problem.residues.update(self._math.get_target_residues())
 
         def transfer_unknown(unknown, name):
             options = { attr: getattr(unknown, attr)
                 for attr in ('max_abs_step', 'max_rel_step', 'lower_bound', 'upper_bound') }
-            new.add_unknown(name, **options)
+            problem.add_unknown(name, **options)
 
         def transfer_transient(unknown, name):
             ref = unknown.context.name2variable[unknown.name]
-            new.add_transient(
+            problem.add_transient(
                 name, 
                 der=unknown.der,
                 max_time_step=unknown.max_time_step_expr,
@@ -1265,7 +1267,7 @@ class System(Module, TimeObserver):
             )
 
         def transfer_rate(unknown, name):
-            new.add_rate(name, source=unknown.source_expr,
+            problem.add_rate(name, source=unknown.source_expr,
                 initial_value=unknown.initial_value_expr)
 
         for child in self.children.values():
@@ -1285,10 +1287,11 @@ class System(Module, TimeObserver):
                 for unknowns, transfer in transfer_items:
                     for name in list(unknowns.keys()):
                         unknown = unknowns[name]
-                        port = unknown.context[unknown.port]
+                        port = unknown.port
                         if (port.owner.name in self.children
                             and port is connector.sink 
-                            and unknown.variable in connector.variable_mapping):
+                            and unknown.variable in connector.variable_mapping.keys()
+                        ):
                             # Port is connected => remove unknown
                             unknowns.pop(name)
                             if connector.source.owner is self:
@@ -1296,9 +1299,29 @@ class System(Module, TimeObserver):
                                 src = connector.variable_mapping[unknown.variable]
                                 transfer(unknown, f"{connector.source.name}.{src}")
 
-            new.extend(child_problem, copy=False)
+                # Prune target equations defined as weak if target is connected
+                origin = connector.source.owner
+                deferred_residues = origin._math.deferred_residues
+                residue_name = MathematicalProblem.residue_naming(self, origin)[1]
 
-        return new
+                for deferred in filter(lambda target: target.weak, deferred_residues):
+                    varname = list(deferred.variables)[0]
+                    varname = f"{origin.name}.{varname}"
+                    ref = self.name2variable[varname]
+                    port = ref.mapping
+                    connected = (
+                        port.owner.name in self.children
+                        and port is connector.source 
+                        and ref.key in connector.variable_mapping.values()
+                    )
+                    if connected:
+                        # Remove deferred equation
+                        key = residue_name(MathematicalProblem.target_key(deferred))
+                        problem.residues.pop(key)
+
+            problem.extend(child_problem, copy=False)
+
+        return problem
 
     def add_child(self,
         child: "System",
@@ -1427,7 +1450,7 @@ class System(Module, TimeObserver):
             max_rel_step: Number = numpy.inf,
             lower_bound: Number = -numpy.inf,
             upper_bound: Number = numpy.inf
-    ) -> "MathematicalProblem":
+    ) -> MathematicalProblem:
         """Add unknown variables.
 
         You can set variable one by one or provide a list of dictionary to set multiple variable at once. The
@@ -1435,21 +1458,21 @@ class System(Module, TimeObserver):
 
         Parameters
         ----------
-        name : str or Iterable of dictionary or str
+        - name : str or Iterable of dictionary or str
             Name of the variable or list of variable to add
-        max_rel_step : float, optional
+        - max_rel_step : float, optional
             Maximal relative step by which the variable can be modified by the numerical solver; default numpy.inf
-        max_abs_step : float, optional
+        - max_abs_step : float, optional
             Maximal absolute step by which the variable can be modified by the numerical solver; default numpy.inf
-        lower_bound : float, optional
+        - lower_bound : float, optional
             Lower bound on which the solver solution is saturated; default -numpy.inf
-        upper_bound : float, optional
+        - upper_bound : float, optional
             Upper bound on which the solver solution is saturated; default numpy.inf
 
         Returns
         -------
         MathematicalProblem
-            The modified MathematicalSystem
+            The modified mathematical problem
         """
 
         def create_unknown(
@@ -1474,32 +1497,62 @@ class System(Module, TimeObserver):
         return self._math
 
     def add_equation(self,
-            equation: Union[str, Iterable[Union[dict, str, Tuple[str, str]]]],
-            name: Optional[str] = None,
-            reference: Union[Number, numpy.ndarray, str] = 1) -> "MathematicalProblem":
-        """Add residue equation.
+        equation: Union[str, Iterable[Union[dict, str, Tuple[str, str]]]],
+        name: Optional[str] = None,
+        reference: Union[Number, numpy.ndarray, str] = 1,
+    ) -> MathematicalProblem:
+        """Add off-design equation.
 
-        You can add residue equation one by one or provide a list of dictionary to add multiple equation at once. The
-        dictionary key are the arguments of this method.
+        Equations may be added one by one, or provided by a list of dictionaries to add multiple equations at once.
+        The dictionary keys are the arguments of this method.
 
         Parameters
         ----------
-        equation : str or Iterable of str of the kind 'lhs == rhs'
+        - equation : str or Iterable of str of the kind 'lhs == rhs'
             Equation or list of equations to add
-        name : str, optional
+        - name : str, optional
             Name of the equation; default None => 'lhs == rhs'
-        reference : Number, numpy.ndarray or "norm", optional
+        - reference : Number, numpy.ndarray or "norm", optional
             Reference value(s) used to normalize the equation; default is 1.
             If value is "norm", actual reference value is estimated from order of magnitude.
 
         Returns
         -------
         MathematicalProblem
-            The modified MathematicalSystem
+            The modified mathematical problem
         """
         self.__lock_check("add_equation")
 
         return self._math.add_equation(equation, name, reference)
+
+    def add_target(self,
+        name: Union[str, Iterable[Union[dict, str, Tuple[str, str]]]],
+        reference: Union[Number, numpy.ndarray, str] = 1,
+        weak = False,
+    ) -> MathematicalProblem:
+        """Add deferred off-design equation on a targetted quantity.
+
+        Target equations may be added one by one, or provided by a list of dictionaries to add multiple equations at once.
+        The dictionary keys are the arguments of this method.
+
+        Parameters
+        ----------
+        - name: str, optional
+            Name of the equation; default None => 'lhs == rhs'
+        - reference: Number, numpy.ndarray or "norm", optional
+            Reference value(s) used to normalize the equation; default is 1.
+            If value is "norm", actual reference value is estimated from order of magnitude.
+        - weak: bool, optional
+            If True, the target is disregarded if the corresponding variable is connected; default is `False`.
+
+        Returns
+        -------
+        MathematicalProblem
+            The modified mathematical problem
+        """
+        self.__lock_check("add_target")
+
+        return self._math.add_target(name, reference, weak)
 
     def add_design_method(self, name: str) -> MathematicalProblem:
         """Add a design method to the `System`
@@ -1517,8 +1570,8 @@ class System(Module, TimeObserver):
 
         Returns
         -------
-        MathematicalSystem
-            The mathematical system to solve to fulfill the method.
+        MathematicalProblem
+            The newly created mathematical problem.
 
         Examples
         --------
