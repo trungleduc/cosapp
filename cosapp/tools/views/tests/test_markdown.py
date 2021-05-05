@@ -62,36 +62,42 @@ class DynamicSystem3(System3):
 # <codecell>
 
 # TODO("be sure the test is complete")
-def test_markdown():
+def test_system_to_markdown():
+    s = System("s")
+    markdown = system_to_md(s)
+    assert "### Child components" not in markdown
+    assert "### Inputs" not in markdown
+    assert "### Outputs" not in markdown
+    assert "### Residues" not in markdown
+    assert f"`{System.INWARDS}`: ExtensiblePort" not in markdown
+    assert f"`{System.OUTWARDS}`: ExtensiblePort" not in markdown
+
     s = System2("s")
     markdown = system_to_md(s)
     assert "### Child components" not in markdown
-    assert "#### {}".format(System.INWARDS.capitalize()) in markdown
-    assert "#### {}".format(System.OUTWARDS.capitalize()) in markdown
-    assert "### Ports" in markdown
-    assert "#### Inputs" not in markdown
-    assert "#### Outputs" in markdown
-    assert "#### Residues" not in markdown
+    assert "### Inputs" in markdown
+    assert "### Outputs" in markdown
+    assert "### Residues" not in markdown
+    assert f"`{System.INWARDS}`: ExtensiblePort" in markdown
+    assert f"`{System.OUTWARDS}`: ExtensiblePort" in markdown
 
     s = System3("s")
     markdown = system_to_md(s)
     assert "### Child components" not in markdown
-    assert "#### {}".format(System.INWARDS.capitalize()) not in markdown
-    assert "#### {}".format(System.OUTWARDS.capitalize()) not in markdown
-    assert "### Ports" in markdown
-    assert "#### Inputs" in markdown
-    assert "#### Outputs" in markdown
-    assert "#### Residues" not in markdown
+    assert "### Inputs" in markdown
+    assert "### Outputs" in markdown
+    assert "### Residues" not in markdown
+    assert f"`{System.INWARDS}`: ExtensiblePort" not in markdown
+    assert f"`{System.OUTWARDS}`: ExtensiblePort" not in markdown
 
     s = System4("s")
     markdown = system_to_md(s)
     assert "### Child components" not in markdown
-    assert "#### {}".format(System.INWARDS.capitalize()) in markdown
-    assert "#### {}".format(System.OUTWARDS.capitalize()) not in markdown
-    assert "### Ports" not in markdown
-    assert "#### Inputs" not in markdown
-    assert "#### Outputs" not in markdown
+    assert "### Inputs" in markdown
+    assert "### Outputs" not in markdown
     assert "### Residues" in markdown
+    assert f"`{System.INWARDS}`: ExtensiblePort" in markdown
+    assert f"`{System.OUTWARDS}`: ExtensiblePort" not in markdown
 
     u = System("child")
     s.add_child(u)
