@@ -224,14 +224,15 @@ nbsphinx_thumbnails = {
     "tutorials/01-Systems": "_images/file-code.svg",
     "tutorials/02-Ports": "_images/plug.svg",
     "tutorials/03-Drivers": "_images/play.svg",
-    "tutorials/03b-Advanced-Drivers": "_images/workflow-all.svg",
     "tutorials/04-Triggers": "_images/zap.svg",
     "tutorials/05-Validation": "_images/verified.svg",
     "tutorials/06-Visibility": "_images/eye.svg",
     "tutorials/SystemSurrogates": "_images/fold.svg",
     "tutorials/10-Recorders": "_images/desktop-download.svg",
+    "tutorials/11-DesignMethods": "_images/pencil.svg",
+    "tutorials/TimeDriver": "_images/pulse.svg",
     "tutorials/FMI": "_images/package.svg",
-    "tutorials/Logging": "_images/pulse.svg",
+    "tutorials/Logging": "_images/file-text.svg",
 }
 
 import nbsphinx
