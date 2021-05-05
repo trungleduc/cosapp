@@ -20,6 +20,18 @@ def port_to_md(port: ExtensiblePort) -> str:
     return "\n".join(port_to_md_table(port))
 
 
+def table_css() -> str:
+    """Local override of Jupyter Lab table CSS"""
+    return "".join([
+        r"<div class='cosapp-port-table' style='margin-left: 25px; margin-top: -12px'>",
+        r"<style type='text/css'>",
+        r".cosapp-port-table >table >thead{display: none}",  # suppress empty table header
+        r".cosapp-port-table tbody tr{background: white!important}",  # override even/odd coloring
+        r".cosapp-port-table tbody tr:hover{background: #e1f5fe!important}",  # set hover color
+        r"</style>",
+    ])
+
+
 def port_to_md_table(port: ExtensiblePort, contextual=True) -> List[str]:
     """Returns the representation of this port variables in as a Markdown table.
 
@@ -37,14 +49,7 @@ def port_to_md_table(port: ExtensiblePort, contextual=True) -> List[str]:
     doc = []
     doc.append(f"`{name}`: {type(port).__name__}")
     # Local override of Jupyter Lab table CSS
-    doc.extend(["",
-        r"<div style='margin-left: 25px; margin-top: -12px' class='cosapp-port-table'>",
-        r"<style type='text/css'>",
-        r".cosapp-port-table >table >thead{display: none}",
-        r".cosapp-port-table tbody tr{background: white!important}",
-        r".cosapp-port-table tbody tr:hover{background: #e1f5fe!important}",
-        r"</style>",
-    ])
+    doc.extend(["", table_css()])
     doc.extend(["", "<!-- -->|<!-- -->", "---|---"])
     doc.extend(f"  {value._repr_markdown_()}" for value in port.get_details().values())
     doc.extend(["</div>", ""])

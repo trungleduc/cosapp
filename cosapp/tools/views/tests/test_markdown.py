@@ -1,12 +1,11 @@
+from _pytest.fixtures import reorder_items
 import pytest
 
 from cosapp.ports import Port, PortType
 from cosapp.systems import System
-import numpy
-from ..markdown import system_to_md, port_to_md_table, port_to_md
+from ..markdown import system_to_md, port_to_md_table, port_to_md, table_css
 
 # <codecell> Local test classes
-
 
 class DummyPort(Port):
     def setup(self):
@@ -59,7 +58,22 @@ class DynamicSystem3(System3):
         self.add_rate("db_out", source="exit.b")
 
 
+@pytest.fixture(scope='function')
+def table_header():
+    return f"{table_css()}\n\n<!-- -->|<!-- -->\n---|---\n"
+
 # <codecell>
+
+def test_table_css():
+    assert table_css() == (
+        r"<div class='cosapp-port-table' style='margin-left: 25px; margin-top: -12px'>"
+        r"<style type='text/css'>"
+        r".cosapp-port-table >table >thead{display: none}"
+        r".cosapp-port-table tbody tr{background: white!important}"
+        r".cosapp-port-table tbody tr:hover{background: #e1f5fe!important}"
+        r"</style>"
+    )
+
 
 # TODO("be sure the test is complete")
 def test_system_to_markdown():
@@ -112,6 +126,7 @@ def test_system_to_markdown():
     assert "**Tags**" in markdown
 
 
+@pytest.mark.parametrize("direction", PortType)
 @pytest.mark.parametrize(
     "PortCls, expected",
     [
@@ -119,47 +134,46 @@ def test_system_to_markdown():
         (DummyPortWithDesc, "  **foo**: 1 | Foo variable\n  **bar**: 2 | Bar variable"),
     ],
 )
-def test_port_to_md(PortCls: Port, expected):
-    p = PortCls("p", PortType.IN)
-    ret = port_to_md(p)
-    header = "<div style='margin-left:25px'>\n\n<!-- -->|<!-- --> \n---|---\n"
+def test_port_to_md(PortCls: Port, direction, table_header, expected):
+    p = PortCls("p", direction)
+    header = f"`p`: {PortCls.__name__}\n\n{table_header}"
     footer = "\n</div>\n"
-    assert ret == f"{header}{expected}{footer}"
+    assert port_to_md(p) == f"{header}{expected}{footer}"
 
 
-@pytest.mark.parametrize(
-    "PortCls, expected",
-    [
-        (
-            DummyPort,
-            [
-                "<div style='margin-left:25px'>",
-                "",
-                "<!-- -->|<!-- --> ",
-                "---|---",
-                "  **a**: 1 |",
-                "  **b**: 2 |",
-                "</div>",
-                "",
-            ],
-        ),
-        (
-            DummyPortWithDesc,
-            [
-                "<div style='margin-left:25px'>",
-                "",
-                "<!-- -->|<!-- --> ",
-                "---|---",
-                "  **foo**: 1 | Foo variable",
-                "  **bar**: 2 | Bar variable",
-                "</div>",
-                "",
-            ],
-        ),
-    ],
-)
-def test_port_to_md_table(PortCls: Port, expected):
-    p = PortCls("p", PortType.IN)
-    ret = port_to_md_table(p)
-    print(ret)
-    assert ret == expected
+@pytest.mark.parametrize("direction", PortType)
+@pytest.mark.parametrize("PortCls, expected", [
+    (
+        DummyPort,
+        [
+            "`p`: DummyPort",
+            "",
+            table_css(),
+            "",
+            "<!-- -->|<!-- -->",
+            "---|---",
+            "  **a**: 1 |",
+            "  **b**: 2 |",
+            "</div>",
+            "",
+        ],
+    ),
+    (
+        DummyPortWithDesc,
+        [
+            "`p`: DummyPortWithDesc",
+            "",
+            table_css(),
+            "",
+            "<!-- -->|<!-- -->",
+            "---|---",
+            "  **foo**: 1 | Foo variable",
+            "  **bar**: 2 | Bar variable",
+            "</div>",
+            "",
+        ],
+    ),
+])
+def test_port_to_md_table(PortCls: Port, direction, expected):
+    p = PortCls("p", direction)
+    assert port_to_md_table(p) == expected
