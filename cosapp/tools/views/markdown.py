@@ -5,11 +5,11 @@ from typing import List
 
 
 def port_to_md(port: ExtensiblePort) -> str:
-    """Returns the representation of this port variables in Markdown format.
+    """Returns the representation of `port` in Markdown format.
 
     Parameters
     ----------
-    port : ExtensiblePort
+    port: ExtensiblePort
         Port to describe
 
     Returns
@@ -33,35 +33,37 @@ def table_css() -> str:
 
 
 def port_to_md_table(port: ExtensiblePort, contextual=True) -> List[str]:
-    """Returns the representation of this port variables in as a Markdown table.
+    """Returns the representation of `port` variables as a Markdown table.
 
     Parameters
     ----------
-    port : ExtensiblePort
+    port: ExtensiblePort
         Port to describe
+    contextual: bool
+        If `True` (default), uses port full name; if `False`, displays only port name.
 
     Returns
     -------
     List[str]
-        List of Markdown strings to represent the table of variables
+        List of Markdown strings representing port variables as a table.
     """
-    name = port.contextual_name if contextual else port.name
+    name = port.full_name() if contextual else port.name
     doc = []
     doc.append(f"`{name}`: {type(port).__name__}")
     # Local override of Jupyter Lab table CSS
     doc.extend(["", table_css()])
-    doc.extend(["", "<!-- -->|<!-- -->", "---|---"])
+    doc.extend(["", "<!-- -->|<!-- -->", "---|---"])  # table header
     doc.extend(f"  {value._repr_markdown_()}" for value in port.get_details().values())
     doc.extend(["</div>", ""])
     return doc
 
 
 def system_to_md(system: System) -> str:
-    """Returns the representation of a system in Markdown format.
+    """Returns the representation of `system` in Markdown format.
 
     Parameters
     ----------
-    system : System
+    system: System
         System to describe
 
     Returns
