@@ -1,7 +1,76 @@
 """Mardown viewers for Module and Port."""
 from cosapp.ports.port import ExtensiblePort
 from cosapp.systems import System
-from typing import List
+from typing import List, Union
+
+
+class PortMarkdownFormatter:
+    """Markdown table formatter for ports"""
+    
+    def __init__(self, port: ExtensiblePort) -> None:
+        self.port = port
+
+    def content(self, contextual=True) -> List[str]:
+        """Returns the port representation in Markdown format, as a list of strings.
+
+        Parameters
+        ----------
+        contextual: bool
+            If `True` (default), uses port full name; if `False`, displays only port name.
+
+        Returns
+        -------
+        List[str]
+            List of Markdown strings representing port variables as a table.
+        """
+        port = self.port
+        name = port.full_name() if contextual else port.name
+        content = [
+            f"  {value._repr_markdown_()}"
+            for value in port.get_details().values()
+        ]
+        doc = []
+        doc.extend([f"`{name}`: {type(port).__name__}", ""])
+        doc.extend(self.wrap(content))
+        return doc
+
+    def markdown(self, contextual=True) -> str:
+        """Returns the port representation in Markdown format.
+
+        Parameters
+        ----------
+        contextual: bool
+            If `True` (default), uses port full name; if `False`, displays only port name.
+
+        Returns
+        -------
+        str
+            Markdown formatted representation
+        """
+        return "\n".join(self.content(contextual))
+
+    @classmethod
+    def wrap(cls, content: Union[str, List[str]]) -> List[str]:
+        if isinstance(content, str):
+            content = [content]
+        header = ["<!-- -->|<!-- -->", "---|---"]
+        doc = [cls.div_header(), ""]
+        doc.extend(header)
+        doc.extend(content)
+        doc.extend(["</div>", ""])
+        return doc
+
+    @classmethod
+    def div_header(cls) -> str:
+        """Div header used to override Jupyter Lab table CSS"""
+        return "".join([
+            r"<div class='cosapp-port-table' style='margin-left: 25px; margin-top: -12px'>",
+            r"<style type='text/css'>",
+            r".cosapp-port-table >table >thead{display: none}",  # suppress empty table header
+            r".cosapp-port-table tbody tr{background: white!important}",  # override even/odd coloring
+            r".cosapp-port-table tbody tr:hover{background: #e1f5fe!important}",  # set hover color
+            r"</style>",
+        ])
 
 
 def port_to_md(port: ExtensiblePort) -> str:
@@ -17,45 +86,8 @@ def port_to_md(port: ExtensiblePort) -> str:
     str
         Markdown formatted representation
     """
-    return "\n".join(port_to_md_table(port))
-
-
-def table_css() -> str:
-    """Local override of Jupyter Lab table CSS"""
-    return "".join([
-        r"<div class='cosapp-port-table' style='margin-left: 25px; margin-top: -12px'>",
-        r"<style type='text/css'>",
-        r".cosapp-port-table >table >thead{display: none}",  # suppress empty table header
-        r".cosapp-port-table tbody tr{background: white!important}",  # override even/odd coloring
-        r".cosapp-port-table tbody tr:hover{background: #e1f5fe!important}",  # set hover color
-        r"</style>",
-    ])
-
-
-def port_to_md_table(port: ExtensiblePort, contextual=True) -> List[str]:
-    """Returns the representation of `port` variables as a Markdown table.
-
-    Parameters
-    ----------
-    port: ExtensiblePort
-        Port to describe
-    contextual: bool
-        If `True` (default), uses port full name; if `False`, displays only port name.
-
-    Returns
-    -------
-    List[str]
-        List of Markdown strings representing port variables as a table.
-    """
-    name = port.full_name() if contextual else port.name
-    doc = []
-    doc.append(f"`{name}`: {type(port).__name__}")
-    # Local override of Jupyter Lab table CSS
-    doc.extend(["", table_css()])
-    doc.extend(["", "<!-- -->|<!-- -->", "---|---"])  # table header
-    doc.extend(f"  {value._repr_markdown_()}" for value in port.get_details().values())
-    doc.extend(["</div>", ""])
-    return doc
+    formatter = PortMarkdownFormatter(port)
+    return formatter.markdown()
 
 
 def system_to_md(system: System) -> str:
@@ -88,7 +120,8 @@ def system_to_md(system: System) -> str:
         doc.extend(["", f"### {header.title()}", ""])
         for port in port_dict.values():
             if len(port) > 0:
-                port_doc = port_to_md_table(port, contextual=False)
+                formatter = PortMarkdownFormatter(port)
+                port_doc = formatter.content(contextual=False)
                 port_doc[0] = f"- {port_doc[0]}"
                 doc.extend(port_doc)
 

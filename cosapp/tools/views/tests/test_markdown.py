@@ -1,9 +1,8 @@
-from _pytest.fixtures import reorder_items
 import pytest
 
 from cosapp.ports import Port, PortType
 from cosapp.systems import System
-from ..markdown import system_to_md, port_to_md_table, port_to_md, table_css
+from cosapp.tools.views.markdown import system_to_md, port_to_md, PortMarkdownFormatter
 
 # <codecell> Local test classes
 
@@ -59,24 +58,18 @@ class DynamicSystem3(System3):
 
 
 @pytest.fixture(scope='function')
-def table_header():
-    return f"{table_css()}\n\n<!-- -->|<!-- -->\n---|---\n"
+def composite():
+    """Returns composite system with ports and children"""
+    top = System3('top')
+    top.add_child(System4('sub'))
+    top.add_child(DynamicSystem3('dyn'))
+    return top
+
 
 # <codecell>
 
-def test_table_css():
-    assert table_css() == (
-        r"<div class='cosapp-port-table' style='margin-left: 25px; margin-top: -12px'>"
-        r"<style type='text/css'>"
-        r".cosapp-port-table >table >thead{display: none}"
-        r".cosapp-port-table tbody tr{background: white!important}"
-        r".cosapp-port-table tbody tr:hover{background: #e1f5fe!important}"
-        r"</style>"
-    )
-
-
 # TODO("be sure the test is complete")
-def test_system_to_markdown():
+def test_system_to_md():
     s = System("s")
     markdown = system_to_md(s)
     assert "### Child components" not in markdown
@@ -134,36 +127,66 @@ def test_system_to_markdown():
         (DummyPortWithDesc, "  **foo**: 1 | Foo variable\n  **bar**: 2 | Bar variable"),
     ],
 )
-def test_port_to_md(PortCls: Port, direction, table_header, expected):
+def test_port_to_md(PortCls: Port, direction, expected):
     p = PortCls("p", direction)
+    div_header = PortMarkdownFormatter.div_header()
+    table_header = f"{div_header}\n\n<!-- -->|<!-- -->\n---|---\n"
     header = f"`p`: {PortCls.__name__}\n\n{table_header}"
     footer = "\n</div>\n"
     assert port_to_md(p) == f"{header}{expected}{footer}"
+
+
+def test_PortMarkdownFormatter_div_header():
+    assert PortMarkdownFormatter.div_header() == (
+        r"<div class='cosapp-port-table' style='margin-left: 25px; margin-top: -12px'>"
+        r"<style type='text/css'>"
+        r".cosapp-port-table >table >thead{display: none}"
+        r".cosapp-port-table tbody tr{background: white!important}"
+        r".cosapp-port-table tbody tr:hover{background: #e1f5fe!important}"
+        r"</style>"
+    )
+
+
+def test_PortMarkdownFormatter_wrap():
+    assert PortMarkdownFormatter.wrap("foo") == [
+        PortMarkdownFormatter.div_header(),
+        "", "<!-- -->|<!-- -->", "---|---",
+        "foo",
+        "</div>", "",
+    ]
+
+    assert PortMarkdownFormatter.wrap(['x', 'y']) == [
+        PortMarkdownFormatter.div_header(),
+        "", "<!-- -->|<!-- -->", "---|---",
+        "x", "y",
+        "</div>", "",
+    ]
 
 
 @pytest.mark.parametrize("direction", PortType)
 @pytest.mark.parametrize("PortCls, expected", [
     (
         DummyPort,
-        [
-            "`p`: DummyPort",
-            "",
-            table_css(),
-            "",
-            "<!-- -->|<!-- -->",
-            "---|---",
+        ["`p`: DummyPort", ""] +
+        PortMarkdownFormatter.wrap([
             "  **a**: 1 |",
             "  **b**: 2 |",
-            "</div>",
-            "",
-        ],
+        ]),
+    ),
+    (
+        DummyPortWithDesc,
+        ["`p`: DummyPortWithDesc", ""] +
+        PortMarkdownFormatter.wrap([
+            "  **foo**: 1 | Foo variable",
+            "  **bar**: 2 | Bar variable",
+        ]),
     ),
     (
         DummyPortWithDesc,
         [
             "`p`: DummyPortWithDesc",
             "",
-            table_css(),
+            PortMarkdownFormatter.div_header(),
             "",
             "<!-- -->|<!-- -->",
             "---|---",
@@ -174,6 +197,41 @@ def test_port_to_md(PortCls: Port, direction, table_header, expected):
         ],
     ),
 ])
-def test_port_to_md_table(PortCls: Port, direction, expected):
+def test_PortMarkdownFormatter_content(PortCls: Port, direction, expected):
     p = PortCls("p", direction)
-    assert port_to_md_table(p) == expected
+    mdt = PortMarkdownFormatter(p)
+    assert mdt.content() == expected
+
+
+def test_PortMarkdownFormatter_markdown(composite):
+    top = composite
+    assert top.name == "top"
+
+    mdt = PortMarkdownFormatter(top.entry)
+    assert mdt.markdown() == mdt.markdown(contextual=True)  # test default
+    assert mdt.markdown(contextual=True).startswith("`top.entry`: DummyPort")
+    assert mdt.markdown(contextual=False).startswith("`entry`: DummyPort")
+
+    mdt = PortMarkdownFormatter(top.exit)
+    assert mdt.markdown(contextual=True).startswith("`top.exit`: DummyPort")
+    assert mdt.markdown(contextual=False).startswith("`exit`: DummyPort")
+
+    mdt = PortMarkdownFormatter(top.sub.inwards)
+    assert mdt.markdown(contextual=True).startswith("`top.sub.inwards`: ExtensiblePort")
+    assert mdt.markdown(contextual=False).startswith("`inwards`: ExtensiblePort")
+
+    mdt = PortMarkdownFormatter(top.dyn.entry)
+    assert mdt.markdown(contextual=True).startswith("`top.dyn.entry`: DummyPort")
+    assert mdt.markdown(contextual=False).startswith("`entry`: DummyPort")
+
+    # Full content test
+    top.dyn.entry.a = 3.14
+    top.dyn.entry.b = -0.5
+    expected = (
+        "`top.dyn.entry`: DummyPort\n"
+        f"\n{PortMarkdownFormatter.div_header()}\n"
+        "\n<!-- -->|<!-- -->\n---|---\n"
+        "  **a**: 3.14 |\n  **b**: -0.5 |"
+        "\n</div>\n"
+    )
+    assert mdt.markdown() == expected
