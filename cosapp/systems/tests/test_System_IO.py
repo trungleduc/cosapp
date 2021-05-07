@@ -1,12 +1,8 @@
 import pytest
-import os, sys
 import numpy as np
-
 from io import StringIO
-from pathlib import Path
 
-from cosapp.utils.testing import assert_keys, assert_all_type
-from cosapp.core.config import CoSAppConfiguration
+from cosapp.utils.testing import assert_keys
 from cosapp.tests.library.systems import AllTypesSystem
 from cosapp.tests.library.ports import NumPort, V1dPort
 from cosapp.ports.port import ExtensiblePort

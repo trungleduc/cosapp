@@ -4,7 +4,7 @@ from collections.abc import Collection
 import inspect
 
 from cosapp.ports.enum import PortType, CommonPorts
-from cosapp.ports.port import ExtensiblePort, Port
+from cosapp.ports.port import BasePort, Port
 from cosapp.utils.helpers import check_arg
 
 SearchPattern = Union[str, List[str]]
@@ -98,8 +98,8 @@ def find_variables(
     excludes = make_wishlist(excludes)
     result = set()
 
-    def is_valid(port):
-        return isinstance(port, ExtensiblePort) and (
+    def is_valid(port: BasePort) -> bool:
+        return isinstance(port, BasePort) and (
             (port.direction is PortType.IN and inputs) or
             (port.direction is PortType.OUT and outputs)
         )

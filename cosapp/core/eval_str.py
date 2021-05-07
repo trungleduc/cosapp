@@ -356,11 +356,11 @@ class EvalString:
         """
         if self.__vars is None:
             from cosapp.systems import System
-            from cosapp.ports.port import ExtensiblePort
+            from cosapp.ports.port import BasePort
             names = set()
             expression = str(self)
             for key, obj in self.__locals.items():
-                if isinstance(obj, (System, ExtensiblePort)):
+                if isinstance(obj, (System, BasePort)):
                     names |= set(f"{key}{tail}"
                         for tail in re.findall(f"{key}(\.[\w\.]*)+", expression)
                     )

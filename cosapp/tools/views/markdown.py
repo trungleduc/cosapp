@@ -1,5 +1,5 @@
 """Mardown viewers for Module and Port."""
-from cosapp.ports.port import ExtensiblePort
+from cosapp.ports.port import BasePort
 from cosapp.systems import System
 from typing import List, Union
 
@@ -7,7 +7,7 @@ from typing import List, Union
 class PortMarkdownFormatter:
     """Markdown table formatter for ports"""
     
-    def __init__(self, port: ExtensiblePort) -> None:
+    def __init__(self, port: BasePort) -> None:
         self.port = port
 
     def content(self, contextual=True) -> List[str]:
@@ -73,12 +73,12 @@ class PortMarkdownFormatter:
         ])
 
 
-def port_to_md(port: ExtensiblePort) -> str:
+def port_to_md(port: BasePort) -> str:
     """Returns the representation of `port` in Markdown format.
 
     Parameters
     ----------
-    port: ExtensiblePort
+    port: BasePort
         Port to describe
 
     Returns

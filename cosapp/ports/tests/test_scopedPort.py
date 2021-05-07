@@ -1,12 +1,9 @@
+import pytest
 from unittest import mock
 
-import pytest
-
-from cosapp.ports.port import PortType, ExtensiblePort
 from cosapp.ports.exceptions import ScopeError
 from cosapp.ports import Scope
 from cosapp.systems import System
-
 from cosapp.drivers import NonLinearSolver
 from cosapp.tests.library.systems import NonLinear1, Multiply2, MergerMath, SplitterMath
 from cosapp.tests.library.ports import XPort

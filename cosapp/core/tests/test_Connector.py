@@ -293,8 +293,8 @@ def test_Connector_name():
     (APort("p3", PortType.OUT, {'a': 2}), dict(error=ConnectorError, match="variable 'x' does not exist in port APort")),
     (XYPort("p3", PortType.IN, {'x': 1, 'y': 2}), dict(error=None)),
     (XYPort("p3", PortType.OUT, {'x': 1, 'y': 2}), dict(error=None)),
-    ("p3", dict(error=TypeError, match="should be ExtensiblePort")),
-    ({'x': 1}, dict(error=TypeError, match="should be ExtensiblePort")),
+    ("p3", dict(error=TypeError, match="should be BasePort")),
+    ({'x': 1}, dict(error=TypeError, match="should be BasePort")),
 ])
 def test_Connector_source_sink(attr, port, expected):
     """Test 'source' and 'sink' attributes"""
