@@ -13,11 +13,11 @@ class VariableReference(NamedTuple):
         Context of the variable
     key : str
         Key of the variable in the dictionary
-    mapping : Mapping[str, Any] or ExtensiblePort
+    mapping : Mapping[str, Any] or BasePort
         Map object with string key
     """
     context: "System"
-    mapping: "Union[Mapping[str, Any], ExtensiblePort]"
+    mapping: "Union[Mapping[str, Any], BasePort]"
     key: str
 
     @property

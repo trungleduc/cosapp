@@ -7,7 +7,7 @@ import weakref
 from typing import Callable, Dict, Iterable, List, Optional, Tuple, Union
 
 from cosapp.ports import units
-from cosapp.ports.port import ExtensiblePort, PortType
+from cosapp.ports.port import BasePort, PortType
 from cosapp.utils.helpers import check_arg, is_numerical
 
 logger = logging.getLogger(__name__)
@@ -42,22 +42,22 @@ class Connector:
     ----------
     name : str
         Name of the connector
-    source : ExtensiblePort
+    source : BasePort
         Port from which originate the variables
     mapping : str or List[str] or Dict[str, str]
         (List of) common name(s) or mapping name dictionary
-    sink : ExtensiblePort
+    sink : BasePort
         Port to which the variables are transferred
     """
 
     def __init__(
         self,
         name: str,
-        sink: ExtensiblePort,
-        source: ExtensiblePort,
+        sink: BasePort,
+        source: BasePort,
         mapping: Union[str, List[str], Dict[str, str], None] = None,
     ):
-        """Connector constructor from the two `ExtensiblePort` to link and the list of variables to map.
+        """Connector constructor from the two `BasePort` to link and the list of variables to map.
 
         If no mapping is provided, connection will be made between variables based on their names. 
         If a name mapping is provided as a list, the name should be present in both port. And if 
@@ -68,9 +68,9 @@ class Connector:
         ----------
         name : str
             Name of the connector
-        sink : ExtensiblePort
+        sink : BasePort
             Port to which the variables are transferred.
-        source : ExtensiblePort
+        source : BasePort
             Port from which originate the variables.
         mapping : str or List[str] or Dict[str, str], optional
             (List of) common name(s) or mapping name dictionary; default None (i.e. no mapping).
@@ -96,8 +96,8 @@ class Connector:
             mapping = dict(zip(mapping, mapping))
 
         self._mapping = mapping  # type: Dict[str, str]
-        self._source = self.__get_port(source, sink=False, check=False)  # type: weakref.ReferenceType[ExtensiblePort]
-        self._sink = self.__get_port(sink, sink=True, check=False)  # type: weakref.ReferenceType[ExtensiblePort]
+        self._source = self.__get_port(source, sink=False, check=False)  # type: weakref.ReferenceType[BasePort]
+        self._sink = self.__get_port(sink, sink=True, check=False)  # type: weakref.ReferenceType[BasePort]
 
         self._unit_conversions = dict(
             (name, None) for name in self._mapping
@@ -118,26 +118,26 @@ class Connector:
         return self._name
 
     @property
-    def source(self) -> ExtensiblePort:
-        """`ExtensiblePort`: Port from which transferred values originate."""
+    def source(self) -> BasePort:
+        """`BasePort`: Port from which transferred values originate."""
         return self._source()
 
     @source.setter
-    def source(self, port: ExtensiblePort) -> None:
+    def source(self, port: BasePort) -> None:
         self._source = self.__get_port(port, sink=False, check=True)
         self.update_unit_conversion()
 
     @property
-    def sink(self) -> ExtensiblePort:
-        """`ExtensiblePort`: Port to which values are transferred."""
+    def sink(self) -> BasePort:
+        """`BasePort`: Port to which values are transferred."""
         return self._sink()
 
     @sink.setter
-    def sink(self, port: ExtensiblePort) -> None:
+    def sink(self, port: BasePort) -> None:
         self._sink = self.__get_port(port, sink=True, check=True)
         self.update_unit_conversion()
 
-    def __get_port(self, port: ExtensiblePort, sink: bool, check=True) -> "weakref.ref[ExtensiblePort]":
+    def __get_port(self, port: BasePort, sink: bool, check=True) -> "weakref.ref[BasePort]":
         """Returns a weakref to `port`, after compatibility check with internal mapping."""
         if sink:
             name = 'sink'
@@ -158,8 +158,8 @@ class Connector:
         return weakref.ref(port)
 
     @staticmethod
-    def __check_port(port: ExtensiblePort, name: str) -> None:
-        check_arg(port, name, ExtensiblePort, stack_shift=1)
+    def __check_port(port: BasePort, name: str) -> None:
+        check_arg(port, name, BasePort, stack_shift=1)
 
         if not port.owner:
             raise ConnectorError(f"{name.title()} owner is undefined.")

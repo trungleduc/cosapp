@@ -4,7 +4,7 @@ import os
 from typing import Dict, List, Optional, Tuple, Union
 
 from cosapp.drivers import Driver
-from cosapp.ports.port import ExtensiblePort
+from cosapp.ports.port import BasePort
 from cosapp.systems import System
 from cosapp.tools import templates
 
@@ -53,17 +53,17 @@ class VisJsRenderer(BaseRenderer):
 
             def get_component2id(
                 system: System,
-                cmpt2id: Dict[Union[System, ExtensiblePort], int],
+                cmpt2id: Dict[Union[System, BasePort], int],
                 node_id: int,
                 edges: List[Dict],
-            ) -> Tuple[Dict[Union[System, ExtensiblePort], int], int, List[Dict]]:
+            ) -> Tuple[Dict[Union[System, BasePort], int], int, List[Dict]]:
                 """Set the mapping between the `Module` and their unique id.
 
                 Parameters
                 ----------
                 system : Module
                     The parent `Module` for which id must be set
-                cmpt2id : Dict[Union[Module, ExtensiblePort], int]
+                cmpt2id : Dict[Union[Module, BasePort], int]
                     Mapping of `Module` or port and its id
                 node_id : int
                     Latest used id
@@ -72,7 +72,7 @@ class VisJsRenderer(BaseRenderer):
 
                 Returns
                 -------
-                tuple (List[Dict], Dict[Union["Module", "ExtensiblePort"], int], int)
+                tuple (List[Dict], Dict[Union["Module", "BasePort"], int], int)
                     The first is the mapping between each involved system or port and an unique id,
                     the second is the latest used id and
                     the third index is the list of edges (one per connector).
@@ -117,9 +117,9 @@ class VisJsRenderer(BaseRenderer):
 
                 def connectors_to_visJS(
                     system: System,
-                    component_id: Optional[Dict[Union[System, ExtensiblePort], int]] = None,
+                    component_id: Optional[Dict[Union[System, BasePort], int]] = None,
                     node_id: int = 1,
-                ) -> Tuple[List[Dict], Dict[Union[System, ExtensiblePort], int], int]:
+                ) -> Tuple[List[Dict], Dict[Union[System, BasePort], int], int]:
                     """Build the dictionary the list of edges.
 
                     Parameters
@@ -133,7 +133,7 @@ class VisJsRenderer(BaseRenderer):
 
                     Returns
                     -------
-                    tuple (List[Dict], Dict[Union["System", "ExtensiblePort"], int], int)
+                    tuple (List[Dict], Dict[Union["System", "BasePort"], int], int)
                         The first index is the list of edges (one per connector),
                         the second is the mapping between each involved system or port and an unique id and
                         the third is the latest used id.
@@ -242,7 +242,7 @@ class VisJsRenderer(BaseRenderer):
 
             groups = list()
             for c, id in cmpt2id.items():
-                if isinstance(c, ExtensiblePort):
+                if isinstance(c, BasePort):
                     port_name = c.name
 
                     ref = dict(

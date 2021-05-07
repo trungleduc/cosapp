@@ -3,7 +3,7 @@ from typing import Union
 import pytest
 
 from cosapp.core.numerics.residues import Residue
-from cosapp.ports.port import ExtensiblePort, Port
+from cosapp.ports.port import BasePort, ExtensiblePort
 from cosapp.systems.system import IterativeConnector, System
 from cosapp.tests.library.ports import XPort
 from cosapp.tests.library.systems import ComplexDuct
@@ -58,10 +58,10 @@ def test_IterativeConnector___init___():
     assert len(connection.inputs[System.INWARDS]) == 0
     assert isinstance(connection.inputs[System.INWARDS], ExtensiblePort)
     assert len(connection.inputs[IterativeConnector.GUESS]) == 1
-    assert isinstance(connection.inputs[IterativeConnector.GUESS], ExtensiblePort)
+    assert isinstance(connection.inputs[IterativeConnector.GUESS], BasePort)
     assert "a_in" in connection.inputs[IterativeConnector.GUESS]
     assert len(connection.inputs[IterativeConnector.RESULT]) == 1
-    assert isinstance(connection.inputs[IterativeConnector.RESULT], ExtensiblePort)
+    assert isinstance(connection.inputs[IterativeConnector.RESULT], BasePort)
     assert "a_out" in connection.inputs[IterativeConnector.RESULT]
 
 

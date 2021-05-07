@@ -14,7 +14,7 @@ import numpy
 from cosapp.core import __version__ as cosapp_version
 from cosapp.drivers import RunSingleCase
 from cosapp.drivers.abstractsolver import AbstractSolver
-from cosapp.ports.port import ExtensiblePort
+from cosapp.ports.port import BasePort
 from cosapp.systems import System
 from cosapp.utils.helpers import check_arg
 
@@ -158,7 +158,7 @@ class FmuBuilder:
 
     @staticmethod
     def _get_default_variables(
-        ports: Dict[str, ExtensiblePort], to_skip: Iterable[str]
+        ports: Dict[str, BasePort], to_skip: Iterable[str]
     ) -> Dict[str, Any]:
         """Get the default variable list from a port list.
 
@@ -169,7 +169,7 @@ class FmuBuilder:
 
         Parameters
         ----------
-        ports : Dict[str, ExtensiblePort]
+        ports : Dict[str, BasePort]
             List of port to extract variables from
         to_skip : Iterable[str]
             List of variable names to ignore

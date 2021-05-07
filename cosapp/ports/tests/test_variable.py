@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 
 from cosapp.ports.variable import Variable
-from cosapp.ports.port import ExtensiblePort
+from cosapp.ports.port import BasePort
 from cosapp.core.numerics.distributions.distribution import Distribution
 from cosapp.core.numerics.distributions.uniform import Uniform
 from cosapp.ports.enum import Scope, Validity
@@ -18,7 +18,7 @@ from cosapp.utils.testing import  get_args
 
 @pytest.fixture(scope='function')
 def port():
-    return mock.Mock(spec=ExtensiblePort)
+    return mock.Mock(spec=BasePort)
 
 
 @pytest.fixture(scope='function')
@@ -149,7 +149,7 @@ def test_Variable___init__(port, caplog):
         Variable(name, port, value, unit="kg/gh")
 
     # Test unit for boolean
-    port = mock.Mock(spec=ExtensiblePort)
+    port = mock.Mock(spec=BasePort)
     name = "var1"
     value = True
     setattr(port, name, value)
@@ -166,7 +166,7 @@ def test_Variable___init__(port, caplog):
     assert re.match(expected_msg, record.message)
 
     # Test unit for string
-    port = mock.Mock(spec=ExtensiblePort)
+    port = mock.Mock(spec=BasePort)
     name = "var1"
     value = "hello"
     setattr(port, name, value)
@@ -184,7 +184,7 @@ def test_Variable___init__(port, caplog):
     assert re.match(expected_msg, record.message)
 
     # Test valid_range
-    port = mock.Mock(spec=ExtensiblePort)
+    port = mock.Mock(spec=BasePort)
     name = "var1"
     value = 0.0
     setattr(port, name, value)
@@ -204,7 +204,7 @@ def test_Variable___init__(port, caplog):
     for a, b in ({"valid_range": (-np.inf, 5.0), "limits": (-np.inf, np.inf)}).items():
         assert getattr(v, a) == b
 
-    port = mock.Mock(spec=ExtensiblePort)
+    port = mock.Mock(spec=BasePort)
     name = "var1"
     value = "dummy string"
     setattr(port, name, value)
@@ -213,7 +213,7 @@ def test_Variable___init__(port, caplog):
         assert getattr(v, a) == b
 
     # Test invalid_comment
-    port = mock.Mock(spec=ExtensiblePort)
+    port = mock.Mock(spec=BasePort)
     name = "var1"
     value = 0.0
     setattr(port, name, value)
@@ -222,7 +222,7 @@ def test_Variable___init__(port, caplog):
     )
     assert v.invalid_comment == "Not acceptable"
 
-    port = mock.Mock(spec=ExtensiblePort)
+    port = mock.Mock(spec=BasePort)
     name = "var1"
     value = True
     setattr(port, name, value)
@@ -238,7 +238,7 @@ def test_Variable___init__(port, caplog):
     )
     assert re.match(expected_msg, record.message)
 
-    port = mock.Mock(spec=ExtensiblePort)
+    port = mock.Mock(spec=BasePort)
     name = "var1"
     value = ""
     setattr(port, name, value)
@@ -257,7 +257,7 @@ def test_Variable___init__(port, caplog):
     assert re.match(expected_msg, record.message)
 
     # Test limits
-    port = mock.Mock(spec=ExtensiblePort)
+    port = mock.Mock(spec=BasePort)
     name = "var1"
     value = 0.0
     setattr(port, name, value)
@@ -293,7 +293,7 @@ def test_Variable___init__(port, caplog):
     for a, b in ({"valid_range": (0.0, 5.0), "limits": (-np.inf, 10.0)}).items():
         assert getattr(v, a) == b
 
-    port = mock.Mock(spec=ExtensiblePort)
+    port = mock.Mock(spec=BasePort)
     name = "var1"
     value = "dummy string"
     setattr(port, name, value)
@@ -302,7 +302,7 @@ def test_Variable___init__(port, caplog):
         assert getattr(v, a) == b
 
     # Test out_of_limits_comment
-    port = mock.Mock(spec=ExtensiblePort)
+    port = mock.Mock(spec=BasePort)
     name = "var1"
     value = 1.0
     setattr(port, name, value)
@@ -311,7 +311,7 @@ def test_Variable___init__(port, caplog):
     )
     assert v.out_of_limits_comment == "Not acceptable"
 
-    port = mock.Mock(spec=ExtensiblePort)
+    port = mock.Mock(spec=BasePort)
     name = "var1"
     value = True
     setattr(port, name, value)
@@ -327,7 +327,7 @@ def test_Variable___init__(port, caplog):
     expected_msg = r"Out-of-limits comment specified for variable '\w+' without limits."
     assert re.match(expected_msg, record.message)
 
-    port = mock.Mock(spec=ExtensiblePort)
+    port = mock.Mock(spec=BasePort)
     name = "var1"
     value = ""
     setattr(port, name, value)
@@ -344,7 +344,7 @@ def test_Variable___init__(port, caplog):
     assert re.match(expected_msg, record.message)
 
     # Test description
-    port = mock.Mock(spec=ExtensiblePort)
+    port = mock.Mock(spec=BasePort)
     name = "var1"
     value = 2.5
     setattr(port, name, value)
@@ -361,21 +361,21 @@ def test_Variable___init__(port, caplog):
         Variable(name, port, value, desc=42.0)
 
     # Test scope
-    port = mock.Mock(spec=ExtensiblePort)
+    port = mock.Mock(spec=BasePort)
     name = "var1"
     value = 2.5
     setattr(port, name, value)
     v = Variable(name, port, value, scope=Scope.PRIVATE)
     assert v.scope == Scope.PRIVATE
 
-    port = mock.Mock(spec=ExtensiblePort)
+    port = mock.Mock(spec=BasePort)
     name = "var1"
     value = 2.5
     setattr(port, name, value)
     v = Variable(name, port, value, scope=Scope.PROTECTED)
     assert v.scope == Scope.PROTECTED
 
-    port = mock.Mock(spec=ExtensiblePort)
+    port = mock.Mock(spec=BasePort)
     name = "var1"
     value = 2.5
     setattr(port, name, value)
@@ -386,91 +386,91 @@ def test_Variable___init__(port, caplog):
         Variable(name, port, value, scope="PRIVATE")
 
     # Test dtype
-    port = mock.Mock(spec=ExtensiblePort)
+    port = mock.Mock(spec=BasePort)
     name = "var1"
     value = -2
     setattr(port, name, value)
     v = Variable(name, port, value)
     assert v.dtype == (Number, np.ndarray)
 
-    port = mock.Mock(spec=ExtensiblePort)
+    port = mock.Mock(spec=BasePort)
     name = "var1"
     value = 2.5
     setattr(port, name, value)
     v = Variable(name, port, value)
     assert v.dtype == (Number, np.ndarray)
 
-    port = mock.Mock(spec=ExtensiblePort)
+    port = mock.Mock(spec=BasePort)
     name = "var1"
     value = True
     setattr(port, name, value)
     v = Variable(name, port, value)
     assert v.dtype == bool
 
-    port = mock.Mock(spec=ExtensiblePort)
+    port = mock.Mock(spec=BasePort)
     name = "var1"
     value = ""
     setattr(port, name, value)
     v = Variable(name, port, value)
     assert v.dtype == str
 
-    port = mock.Mock(spec=ExtensiblePort)
+    port = mock.Mock(spec=BasePort)
     name = "var1"
     value = list()
     setattr(port, name, value)
     v = Variable(name, port, value)
     assert v.dtype == list
 
-    port = mock.Mock(spec=ExtensiblePort)
+    port = mock.Mock(spec=BasePort)
     name = "var1"
     value = tuple()
     setattr(port, name, value)
     v = Variable(name, port, value)
     assert v.dtype == tuple
 
-    port = mock.Mock(spec=ExtensiblePort)
+    port = mock.Mock(spec=BasePort)
     name = "var1"
     value = set()
     setattr(port, name, value)
     v = Variable(name, port, value)
     assert v.dtype == set
 
-    port = mock.Mock(spec=ExtensiblePort)
+    port = mock.Mock(spec=BasePort)
     name = "var1"
     value = dict()
     setattr(port, name, value)
     v = Variable(name, port, value)
     assert v.dtype == dict
 
-    port = mock.Mock(spec=ExtensiblePort)
+    port = mock.Mock(spec=BasePort)
     name = "var1"
     value = np.asarray([1, 2, 3])
     setattr(port, name, value)
     v = Variable(name, port, value)
     assert v.dtype == np.ndarray
 
-    port = mock.Mock(spec=ExtensiblePort)
+    port = mock.Mock(spec=BasePort)
     name = "var1"
     value = 2.5
     setattr(port, name, value)
     v = Variable(name, port, value, dtype=float)
     assert v.dtype == float
 
-    port = mock.Mock(spec=ExtensiblePort)
+    port = mock.Mock(spec=BasePort)
     name = "var1"
     value = 2
     setattr(port, name, value)
     v = Variable(name, port, value, dtype=int)
     assert v.dtype == int
 
-    port = mock.Mock(spec=ExtensiblePort)
+    port = mock.Mock(spec=BasePort)
     name = "var1"
     value = 2.5
     setattr(port, name, value)
     with pytest.raises(TypeError, match=r"Cannot set .+ of type \w+ with a \w+"):
         Variable(name, port, value, dtype=int)
 
-    port = mock.Mock(spec=ExtensiblePort)
+    port = mock.Mock(spec=BasePort)
     name = "var1"
     value = np.r_[1]
     setattr(port, name, value)
@@ -486,7 +486,7 @@ def test_Variable___init__(port, caplog):
     )
     assert re.match(expected_msg, record.message)
 
-    port = mock.Mock(spec=ExtensiblePort)
+    port = mock.Mock(spec=BasePort)
     name = "var1"
     value = np.r_[1.0]
     setattr(port, name, value)
@@ -496,7 +496,7 @@ def test_Variable___init__(port, caplog):
     assert len(caplog.records) == 0
 
     # Test distribution
-    port = mock.Mock(spec=ExtensiblePort)
+    port = mock.Mock(spec=BasePort)
     name = "var1"
     value = 0.0
     setattr(port, name, value)
@@ -687,7 +687,7 @@ def test_Variable_scope(port):
 
 
 def test_Variable_valid_range():
-    port = mock.Mock(spec=ExtensiblePort)
+    port = mock.Mock(spec=BasePort)
     name = "var1"
     value = 2.0
     setattr(port, name, value)
@@ -730,7 +730,7 @@ def test_Variable_valid_range():
     for a, b in ({"limits": (-np.inf, np.inf), "valid_range": (-np.inf, 5.0)}).items():
         assert getattr(v, a) == b
 
-    port = mock.Mock(spec=ExtensiblePort)
+    port = mock.Mock(spec=BasePort)
     name = "var1"
     value = "dummy string"
     setattr(port, name, value)
@@ -740,7 +740,7 @@ def test_Variable_valid_range():
         assert getattr(v, a) == b
 
     # With limits
-    port = mock.Mock(spec=ExtensiblePort)
+    port = mock.Mock(spec=BasePort)
     name = "var1"
     value = 2.0
     setattr(port, name, value)
@@ -766,7 +766,7 @@ def test_Variable_invalid_comment(port):
 
 
 def test_Variable_limits():
-    port = mock.Mock(spec=ExtensiblePort)
+    port = mock.Mock(spec=BasePort)
     name = "var1"
     value = 0.0
     setattr(port, name, value)
@@ -839,7 +839,7 @@ def test_Variable_limits():
     for a, b in ({"valid_range": (0.0, 5.0), "limits": (-np.inf, np.inf)}).items():
         assert getattr(v, a) == b
 
-    port = mock.Mock(spec=ExtensiblePort)
+    port = mock.Mock(spec=BasePort)
     name = "var1"
     value = "dummy string"
     setattr(port, name, value)
@@ -875,7 +875,7 @@ def test_Variable_distribution(port):
 
 
 def test_Variable_is_valid():
-    port = mock.Mock(spec=ExtensiblePort)
+    port = mock.Mock(spec=BasePort)
     name = "var1"
     value = 2.0
     setattr(port, name, value)
@@ -909,7 +909,7 @@ def test_Variable_is_valid():
     setattr(port, name, 4.5)
     assert v.is_valid() == Validity.ERROR
 
-    port = mock.Mock(spec=ExtensiblePort)
+    port = mock.Mock(spec=BasePort)
     name = "var1"
     value = True
     setattr(port, name, value)
@@ -925,7 +925,7 @@ def test_Variable_is_valid():
 
 
 def test_Variable_get_validity_comment():
-    port = mock.Mock(spec=ExtensiblePort)
+    port = mock.Mock(spec=BasePort)
     name = "var1"
     value = 2.0
     setattr(port, name, value)
@@ -955,7 +955,7 @@ def test_Variable_get_validity_comment():
     assert v.get_validity_comment(Validity.WARNING) == "[1.0, 3.0] - Not valid"
     assert v.get_validity_comment(Validity.ERROR) == "[0.0, 4.0] - Get out now!"
 
-    port = mock.Mock(spec=ExtensiblePort)
+    port = mock.Mock(spec=BasePort)
     name = "var1"
     value = True
     setattr(port, name, value)

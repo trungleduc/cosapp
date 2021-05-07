@@ -8,7 +8,7 @@ from typing import Any, Dict, Optional, Union, Tuple, Type
 import numpy
 import pandas
 
-from cosapp.ports.port import ExtensiblePort
+from cosapp.ports.port import Port
 from cosapp.ports.enum import Scope
 from cosapp.systems.system import System
 from cosapp.systems.surrogate_models.nearest_neighbor import NearestNeighbor
@@ -193,7 +193,7 @@ class MetaSystem(System):
         name: str,
         variables: Optional[Dict[str, Any]] = None,
         model: Optional[Union[Type[SurrogateModel], Dict[str, SurrogateModel]]] = None,
-    ) -> ExtensiblePort:
+    ) -> Port:
         """Add an output `Port` to the `System`.
 
         This function cannot be called outside `System.setup`.
@@ -212,7 +212,7 @@ class MetaSystem(System):
 
         Returns
         -------
-        ExtensiblePort
+        Port
             The created port
 
         Examples

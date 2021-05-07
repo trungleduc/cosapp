@@ -5,7 +5,7 @@ from typing import Union
 
 from cosapp.core.module import Module
 from cosapp.ports.enum import PortType
-from cosapp.ports.port import ExtensiblePort, Port
+from cosapp.ports.port import BasePort
 
 
 class DocDisplay:
@@ -13,7 +13,7 @@ class DocDisplay:
 
     # TODO unit tests
 
-    def __init__(self, obj: Union[type, ExtensiblePort, Module]):
+    def __init__(self, obj: Union[type, BasePort, Module]):
         """DocDisplay constructor.
 
         Documentation can only be built for object of type :py:class:`~cosapp.drivers.driver.Driver`,
@@ -21,15 +21,15 @@ class DocDisplay:
 
         Parameters
         ----------
-        obj: ExtensiblePort or Module class, or instance thereof
+        obj: BasePort or Module class, or instance thereof
             Class type of the object to display, or instance of such class.
         """
-        supported = (ExtensiblePort, Module)
+        supported = (BasePort, Module)
         if not (isinstance(obj, supported) or issubclass(obj, supported)):
             raise TypeError("Only Driver, Port and System are supported for display.")
 
         if isinstance(obj, type):  # Instantiate an object
-            if issubclass(obj, Port):
+            if issubclass(obj, BasePort):
                 obj = obj("dummy", PortType.OUT)
             else:
                 obj = obj("dummy")
@@ -83,7 +83,7 @@ class DocDisplay:
         return "\n".join(doc)
 
     @classmethod
-    def display_doc(cls, obj: Union[type, ExtensiblePort, Port]) -> "DocDisplay":
+    def display_doc(cls, obj: Union[type, BasePort, Module]) -> "DocDisplay":
         """Display information for `Driver`, `System` or `Port` in a Jupyter notebook.
 
         Parameters

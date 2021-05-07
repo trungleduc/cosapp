@@ -19,10 +19,10 @@ from cosapp.utils.naming import NameChecker
 logger = logging.getLogger(__name__)
 
 
-class ExtensiblePort:
-    """`ExtensiblePort` is a container to gather variables.
+class BasePort:
+    """Base class for ports, containers gathering variables.
 
-    Common user should not use this class.
+    Common users should not use this class directly.
 
     Parameters
     ----------
@@ -35,7 +35,7 @@ class ExtensiblePort:
     _name_check = NameChecker()
 
     def __init__(self, name: str, direction: PortType) -> None:
-        """`ExtensiblePort` constructor.
+        """`BasePort` constructor.
 
         Parameters
         ----------
@@ -228,29 +228,6 @@ class ExtensiblePort:
         # For efficiency reasons, variables are stored as port attributes
         setattr(self, name, value)
 
-    # TODO unused and should be removed -> to dangerous for consistency
-    def remove_variable(self, name: str) -> None:
-        """Remove the variable from the port.
-
-        Parameters
-        ----------
-        name : str
-            Name of the variable to be removed
-
-        Raises
-        ------
-        ValueError
-            If the variable does not exists
-        """
-
-        if name not in self._variables:
-            raise AttributeError(
-                f"Variable {name!r} does not exist in port {self.contextual_name}"
-            )
-
-        delattr(self, name)
-        self._variables.pop(name)
-
     # TODO should we override __setattr__ to forward setting to the source port? and/or raise an
     #   error if it is not possible - for example if the source is an output variable
     def __set_notype_checking(self, key, value):
@@ -326,9 +303,9 @@ class ExtensiblePort:
             True to activate type checking, False to deactivate
         """
         if activate:
-            ExtensiblePort.__setattr__ = ExtensiblePort.__set_variable
+            BasePort.__setattr__ = BasePort.__set_variable
         else:
-            ExtensiblePort.__setattr__ = ExtensiblePort.__set_notype_checking
+            BasePort.__setattr__ = BasePort.__set_notype_checking
 
     def __contains__(self, item: str) -> bool:
         return item in self._variables
@@ -487,7 +464,7 @@ class ExtensiblePort:
     def copy(self,
         name: Optional[str] = None,
         direction: Optional[PortType] = None,
-    ) -> "ExtensiblePort":
+    ) -> "BasePort":
         """Duplicates the port.
 
         Parameters
@@ -520,7 +497,7 @@ class ExtensiblePort:
 
         return new_port
 
-    def morph(self, port: "ExtensiblePort") -> None:
+    def morph(self, port: "BasePort") -> None:
         """Morph the provided port into this port.
 
         Morphing a port is useful when converting a `System` in something equivalent. The morphing
@@ -528,7 +505,7 @@ class ExtensiblePort:
 
         Parameters
         ----------
-        port : ExtensiblePort
+        port : BasePort
             The port to morph to
         """
 
@@ -590,7 +567,45 @@ class ExtensiblePort:
         return new_dict
 
 
-class Port(ExtensiblePort):
+
+class ExtensiblePort(BasePort):
+    """Class describing ports with a varying number of variables."""
+
+    def __init__(self, name: str, direction: PortType) -> None:
+        """`ExtensiblePort` constructor.
+
+        Parameters
+        ----------
+        name : str
+            Port name
+        direction : {PortType.IN, PortType.OUT}
+            Port direction
+        """
+        super().__init__(name, direction)
+
+    # TODO unused and should be removed -> to dangerous for consistency
+    def remove_variable(self, name: str) -> None:
+        """Removes a variable from the port.
+
+        Parameters
+        ----------
+        name : str
+            Name of the variable to be removed
+
+        Raises
+        ------
+        AttributeError
+            If the variable does not exists
+        """
+        if name not in self._variables:
+            raise AttributeError(
+                f"Variable {name!r} does not exist in port {self.contextual_name}"
+            )
+        delattr(self, name)
+        self._variables.pop(name)
+
+
+class Port(BasePort):
     """A `Port` is a container gathering variables tightly linked.
 
     An optional dictionary may be specified to overwrite variable value and some of their
@@ -735,8 +750,8 @@ class Port(ExtensiblePort):
 
         Notes
         -----
-        The default visibility of a `Port` variable is `Scope.PUBLIC`. This is a difference compared
-        to `ExtensiblePort`.
+        The default visibility of a `Port` variable is `Scope.PUBLIC`.
+        This is a difference compared to `BasePort`.
 
         Parameters
         ----------
@@ -780,25 +795,9 @@ class Port(ExtensiblePort):
             scope=scope,
         )
 
-    # TODO remove ?
-    def remove_variable(self, name: str) -> None:
-        """Remove the variable from the port.
-
-        Parameters
-        ----------
-        name : str
-            Name of the variable to be removed
-
-        Raises
-        ------
-        ValueError
-            If the variable does not exists
-        """
-        raise AttributeError("remove_variable cannot be called on Port.")
-
     def copy(
         self, name: Optional[str] = None, direction: Optional[PortType] = None
-    ) -> "ExtensiblePort":
+    ) -> "BasePort":
         """Duplicates the port.
 
         Parameters

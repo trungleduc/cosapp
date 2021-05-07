@@ -1,19 +1,15 @@
-import logging
-from collections import OrderedDict
-from typing import Any, Dict, Optional, Union
-
 import numpy
+from typing import Any, Dict, Optional
 
 from cosapp.core.eval_str import AssignString
 from cosapp.core.numerics.basics import MathematicalProblem
 from cosapp.core.numerics.boundary import Boundary
 from cosapp.drivers.iterativecase import IterativeCase
 from cosapp.ports.enum import PortType
-from cosapp.ports.port import ExtensiblePort
-from cosapp.ports.variable import ArrayIndices
 from cosapp.systems import System
 from cosapp.utils.helpers import check_arg
 
+import logging
 logger = logging.getLogger(__name__)
 
 

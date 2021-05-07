@@ -34,10 +34,6 @@ class Module(LoggerContext, metaclass=abc.ABCMeta):
     ----------
     name : str
         `Module` name
-    inputs : :obj:`collections.OrderedDict` of :obj:`ExtensiblePort`
-        Dictionary of `ExtensiblePort` containing the values needed to compute the `Module`
-    outputs : Dict[ExtensiblePort]
-        Dictionary of `ExtensiblePort` containing the values computed by the `Module`
     children : Dict[str, Module]
         Child `Module` of this `Module`
     parent : Module
@@ -47,9 +43,6 @@ class Module(LoggerContext, metaclass=abc.ABCMeta):
 
     _active : bool
         If False, the `Module` will not execute its `run_once` method
-    _is_clean : dict[bool]
-        Reflects the status of the inputs and outputs. `clean` status means the group of ports was not updated since
-        last computation of the `Module`
     _compute_calls: int
         Store if the number of times :py:meth:`~cosapp.core.module.Module.compute` was called (due to inhibition of clean status)
 
@@ -64,8 +57,8 @@ class Module(LoggerContext, metaclass=abc.ABCMeta):
     """
 
     __slots__ = (
-        '__weakref__', '_name', 'children', 'parent', '__exec_order', '_active', '_compute_calls',
-        'setup_ran', 'computed', 'clean_ran'
+        '__weakref__', '_name', 'children', 'parent', '__exec_order', '_active',
+        '_compute_calls', 'setup_ran', 'computed', 'clean_ran',
     )
 
     _name_check = NameChecker(excluded=["inwards", "outwards"])

@@ -8,7 +8,7 @@ import logging
 import base64
 
 from cosapp.systems import System
-from cosapp.ports.port import ExtensiblePort
+from cosapp.ports.port import BasePort
 from cosapp.ports.enum import PortType
 
 from cosapp.utils.helpers import check_arg
@@ -17,16 +17,16 @@ logger = logging.getLogger(__name__)
 
 
 def _get_tree_dict(
-    system_or_port: Union[System, ExtensiblePort],
+    system_or_port: Union[System, BasePort],
     include_wards: bool
 ) -> Dict[str, Any]:
     """Get a dictionary representation of the system hierarchy."""
-    check_arg(system_or_port, 'system_or_port', (System, ExtensiblePort))
+    check_arg(system_or_port, 'system_or_port', (System, BasePort))
 
     tree_dict = OrderedDict(name=system_or_port.name, type='subsystem')
     children = list()
 
-    if isinstance(system_or_port, ExtensiblePort):  # look for variable in in the system
+    if isinstance(system_or_port, BasePort):  # look for variable in in the system
 
         tree_dict['subsystem_type'] = 'component'
         if system_or_port.direction == PortType.IN:

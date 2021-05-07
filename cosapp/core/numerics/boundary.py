@@ -88,7 +88,7 @@ class Boundary:
         )
 
     @staticmethod
-    def container(system: "cosapp.systems.System", name: str) -> "ExtensiblePort":
+    def container(system: "cosapp.systems.System", name: str) -> "BasePort":
         """
         Checks that variable `name` is a valid boundary in `system`.
         If so, returns the container port. Raises an exception otherwise.
@@ -102,7 +102,7 @@ class Boundary:
         
         Returns
         -------
-        - container: ExtensiblePort
+        - container: BasePort
             Port containing the variable, if the latter is found valid (raises an exception otherwise)
 
         Raises
@@ -112,14 +112,14 @@ class Boundary:
         - `ValueError` if container is an output port
         - `ScopeError` if container port does not belong to system
         """
-        from cosapp.ports.port import ExtensiblePort
+        from cosapp.ports.port import BasePort
         if name not in system:
             raise AttributeError(
                 f"Variable {name!r} is not present in {system.name!r}."
             )
 
         _, container, key = system.name2variable[name]
-        if not isinstance(container, ExtensiblePort):
+        if not isinstance(container, BasePort):
             raise TypeError(
                 f"Only variables can be used in mathematical algorithms; got {name!r} in {system.name!r}"
             )
@@ -153,8 +153,8 @@ class Boundary:
         return self._context
 
     @property
-    def port(self) -> "ExtensiblePort":
-        """ExtensiblePort: port containing the boundary."""
+    def port(self) -> "BasePort":
+        """BasePort: port containing the boundary."""
         return self.__info.port
 
     @property

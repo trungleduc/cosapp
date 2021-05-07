@@ -5,7 +5,7 @@ from typing import Any, Iterable, List, Optional, Union
 import numpy
 
 from cosapp.core.numerics import sobol_seq
-from cosapp.ports.port import ExtensiblePort, PortType
+from cosapp.ports.port import BasePort, PortType
 from cosapp.drivers.abstractsetofcases import AbstractSetOfCases
 from cosapp.drivers.abstractsolver import AbstractSolver
 from cosapp.utils.helpers import check_arg
@@ -89,7 +89,7 @@ class MonteCarlo(AbstractSetOfCases):
             ref = self.owner.name2variable[name]
             port = ref.mapping
 
-            if not isinstance(port, ExtensiblePort):
+            if not isinstance(port, BasePort):
                 raise TypeError(f"{name!r} is not a variable.")
 
             if port.direction != PortType.IN:

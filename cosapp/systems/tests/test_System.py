@@ -15,7 +15,7 @@ from cosapp.core.connectors import Connector, ConnectorError
 from cosapp.core.numerics.basics import MathematicalProblem
 from cosapp.core.numerics.boundary import Unknown
 from cosapp.core.numerics.residues import Residue
-from cosapp.ports.port import ExtensiblePort, Port, PortType, Scope, Validity
+from cosapp.ports.port import BasePort, Port, PortType, Scope, Validity
 from cosapp.ports.units import UnitError
 from cosapp.drivers import Driver, RunOnce, NonLinearSolver
 from cosapp.systems import system as system_module
@@ -163,10 +163,10 @@ def test_System_skip_type_checking():
     m = Multiply1("m")
     with pytest.raises(TypeError):
         m.p_in.x = "a"
-    ExtensiblePort.set_type_checking(False)
+    BasePort.set_type_checking(False)
     m.p_in.x = "a"
     m.K1 = 2
-    ExtensiblePort.set_type_checking(True)
+    BasePort.set_type_checking(True)
     pattern = r"Trying to set [\w\.]+ of type .*? with .*?"  # match in error message
     with pytest.raises(TypeError, match=pattern):
         m.run_once()
@@ -187,9 +187,9 @@ def test_System_skip_type_checking():
 
 def test_System_type_checking_sub_system(set_master_system):
     m = Multiply1("m")
-    ExtensiblePort.set_type_checking(False)
+    BasePort.set_type_checking(False)
     m.p_in.x = "a"  # Set bad value on purpose
-    ExtensiblePort.set_type_checking(True)
+    BasePort.set_type_checking(True)
     m.add_driver(RunOnce("r"))
     pattern = r"Trying to set [\w\.]+ of type .*? with .*?"  # match in error message
 
@@ -1121,7 +1121,7 @@ def test_System_open_loops():
 
     assert_keys(child.inputs, System.INWARDS,
         IterativeConnector.GUESS, IterativeConnector.RESULT)
-    assert all(isinstance(obj, ExtensiblePort) for obj in child.inputs.values())
+    assert all(isinstance(obj, BasePort) for obj in child.inputs.values())
     assert len(child.inputs[System.INWARDS]) == 0
     c_input = child.inputs[IterativeConnector.GUESS]
     assert isinstance(c_input, Port)
@@ -1150,7 +1150,7 @@ def test_System_open_loops():
     assert isinstance(child, IterativeConnector)
     assert_keys(child.inputs, System.INWARDS,
         IterativeConnector.GUESS, IterativeConnector.RESULT)
-    assert all(isinstance(obj, ExtensiblePort) for obj in child.inputs.values())
+    assert all(isinstance(obj, BasePort) for obj in child.inputs.values())
     assert len(child.inputs[System.INWARDS]) == 0
     c_input = child.inputs[IterativeConnector.GUESS]
     assert len(c_input) == 1
@@ -1180,7 +1180,7 @@ def test_System_open_loops():
     assert isinstance(child, IterativeConnector)
     assert_keys(child.inputs, System.INWARDS,
         IterativeConnector.GUESS, IterativeConnector.RESULT)
-    assert all(isinstance(obj, ExtensiblePort) for obj in child.inputs.values())
+    assert all(isinstance(obj, BasePort) for obj in child.inputs.values())
     assert len(child[System.INWARDS]) == 0
     assert isinstance(child[IterativeConnector.RESULT], Port)
     c_input = child.inputs[IterativeConnector.GUESS]
@@ -1392,6 +1392,41 @@ def test_System_close_loops():
     # Parent has no trace in name2variable
     for key in ("a_entry", "a_entry.y"):
         assert key not in s.name2variable
+
+
+def test_System_is_input_var(DummyFactory):
+    s = DummyFactory("dummy",
+        inputs = get_args(PtWPort, 'flow_in'),
+        outputs = get_args(PtWPort, 'flow_out'),
+        inwards = [get_args('x', 1.0), get_args('y', np.zeros(4))],
+        outwards = get_args("z", 42.0),
+    )
+    # Test `System.is_input_var`
+    assert s.is_input_var('x')
+    assert s.is_input_var('y')
+    assert not s.is_input_var('z')
+
+    assert s.is_input_var('flow_in.Pt')
+    assert s.is_input_var('flow_in.W')
+    assert not s.is_input_var('flow_in')  # does not apply to ports
+
+    assert not s.is_input_var('flow_out.Pt')
+    assert not s.is_input_var('flow_out.W')
+    assert not s.is_input_var('flow_out')
+
+    # Test `System.is_output_var`
+    assert not s.is_output_var('x')
+    assert not s.is_output_var('y')
+    assert s.is_output_var('z')
+
+    assert not s.is_output_var('flow_in.Pt')
+    assert not s.is_output_var('flow_in.W')
+    assert not s.is_output_var('flow_in')
+
+    assert s.is_output_var('flow_out.Pt')
+    assert s.is_output_var('flow_out.W')
+    assert not s.is_output_var('flow_out')
+
 
 def test_System_clean_partial_inwards():
     # This test case comes from the following configuration

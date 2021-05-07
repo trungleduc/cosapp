@@ -30,7 +30,7 @@ class Variable:
     ----------
     name : str
         Variable name.
-    port : ExtensiblePort
+    port : BasePort
         Port to which belong the variable
     value : Any
         Variable value
@@ -62,7 +62,7 @@ class Variable:
     #     a way to change the value no passing through the Port (which is bad for the
     #     clean dirty logic).
     #   Disadvantage : the logic to store the details and the value is a bit messy in
-    #     ExtensiblePort.add_variable
+    #     BasePort.add_variable
 
     __slots__ = [
         "__weakref__",
@@ -236,7 +236,7 @@ class Variable:
     def __init__(
         self,
         name: str,
-        port: "cosapp.ports.port.ExtensiblePort",
+        port: "cosapp.ports.port.BasePort",
         value: Any,
         unit: str = "",
         dtype: Types = None,
@@ -250,8 +250,8 @@ class Variable:
     ):
         self._name = self.name_check(name)
 
-        from cosapp.ports.port import ExtensiblePort
-        check_arg(port, 'port', ExtensiblePort)
+        from cosapp.ports.port import BasePort
+        check_arg(port, 'port', BasePort)
         self._port = port
 
         check_arg(unit, 'unit', str)

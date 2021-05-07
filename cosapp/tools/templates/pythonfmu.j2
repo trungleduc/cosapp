@@ -3,7 +3,7 @@ import pathlib
 
 from cosapp.core.eval_str import EvalString
 from cosapp.drivers import {{ driver }}, NonLinearSolver
-from cosapp.ports.port import ExtensiblePort
+from cosapp.ports.port import BasePort
 from cosapp.systems.system import System
 from cosapp.tools.fmu.logging import FMUForwardHandler
 from numpy import inf
@@ -49,7 +49,7 @@ class {{ class_name }}FMU(Fmi2Slave):
         self.__master.add_driver(self.__driver)
 
         System._System__master_set = True
-        ExtensiblePort.set_type_checking(False)
+        BasePort.set_type_checking(False)
         self.__master.open_loops()
 
         # Add the drivers
@@ -84,7 +84,7 @@ class {{ class_name }}FMU(Fmi2Slave):
         self.__master.call_clean_run()
         self.__master.close_loops()
         System._System__master_set = False
-        ExtensiblePort.set_type_checking(True)
+        BasePort.set_type_checking(True)
         self.__master.drivers.clear()
 
     def terminate(self):
