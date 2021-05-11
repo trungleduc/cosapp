@@ -62,6 +62,7 @@ dependencies:
   - libxml2=2.9.10
   - libxslt=1.1.33
   - lxml=4.6.2
+  - m2r2=0.2.7
   - markupsafe=1.1.1
   - metis=5.1.0
   - mistune=0.8.4

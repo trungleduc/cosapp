@@ -1,8 +1,8 @@
-include AUTHORS.rst
-include CONTRIBUTING.rst
-include HISTORY.rst
+include AUTHORS.md
+include CONTRIBUTING.md
+include HISTORY.md
 include LICENSE.rst
-include README.rst
+include README.md
 
 include cosapp/core/configuration_schema.json
 include cosapp/ports/unit_library.ini
