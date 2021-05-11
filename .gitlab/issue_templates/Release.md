@@ -4,12 +4,12 @@ For releasing `cosapp`, please check the following items are fulfilled:
 
 1. Documentation is up-to-date:
   * [ ] [Package list](docs/source/modules.rst)
-  * [ ] [History](HISTORY.rst)
-  * [ ] [Contributor list](AUTHORS.rst)
+  * [ ] [History](HISTORY.md)
+  * [ ] [Contributor list](AUTHORS.md)
 2. Version bumped
   * [ ] [core](cosapp/core/_version.py)
   * [ ] [conda recipe](conda.recipe/meta.yaml)
-  * [ ] [History](HISTORY.rst)
+  * [ ] [History](HISTORY.md)
   * [ ] [Git tag](https://gitlab.com/cosapp/cosapp/tags) (vX.Y.Z)
 3. Check publication after manually triggering a pipeline:
   * [ ] cosapp on [PyPi](https://pypi.org)

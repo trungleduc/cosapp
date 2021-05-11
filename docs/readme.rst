@@ -5,4 +5,4 @@
     :alt: gitlab
     :target: https://gitlab.com/cosapp/cosapp
     
-.. include:: ../README.rst
+.. mdinclude:: ../README.md

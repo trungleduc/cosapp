@@ -129,7 +129,7 @@ build_doc:
   extends: 
     - ".linux_env"
   variables:
-    JOB_DEP: $COSAPP_DEP jupyter_client "conda-forge::sphinx>=1.5" "nbsphinx>=0.6.0" sphinx-copybutton requests_ntlm pythonfmu
+    JOB_DEP: $COSAPP_DEP jupyter_client "conda-forge::sphinx>=1.5" "nbsphinx>=0.6.0" sphinx-copybutton m2r2 requests_ntlm pythonfmu
     BUILDDIR: _build
     PYTHON_VERSION : "3.9"
   script:
