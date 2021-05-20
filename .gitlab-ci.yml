@@ -175,15 +175,20 @@ deploy:
   extends: 
     - ".deploy_env"
   variables:
-    JOB_DEP: setuptools wheel twine packaging
+    JOB_DEP: setuptools wheel twine packaging anaconda-client conda-build conda-verify
     TWINE_USERNAME: __token__
     TWINE_PASSWORD: $PYPI
+    CONDA_USERNAME: cosapp
+    CONDA_UPLOAD_TOKEN : $CONDA_UPLOAD_TOKEN
   script:
     - python -m pip install --upgrade pip
     - pip install $JOB_DEP
     - python setup.py sdist bdist_wheel
     - twine upload dist/*.tar.gz
     - twine upload dist/*.whl
+    - conda build -c conda-forge --no-test --output-folder ./dist conda.recipe
+    - anaconda -t $CONDA_UPLOAD_TOKEN upload -u $CONDA_USERNAME ./dist/noarch/cosapp*
+
   artifacts:
     paths:
       - dist/
