@@ -137,10 +137,9 @@ class NumericSolver:
 
         jac_rel_perturbation = options['eps']
         factor_ref = factor = options['factor']
-        try:
-            jac = numpy.asarray(options['jac'])
-        except:
-            jac = None
+        jac = options.get('jac', None)
+        if jac is not None:
+            jac = numpy.asarray(jac)
         jac_lu, piv = options.get('jac_lup', (None, None))
         calc_jac = options.get('compute_jacobian', True) or jac is None or jac.shape[1] != x0.shape[0]
         jac_update_tol = options.get('jac_update_tol', 0.01)
