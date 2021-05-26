@@ -4,10 +4,10 @@ Classes connecting `Port` of foreign `System` to transfer variable values.
 import copy
 import logging
 import weakref
-from typing import Callable, Dict, Iterable, List, Optional, Tuple, Union
+from typing import Callable, Dict, Iterable, Iterator, List, Optional, Tuple, Union
 
 from cosapp.ports import units
-from cosapp.ports.port import BasePort, PortType
+from cosapp.ports.port import BasePort, Port, PortType
 from cosapp.utils.helpers import check_arg, is_numerical
 
 logger = logging.getLogger(__name__)
@@ -109,7 +109,7 @@ class Connector:
         return "Connector({} <- {}, {})".format(
             self.sink.contextual_name,
             self.source.contextual_name,
-            self.variable_mapping,
+            self.mapping,
         )
 
     @property
@@ -164,16 +164,41 @@ class Connector:
         if not port.owner:
             raise ConnectorError(f"{name.title()} owner is undefined.")
 
+    def __len__(self) -> int:
+        return len(self._mapping)
+
     @property
-    def variable_mapping(self) -> Dict[str, str]:
+    def mapping(self) -> Dict[str, str]:
         """Dict[str, str] : Variable name mapping between the sink (key) and the source (value)."""
         return self._mapping
 
-    def sink_variables(self) -> Iterable:
+    def sink_variables(self) -> Iterator[str]:
         return self._mapping.keys()
 
-    def source_variables(self) -> Iterable:
+    def source_variables(self) -> Iterator[str]:
         return self._mapping.values()
+
+    def sink_variable(self, source_variable: str) -> str:
+        """Returns the name of the sink variable associated to `source_variable`"""
+        for sink, source in self._mapping.items():
+            if source == source_variable:
+                return sink
+        raise KeyError(source_variable)
+
+    def source_variable(self, sink_variable: str) -> str:
+        """Returns the name of the source variable associated to `sink_variable`"""
+        return self._mapping[sink_variable]
+
+    def is_mirror(self) -> bool:
+        """Returns `True` if connector is an identical, one-to-one mapping
+        between two ports of the same kind; `False` otherwise."""
+        sink, source = self.sink, self.source
+        return (
+            type(sink) is type(source)
+            and isinstance(sink, Port)
+            and len(self) == len(sink)
+            and all(target == origin for target, origin in self._mapping.items())
+        )
 
     def set_perturbation(self, name: str, value: float) -> None:
         """Add a perturbation on a connector.
@@ -192,15 +217,15 @@ class Connector:
         self._unit_conversions[name] = s, a + value
         self.source.owner.set_dirty(PortType.IN)
 
-    def remove_variables(self, names: List[str]) -> None:
+    def remove_variables(self, names: Iterable[str]) -> None:
         """Remove the provided variables from this connection.
 
         The provided names should be sink names.
 
         Parameters
         ----------
-        names : List[str]
-            list of sink variable names to be removed.
+        names : Iterable[str]
+            Collection of sink variable names to be removed.
         """
         for variable in names:
             del self._mapping[variable]
@@ -223,7 +248,7 @@ class Connector:
             If unit conversion from source to sink is not possible
         """
         source, sink = self.source, self.sink
-        mapping = self.variable_mapping
+        mapping = self.mapping
 
         def update_one_connection(key: str) -> None:
             """Update the unit converter of the connected key.

@@ -286,10 +286,10 @@ def get_dependant_connections(system, head_system=None) -> Dict[str, list]:
         head_system = system
     elif system is not head_system:
         prefix = f"{head_system.get_path_to_child(system)}."
-        for list_connectors in system.parent._connectors.values():
-            for connector in list_connectors:
+        for connectors in system.parent.systems_connectors.values():
+            for connector in connectors:
                 sink = connector.sink
-                mapping = connector.variable_mapping
+                mapping = connector.mapping
                 logger.debug(f"Detecting connector {connector} with sink {sink.name!r}")
                 if sink in system.inputs.values():
                     for portvariable in mapping:

@@ -17,7 +17,7 @@ def test_IterativeConnector___init___():
     assert isinstance(connection, IterativeConnector)
     assert connection._sink is s.merger.fl2_in
     assert connection._source is s.bleed.fl2_out
-    assert connection._mapping is connector.variable_mapping
+    assert connection._mapping is connector.mapping
     assert len(connection.inputs) == 3
     assert len(connection.inputs[System.INWARDS]) == 0
     assert len(connection.inputs[IterativeConnector.GUESS]) == len(s.merger.fl2_in)
@@ -114,4 +114,4 @@ def test_IterativeConnector_get_connection():
     sink, source, mapping = connection.get_connection()
     assert sink is connector.sink
     assert source is connector.source
-    assert mapping == connector.variable_mapping
+    assert mapping == connector.mapping

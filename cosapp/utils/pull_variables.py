@@ -25,7 +25,7 @@ def pull_variables(
     parent = child.parent
     if parent is None:
         raise AttributeError(
-            "Impossible to pull variables if the child System has no parent"
+            "Can't pull variables if the child System has no parent"
         )
 
     if isinstance(pulling, str):
@@ -35,21 +35,20 @@ def pull_variables(
 
     for child_port, parent_port in pulling.items():
         sink_port = child[child_port]
+
         if isinstance(sink_port, Port):
             if parent_port not in parent:
                 pulled_port = sink_port.copy(parent_port)
                 parent._add_port(pulled_port)
                 logger.debug(
-                    "Port {} will be duplicated from {} - including validation "
-                    "range and scope.".format(
-                        pulled_port.contextual_name, sink_port.contextual_name
-                    )
+                    f"Port {pulled_port.contextual_name} will be duplicated from {sink_port.contextual_name}"
+                    " - including validation range and scope."
                 )
             else:
                 pulled_port = parent[parent_port]
             parent.connect(sink_port, pulled_port)
-        else:  # Its a inwards or a outwards
 
+        else:  # ExtensiblePort (inwards or outwards)
             def copy_variable(
                 port: str,
                 child: "cosapp.core.Module",

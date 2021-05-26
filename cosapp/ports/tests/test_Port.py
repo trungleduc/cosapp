@@ -5,11 +5,9 @@ import copy
 
 from cosapp.utils.testing import get_args, assert_keys
 from cosapp.systems import System
-from cosapp.ports.variable import Variable
 from cosapp.core.numerics.distributions.distribution import Distribution
 from cosapp.core.numerics.distributions.uniform import Uniform
-from cosapp.core.connectors import Connector, ConnectorError
-from cosapp.ports.port import PortType, Port
+from cosapp.ports.port import PortType
 
 
 @pytest.mark.parametrize("direction", PortType)

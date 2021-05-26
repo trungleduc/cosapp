@@ -4,7 +4,7 @@ import os
 from typing import Dict, List, Optional, Tuple, Union
 
 from cosapp.drivers import Driver
-from cosapp.ports.port import BasePort
+from cosapp.ports.port import BasePort, ExtensiblePort
 from cosapp.systems import System
 from cosapp.tools import templates
 
@@ -134,15 +134,15 @@ class VisJsRenderer(BaseRenderer):
                     Returns
                     -------
                     tuple (List[Dict], Dict[Union["System", "BasePort"], int], int)
-                        The first index is the list of edges (one per connector),
-                        the second is the mapping between each involved system or port and an unique id and
-                        the third is the latest used id.
+                        First index is the list of edges (one per connector);
+                        second index is the mapping between each involved system/port and a unique id;
+                        third index is the latest id used.
                     """
                     edges = list()
 
                     for connection in system.connectors.values():
                         supplier = connection.source.owner
-                        if len(supplier.children):  # Insert port as node
+                        if supplier.children:  # Insert port as node
                             supplier = connection.source
 
                         if supplier not in component_id:
@@ -150,7 +150,7 @@ class VisJsRenderer(BaseRenderer):
                             node_id = node_id + 1
 
                         target = connection.sink.owner
-                        if len(target.children):  # Insert port as node
+                        if target.children:  # Insert port as node
                             target = connection.sink
 
                         if target not in component_id:
@@ -163,12 +163,14 @@ class VisJsRenderer(BaseRenderer):
                             "arrows": "to",
                             "title": "",
                         }
-                        if set(connection.variable_mapping.values()) == set(
-                            connection.variable_mapping
-                        ):
-                            edge["title"] = str(list(connection.variable_mapping))
+                        if connection.is_mirror():
+                            edge["title"] = type(connection.source).__name__
                         else:
-                            edge["title"] = str(connection.variable_mapping)
+                            to = "&#8594;"  # rightarrow
+                            edge["title"] = ", ".join(
+                                origin if origin == target else f"{origin}{to}{target}"
+                                for target, origin in connection.mapping.items()
+                            ).join("[]")
 
                         edges.append(edge)
 
@@ -189,10 +191,8 @@ class VisJsRenderer(BaseRenderer):
                         cmpt2id[cpt] = node_id
                         node_id = node_id + 1
 
-                    if len(cpt.children):
-                        cmpt2id, node_id, edges = get_component2id(
-                            cpt, cmpt2id, node_id, edges
-                        )
+                    if cpt.children:
+                        cmpt2id, node_id, edges = get_component2id(cpt, cmpt2id, node_id, edges)
 
                 local_edges, cmpt2id, node_id = connectors_to_visJS(system, cmpt2id, node_id)
                 edges.extend(local_edges)
@@ -231,26 +231,17 @@ class VisJsRenderer(BaseRenderer):
                     }
                 )
 
-            def get_fullname(system: System) -> str:
-                name = [system.name]
-                parent = system
-                while parent.parent is not None:
-                    parent = parent.parent
-                    name.insert(0, parent.name)
-
-                return ".".join(name)
-
             groups = list()
             for c, id in cmpt2id.items():
                 if isinstance(c, BasePort):
-                    port_name = c.name
-
                     ref = dict(
-                        title=f"{c.owner.name}.{port_name} - {c.__class__.__name__}",
+                        title=f"{c.full_name(trim_root=True)}",
                         id=id,
-                        group=f"{get_fullname(c.owner)}",
+                        group=f"{c.owner.full_name()}",
                         mass=2,
                     )
+                    if not isinstance(c, ExtensiblePort):
+                        ref["title"] += f" - {type(c).__name__}"
 
                     # Add edge to bind to central owner node
                     edge = {
@@ -272,7 +263,7 @@ class VisJsRenderer(BaseRenderer):
                         shape="box",
                         hidden=True,
                         physics=False,
-                        group=f"{get_fullname(c.owner)}",
+                        group=f"{c.owner.full_name()}",
                     )
 
                     # Add edge to Module owner if top driver
@@ -299,18 +290,18 @@ class VisJsRenderer(BaseRenderer):
                 else:
                     ref = dict(
                         label=f"{c.name}",
-                        title=f"{c.parent.name}.{c.name} - {c.__class__.__name__}", 
+                        title=f"{c.full_name(trim_root=True)} - {type(c).__name__}", 
                         id=id,
                     )
 
-                    if len(c.children) > 0:  # Component containing component => Cluster
+                    if c.children:  # Component containing component => Cluster
                         ref["hidden"] = True
 
                         # Add edge to force binding to central system node
                         for child in c.children.values():
                             edges.append({"from": id, "to": cmpt2id[child], "hidden": True})
 
-                    ref["group"] = f"{get_fullname(c.parent)}"
+                    ref["group"] = f"{c.parent.full_name()}"
 
                 if "level" not in ref:
                     ref["level"] = 0
@@ -334,7 +325,6 @@ class VisJsRenderer(BaseRenderer):
 
     def html_content(self) -> str:
         """Returns vis.JS HTML content of renderer"s system as a character string."""
-        
         elements = self.get_data()
         common = self.get_globals()
         elements["visJS"] = common["visJS"]
@@ -363,7 +353,6 @@ class VisJsRenderer(BaseRenderer):
         Dict[str, Dict]
             The necessary resources to render Jinja template
         """
-        
         ressource_dir = os.path.dirname(os.path.abspath(templates.__file__))
         libs_dir = os.path.join(ressource_dir, "lib")
 
@@ -382,7 +371,6 @@ class VisJsRenderer(BaseRenderer):
         Returns
         -------
         Template
-
         """
         try:
             from jinja2 import Environment, PackageLoader
