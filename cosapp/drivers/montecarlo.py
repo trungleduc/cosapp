@@ -108,7 +108,7 @@ class MonteCarlo(AbstractSetOfCases):
             if port.owner.parent is not None:
                 connectors = port.owner.parent.connectors.values()
                 for connector in filter(lambda c: c.sink is port, connectors):
-                    if ref.key in connector.variable_mapping:
+                    if ref.key in connector.mapping:
                         connection = connector
                         break
 

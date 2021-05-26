@@ -1242,7 +1242,7 @@ def test_System_open_loops():
     assert "top_inwards_to_s1_inwards" in connectors
     assert connectors["top_inwards_to_s1_inwards"].sink is top.s1.inputs[System.INWARDS]
     assert connectors["top_inwards_to_s1_inwards"].source is top.inputs[System.INWARDS]
-    assert connectors["top_inwards_to_s1_inwards"].variable_mapping == {"x": "s1_x", "y": "s1_y"}
+    assert connectors["top_inwards_to_s1_inwards"].mapping == {"x": "s1_x", "y": "s1_y"}
 
     # Test system depending on two others not already executed
     class SimpleSystem(System):
@@ -1267,7 +1267,7 @@ def test_System_open_loops():
     assert "top_inwards_to_s1_inwards" in connectors
     assert connectors["top_inwards_to_s1_inwards"].sink is top.s1.inputs[System.INWARDS]
     assert connectors["top_inwards_to_s1_inwards"].source is top.inputs[System.INWARDS]
-    assert connectors["top_inwards_to_s1_inwards"].variable_mapping == {"x": "s1_x", "y": "s1_y"}
+    assert connectors["top_inwards_to_s1_inwards"].mapping == {"x": "s1_x", "y": "s1_y"}
 
     # Test system depending on two others not already executed
     top = System("top")
@@ -1286,7 +1286,7 @@ def test_System_open_loops():
     assert "top_inwards_to_s1_inwards" in connectors
     assert connectors["top_inwards_to_s1_inwards"].sink is top.s1.inputs[System.INWARDS]
     assert connectors["top_inwards_to_s1_inwards"].source is top.inputs[System.INWARDS]
-    assert connectors["top_inwards_to_s1_inwards"].variable_mapping == {"x": "s1_x", "y": "s1_y"}
+    assert connectors["top_inwards_to_s1_inwards"].mapping == {"x": "s1_x", "y": "s1_y"}
 
 
 def test_System_close_loops():
@@ -1337,7 +1337,7 @@ def test_System_close_loops():
     connector = s.connectors["b_outwards_to_a_inwards"]
     assert connector.sink is s.a.inwards
     assert connector.source is s.b.outwards
-    assert connector.variable_mapping == {"a_in": "a_out"}
+    assert connector.mapping == {"a_in": "a_out"}
 
     for key in ("a_a_in", "inwards.a_a_in"):
         assert key not in s.name2variable
@@ -1356,7 +1356,7 @@ def test_System_close_loops():
     connector = s.connectors["b_exit_to_a_inwards"]
     assert connector.sink is s.a.inwards
     assert connector.source is s.b.exit
-    assert connector.variable_mapping == {"a_in": "x"}
+    assert connector.mapping == {"a_in": "x"}
 
     for key in ("a_a_in", "inwards.a_a_in"):
         assert key not in s.name2variable
@@ -1385,7 +1385,7 @@ def test_System_close_loops():
     connector = s.connectors["b_exit_to_a_entry"]
     assert connector.sink is s.a.entry
     assert connector.source is s.b.exit
-    assert connector.variable_mapping == {"y": "x"}
+    assert connector.mapping == {"y": "x"}
 
     # Parent has no more pulled port
     assert "a_entry" not in s.inputs
@@ -2037,6 +2037,21 @@ def test_System_get_unsolved_problem_seq(DummyFactory):
     assert unknown.context is T
 
 
+@pytest.mark.parametrize("direction", PortType)
+def test_System_connect_orphan_ports(DummyFactory, direction):
+    s = DummyFactory("s",
+        inputs = get_args(PtWPort, "flow_in"),
+        outputs = get_args(PtWPort, "flow_out"),
+    )
+    orphan = PtWPort("orphan", direction=direction)
+
+    with pytest.raises(ValueError, match="Cannot connect orphan port"):
+        s.connect(s.flow_in, orphan)
+
+    with pytest.raises(ValueError, match="Cannot connect orphan port"):
+        s.connect(s.flow_out, orphan)
+
+
 def test_System_connect_ports(caplog, DummyFactory):
     caplog.set_level(logging.DEBUG)
 
@@ -2054,7 +2069,7 @@ def test_System_connect_ports(caplog, DummyFactory):
     connector = connectors["s1_out_to_s2_in_"]
     assert connector.source is s1.out
     assert connector.sink is s2.in_
-    assert connector._mapping == {"Pt": "Pt", "W": "W"}
+    assert connector.mapping == {"Pt": "Pt", "W": "W"}
     assert connector._unit_conversions == {"Pt": (1, 0), "W": (1, 0)}
 
     # Partial connection
@@ -2071,7 +2086,7 @@ def test_System_connect_ports(caplog, DummyFactory):
     connector = connectors["s1_out_to_s2_in_"]
     assert connector.source is s1.out
     assert connector.sink is s2.in_
-    assert connector._mapping == {"Pt": "Pt"}
+    assert connector.mapping == {"Pt": "Pt"}
     assert connector._unit_conversions == {"Pt": (1, 0)}
 
     records = list(filter(lambda record: record.levelno == logging.DEBUG, caplog.records))
@@ -2094,9 +2109,8 @@ def test_System_connect_ports(caplog, DummyFactory):
     connector = connectors["s1_out_to_s2_in_"]
     assert connector.source is s1.out
     assert connector.sink is s2.in_
-    assert connector._mapping == {"Pt": "Pt", "W": "W"}
+    assert connector.mapping == {"Pt": "Pt", "W": "W"}
     assert connector._unit_conversions == {"Pt": (1, 0), "W": (1, 0)}
-
 
     s1 = SubSystem("s1")
     group = DummyFactory("hat",
@@ -2114,7 +2128,7 @@ def test_System_connect_ports(caplog, DummyFactory):
     connector = connectors["hat_hat_in_to_s1_in_"]
     assert connector.source is group.hat_in
     assert connector.sink is s1.in_
-    assert connector._mapping == {"Pt": "Pt", "W": "W"}
+    assert connector.mapping == {"Pt": "Pt", "W": "W"}
     assert connector._unit_conversions == {"Pt": (1, 0), "W": (1, 0)}
     # Add new connection
     group.connect(s1.out, group.hat_out)
@@ -2125,7 +2139,7 @@ def test_System_connect_ports(caplog, DummyFactory):
     connector = connectors["s1_out_to_hat_hat_out"]
     assert connector.source is s1.out
     assert connector.sink is group.hat_out
-    assert connector._mapping == {"Pt": "Pt", "W": "W"}
+    assert connector.mapping == {"Pt": "Pt", "W": "W"}
     assert connector._unit_conversions == {"Pt": (1, 0), "W": (1, 0)}
 
     # Same as previous test, with different args order in group.connect(...)
@@ -2145,7 +2159,7 @@ def test_System_connect_ports(caplog, DummyFactory):
     connector = connectors["hat_hat_in_to_s1_in_"]
     assert connector.source is group.hat_in
     assert connector.sink is s1.in_
-    assert connector._mapping == {"Pt": "Pt", "W": "W"}
+    assert connector.mapping == {"Pt": "Pt", "W": "W"}
     assert connector._unit_conversions == {"Pt": (1, 0), "W": (1, 0)}
     # Add new connection
     group.connect(group.hat_out, s1.out)
@@ -2156,7 +2170,7 @@ def test_System_connect_ports(caplog, DummyFactory):
     connector = connectors["s1_out_to_hat_hat_out"]
     assert connector.source is s1.out
     assert connector.sink is group.hat_out
-    assert connector._mapping == {"Pt": "Pt", "W": "W"}
+    assert connector.mapping == {"Pt": "Pt", "W": "W"}
     assert connector._unit_conversions == {"Pt": (1, 0), "W": (1, 0)}
 
     with pytest.raises(TypeError):
@@ -2211,7 +2225,7 @@ def test_System_connect_hybrid(DummyFactory):
     connector = connectors["s1_out_to_s2_in_"]
     assert connector.source is s1.out
     assert connector.sink is s2.in_
-    assert connector._mapping == {"Pt": "Pt", "W": "W"}
+    assert connector.mapping == {"Pt": "Pt", "W": "W"}
     assert connector._unit_conversions == {"Pt": (1, 0), "W": (1, 0)}
 
     class CopyCatPort(Port):
@@ -2233,7 +2247,7 @@ def test_System_connect_hybrid(DummyFactory):
     connector = connectors["s1_out_to_s2_in_"]
     assert connector.source is s1.out
     assert connector.sink is s2.in_
-    assert connector._mapping == {"P": "Pt", "Mfr": "W"}
+    assert connector.mapping == {"P": "Pt", "Mfr": "W"}
     assert connector._unit_conversions == {"P": (1, 0), "Mfr": pytest.approx((2.2046226218487757, 0), abs=1e-14)}
 
     # Uncompatible unit
@@ -2286,13 +2300,13 @@ def test_System_connect_full():
     connector = connectors["hat_s3_entry_to_s3_entry"]
     assert connector.source is group.s3_entry
     assert connector.sink is group.s3.entry
-    assert connector._mapping == {"a": "a", "b": "b"}
+    assert connector.mapping == {"a": "a", "b": "b"}
     assert connector._unit_conversions == {"a": (1, 0), "b": (1, 0)}
     # Second connector:
     connector = connectors["hat_s3_entry_to_s1_inwards"]
     assert connector.source is group.s3_entry
     assert connector.sink is group.s1.inwards
-    assert connector._mapping == {"a": "a", "b": "b"}
+    assert connector.mapping == {"a": "a", "b": "b"}
     assert connector._unit_conversions == {"a": (1, 0), "b": (1, 0)}
 
     with pytest.raises(ConnectorError, match="already connected"):
@@ -2311,7 +2325,7 @@ def test_System_connect_full():
     connector = connectors["s3_exit_to_s1_inwards"]
     assert connector.source is group.s3.exit
     assert connector.sink is group.s1.inwards
-    assert connector._mapping == {"a": "a", "b": "b"}
+    assert connector.mapping == {"a": "a", "b": "b"}
     assert connector._unit_conversions == {"a": (1, 0), "b": (1, 0)}
     # Add new connection
     group.connect(group.s2.outwards, group.s4.entry)
@@ -2321,10 +2335,10 @@ def test_System_connect_full():
     connector = connectors["s2_outwards_to_s4_entry"]
     assert connector.source is group.s2.outwards
     assert connector.sink is group.s4.entry
-    assert connector._mapping == {"a": "a", "b": "b"}
+    assert connector.mapping == {"a": "a", "b": "b"}
     assert connector._unit_conversions == {"a": (1, 0), "b": (1, 0)}
 
-    with pytest.raises(ConnectorError, match=r"s1.inwards.a is already set by Connector\(s1.inwards <- s3.exit"):
+    with pytest.raises(ConnectorError, match=r"s1.inwards.{a, b} are already set by Connector\(s1.inwards <- s3.exit"):
         group.connect(group.s1.inwards, group.s2.outwards)
 
     group = System("hat")
@@ -2340,7 +2354,7 @@ def test_System_connect_full():
     connector = connectors["s2_outwards_to_s1_inwards"]
     assert connector.source is group.s2.outwards
     assert connector.sink is group.s1.inwards
-    assert connector._mapping == {"a": "a", "b": "b", "test": "test"}
+    assert connector.mapping == {"a": "a", "b": "b", "test": "test"}
 
 
 def test_System_connect_partial():
@@ -2380,13 +2394,13 @@ def test_System_connect_partial():
     connector = connectors["hat_s3_entry_to_s3_entry"]
     assert connector.source is group.s3_entry
     assert connector.sink is group.s3.entry
-    assert connector._mapping == {"b": "b"}
+    assert connector.mapping == {"b": "b"}
     assert connector._unit_conversions == {"b": (1, 0)}
     # Second connector:
     connector = connectors["hat_s3_entry_to_s1_inwards"]
     assert connector.source is group.s3_entry
     assert connector.sink is group.s1.inwards
-    assert connector._mapping == {"b": "b"}
+    assert connector.mapping == {"b": "b"}
     assert connector._unit_conversions == {"b": (1, 0)}
 
     with pytest.raises(ConnectorError, match="already connected"):
@@ -2405,7 +2419,7 @@ def test_System_connect_partial():
     connector = connectors["s3_exit_to_s1_inwards"]
     assert connector.source is group.s3.exit
     assert connector.sink is group.s1.inwards
-    assert connector._mapping == {"b": "b"}
+    assert connector.mapping == {"b": "b"}
     assert connector._unit_conversions == {"b": (1, 0)}
     # Add new connection
     group.connect(group.s3.exit, group.s4.entry, ["a", "b"])
@@ -2415,7 +2429,7 @@ def test_System_connect_partial():
     connector = connectors["s3_exit_to_s4_entry"]
     assert connector.source is group.s3.exit
     assert connector.sink is group.s4.entry
-    assert connector._mapping == {"a": "a", "b": "b"}
+    assert connector.mapping == {"a": "a", "b": "b"}
 
     group = System("hat")
     group.add_child(System1("s1"))
@@ -2431,12 +2445,12 @@ def test_System_connect_partial():
     connector = connectors["hat_inwards_to_s1_inwards"]
     assert connector.source is group.inwards
     assert connector.sink is group.s1.inwards
-    assert connector._mapping == {"data1": "s2_d1"}
+    assert connector.mapping == {"data1": "s2_d1"}
     # Second connector
     connector = connectors["hat_inwards_to_s2_inwards"]
     assert connector.source is group.inwards
     assert connector.sink is group.s2.inwards
-    assert connector._mapping == {"d1": "s2_d1"}
+    assert connector.mapping == {"d1": "s2_d1"}
 
     group = System("hat")
     group.add_child(System1("s1"))
@@ -2451,7 +2465,7 @@ def test_System_connect_partial():
     connector = connectors["s3_exit_to_s4_entry"]
     assert connector.source is group.s3.exit
     assert connector.sink is group.s4.entry
-    assert connector._mapping == {"a": "a", "b": "b"}
+    assert connector.mapping == {"a": "a", "b": "b"}
     # Add new connection
     group.connect(group.s2.inwards, group.s1.outwards,
         {"d1": "local1", "d2": "local2"})
@@ -2461,7 +2475,7 @@ def test_System_connect_partial():
     connector = connectors["s1_outwards_to_s2_inwards"]
     assert connector.source is group.s1.outwards
     assert connector.sink is group.s2.inwards
-    assert connector._mapping == {"d1": "local1", "d2": "local2"}
+    assert connector.mapping == {"d1": "local1", "d2": "local2"}
     # Add new connection
     group.connect(group.s2.outwards, group.s1.inwards,
         {"l1": "data1", "l2": "data2"})
@@ -2472,7 +2486,7 @@ def test_System_connect_partial():
     connector = connectors["s2_outwards_to_s1_inwards"]
     assert connector.source is group.s2.outwards
     assert connector.sink is group.s1.inwards
-    assert connector._mapping == {"data1": "l1", "data2": "l2"}
+    assert connector.mapping == {"data1": "l1", "data2": "l2"}
 
     g1 = System("group1")
     s1 = g1.add_child(System3("s1"))
@@ -2500,7 +2514,7 @@ def test_System_connect_partial():
     connector = connectors["s3_exit_to_s4_entry"]
     assert connector.source is group.s3.exit
     assert connector.sink is group.s4.entry
-    assert connector._mapping == {"b": "b"}
+    assert connector.mapping == {"b": "b"}
     assert connector._unit_conversions == {"b": (1, 0)}
     # New connection extending the existing connector
     # Should not create any new connector
@@ -2511,7 +2525,7 @@ def test_System_connect_partial():
     connector = connectors["s3_exit_to_s4_entry"]
     assert connector.source is group.s3.exit
     assert connector.sink is group.s4.entry
-    assert connector._mapping == {"a": "a", "b": "b"}
+    assert connector.mapping == {"a": "a", "b": "b"}
     assert connector._unit_conversions == {"a": (1, 0), "b": (1, 0)}
 
 

@@ -104,7 +104,7 @@ class T(Port):
 @pytest.fixture(scope="function")
 def ConnectorFactory():
     """Connector factory from construction settings"""
-    def factory(port1, port2, name="p2_to_p1", mapping=lambda p1, p2: dict(zip(p1, p2))):
+    def factory(port1, port2, name="p2_to_p1", mapping=lambda p1, p2: dict(zip(p1, p2))) -> Connector:
         return Connector(name, port1, port2, mapping(port1, port2))
     return factory
 
@@ -202,6 +202,14 @@ def ConnectorFactory():
         dict(
             port1 = XYPort('p1', PortType.IN),
             port2 = XYImperialPort('p2', PortType.OUT),
+            mapping = lambda p1, p2: 'y',
+        ),
+        dict(mapping={'y': 'y'}, conversions={'y': (5/9, -32)})
+    ),
+    (
+        dict(
+            port1 = XYPort('p1', PortType.IN),
+            port2 = XYImperialPort('p2', PortType.OUT),
             mapping = lambda p1, p2: ['x', 'y'],
         ),
         dict(mapping={'x': 'x', 'y': 'y'}, conversions={'x': (0.3048, 0), 'y': (5/9, -32)})
@@ -247,7 +255,7 @@ def test_Connector__init__(ConnectorFactory, settings, expected):
         assert c.name == settings.get('name', 'p2_to_p1')
         assert c.sink is settings['port1']
         assert c.source is settings['port2']
-        assert c.variable_mapping == expected['mapping']
+        assert c.mapping == expected['mapping']
         # conversion factors:
         conversions = expected.get('conversions',
             { var: (1, 0) for var in expected['mapping']})
@@ -265,7 +273,7 @@ def test_Connector_empty():
     port1 = XYZPort('p1', PortType.IN)
     port2 = AbcPort('p2', PortType.OUT)
     c = Connector('p2_p1', port1, port2)
-    assert c.variable_mapping == dict()
+    assert c.mapping == dict()
 
 
 @pytest.mark.parametrize("ptype", PortType)
@@ -351,6 +359,98 @@ def test_Connector_source_sink_mapping(attr, port, expected):
             setattr(c, attr, port)
 
 
+def test_Connector_source_sink_variables():
+    p1 = XYPort('p1', PortType.IN, {'x': -2, 'y': 0})
+    p2 = AbcPort('p2', PortType.OUT, {'a': 1, 'b': 100, 'c': 0})
+    c = Connector('p2_to_p1', p1, p2, {'x': 'a', 'y': 'b'})
+    assert c.source is p2
+    assert c.sink is p1
+
+    assert len(c) == 2
+    assert len(c.sink_variables()) == len(c)
+    assert len(c.source_variables()) == len(c)
+
+    assert 'x' in c.sink_variables()
+    assert 'y' in c.sink_variables()
+    assert c.source_variable('x') == 'a'
+    assert c.source_variable('y') == 'b'
+    with pytest.raises(KeyError):
+        c.source_variable('a')
+
+    assert 'a' in c.source_variables()
+    assert 'b' in c.source_variables()
+    assert c.sink_variable('a') == 'x'
+    assert c.sink_variable('b') == 'y'
+    with pytest.raises(KeyError):
+        c.sink_variable('x')
+
+
+@pytest.mark.parametrize("settings, expected", [
+    (
+        dict(Port1=XYZPort),
+        True
+    ),
+    (   # Same Port types with implicit full mapping
+        dict(Port1=XYZPort, mapping=['x', 'y', 'z']),
+        True
+    ),
+    (   # Same Port types with explicit full mapping
+        dict(Port1=XYZPort, mapping={'x': 'x', 'y': 'y', 'z': 'z'}),
+        True
+    ),
+    (   # Same Port types with incomplete mapping
+        dict(Port1=XYZPort, mapping='x'),
+        False
+    ),
+    (   # Same Port types with incomplete mapping
+        dict(Port1=XYZPort, mapping=['x', 'y']),
+        False
+    ),
+    (   # Same Port types with full mapping, but with name permutation
+        dict(Port1=XYZPort, mapping={'x': 'z', 'y': 'x', 'z': 'y'}),
+        False
+    ),
+    (   # Complete mapping, but different Port types
+        dict(Port1=XYPort, Port2=XYImperialPort, mapping=['x', 'y']),
+        False
+    ),
+    (
+        dict(Port1=XYPort, Port2=XYImperialPort),
+        False
+    ),
+])
+def test_Connector_is_mirror(settings, expected):
+    """Test method `Connector.is_mirror`"""
+    Port1 = settings['Port1']
+    Port2 = settings.get('Port2', Port1)
+    port1 = Port1('p1', PortType.IN)
+    port2 = Port2('p2', PortType.OUT)
+    c = Connector('test', port1, port2, settings.get('mapping', None))
+    assert c.is_mirror() == expected
+
+
+def test_Connector_is_mirror_ExtensiblePort():
+    """Test method `Connector.is_mirror` involving extensible ports"""
+    class InwardSystem(System):
+        def setup(self):
+            self.add_inward('x', 1.0)
+            self.add_inward('d', dict(cool=True))
+
+    class OutwardSystem(System):
+        def setup(self):
+            self.add_outward('x', 0.0)
+            self.add_outward('d', dict(pi=3.14))
+
+    sub_in = InwardSystem('sub_in')
+    sub_out = OutwardSystem('sub_out')
+    c = Connector('test', sub_in.inwards, sub_out.outwards)
+
+    assert type(c.sink) is type(c.source)
+    assert len(c) == len(c.sink)
+    assert all(target == origin for target, origin in c.mapping.items())
+    assert not c.is_mirror()  # by convention
+
+
 def test_Connector_source_unit():
     """Check that changing 'source' updates the conversion table"""
     p1 = XYPort('p1', PortType.IN, {'x': -2, 'y': 0})
@@ -408,9 +508,9 @@ def test_Connector_sink_unit():
         dict(mapping={'z': 'z'})
     ),
 ])
-def test_Connector_variable_mapping(ConnectorFactory, settings, expected):
+def test_Connector_mapping(ConnectorFactory, settings, expected):
     c = ConnectorFactory(**settings)
-    assert c.variable_mapping == expected['mapping']
+    assert c.mapping == expected['mapping']
 
 
 @pytest.mark.parametrize("settings, removed, expected", [
@@ -459,7 +559,7 @@ def test_Connector_remove_variables(ConnectorFactory, settings, removed, expecte
     error = expected.get('error', None)
     if error is None:
         c.remove_variables(removed)
-        assert c.variable_mapping == expected['mapping']
+        assert c.mapping == expected['mapping']
     else:
         pattern = expected.get('match', None)
         with pytest.raises(error, match=pattern):

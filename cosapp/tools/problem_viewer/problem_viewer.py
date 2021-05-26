@@ -77,7 +77,7 @@ def _get_connections(
         if c.sink.name in (System.INWARDS, System.OUTWARDS) and not include_wards:
             continue
 
-        for target, origin in c.variable_mapping.items():
+        for target, origin in c.mapping.items():
             connections[f"{c.sink.contextual_name}.{target}"] = f"{c.source.contextual_name}.{origin}"
 
     # Recursively gather children connections

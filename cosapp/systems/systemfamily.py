@@ -84,7 +84,7 @@ class SystemFamily(System):
         parent.pop_child(name)
         parent.add_child(new_obj, execution_index=execution_idx)
         for c in to_restore:
-            parent.connect(c.sink, c.source, c.variable_mapping)
+            parent.connect(c.sink, c.source, c.mapping)
 
     def update_connections(self, new_system: System) -> None:
         # TODO this should be called automatically and not in the _to_ user method?
