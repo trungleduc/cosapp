@@ -1,4 +1,3 @@
-from _pytest.mark.structures import NodeKeywords
 import pytest
 import numpy
 import pandas
@@ -11,7 +10,7 @@ from cosapp.tests.library.ports import XPort
 from cosapp.systems import FloatKrigingSurrogate, LinearNearestNeighbor
 from cosapp.systems.systemSurrogate import (
     SystemSurrogate, SystemSurrogateState,
-    flatten, get_dependant_connections,
+    flatten, get_dependent_connections,
 )
 from cosapp.drivers import RunOnce, NonLinearSolver, RunSingleCase, EulerExplicit
 from cosapp.tests.library.systems.basicalgebra import (
@@ -22,7 +21,7 @@ from cosapp.tests.library.systems.basicalgebra import (
     Sys_Lopped_Div_Int_Div,
 )
 from cosapp.tests.library.systems.vectors import Strait1dLine, Splitter1d
-from cosapp.utils.testing import get_args
+from cosapp.utils.testing import get_args, no_exception
 
 
 """
@@ -157,7 +156,7 @@ def data_vectorsplit_HF(cubic_DoE):
 
 
 @pytest.fixture(scope = "function")
-def nude_sumg():
+def sumg_bare():
     return Sys_Unknown_1Eq_2Mult_Getter("sumg")
 
 
@@ -717,20 +716,20 @@ def test_SystemSurrogate_no_set_and_execute_DoE_out(p1e2mg, p1e2mg_doe_out, data
         'S1E2M.x_out.x', 'S1E2M.u_out.x', 
         'S1E2M.u_in.x', 'S1E2M.x_in.x', 
         'S1E2M.Mult_by_2_1.x_out.x', 'S1E2M.Mult_by_2_1.x_in.x', 
-        'S1E2M.Mult_by_2_2.x_out.x', 'S1E2M.Mult_by_2_2.x_in.x'
+        'S1E2M.Mult_by_2_2.x_out.x', 'S1E2M.Mult_by_2_2.x_in.x',
     }),
     (Sys_Unknown_1Eq_2Mult_Getter("sumg"), {
         'Eq_2Mult.Basic_Eq.x_in.x', 'Eq_2Mult.Mult_by_2_1.x_in.x',
-        'Eq_2Mult.Mult_by_2_1.x_out.x','Eq_2Mult.Mult_by_2_2.x_in.x',
-        'Eq_2Mult.Mult_by_2_2.x_out.x','Eq_2Mult.u_in.x',
-        'Eq_2Mult.u_out.x','Eq_2Mult.x_in.x','Eq_2Mult.x_out.x',
-        'Get2D.u_in.x','Get2D.u_out.x','Get2D.x_in.x',
-        'Get2D.x_out.x','Provider.u_out.x','Provider.x_out.x'
+        'Eq_2Mult.Mult_by_2_1.x_out.x', 'Eq_2Mult.Mult_by_2_2.x_in.x',
+        'Eq_2Mult.Mult_by_2_2.x_out.x', 'Eq_2Mult.u_in.x',
+        'Eq_2Mult.u_out.x', 'Eq_2Mult.x_in.x', 'Eq_2Mult.x_out.x',
+        'Get2D.u_in.x', 'Get2D.u_out.x', 'Get2D.x_in.x',
+        'Get2D.x_out.x', 'Provider.u_out.x', 'Provider.x_out.x',
     }),
     (Sys_Unknown_1Eq_2Mult_Getter("sumg").Provider, {'u_out.x', 'x_out.x'}),
 ])
-def test_get_dependant_connections(system, expected):
-    actual = get_dependant_connections(system)
+def test_get_dependent_connections(system, expected):
+    actual = get_dependent_connections(system)
     assert set(actual.keys()) == expected
 
 
@@ -779,9 +778,10 @@ def test_SystemSurrogate_check_unknowns_and_transients(no_output_sys, DummyFacto
         SystemSurrogate(no_output_sys, cubic_DoE(data), LinearNearestNeighbor)
 
 
-def test_get_dependant_connections_with_NLS_inside(nude_sumg):
-    nude_sumg.Eq_2Mult.Eq2u1.add_driver(NonLinearSolver("nls"))
-    actual = get_dependant_connections(nude_sumg)
+def test_get_dependent_connections_with_NLS(sumg_bare):
+    """Test `get_dependent_connections` on a system with a `NonLinearSolver` driver."""
+    sumg_bare.Eq_2Mult.Eq2u1.add_driver(NonLinearSolver("nls"))
+    actual = get_dependent_connections(sumg_bare)
     assert set(actual.keys()) == {
         'Provider.u_out.x', 'Provider.x_out.x',
         'Eq_2Mult.x_in.x', 'Eq_2Mult.u_in.x',
@@ -794,9 +794,9 @@ def test_get_dependant_connections_with_NLS_inside(nude_sumg):
     }
 
 
-def test_SystemSurrogate_check_unknowns_with_NLS_inside(nude_sumg, training_data3):
-    nude_sumg.Eq_2Mult.Eq2u1.add_driver(NonLinearSolver("nls"))
-    meta = nude_sumg.Eq_2Mult.make_surrogate(training_data3, FloatKrigingSurrogate)
+def test_SystemSurrogate_check_unknowns_with_NLS(sumg_bare, training_data3):
+    sumg_bare.Eq_2Mult.Eq2u1.add_driver(NonLinearSolver("nls"))
+    meta = sumg_bare.Eq_2Mult.make_surrogate(training_data3, FloatKrigingSurrogate)
     expected_keys = {
         'Basic_Eq.x_in.x',
         'Eq2u1.inwards.u',
@@ -810,9 +810,9 @@ def test_SystemSurrogate_check_unknowns_with_NLS_inside(nude_sumg, training_data
     assert set(meta.state.doe_out.keys()) == expected_keys
 
 
-def test_SystemSurrogate_check_unknowns_warning_without_NLS_inside(nude_sumg, training_data3):
+def test_SystemSurrogate_check_unknowns_warning_without_NLS(sumg_bare, training_data3):
     with pytest.warns(UserWarning):
-        meta = nude_sumg.Eq_2Mult.make_surrogate(training_data3, FloatKrigingSurrogate)
+        meta = sumg_bare.Eq_2Mult.make_surrogate(training_data3, FloatKrigingSurrogate)
 
     expected_keys = {
         'Basic_Eq.x_in.x',
@@ -856,7 +856,7 @@ def test_System_make_surrogate_0(p1e2mg, data_in):
     assert (p1e2mg.Eq_2Mult._meta.state.doe_in.columns == meta.state.doe_in.columns).all()
     assert (p1e2mg.Eq_2Mult._meta.state.doe_in.values == meta.state.doe_in.values).all()
     assert p1e2mg.Eq_2Mult._meta.state.doe_out == meta.state.doe_out
-    assert p1e2mg.Eq_2Mult._meta_active_status
+    assert p1e2mg.Eq_2Mult.has_surrogate
 
 
 @pytest.mark.filterwarnings("ignore:The.*unknowns/transients are not part of the training set")
@@ -934,7 +934,7 @@ def test_System_make_surrogate_1(pme, training_data_pme):
     assert (pme.PMEMUG._meta.state.doe_in.columns == meta.state.doe_in.columns).all()
     assert (pme.PMEMUG._meta.state.doe_in.values == meta.state.doe_in.values).all()
     assert pme.PMEMUG._meta.state.doe_out == meta.state.doe_out
-    assert pme.PMEMUG._meta_active_status
+    assert pme.PMEMUG.active_surrogate
 
 
 @pytest.mark.filterwarnings("ignore:The.*unknowns/transients are not part of the training set")
@@ -957,7 +957,7 @@ def test_System_make_surrogate_2(sumg, training_data3):
     assert (sumg.Eq_2Mult._meta.state.doe_in.columns == meta.state.doe_in.columns).all()
     assert (sumg.Eq_2Mult._meta.state.doe_in.values == meta.state.doe_in.values).all()
     assert sumg.Eq_2Mult._meta.state.doe_out == meta.state.doe_out
-    assert sumg.Eq_2Mult._meta_active_status
+    assert sumg.Eq_2Mult.active_surrogate
 
 
 @pytest.mark.filterwarnings("ignore:The.*unknowns/transients are not part of the training set")
@@ -995,7 +995,7 @@ def test_System_dump_surrogate_load_surrogate_result(tmp_path, sumg, training_da
     sumg.Eq_2Mult._meta = None
     assert sumg.Eq_2Mult._meta is None
     sumg.Eq_2Mult.load_surrogate(tmp_path / "sysmetadump.obj")
-    assert sumg.Eq_2Mult._meta_active_status
+    assert sumg.Eq_2Mult.active_surrogate
     assert sumg.Eq_2Mult._meta is not None
     sumg.run_drivers()
     assert sumg.Provider.x_in.x == pytest.approx(12.5, rel=1e-3)
@@ -1029,7 +1029,7 @@ def test_System_dump_surrogate_load_surrogate_result1(tmp_path, pme, training_da
     assert MySystem2.PMEMUG.SMXI.m.x == MySystem.PMEMUG.SMXI.m.x
 
 
-@pytest.mark.parametrize("choice", [True, False])
+@pytest.mark.parametrize("activate", [True, False])
 @pytest.mark.parametrize("system", [
     Sys_Provider_1Eq_2Mult_Getter('p1e2mg').Eq_2Mult,
     Sys_Provider_1Eq_2Mult_Getter('p1e2mg'),
@@ -1039,9 +1039,18 @@ def test_System_dump_surrogate_load_surrogate_result1(tmp_path, pme, training_da
     Sys_Unknown_1Eq_2Mult_Getter("sumg"),
     Sys_Unknown_1Eq_2Mult_Getter("sumg").Provider,
 ])
-def test_System_active_surrogate_RuntimeError(system, choice):
-    with pytest.raises(AttributeError, match="no surrogate model has been created"):
-        system.active_surrogate = choice
+def test_System_active_surrogate_RuntimeError(system, activate):
+    assert not system.has_surrogate
+    assert not system.active_surrogate
+
+    if activate:
+        with pytest.raises(AttributeError, match="no surrogate model has been created"):
+            system.active_surrogate = activate
+
+    else:
+        with no_exception():
+            system.active_surrogate = activate
+        assert not system.active_surrogate
 
 
 @pytest.mark.filterwarnings("ignore:The.*unknowns/transients are not part of the training set")
@@ -1072,7 +1081,7 @@ def test_System_active_surrogate_arg(sumg, training_data3, choice, error):
     sumg.Eq_2Mult.make_surrogate(training_data3, FloatKrigingSurrogate)
     if error is None:
         sumg.Eq_2Mult.active_surrogate = choice
-        assert sumg.Eq_2Mult._meta_active_status == choice
+        assert sumg.Eq_2Mult.active_surrogate == choice
     else:
         with pytest.raises(error):
             sumg.Eq_2Mult.active_surrogate = choice

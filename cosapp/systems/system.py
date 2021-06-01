@@ -153,7 +153,7 @@ class System(Module, TimeObserver):
     __slots__ = (
         '_context_lock', '_systems_connectors', '_is_clean', '_locked', '_math',
         'design_methods', 'drivers', 'inputs', 'name2variable', 'outputs',
-        '__readonly', '_meta','_meta_active_status',
+        '__readonly', '_meta', '__runner',
     )
 
     INWARDS = CommonPorts.INWARDS.value  # type: ClassVar[str]
@@ -220,7 +220,7 @@ class System(Module, TimeObserver):
         self._locked = False  # type: bool
         self._is_clean = { PortType.IN: False, PortType.OUT: False }  # type: Dict[PortType, bool]
         self._meta = None
-        self._meta_active_status = False
+        self.__runner = self  # type: Union[System, SystemSurrogate]
         # For efficiency purpose, link to object are stored as reference
         # !! Must be the latest attribute set 
         # => KeyError will be raised instead of AttributeError in __setattr__ 
@@ -1781,10 +1781,7 @@ class System(Module, TimeObserver):
                         logger.debug(f"Call {self.name}.compute")
                         self._compute_calls += 1
                         with self._context_lock:
-                            if self.active_surrogate:
-                                self._meta.compute()
-                            else :
-                                self.compute()
+                            self.__runner.compute()
                     else:
                         logger.debug(f"Skip {self.name}.compute - Clean inputs")
 
@@ -1862,12 +1859,7 @@ class System(Module, TimeObserver):
                     if not self.is_clean(PortType.IN):
                         self._compute_calls += 1
                         with self._context_lock:
-                            if self.active_surrogate:
-                                self._meta.compute()
-                                logger.debug(f"Call {self.name}.meta.compute")
-                            else :
-                                self.compute()
-                                logger.debug(f"Call {self.name}.compute")
+                            self.__runner.compute()
                     else:
                         logger.debug(f"Skip {self.name}.compute - Clean inputs")
 
@@ -2658,7 +2650,7 @@ class System(Module, TimeObserver):
 
     def __set_surrogate(self, surrogate: SystemSurrogate, activate=True) -> None:
         """Private setter for surrogate model"""
-        if self._meta is not None:
+        if self.has_surrogate:
             warnings.warn(f"Existing surrogate model of {self.name} has been overwritten by a new one.")
         self._meta = surrogate
         self.active_surrogate = activate
@@ -2680,45 +2672,45 @@ class System(Module, TimeObserver):
 
     def dump_surrogate(self, filename: str) -> None:
         """Dumps system surrogate model (if any) into a binary file."""
-        if self._meta is None:
+        if not self.has_surrogate:
             raise AttributeError(f"{self.name!r} has no surrogate model")
         self._meta.dump(filename)
     
     @property
     def active_surrogate(self) -> bool:
         """bool: True if surrogate model is activated, False otherwise."""
-        return self._meta is not None and self._meta_active_status
+        return self.__runner is self._meta
 
     @active_surrogate.setter
-    def active_surrogate(self, activated: bool) -> None:
+    def active_surrogate(self, activate: bool) -> None:
         """Activation boolean setter for surrogate model."""
-        check_arg(activated, "active_surrogate", bool)
-        if self._meta is None:
-            raise AttributeError(
-                "Can't set `active_surrogate` if no surrogate model has been created"
-                " by either `make_surrogate` or `load_surrogate`."
-            )
+        check_arg(activate, "active_surrogate", bool)
 
-        if activated == self._meta_active_status:
-            return
+        if activate == self.active_surrogate:
+            return  # no change - quit
 
-        if activated:
+        if activate:
+            if self._meta is None:
+                raise AttributeError(
+                    "Can't set `active_surrogate` if no surrogate model has been created"
+                    " by either `make_surrogate` or `load_surrogate`."
+                )
             # Deactivate owner, children, and all drivers
             self._set_recursive_active_status(False)
             # Reactivate owner after upper recursion
             self._active = True
-            self._meta_active_status = True
+            self.__runner = self._meta
         
         else:
             self._set_recursive_active_status(True)
-            self._meta_active_status = False
+            self.__runner = self
 
     @property
     def has_surrogate(self) -> bool:
         """bool: True if system has a surrogate model (even if inactive), False otherwise."""
         return self._meta is not None
 
-    def _set_recursive_active_status(self, active_status : bool) -> None:
+    def _set_recursive_active_status(self, active_status: bool) -> None:
         #TODO save and recover drivers original status
         logger.debug(f"Starting recursive active status modifying of {self.name}, status to be set is {active_status}")
         self._active = active_status
