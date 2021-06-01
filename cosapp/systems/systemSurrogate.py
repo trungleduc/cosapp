@@ -83,7 +83,7 @@ class SystemSurrogate:
     @property
     def synched_outputs(self) -> List[str]:
         """List[str]: list of synchronized output variable names"""
-        return list(self.__state.doe_out_sizes.keys())
+        return list(self.__state.doe_out_sizes)
 
     def __init_doe_out(self, data_out, postsynch) -> "OrderedDict[str, List]":
         doe_out = OrderedDict()
@@ -250,18 +250,18 @@ class SystemSurrogate:
 
     def __check_unknowns_and_transients(self) -> None:
         state = self.state
-        unknowns = get_unknows_transients(self.__owner)
-        unsolvable_unknows = set(unknowns).difference(state.doe_out.keys())
-        trained_unknowns = unsolvable_unknows.issubset(state.doe_in.keys())
+        unknowns = get_unknowns_transients(self.__owner)
+        unsolvable_unknowns = set(unknowns).difference(state.doe_out)
+        trained_unknowns = unsolvable_unknowns.issubset(state.doe_in)
         if not trained_unknowns:
             message = "The following unknowns/transients are not part of the training set; "\
                 "future attempts to compute them with a driver may fail:"
-            for name in unknowns.difference(state.doe_in.keys()):
+            for name in unknowns.difference(state.doe_in):
                 message += f"\n\t- {name}"
             warnings.warn(message)
 
     def __get_owner_connections(self) -> "OrderedDict[str, list]":
-        return get_dependant_connections(self.__owner)
+        return get_dependent_connections(self.__owner)
 
 
 def flatten(iterable: Iterable) -> Iterable:
@@ -272,51 +272,51 @@ def flatten(iterable: Iterable) -> Iterable:
             yield elem
 
 
-def get_dependant_connections(system, head_system=None) -> Dict[str, list]:
+def get_dependent_connections(system: "cosapp.systems.System") -> Dict[str, PortType]:
     """
     This function returns a dictionnary mapping variable names to a port direction.
     Keys are absolute paths to connected inputs and all outputs.
     Values are owner port direction.
     """
-    logger.debug(f"Starting recursive getter of connected inputs and all outputs on {system.name}")
-    result = dict()
-    prefix = ""
+    logger.debug(f"Starting recursive search of connected inputs and all outputs on {system.name}")
 
-    if head_system is None:
-        head_system = system
-    elif system is not head_system:
-        prefix = f"{head_system.get_path_to_child(system)}."
-        for connectors in system.parent.systems_connectors.values():
-            for connector in connectors:
-                sink = connector.sink
-                mapping = connector.mapping
-                logger.debug(f"Detecting connector {connector} with sink {sink.name!r}")
-                if sink in system.inputs.values():
-                    for portvariable in mapping:
-                        key = f"{prefix}{sink.name}.{portvariable}"
-                        result[key] = PortType.IN
-                        logger.debug(f"Add {key} to list of connected inputs")
+    def get_connections(system, head_system) -> Dict[str, PortType]:
+        """Recursive inner version of `get_dependent_connections`"""
+        result = dict()
+        prefix = ""
+        if system is not head_system:
+            prefix = f"{head_system.get_path_to_child(system)}."
+            for connectors in system.parent.systems_connectors.values():
+                for connector in connectors:
+                    sink = connector.sink
+                    logger.debug(f"Detecting connector {connector} with sink {sink.name!r}")
+                    if sink in system.inputs.values():
+                        for var in connector.sink_variables():
+                            key = f"{prefix}{sink.name}.{var}"
+                            result[key] = PortType.IN
+                            logger.debug(f"Add {key} to list of connected inputs")
 
-    for output in system.outputs.values():
-        logger.debug(f"Checking output {output}.")
-        for portvariable in output:
-            key = f"{prefix}{output.name}.{portvariable}"
-            logger.debug(f"Add {key} to list of outputs")
-            result[key] = PortType.OUT
-    if system.is_standalone():
-        unknowns = system.get_unsolved_problem().unknowns
-        for unknown in unknowns:
-            key = f"{prefix}{unknown}"
-            result[key] = PortType.IN
-            logger.debug(f"Add {key} to list of unknowns")
-    for child in system.children.values():
-        logger.debug(f"Targeted child of recursive getter of connected inputs and all outputs is {child}")
-        child_dict_path_str = get_dependant_connections(child, head_system)
-        result.update(child_dict_path_str)
-    return result
+        for output in system.outputs.values():
+            logger.debug(f"Checking output {output}.")
+            for var in output:
+                key = f"{prefix}{output.name}.{var}"
+                result[key] = PortType.OUT
+                logger.debug(f"Add {key} to list of outputs")
+        if system.is_standalone():
+            unknowns = system.get_unsolved_problem().unknowns
+            for unknown in unknowns:
+                key = f"{prefix}{unknown}"
+                result[key] = PortType.IN
+                logger.debug(f"Add {key} to list of unknowns")
+        for child in system.children.values():
+            logger.debug(f"Targeted child of recursive getter of connected inputs and all outputs is {child}")
+            result.update(get_connections(child, head_system))
+        return result
+
+    return get_connections(system, system)
 
 
-def get_unknows_transients(system: "cosapp.systems.System") -> set:
+def get_unknowns_transients(system: "cosapp.systems.System") -> set:
     res = set()
     problem = system.get_unsolved_problem()
     for collection in (problem.unknowns, problem.transients):

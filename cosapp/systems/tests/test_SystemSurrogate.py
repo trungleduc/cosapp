@@ -10,7 +10,7 @@ from cosapp.tests.library.ports import XPort
 from cosapp.systems import FloatKrigingSurrogate, LinearNearestNeighbor
 from cosapp.systems.systemSurrogate import (
     SystemSurrogate, SystemSurrogateState,
-    flatten, get_dependant_connections,
+    flatten, get_dependent_connections,
 )
 from cosapp.drivers import RunOnce, NonLinearSolver, RunSingleCase, EulerExplicit
 from cosapp.tests.library.systems.basicalgebra import (
@@ -156,7 +156,7 @@ def data_vectorsplit_HF(cubic_DoE):
 
 
 @pytest.fixture(scope = "function")
-def nude_sumg():
+def sumg_bare():
     return Sys_Unknown_1Eq_2Mult_Getter("sumg")
 
 
@@ -728,8 +728,8 @@ def test_SystemSurrogate_no_set_and_execute_DoE_out(p1e2mg, p1e2mg_doe_out, data
     }),
     (Sys_Unknown_1Eq_2Mult_Getter("sumg").Provider, {'u_out.x', 'x_out.x'}),
 ])
-def test_get_dependant_connections(system, expected):
-    actual = get_dependant_connections(system)
+def test_get_dependent_connections(system, expected):
+    actual = get_dependent_connections(system)
     assert set(actual.keys()) == expected
 
 
@@ -778,10 +778,10 @@ def test_SystemSurrogate_check_unknowns_and_transients(no_output_sys, DummyFacto
         SystemSurrogate(no_output_sys, cubic_DoE(data), LinearNearestNeighbor)
 
 
-def test_get_dependant_connections_with_NLS(nude_sumg):
-    """Test `get_dependant_connections` on a system with a `NonLinearSolver` driver."""
-    nude_sumg.Eq_2Mult.Eq2u1.add_driver(NonLinearSolver("nls"))
-    actual = get_dependant_connections(nude_sumg)
+def test_get_dependent_connections_with_NLS(sumg_bare):
+    """Test `get_dependent_connections` on a system with a `NonLinearSolver` driver."""
+    sumg_bare.Eq_2Mult.Eq2u1.add_driver(NonLinearSolver("nls"))
+    actual = get_dependent_connections(sumg_bare)
     assert set(actual.keys()) == {
         'Provider.u_out.x', 'Provider.x_out.x',
         'Eq_2Mult.x_in.x', 'Eq_2Mult.u_in.x',
@@ -794,9 +794,9 @@ def test_get_dependant_connections_with_NLS(nude_sumg):
     }
 
 
-def test_SystemSurrogate_check_unknowns_with_NLS_inside(nude_sumg, training_data3):
-    nude_sumg.Eq_2Mult.Eq2u1.add_driver(NonLinearSolver("nls"))
-    meta = nude_sumg.Eq_2Mult.make_surrogate(training_data3, FloatKrigingSurrogate)
+def test_SystemSurrogate_check_unknowns_with_NLS(sumg_bare, training_data3):
+    sumg_bare.Eq_2Mult.Eq2u1.add_driver(NonLinearSolver("nls"))
+    meta = sumg_bare.Eq_2Mult.make_surrogate(training_data3, FloatKrigingSurrogate)
     expected_keys = {
         'Basic_Eq.x_in.x',
         'Eq2u1.inwards.u',
@@ -810,9 +810,9 @@ def test_SystemSurrogate_check_unknowns_with_NLS_inside(nude_sumg, training_data
     assert set(meta.state.doe_out.keys()) == expected_keys
 
 
-def test_SystemSurrogate_check_unknowns_warning_without_NLS_inside(nude_sumg, training_data3):
+def test_SystemSurrogate_check_unknowns_warning_without_NLS(sumg_bare, training_data3):
     with pytest.warns(UserWarning):
-        meta = nude_sumg.Eq_2Mult.make_surrogate(training_data3, FloatKrigingSurrogate)
+        meta = sumg_bare.Eq_2Mult.make_surrogate(training_data3, FloatKrigingSurrogate)
 
     expected_keys = {
         'Basic_Eq.x_in.x',
