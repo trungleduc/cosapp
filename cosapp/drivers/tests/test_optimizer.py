@@ -1,7 +1,6 @@
-from typing import Union
-
-import numpy as np
 import pytest
+import logging, re
+import numpy as np
 
 from cosapp.systems import System
 from cosapp.drivers import Optimizer, RunSingleCase, NonLinearSolver, NonLinearMethods
@@ -45,6 +44,16 @@ class ExempleOptim(System):
 
     def compute(self):
         self.fcost = (self.x1 - self.a) ** 2 + (self.x2 - self.a) ** 2
+
+
+class CubicFunction(System):
+    def setup(self):
+        self.add_inward('a')
+        self.add_inward('x')
+        self.add_outward('y')
+    
+    def compute(self):
+        self.y = self.x**3 - (2 * self.a)**3
 
 
 # Note: scipy.optimize.minimize raises `OptimizeWarning`, as
@@ -111,7 +120,7 @@ def test_Optimizer_compute_with_optimizer():
 
 
 @pytest.mark.filterwarnings("ignore:Unknown solver options. .tol")
-def test_Optimizer_compute_with_optimizer_and_solver():
+def test_Optimizer_compute_with_optimizer_and_solver_1():
     s = ExempleOptim("system")
     opt = Optimizer("optimization", verbose=1)
     s.add_driver(opt)
@@ -119,7 +128,7 @@ def test_Optimizer_compute_with_optimizer_and_solver():
     run = solver.add_driver(RunSingleCase("run", verbose=1))
     opt.runner.add_driver(solver)
 
-    s.a = 5.0
+    s.a = 15.0
     s.x1 = 10.0
     s.x2 = 100.0
     opt.options["ftol"] = 1.0e-5
@@ -127,10 +136,71 @@ def test_Optimizer_compute_with_optimizer_and_solver():
     opt.runner.set_objective("fcost")
     opt.runner.add_unknown(["x1", "x2"])
 
-    run.design.add_unknown("a").add_equation("a == 12")
+    run.design.add_unknown("a").add_equation("a**2 == 9")
 
     s.run_drivers()
 
-    assert s.a == pytest.approx(12.0, abs=1e-4)
+    assert s.a == pytest.approx(3, abs=1e-4)
     assert s.x1 == pytest.approx(s.a, abs=1e-4)
     assert s.x2 == pytest.approx(s.a, abs=1e-4)
+
+
+@pytest.mark.filterwarnings("ignore:Unknown solver options. .tol")
+def test_Optimizer_compute_with_optimizer_and_solver_2():
+    head = CubicFunction("head")
+    optim = head.add_driver(Optimizer("optim", verbose=1))
+    solver = optim.runner.add_driver(NonLinearSolver("solver", tol=1e-10))
+
+    # Optim problem
+    optim.runner.set_objective("2 + (x - 1)**2")
+    optim.runner.add_unknown("a")
+
+    # Solver problem (solution is x = 2a)
+    solver.runner.design.add_unknown("x").add_equation("y == 0")
+
+    head.a = -5.0
+    head.x = 10.0
+
+    head.run_drivers()
+
+    assert head.a == pytest.approx(0.5)  # minimizes 2 + (x - 1)**2, when x = 2a
+    assert head.x == pytest.approx(1)
+    assert head.y == pytest.approx(0, abs=1e-10)
+
+
+@pytest.mark.filterwarnings("ignore:Unknown solver options. .tol")
+def test_Optimizer_compute_with_optimizer_and_solver_3(caplog):
+    """Same as test #2, where both optimizer and solver unknowns are pulled up"""
+    head = System("head")
+    head.add_child(CubicFunction("sub"), pulling=['a', 'x'])
+
+    optim = head.add_driver(Optimizer("optim", verbose=1))
+    solver = optim.runner.add_driver(NonLinearSolver("solver", tol=1e-10))
+
+    # Optim problem
+    optim.runner.set_objective("2 + (x - 1)**2")
+    optim.runner.add_unknown("sub.a")  # `sub.a` is pulled
+
+    # Solver problem (solution is x = 2a)
+    solver.runner.design.add_equation("sub.y == 0").add_unknown("sub.x")  # `sub.x` is pulled
+
+    head.a = -5.0
+    head.x = 10.0
+
+    caplog.clear()
+    with caplog.at_level(logging.INFO):
+        head.run_drivers()
+    
+    assert len(caplog.records) > 1
+    assert re.match(
+        "Replace unknown 'sub.inwards.a' by 'inwards.a'",
+        caplog.records[0].message
+    )
+    assert re.match(
+        "Replace unknown 'sub.inwards.x' by 'inwards.x'",
+        caplog.records[1].message
+    )
+
+    assert head.sub.a == pytest.approx(0.5)  # minimizes 2 + (x - 1)**2, when x = 2a
+    assert head.sub.x == pytest.approx(1)
+    assert head.sub.y == pytest.approx(0, abs=1e-10)

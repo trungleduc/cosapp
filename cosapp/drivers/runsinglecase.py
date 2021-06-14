@@ -1,5 +1,5 @@
 import numpy
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional, Union
 
 from cosapp.core.eval_str import AssignString
 from cosapp.core.numerics.basics import MathematicalProblem
@@ -66,47 +66,55 @@ class RunSingleCase(IterativeCase):
         """Method called once before starting any simulation."""
         super().setup_run()
         
-        full_name = lambda name: self.name + name.join('[]')
+        local_name = lambda name: f"{self.name}[{name}]"
 
-        def raise_ValueError(kind, name):
-            raise ValueError(
-                "{} {!r} is defined as design and offdesign {} in driver {!r}".format(
-                    kind.capitalize(), name, kind.lower(), self.name))
+        self.problem = problem = MathematicalProblem(self.name, self.owner)
+        unknown_list = []
 
-        self.problem = MathematicalProblem(self.name, self.owner)
-        # Add design equations
-        for name, unknown in self.design.unknowns.items():
-            self.problem.unknowns[name] = unknown
-        for name, residue in self.design.residues.items():
-            self.problem.residues[full_name(name)] = residue
-        for name, residue in self.design.get_target_residues().items():
-            self.problem.residues[full_name(name)] = residue
-        # Add off-design equations
-        for name, unknown in self.offdesign.unknowns.items():
-            if name in self.problem.unknowns:
-                raise_ValueError("variable", name)
-            self.problem.unknowns[full_name(name)] = unknown
-        for name, residue in self.offdesign.residues.items():
-            fullname = full_name(name)
-            if fullname in self.problem.residues:
-                raise_ValueError("equation", name)
-            self.problem.residues[fullname] = residue
-        for name, residue in self.offdesign.get_target_residues().items():
-            self.problem.residues[full_name(name)] = residue
-        # Get common off-design problem to be solved on each case
-        common_system = self.owner.get_unsolved_problem()
-        # Add common off-design equations taken into account switch in frozen status
-        for name, unknown in common_system.unknowns.items():
-            if name in self.problem.unknowns:
-                raise_ValueError("variable", name)
-            # Common unknowns must be duplicated to avoid modification by one point to the others
-            self.problem.unknowns[full_name(name)] = unknown.copy()
-        for name, residue in common_system.residues.items():
-            fullname = full_name(name)
-            if fullname in self.problem.residues:
-                raise_ValueError("equation", name)
-            # Common residues must be duplicated to avoid modification by one point to the others
-            self.problem.residues[fullname] = residue.copy()
+        def add_problem(other: MathematicalProblem, rename_unknowns=True, copy=False) -> None:
+            nonlocal problem, unknown_list
+            rename = local_name if rename_unknowns else lambda name: name
+
+            # Add unknowns
+            for name, unknown in other.unknowns.items():
+                unknown = self.get_free_unknown(unknown, name)
+                if unknown is None:
+                    continue
+                aliased = (unknown is not other.unknowns[name])
+                uname = unknown.name if aliased else name
+                if uname in unknown_list:
+                    raise ValueError(
+                        f"{name!r} is defined as design and offdesign unknown in driver {self.name!r}"
+                    )
+                name = rename(name)
+                problem.unknowns[name] = unknown.copy() if copy else unknown
+                unknown_list.append(rename(uname))
+            
+            # Add residues
+            for name, residue in other.residues.items():
+                fullname = local_name(name)
+                if fullname in problem.residues:
+                    raise ValueError(
+                        f"{name!r} is defined as design and offdesign equation in driver {self.name!r}"
+                    )
+                problem.residues[fullname] = residue.copy() if copy else residue
+
+            for name, residue in other.get_target_residues().items():
+                problem.residues[local_name(name)] = residue.copy() if copy else residue
+
+        # Add design unknowns & equations
+        # Warning:
+        #   Even if unknowns are modified, `unknowns` dict keys
+        #   must be preserved for later comparison between
+        #   self.problem and self.design; hence, no renaming.
+        add_problem(self.design, rename_unknowns=False)
+
+        # Add off-design unknowns & equations
+        add_problem(self.offdesign)
+
+        # Add owner system's off-design problem to be solved on each point
+        # Unknowns & residues are duplicated to avoid side effects between points
+        add_problem(self.owner.get_unsolved_problem(), copy=True)
 
     def _precompute(self) -> None:
         """Actions to carry out before the :py:meth:`~cosapp.drivers.runonce.RunOnce.compute` method call.

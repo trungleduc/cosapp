@@ -207,14 +207,15 @@ class Boundary:
 
     @value.setter
     def value(self, new: Union[Number, numpy.ndarray]) -> None:
-        me = self.name
+        ref = self.context.name2variable[self.name]
 
         if self.mask is None:
-            if not numpy.array_equal(self.context[me], new):
-                self.context[me] = new
-        elif numpy.any(self.mask) and not numpy.array_equal(self.context[me][self.mask], new):
-            self.context[me][self.mask] = new
-            self.context.name2variable[me].mapping.owner.set_dirty(PortType.IN)
+            if not numpy.array_equal(ref.value, new):
+                ref.value = new
+                ref.mapping.owner.set_dirty(PortType.IN)
+        elif numpy.any(self.mask) and not numpy.array_equal(ref.value[self.mask], new):
+            ref.value[self.mask] = new
+            ref.mapping.owner.set_dirty(PortType.IN)
 
     @property
     def default_value(self) -> Union[Number, numpy.ndarray, None]:
@@ -418,9 +419,19 @@ class Unknown(Boundary):
         Unknown
             Duplicated unknown
         """
+        return self.transfer(self.context, self.name)
+
+    def transfer(self, context: "cosapp.systems.System", name: str) -> "Unknown":
+        """Transfer a copy of the unknown in a new context.
+
+        Returns
+        -------
+        Unknown
+            Duplicated unknown, in new context
+        """
         new = Unknown(
-            self.context,
-            self.name,
+            context,
+            name,
             max_abs_step=self.max_abs_step,
             max_rel_step=self.max_rel_step,
             lower_bound=self.lower_bound,

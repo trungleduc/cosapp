@@ -1255,6 +1255,15 @@ class System(Module, TimeObserver):
                 result[connector.name] = connector
         return result
 
+    def incoming_connectors(self) -> List[Connector]:
+        """Returns the list of connectors targetting current system"""
+        connectors = self._systems_connectors.get(self.name, [])
+        connectors = list(connectors)  # make shallow copy to avoid side effects
+        parent = self.parent
+        if parent is not None:
+            connectors.extend(parent._systems_connectors.get(self.name, []))
+        return connectors
+
     def get_unsolved_problem(self) -> MathematicalProblem:
         """Returns the unsolved mathematical problem.
 
@@ -1466,11 +1475,11 @@ class System(Module, TimeObserver):
         return self.drivers[name]
 
     def add_unknown(self,
-            name: Union[str, Iterable[Union[dict, str]]],
-            max_abs_step: Number = numpy.inf,
-            max_rel_step: Number = numpy.inf,
-            lower_bound: Number = -numpy.inf,
-            upper_bound: Number = numpy.inf
+        name: Union[str, Iterable[Union[dict, str]]],
+        max_abs_step: Number = numpy.inf,
+        max_rel_step: Number = numpy.inf,
+        lower_bound: Number = -numpy.inf,
+        upper_bound: Number = numpy.inf
     ) -> MathematicalProblem:
         """Add unknown variables.
 
@@ -1497,11 +1506,11 @@ class System(Module, TimeObserver):
         """
 
         def create_unknown(
-                name: str,
-                max_abs_step: Number = numpy.inf,
-                max_rel_step: Number = numpy.inf,
-                lower_bound: Number = -numpy.inf,
-                upper_bound: Number = numpy.inf
+            name: str,
+            max_abs_step: Number = numpy.inf,
+            max_rel_step: Number = numpy.inf,
+            lower_bound: Number = -numpy.inf,
+            upper_bound: Number = numpy.inf
         ):
             unknown = Unknown(self, name, max_abs_step, max_rel_step, lower_bound, upper_bound)
             # Remove existing unknown if user wants to update the parameters.

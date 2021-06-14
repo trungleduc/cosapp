@@ -128,6 +128,25 @@ class Module(LoggerContext, metaclass=abc.ABCMeta):
             size += child.size
         return size
 
+    def root(self) -> "Module":
+        return self.path()[0]
+
+    def path(self) -> List["Module"]:
+        """Returns full path up to root Module as a list.
+        
+        Returns
+        -------
+        List[Module]
+            Full module list from root to self
+        """
+        current = self
+        path = [current]
+        while current.parent is not None:
+            current = current.parent
+            path.append(current)
+        path.reverse()
+        return path
+
     def path_namelist(self) -> List[str]:
         """Returns full name list up to root Module.
         
@@ -136,13 +155,7 @@ class Module(LoggerContext, metaclass=abc.ABCMeta):
         List[str]
             The module full name list
         """
-        current = self
-        names = [current.name]
-        while current.parent is not None:
-            current = current.parent
-            names.append(current.name)
-        names.reverse()
-        return names
+        return [module.name for module in self.path()]
 
     def full_name(self, trim_root=False) -> str:
         """Returns full name up to root Module.
