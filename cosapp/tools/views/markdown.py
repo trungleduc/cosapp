@@ -67,7 +67,7 @@ class PortMarkdownFormatter:
             r"<div class='cosapp-port-table' style='margin-left: 25px; margin-top: -12px'>",
             r"<style type='text/css'>",
             r".cosapp-port-table >table >thead{display: none}",  # suppress empty table header
-            r".cosapp-port-table tbody tr{background: white!important}",  # override even/odd coloring
+            r".cosapp-port-table tbody tr{background: rgba(255, 255, 255, 0)!important}",  # override even/odd coloring
             r".cosapp-port-table tbody tr:hover{background: #e1f5fe!important}",  # set hover color
             r"</style>",
         ])

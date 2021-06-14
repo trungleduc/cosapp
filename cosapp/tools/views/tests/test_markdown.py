@@ -141,7 +141,7 @@ def test_PortMarkdownFormatter_div_header():
         r"<div class='cosapp-port-table' style='margin-left: 25px; margin-top: -12px'>"
         r"<style type='text/css'>"
         r".cosapp-port-table >table >thead{display: none}"
-        r".cosapp-port-table tbody tr{background: white!important}"
+        r".cosapp-port-table tbody tr{background: rgba(255, 255, 255, 0)!important}"
         r".cosapp-port-table tbody tr:hover{background: #e1f5fe!important}"
         r"</style>"
     )
