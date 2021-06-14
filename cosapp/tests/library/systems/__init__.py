@@ -12,7 +12,6 @@ from .multiply import (
     NonLinear1,
     NonLinear3,
     IterativeNonLinear,
-    Multiply2Derivative,
     IterativeNonLinearDerivative,
 )
 from .multiply import Splitter as SplitterMath
@@ -51,4 +50,13 @@ from .vectors import (
     Merger1d,
     AllTypesSystem,
     BooleanSystem,
+)
+from .elec import (
+    Voltage,
+    Current,
+    Dipole,
+    Resistor,
+    Node,
+    Source,
+    Ground,
 )

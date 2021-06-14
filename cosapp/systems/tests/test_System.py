@@ -2692,4 +2692,3 @@ def test_System_log_debug_message(format, msg, kwargs, to_log, emitted):
         assert re.match(emitted["pattern"], args[1]) is not None
     else:
         handler.log.assert_not_called()
-

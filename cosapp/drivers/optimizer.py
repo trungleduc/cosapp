@@ -191,12 +191,14 @@ class Optimizer(AbstractSolver):
         """
         return super()._fresidues(x, update_residues_ref)[0]
 
-    def resolution_method(self, fresidues: Callable[[Sequence[float]], float],
-                          x0: numpy.ndarray,
-                          args: Tuple[Union[float, str], bool] = (),
-                          options: Optional[OptionsDictionary] = None,
-                          bounds=None,
-                          constraints=None) -> SolverResults:
+    def resolution_method(self,
+        fresidues: Callable[[Sequence[float]], float],
+        x0: numpy.ndarray,
+        args: Tuple[Union[float, str], bool] = (),
+        options: Optional[OptionsDictionary] = None,
+        bounds = None,
+        constraints = None,
+    ) -> SolverResults:
         """Function call to cancel the residues.
 
         Parameters
@@ -295,12 +297,14 @@ class Optimizer(AbstractSolver):
             if not self.options['monitor']:
                 BaseRecorder.paused = True
 
-            results = self.resolution_method(self._fresidues,
-                                             self.initial_values,
-                                             args=(False),
-                                             bounds=bounds,
-                                             constraints=constraints,
-                                             options=self.options)
+            results = self.resolution_method(
+                self._fresidues,
+                self.initial_values,
+                args = (False,),
+                bounds = bounds,
+                constraints = constraints,
+                options = self.options,
+            )
 
             if not results.success:
                 self.status = 'ERROR'

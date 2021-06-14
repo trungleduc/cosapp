@@ -60,7 +60,7 @@ class RunOptim(IterativeCase):
         check_arg(expression, "expression", str, lambda s: "==" not in s)
 
         self.design.residues.clear()  # Ensure only one objective is defined
-        self.design.add_equation(expression + " == 0", name="f_objective", reference=1.)
+        self.design.add_equation(f"{expression} == 0", name="f_objective", reference=1.)
 
     def add_unknown(self,
             name: Union[str, Iterable[Union[dict, str, Unknown]]],
@@ -94,8 +94,10 @@ class RunOptim(IterativeCase):
         """
         self.design.add_unknown(name, max_abs_step, max_rel_step, lower_bound, upper_bound)
 
-    def add_constraints(self, expression: Union[str, List[Union[str, Tuple[str, bool]]]],
-                        inequality: bool = True) -> None:
+    def add_constraints(self,
+        expression: Union[str, List[Union[str, Tuple[str, bool]]]],
+        inequality: bool = True,
+    ) -> None:
         """Add constraints to the optimization problem.
 
         Parameters
@@ -119,7 +121,7 @@ class RunOptim(IterativeCase):
             })
 
         if self.owner is None:
-            raise AttributeError("Owner System is needed to define an optimization.")
+            raise AttributeError("Owner System is required to define an optimization.")
 
         if isinstance(expression, str):
             add_constraint(expression, inequality)
@@ -143,5 +145,13 @@ class RunOptim(IterativeCase):
 
     def setup_run(self):
         """Method called once before starting any simulation."""
-        # Skip checking problem shape
-        pass  # pragma: no cover
+        super().setup_run()
+        
+        unknowns = self.design.unknowns
+
+        for name in list(unknowns):
+            unknown = self.get_free_unknown(unknowns[name])
+            if unknown is None:
+                unknowns.pop(name)
+            else:
+                unknowns[name] = unknown

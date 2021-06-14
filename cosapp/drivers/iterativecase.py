@@ -2,7 +2,12 @@ import logging
 import numpy
 
 from cosapp.drivers.runonce import RunOnce
+from cosapp.core.variableref import VariableReference
 from cosapp.core.numerics.basics import MathematicalProblem
+from cosapp.core.numerics.boundary import Unknown
+from cosapp.utils.graph_analysis import get_free_inputs
+
+from typing import Union, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +25,7 @@ class IterativeCase(RunOnce):
         Optional keywords arguments
     """
 
-    __slots__ = ('design')
+    __slots__ = ('design', '_input_mapping')
 
     def __init__(
         self, name: str, owner: "Optional[cosapp.systems.System]" = None, **kwargs
@@ -40,6 +45,7 @@ class IterativeCase(RunOnce):
 
         self.design = MathematicalProblem(self.name, self.owner)  # type: MathematicalProblem
             # desc="Additional mathematical problem to solve for the case.",
+        self._input_mapping = dict()  # type: Dict[str, VariableReference]
 
     @RunOnce.owner.setter
     def owner(self, value: "Optional[cosapp.systems.System]") -> None:
@@ -82,6 +88,11 @@ class IterativeCase(RunOnce):
 
         return counter
 
+    def setup_run(self):
+        """Method called once before starting any simulation."""
+        super().setup_run()
+        self._input_mapping = get_free_inputs(self.owner)
+
     def _postcompute(self) -> None:
         """Actions to carry out after the :py:meth:`~cosapp.drivers.runonce.RunOnce.compute` method call.
 
@@ -94,3 +105,31 @@ class IterativeCase(RunOnce):
         super()._postcompute()
 
     # TODO Fred do we need a get_problem here or better integration between IterativeCase -> RunOptim & RunSingleCase
+
+    def get_free_unknown(self, unknown: Unknown, name: Optional[str]=None) -> Union[Unknown, None]:
+        """Checks if `unknown` is aliased by pulling.
+        If so, returns alias unknown; else, returns original unknown.
+        """
+        if name is None:
+            name = unknown.name
+        try:
+            alias = self._input_mapping[name]
+        except KeyError:
+            logger.warning(f"Skip connected unknown {name!r}")
+            return None
+        if alias.mapping is not unknown.port:
+            if alias.context is not self.owner:
+                alias_name = f"{alias.mapping.contextual_name}.{alias.key}"
+                contextual_name = f"{unknown.context.name}.{unknown.name}"
+                logger.warning(
+                    f"Unknown {contextual_name!r} is aliased by {alias_name!r}"
+                    f", defined outside the context of {self.owner.name!r}"
+                    f"; it is likely to be overwritten after the computation."
+                )
+            else:
+                alias_name = f"{alias.mapping.name}.{alias.key}"
+                logger.info(
+                    f"Replace unknown {name!r} by {alias_name!r}"
+                )
+                unknown = unknown.transfer(alias.context, alias_name)
+        return unknown

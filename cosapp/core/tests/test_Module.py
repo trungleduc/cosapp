@@ -117,6 +117,24 @@ def test_Module_fullname(Russian_dolls):
     assert d.full_name() == "a.b.c.d"
 
 
+def test_Module_path(Russian_dolls):
+    a, b, c, d = Russian_dolls(*iter('abcd'))
+
+    assert a.path() == [a]
+    assert b.path() == [a, b]
+    assert c.path() == [a, b, c]
+    assert d.path() == [a, b, c, d]
+
+
+def test_Module_root(Russian_dolls):
+    a, b, c, d = Russian_dolls(*iter('abcd'))
+
+    assert a.root() is a
+    assert b.root() is a
+    assert c.root() is a
+    assert d.root() is a
+
+
 def test_Module_path_namelist(Russian_dolls):
     a, b, c, d = Russian_dolls(*iter('abcd'))
 
