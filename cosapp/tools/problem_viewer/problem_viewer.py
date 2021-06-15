@@ -8,8 +8,7 @@ import logging
 import base64
 
 from cosapp.systems import System
-from cosapp.ports.port import BasePort
-from cosapp.ports.enum import PortType
+from cosapp.ports.port import BasePort, ExtensiblePort
 
 from cosapp.utils.helpers import check_arg
 
@@ -17,106 +16,114 @@ logger = logging.getLogger(__name__)
 
 
 def _get_tree_dict(
-    system_or_port: Union[System, BasePort],
-    include_wards: bool
+    obj: Union[System, BasePort],
+    include_orphan_vars=True
 ) -> Dict[str, Any]:
-    """Get a dictionary representation of the system hierarchy."""
-    check_arg(system_or_port, 'system_or_port', (System, BasePort))
+    """Get a dictionary representation of the system hierarchy.
+    """
+    def init_tree(obj, subtype):
+        return OrderedDict(
+            name = obj.name,
+            type = 'subsystem',
+            subsystem_type = subtype,
+        )
 
-    tree_dict = OrderedDict(name=system_or_port.name, type='subsystem')
-    children = list()
+    def port_tree(port):
+        tree_dict = init_tree(port, 'component')
+        tree_dict['children'] = children = list()
 
-    if isinstance(system_or_port, BasePort):  # look for variable in in the system
+        if include_orphan_vars or not isinstance(port, ExtensiblePort):
+            dtype = 'param' if port.is_input else 'unknown'
+            children.extend(
+                map(lambda n: OrderedDict(name=n, type=dtype), iter(port))
+            )
+        return tree_dict
 
-        tree_dict['subsystem_type'] = 'component'
-        if system_or_port.direction == PortType.IN:
-            view = lambda n: OrderedDict(name=n, type='param')
-        else:  # system_or_port.direction == PortType.OUT
-            view = lambda n: OrderedDict(name=n, type='unknown')
+    def system_tree(system):
+        tree_dict = init_tree(system, 'group')
+        tree_dict['children'] = children = list()
 
-        if include_wards or system_or_port.name not in (System.INWARDS, System.OUTWARDS):
-            children.extend(map(view, iter(system_or_port)))
-    
-    else:
-
-        tree_dict['subsystem_type'] = 'group'
-        for port in filter(lambda p: len(p) > 0, system_or_port.inputs.values()):
-            children.append(_get_tree_dict(port, include_wards))
-            
-        for child in system_or_port.exec_order:
-            children.append(
-                _get_tree_dict(
-                    system_or_port.children[child], 
-                    include_wards
-                )
+        def add_ports(ports):
+            nonlocal children
+            children.extend(port_tree(port)
+                for port in filter(lambda p: len(p) > 0, ports)
             )
 
-        # outputs come after child for a matter of visualization
-        for port in filter(lambda p: len(p) > 0, system_or_port.outputs.values()):
-            children.append(_get_tree_dict(port, include_wards))
-    
-    tree_dict['children'] = children
+        add_ports(system.inputs.values())
 
-    return tree_dict
+        if len(system.exec_order) != len(system.children):
+            system.exec_order = list(system.children)
+        
+        children.extend(system_tree(system.children[name])
+            for name in system.exec_order
+        )
+        # outputs come after child list for a matter of visualization
+        add_ports(system.outputs.values())
+        
+        return tree_dict
+
+    if isinstance(obj, System):
+        return system_tree(obj)
+    elif isinstance(obj, BasePort):
+        return port_tree(obj)
+    else:
+        raise TypeError(f"Object must be a port or a system; got {type(obj)}.")
 
 
-def _get_connections(
-    system: System,
-    include_wards: bool
-) -> Dict[str, str]:
+def _get_connections(system: System, include_orphan_vars: bool) -> Dict[str, str]:
     """Get a dictionary representation of the system connections. Structure is {'_in': '_out'}."""
     connections = OrderedDict()
     def add_prefix(name, s):
-        if s.startswith(name):  # Case of port of systems group connect inside and outside
-            return s
-        else:
-            return f"{name}.{s}"
+        return s if s.startswith(name) else f"{name}.{s}"
 
-    # Gather the connections for the current system
+    # Gather connections for current system
     for c in system.connectors.values():
-        if c.sink.name in (System.INWARDS, System.OUTWARDS) and not include_wards:
+        if not include_orphan_vars and isinstance(c.sink, ExtensiblePort):
             continue
 
         for target, origin in c.mapping.items():
             connections[f"{c.sink.contextual_name}.{target}"] = f"{c.source.contextual_name}.{origin}"
 
-    # Recursively gather children connections
+    # Recursively gather children's connections
     for name, child in system.children.items():
-        child_connections = _get_connections(child, include_wards)
+        child_connections = _get_connections(child, include_orphan_vars)
         for k, v in child_connections.items():
             connections[add_prefix(name, k)] = add_prefix(name, v)
 
     return connections
 
-def _get_viewer_data(system: System,
-                     include_wards: bool):
+
+def _get_viewer_data(system: System, include_orphan_vars: bool) -> Dict:
     """Get the data needed by the N2 viewer as a dictionary."""
     if isinstance(system, System):
         root_group = system
     else:
         raise TypeError('get_model_viewer_data only accepts System')
 
-    if not include_wards:
+    if not include_orphan_vars:
         logger.warning('The system may contain inwards or outwards.')
 
     data_dict = {}
-    data_dict['tree'] = _get_tree_dict(root_group, include_wards)
+    data_dict['tree'] = _get_tree_dict(root_group, include_orphan_vars)
     connections_list = []
-    for in_abs, out_abs in _get_connections(root_group, include_wards).items():
+    connections = _get_connections(root_group, include_orphan_vars)
+    for in_abs, out_abs in connections.items():
         if out_abs is None:
             continue
-        connections_list.append(OrderedDict([('src', out_abs), ('tgt', in_abs)]))
+        connections_list.append(OrderedDict(src=out_abs, tgt=in_abs))
     data_dict['connections_list'] = connections_list
 
     return data_dict
 
 
-def view_model(problem_or_filename,
-               outfile='n2.html',
-               show_browser=True,
-               embeddable=False,
-               draw_potential_connections=False,
-               include_wards=True):
+def view_model(
+    problem_or_filename,
+    outfile='n2.html',
+    show_browser=True,
+    embeddable=False,
+    draw_potential_connections=False,
+    include_orphan_vars=True,
+):
     """
     Generates an HTML file containing a tree viewer. Optionally pops up a web browser to
     view the file.
@@ -141,7 +148,7 @@ def view_model(problem_or_filename,
         If true, allows connections to be drawn on the N2 that do not currently exist
         in the model. Defaults to True.
 
-    include_wards : bool, optional
+    include_orphan_vars : bool, optional
     If True, display inwards and outwards on the N2 diagram. Defaults to True.
     """
     html_begin_tags = """<!DOCTYPE html>
@@ -197,7 +204,8 @@ def view_model(problem_or_filename,
         index = f.read()
 
     #grab the model viewer data
-    model_viewer_data = 'var modelData = %s' % json.dumps(_get_viewer_data(problem_or_filename, include_wards))
+    data = _get_viewer_data(problem_or_filename, include_orphan_vars)
+    model_viewer_data = f"var modelData = {json.dumps(data)}"
 
     #add the necessary HTML tags if we aren't embedding
     if not embeddable:

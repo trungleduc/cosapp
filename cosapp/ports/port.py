@@ -109,6 +109,16 @@ class BasePort:
         """:obj:`PortType.IN` or :obj:`PortType.OUT` : Port direction"""
         return self._direction
 
+    @property
+    def is_input(self) -> bool:
+        """bool: True if port is an input, False otherwise."""
+        return self._direction == PortType.IN
+
+    @property
+    def is_output(self) -> bool:
+        """bool: True if port is an output, False otherwise."""
+        return self._direction == PortType.OUT
+
     def __repr__(self) -> str:
         var_list = [f"'{key}': {getattr(self, key)!r}" for key in self._variables]
         return f"{type(self).__name__}: {{{', '.join(var_list)}}}"
@@ -559,7 +569,7 @@ class BasePort:
             new_dict[self.name] = tmp
         
         else:
-            if self.direction == PortType.IN:
+            if self.is_input:
                 for variable in self:
                     fullname = f"{self.name}.{variable}"
                     new_dict[fullname] = getattr(self, variable)

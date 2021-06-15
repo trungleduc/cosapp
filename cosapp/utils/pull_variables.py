@@ -25,7 +25,7 @@ def pull_variables(
     parent = child.parent
     if parent is None:
         raise AttributeError(
-            "Can't pull variables if the child System has no parent"
+            f"Can't pull variables from orphan System {child.name!r}"
         )
 
     if isinstance(pulling, str):
