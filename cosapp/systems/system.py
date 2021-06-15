@@ -653,13 +653,13 @@ class System(Module, TimeObserver):
             )
 
         port.owner = self
-        if port.direction == PortType.IN:
+        if port.is_input:
             inputs = self.inputs
             if port.name in inputs:
                 raise ValueError(f"Port name {port.name!r} already exists as input")
             inputs[port.name] = port
             port_key = (port.name, VariableReference(context=self, mapping=inputs, key=port.name))
-        elif port.direction == PortType.OUT:
+        elif port.is_output:
             outputs = self.outputs
             if port.name in outputs:
                 raise ValueError(f"Port name {port.name!r} already exists as output")

@@ -1,5 +1,4 @@
 from cosapp.systems import System
-from cosapp.ports.enum import PortType
 from cosapp.ports.port import BasePort
 from cosapp.core.variableref import VariableReference
 from cosapp.utils.find_variables import natural_varname
@@ -40,10 +39,10 @@ def get_free_inputs(system: System) -> Dict[str, VariableReference]:
 
         for connector in system.incoming_connectors():
             sink, source = connector.sink, connector.source
-            if sink.direction == PortType.OUT:
+            if sink.is_output:
                 continue
             sink_name = get_portname(sink)
-            if source.direction == PortType.OUT:
+            if source.is_output:
                 bound_inputs |= set(
                     f"{sink_name}.{target}"
                     for target in connector.sink_variables()

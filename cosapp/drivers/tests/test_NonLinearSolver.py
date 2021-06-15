@@ -1,12 +1,9 @@
-import logging
-import os
-import re
-import sys
+import pytest
+import logging, re
+import numpy as np
+
 from collections import OrderedDict
 from unittest.mock import MagicMock, patch
-
-import numpy as np
-import pytest
 
 from cosapp.core.numerics.residues import Residue
 from cosapp.core.numerics.basics import MathematicalProblem

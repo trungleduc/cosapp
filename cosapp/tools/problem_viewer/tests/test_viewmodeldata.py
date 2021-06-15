@@ -3340,7 +3340,7 @@ class TestViewModelData(unittest.TestCase):
         """
         p = ComplexTurbofan("turbofan")
 
-        model_viewer_data = _get_viewer_data(p, include_wards=True)
+        model_viewer_data = _get_viewer_data(p, include_orphan_vars=True)
         tree_json = model_viewer_data["tree"]
         conns_json = model_viewer_data["connections_list"]
 
@@ -3353,7 +3353,7 @@ class TestViewModelData(unittest.TestCase):
         """
         p = ComplexTurbofan("turbofan")
 
-        model_viewer_data = _get_viewer_data(p, include_wards=False)
+        model_viewer_data = _get_viewer_data(p, include_orphan_vars=False)
         tree_json = model_viewer_data["tree"]
         conns_json = model_viewer_data["connections_list"]
 
@@ -3374,4 +3374,3 @@ class TestViewModelData(unittest.TestCase):
             (self.problem_html_filename + " is not a valid file."),
         )
         self.assertGreater(os.path.getsize(self.problem_html_filename), 100)
-

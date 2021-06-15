@@ -106,10 +106,13 @@ class Connector:
         self.update_unit_conversion()
 
     def __repr__(self) -> str:
+        mapping = self._mapping
+        if self.preserves_names():
+            mapping = list(mapping)
         return "Connector({} <- {}, {})".format(
             self.sink.contextual_name,
             self.source.contextual_name,
-            self.mapping,
+            mapping,
         )
 
     @property
@@ -189,6 +192,11 @@ class Connector:
         """Returns the name of the source variable associated to `sink_variable`"""
         return self._mapping[sink_variable]
 
+    def preserves_names(self) -> bool:
+        """Returns `True` if connector mapping preserves variable names,
+        `False` otherwise."""
+        return all(target == origin for target, origin in self._mapping.items())
+
     def is_mirror(self) -> bool:
         """Returns `True` if connector is an identical, one-to-one mapping
         between two ports of the same kind; `False` otherwise."""
@@ -197,7 +205,7 @@ class Connector:
             type(sink) is type(source)
             and isinstance(sink, Port)
             and len(self) == len(sink)
-            and all(target == origin for target, origin in self._mapping.items())
+            and self.preserves_names()
         )
 
     def set_perturbation(self, name: str, value: float) -> None:

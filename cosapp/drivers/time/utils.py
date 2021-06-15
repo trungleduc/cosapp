@@ -7,6 +7,7 @@ import numpy
 from cosapp.core.eval_str import EvalString
 from cosapp.core.variableref import VariableReference
 from cosapp.core.numerics.boundary import AbstractTimeUnknown, TimeUnknown
+from cosapp.ports.port import ExtensiblePort
 from cosapp.systems.system import System
 from cosapp.utils.helpers import check_arg
 
@@ -361,7 +362,7 @@ class TimeVarManager:
             The variable fullname
         """
         # First condition is to handle complex derivative expression see previous loop
-        if ref.mapping is None or ref.mapping.name in (System.INWARDS, System.OUTWARDS):
+        if ref.mapping is None or isinstance(ref.mapping, ExtensiblePort):
             return ref.key
         else:
             return f"{ref.mapping.name}.{ref.key}"

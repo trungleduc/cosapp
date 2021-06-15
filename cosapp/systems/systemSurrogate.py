@@ -286,15 +286,15 @@ def get_dependent_connections(system: "cosapp.systems.System") -> Dict[str, Port
         prefix = ""
         if system is not head_system:
             prefix = f"{head_system.get_path_to_child(system)}."
-            for connectors in system.parent.systems_connectors.values():
-                for connector in connectors:
-                    sink = connector.sink
-                    logger.debug(f"Detecting connector {connector} with sink {sink.name!r}")
-                    if sink in system.inputs.values():
-                        for var in connector.sink_variables():
-                            key = f"{prefix}{sink.name}.{var}"
-                            result[key] = PortType.IN
-                            logger.debug(f"Add {key} to list of connected inputs")
+            connectors = system.parent.systems_connectors.get(system.name, [])
+            for connector in connectors:
+                sink = connector.sink
+                logger.debug(f"Detecting connector {connector} with sink {sink.name!r}")
+                if sink.is_input:
+                    for var in connector.sink_variables():
+                        key = f"{prefix}{sink.name}.{var}"
+                        result[key] = PortType.IN
+                        logger.debug(f"Add {key} to list of connected inputs")
 
         for output in system.outputs.values():
             logger.debug(f"Checking output {output}.")

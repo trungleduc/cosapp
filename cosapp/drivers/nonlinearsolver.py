@@ -1,7 +1,9 @@
 import logging
 from io import StringIO
-from typing import (Any, Callable, Dict, List, Optional, Sequence,
-                    Tuple, Union)
+from typing import (
+    Any, Callable, Dict, List, Optional,
+    Sequence, Tuple, Union,
+)
 
 import numpy
 import pandas
@@ -117,10 +119,12 @@ class NonLinearSolver(AbstractSolver):
         """
         return True
 
-    def resolution_method(self, fresidues: Callable[[Sequence[float], Union[float, str], bool], numpy.ndarray],
-                          x0: Sequence[float],
-                          args: Tuple[Union[float, str]] = (),
-                          options: Optional[Dict[str, Any]] = None) -> SolverResults:
+    def resolution_method(self,
+        fresidues: Callable[[Sequence[float], Union[float, str], bool], numpy.ndarray],
+        x0: Sequence[float],
+        args: Tuple[Union[float, str]] = (),
+        options: Optional[Dict[str, Any]] = None
+    ) -> SolverResults:
 
         if self.method == NonLinearMethods.NR:
             self.options.update(self._get_solver_limits())
@@ -190,10 +194,10 @@ class NonLinearSolver(AbstractSolver):
 
         try:
             self.problem.validate()
-        except ArithmeticError as err:
+        except ArithmeticError:
             self.status = 'ERROR'
             self.error_code = '9'
-            raise err
+            raise
 
         if len(self.initial_values) > 0:
             self.solution = {}
@@ -238,7 +242,7 @@ class NonLinearSolver(AbstractSolver):
                 else:
                     logger.error(error_msg)
 
-            self.solution = dict([(key, unknown.default_value) for key, unknown in self.problem.unknowns.items()])
+            self.solution = dict((key, unknown.default_value) for key, unknown in self.problem.unknowns.items())
             self._print_solution()
         else:
             self.owner.run_children_drivers()
