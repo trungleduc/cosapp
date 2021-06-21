@@ -20,13 +20,10 @@ class AbstractResidue:
         Residue name
     """
 
-    # SOLVER_STEP = SolverStep.INIT  # type: # SolverStep
-
     def __init__(
         self,
         context: "System",
         name: str,
-        # tolerance: Optional[float] = 1e-6, # TODO ?
     ):
         from cosapp.systems import System
         check_arg(context, "context", System)
@@ -35,11 +32,10 @@ class AbstractResidue:
         self._value = None  # type: Union[Number, numpy.ndarray]
         self._context = context  # type: System
         self._name = name  # type: str
-        # self.tolerance = tolerance
         super().__init__()
 
     def __str__(self) -> str:
-        return self._name + ":= " + str(self._value)
+        return f"{self._name} := {self._value}"
 
     def __repr__(self) -> str:
         return f"{type(self).__qualname__}({self._name}): {self._value!s}"
@@ -206,7 +202,6 @@ class Residue(AbstractResidue):
         equation: str,
         name: Optional[str] = None,
         reference: Union[Number, Collection, numpy.ndarray, str] = 1,
-        # tolerance: Optional[float] = 1e-6, # TODO ?
     ):
         """Initialization parameters:
         ----------

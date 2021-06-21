@@ -1,7 +1,7 @@
 from cosapp.systems import System
 from cosapp.ports.port import BasePort
 from cosapp.core.variableref import VariableReference
-from cosapp.utils.find_variables import natural_varname
+from cosapp.utils.naming import natural_varname
 from cosapp.utils.helpers import check_arg
 
 from typing import Dict, Set, Tuple

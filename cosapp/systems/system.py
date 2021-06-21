@@ -1274,29 +1274,31 @@ class System(Module, TimeObserver):
         """
         problem = MathematicalProblem('off-design', self)
 
-        for name in ('residues', 'unknowns', 'transients', 'rates'):
-            var_dict = getattr(problem, name)
-            var_dict.update(getattr(self._math, name))
-
-        problem.residues.update(self._math.get_target_residues())
+        # Make shallow copy of `self._math` properties
+        for name in ('residues', 'deferred_residues', 'unknowns', 'transients', 'rates'):
+            attr = getattr(problem, name)
+            attr.update(getattr(self._math, name))
 
         def transfer_unknown(unknown, name):
-            options = { attr: getattr(unknown, attr)
-                for attr in ('max_abs_step', 'max_rel_step', 'lower_bound', 'upper_bound') }
+            options = {
+                attr: getattr(unknown, attr)
+                for attr in ('max_abs_step', 'max_rel_step', 'lower_bound', 'upper_bound')
+            }
             problem.add_unknown(name, **options)
 
         def transfer_transient(unknown, name):
             ref = unknown.context.name2variable[unknown.name]
-            problem.add_transient(
-                name, 
-                der=unknown.der,
-                max_time_step=unknown.max_time_step_expr,
-                pulled_from=unknown.pulled_from or ref
+            problem.add_transient(name, 
+                der = unknown.der,
+                max_time_step = unknown.max_time_step_expr,
+                pulled_from = unknown.pulled_from or ref,
             )
 
         def transfer_rate(unknown, name):
-            problem.add_rate(name, source=unknown.source_expr,
-                initial_value=unknown.initial_value_expr)
+            problem.add_rate(name,
+                source = unknown.source_expr,
+                initial_value = unknown.initial_value_expr,
+            )
 
         for child in self.children.values():
             if child.is_standalone():
@@ -1329,13 +1331,11 @@ class System(Module, TimeObserver):
 
                 # Prune target equations defined as weak if target is connected
                 origin = connector.source.owner
-                deferred_residues = origin._math.deferred_residues
-                residue_name = MathematicalProblem.residue_naming(self, origin)[1]
+                deferred_residues = origin._math.deferred_residues.values()
 
                 for deferred in filter(lambda target: target.weak, deferred_residues):
-                    varname = list(deferred.variables)[0]
-                    varname = f"{origin.name}.{varname}"
-                    ref = self.name2variable[varname]
+                    targetted = list(deferred.variables)[0]
+                    ref = origin.name2variable[targetted]
                     port = ref.mapping
                     connected = (
                         port.owner.name in self.children
@@ -1344,8 +1344,8 @@ class System(Module, TimeObserver):
                     )
                     if connected:
                         # Remove deferred equation
-                        key = residue_name(MathematicalProblem.target_key(deferred))
-                        problem.residues.pop(key)
+                        key = MathematicalProblem.target_key(f"{origin.name}.{targetted}")
+                        problem.deferred_residues.pop(key)
 
             problem.extend(child_problem, copy=False)
 

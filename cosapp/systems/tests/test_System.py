@@ -1629,8 +1629,8 @@ def test_System_add_target(DummyFactory):
 
     offdesign = s.get_unsolved_problem()
     assert offdesign.shape == (0, 1)
-    assert set(offdesign.residues) == {"Target[z]"}
-    assert offdesign.residues["Target[z]"].equation == "z == 1.5"
+    assert len(offdesign.residues) == 0
+    assert len(offdesign.deferred_residues) == 1
 
     with pytest.raises(AttributeError, match="`add_target` cannot be called outside `setup`"):
         s.add_target('x')
@@ -1660,14 +1660,13 @@ def test_System_add_target_offdesign():
             self.z = self.x * self.y**2
 
     s = SystemWithTarget('s')
-    s.z = 1.5
 
     offdesign = s.get_unsolved_problem()
     assert offdesign.shape == (1, 1)
-    assert set(offdesign.residues) == {"Target[z]"}
-    assert offdesign.residues["Target[z]"].equation == "z == 1.5"
+    assert len(offdesign.residues) == 0
+    assert len(offdesign.deferred_residues) == 1
 
-    s.add_driver(NonLinearSolver('solver', tol=1e-9))
+    solver = s.add_driver(NonLinearSolver('solver', tol=1e-9))
 
     s.x = 0.5
     s.y = 0.0
@@ -1675,6 +1674,8 @@ def test_System_add_target_offdesign():
     s.run_drivers()
     assert s.z == pytest.approx(2)
     assert s.y == pytest.approx(2)
+    assert set(solver.problem.residues) == {"runner[Target[z]]"}
+    assert solver.problem.residues["runner[Target[z]]"].equation == "z == 2.0"
 
     s.z = 4.0
     s.run_drivers()
@@ -1847,6 +1848,81 @@ def test_System_add_target_composite():
     assert top.sub.y == pytest.approx(np.sqrt(8))
 
 
+def test_System_add_target_pulled_output_1():
+    """Test involving a target set on a pulled output.
+    Related to https://gitlab.com/cosapp/cosapp/-/issues/57
+    """
+    class SubSystem(System):
+        def setup(self):
+            self.add_inward('x', 0.0)
+            self.add_outward('y', 0.0)
+            
+            self.add_unknown('x').add_target('y')
+        
+        def compute(self):
+            self.y = 0.5 * self.x
+
+    class TopSystem(System):
+        def setup(self):
+            self.add_child(SubSystem('sub'), pulling='y')
+
+    top = TopSystem('top')
+    solver = top.add_driver(NonLinearSolver('solver'))
+
+    top.y = 3.14      # specify target at top level
+    top.sub.y = -0.1  # set child variable to another value
+
+    top.run_drivers()
+
+    problem = solver.problem
+    assert problem.shape == (1, 1)
+    residue = list(problem.residues.values())[0]
+    assert residue.name == "y == 3.14"
+    assert top.y == pytest.approx(3.14)
+    assert top.sub.x == pytest.approx(6.28)
+    assert top.sub.y == pytest.approx(3.14)
+
+
+def test_System_add_target_pulled_output_2():
+    """Test involving a target set on a pulled output.
+    Related to https://gitlab.com/cosapp/cosapp/-/issues/54
+    """
+    class SubSystem(System):
+        """y = 0.5 * x**2"""
+        def setup(self):
+            self.add_inward('x', 1.0)
+            self.add_outward('y', 0.0)
+            
+            self.add_unknown('x').add_target('y', weak=True)
+        
+        def compute(self):
+            self.y = 0.5 * self.x**2
+
+    class TopSystem(System):
+        """y = 0.25 * x**4, by combination of two subsystems"""
+        def setup(self):
+            a = self.add_child(SubSystem('a'), pulling='x')
+            b = self.add_child(SubSystem('b'), pulling='y')
+
+            self.connect(a.outwards, b.inwards, {'y': 'x'})
+
+    top = TopSystem('top')
+    solver = top.add_driver(NonLinearSolver('solver', tol=1e-6))
+
+    top.y = target = 3.14   # specify target at top level
+    top.b.y = -0.1   # set child variable to another value
+
+    top.run_drivers()
+
+    problem = solver.problem
+    assert problem.shape == (1, 1)
+    residue = list(problem.residues.values())[0]
+    assert residue.name == f"y == {target}"
+    assert top.y == pytest.approx(target)
+    assert top.x == pytest.approx((8 * target)**0.25)
+    assert top.b.y == pytest.approx(target)
+
+
 @pytest.mark.parametrize("weak", [True, False])
 def test_System_add_target_weak(weak):
     """Use of `add_target` with `weak` option"""
@@ -1880,14 +1956,17 @@ def test_System_add_target_weak(weak):
 
     offdesign = top.get_unsolved_problem()
     assert set(offdesign.unknowns) == {'a.inwards.y'}
+    assert len(offdesign.residues) == 0
 
     if weak:
         # Weak target: residue is suppressed due to a.z -> b.u connection
-        assert len(offdesign.residues) == 0
+        assert len(offdesign.deferred_residues) == 0
+        assert offdesign.shape == (1, 0)
 
     else:
         # Strong target: residue is maintained despite connection
-        assert len(offdesign.residues) == 1
+        assert len(offdesign.deferred_residues) == 1
+        assert offdesign.shape == (1, 1)
 
         solver = top.add_driver(NonLinearSolver('solver', tol=1e-9))
 
