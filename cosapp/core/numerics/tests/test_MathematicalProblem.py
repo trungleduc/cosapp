@@ -9,7 +9,7 @@ from cosapp.systems import System
 from cosapp.ports import Port
 from cosapp.core.numerics.basics import MathematicalProblem
 from cosapp.core.numerics.boundary import Unknown, TimeUnknown
-from cosapp.core.numerics.residues import Residue
+from cosapp.core.numerics.residues import DeferredResidue, Residue
 from cosapp.utils.testing import get_args
 
 
@@ -22,6 +22,7 @@ class SystemA(System):
         self.add_property('n', 12)
 
         self.add_input(BogusPort, 'in_')
+        self.add_output(BogusPort, 'out')
         self.add_inward('a', 1.)
         self.add_inward('b', [1., 2.])
         self.add_inward('c', np.asarray([1., 2.]))
@@ -61,6 +62,7 @@ def test_MathematicalProblem__init__():
     assert len(m.unknowns) == 0
     assert len(m.residues) == 0
     assert len(m.transients) == 0
+    assert len(m.deferred_residues) == 0
 
 
 def test_MathematicalProblem_name(test_objects):
@@ -117,15 +119,47 @@ def test_MathematicalProblem_residues_vector(test_objects):
         np.concatenate(([m.residues['g == 0'].value], m.residues['h - gorilla'].value)))
 
 
-def test_MathematicalProblem_shape(test_objects):
-    s, m = test_objects
-    m.add_equation("g == 0")
-    m.add_unknown("c")
-    assert m.shape == (2, 1)
+@pytest.mark.parametrize("case, expected", [
+    (
+        dict(unknowns='c', equations='g == 0'),
+        dict(n_unknowns=2, n_equations=1),
+    ),
+    (
+        dict(unknowns='a', equations='h == zeros(2)'),
+        dict(n_unknowns=1, n_equations=2),
+    ),
+    (
+        dict(unknowns=['a', 'c']), dict(n_unknowns=3),
+    ),
+    (
+        dict(unknowns=['a', 'c'], equations=['g == 0', 'h == zeros(2)']),
+        dict(n_unknowns=3, n_equations=3),
+    ),
+    (
+        dict(equations='g == 0', targets='out.m'),
+        dict(n_equations=2),
+    ),
+    (
+        dict(equations='g == 0', targets=['out.m', 'h']),
+        dict(n_equations=4),
+    ),
+    (
+        dict(targets=['out.m', 'h']),
+        dict(n_equations=3),
+    ),
+])
+def test_MathematicalProblem_shape(test_objects, case, expected):
+    system, problem = test_objects
+    problem.add_equation(case.get('equations', []))
+    problem.add_unknown(case.get('unknowns', []))
+    problem.add_target(case.get('targets', []))
+    # Retrieve expected values
+    n_unknowns = expected.get('n_unknowns', 0)
+    n_equations = expected.get('n_equations', 0)
 
-    m.add_unknown("a")
-    m.add_equation("h == array([22., 4.2])", name="h - gorilla", reference=24.)
-    assert m.shape == (3, 3)
+    assert problem.n_unknowns == n_unknowns
+    assert problem.n_equations == n_equations
+    assert problem.shape == (n_unknowns, n_equations)
 
 
 def test_MathematicalProblem_add_methods():
@@ -268,11 +302,13 @@ def test_MathematicalProblem_add_equation(test_objects, args_kwargs, expected):
 ])
 def test_MathematicalProblem_add_target(test_objects, args_kwargs, expected):
     context, problem = test_objects
+    assert len(problem.deferred_residues) == 0
     args, kwargs = args_kwargs
     error = expected.get('error', None)
 
     if error is None:
         problem.add_target(*args, **kwargs)
+        assert len(problem.deferred_residues) == 1
 
         equations = problem.get_target_equations()
         residues = problem.get_target_residues()
@@ -434,72 +470,232 @@ def test_MathematicalProblem_add_transient():
 
 def test_MathematicalProblem_extend():
     def local_test_objects():
-        r, s = SystemA('asyst'), SystemB('bsyst')
-        m = MathematicalProblem('test', r)
-        n = MathematicalProblem('test', s)
-        # Define mathematical problem 'm'
-        m.add_equation([
+        r, s = SystemA('r'), SystemB('s')
+        mr = MathematicalProblem('test', r)
+        ms = MathematicalProblem('test', s)
+        # Define mathematical problem 'mr'
+        mr.add_equation([
             dict(equation="g == 0"),
-            dict(equation="h == array([22., 4.2])", name="h - gorilla", reference=24.)
+            dict(equation="h == array([22., 4.2])", name="h equation", reference=24.)
         ])
-        m.add_unknown([
+        mr.add_target("i")
+        mr.add_unknown([
             dict(name="a", max_rel_step=1e-5),
-            dict(name="c", max_abs_step=1e-2)
+            dict(name="c", max_abs_step=1e-2),
         ])
-        # Define mathematical problem 'n'
-        n.add_equation("v == 0").add_unknown("y")
+        # Define mathematical problem 'ms'
+        ms.add_equation("v == 0").add_unknown("y")
+        ms.add_target("u")
 
-        return r, s, m, n
+        return r, s, mr, ms
 
     # Test default extension (should copy unknowns and residues)
-    r, s, m, n = local_test_objects()
+    r, s, mr, ms = local_test_objects()
     
-    extended = m.extend(m, copy=False)
-    assert extended is m
+    extended = mr.extend(mr, copy=False)
+    assert extended is mr
 
     with pytest.raises(ValueError):
-        m.extend(m, copy=True)
+        mr.extend(mr, copy=True)
 
     with pytest.raises(ValueError, match=r".* is not a child of .*\."):
-        m.extend(n)
+        mr.extend(ms)
 
     r.add_child(s)
-    m.extend(n)
-    assert m.context is r
-    assert len(m.unknowns) == 3
-    assert len(m.residues) == 3
-    assert len(m.transients) == 0
-    assert len(m.rates) == 0
+    extended = mr.extend(ms)
+    assert extended is mr
+    assert mr.context is r
+    assert len(mr.unknowns) == 3
+    assert len(mr.residues) == 3
+    assert len(mr.transients) == 0
+    assert len(mr.rates) == 0
+    assert len(mr.deferred_residues) == 2
+    assert all(
+        isinstance(obj.deferred, DeferredResidue)
+        for obj in mr.deferred_residues.values()
+    )
+    assert [deferred.target for deferred in mr.deferred_residues.values()] == ['i', 's.u']
 
-    for name in ('inwards.a', 'inwards.c', 'bsyst.inwards.y'):
-        assert name in m.unknowns
+    for name in ('inwards.a', 'inwards.c', 's.inwards.y'):
+        assert name in mr.unknowns
     
-    for name in ('g == 0', 'h - gorilla', 'bsyst.(v == 0)'):
-        assert name in m.residues
+    for name in ('g == 0', 'h equation', 's.(v == 0)'):
+        assert name in mr.residues
 
-    assert m.unknowns['bsyst.inwards.y'] is not n.unknowns['inwards.y']
-    assert m.residues['bsyst.(v == 0)'] is not n.residues['v == 0']
+    assert mr.unknowns['s.inwards.y'] is not ms.unknowns['inwards.y']
+    assert mr.residues['s.(v == 0)'] is not ms.residues['v == 0']
+
+    # Test with pulled output
+    r, s, mr, ms = local_test_objects()
+
+    r.add_child(s, pulling='u')
+    extended = mr.extend(ms)
+    assert extended is mr
+    assert mr.context is r
+    assert len(mr.unknowns) == 3
+    assert len(mr.residues) == 3
+    assert len(mr.transients) == 0
+    assert len(mr.rates) == 0
+    assert len(mr.deferred_residues) == 2
+    assert all(
+        isinstance(obj.deferred, DeferredResidue)
+        for obj in mr.deferred_residues.values()
+    )
+    assert [deferred.target for deferred in mr.deferred_residues.values()] == ['i', 'u']
+
+    for name in ('inwards.a', 'inwards.c', 's.inwards.y'):
+        assert name in mr.unknowns
+    
+    for name in ('g == 0', 'h equation', 's.(v == 0)'):
+        assert name in mr.residues
+
+    assert mr.unknowns['s.inwards.y'] is not ms.unknowns['inwards.y']
+    assert mr.residues['s.(v == 0)'] is not ms.residues['v == 0']
 
     # Test extension with option copy = False
-    r, s, m, n = local_test_objects()
+    r, s, mr, ms = local_test_objects()
 
     r.add_child(s)
-    m.extend(n, copy=False)
+    mr.extend(ms, copy=False)
 
-    assert m.context is r
-    assert len(m.unknowns) == 3
-    assert len(m.residues) == 3
-    assert len(m.transients) == 0
-    assert len(m.rates) == 0
+    assert mr.context is r
+    assert len(mr.unknowns) == 3
+    assert len(mr.residues) == 3
+    assert len(mr.transients) == 0
+    assert len(mr.rates) == 0
+    assert len(mr.deferred_residues) == 2
+    assert all(
+        isinstance(obj.deferred, DeferredResidue)
+        for obj in mr.deferred_residues.values()
+    )
+    assert [deferred.target for deferred in mr.deferred_residues.values()] == ['i', 's.u']
 
-    for name in ('inwards.a', 'inwards.c', 'bsyst.inwards.y'):
-        assert name in m.unknowns
+    for name in ('inwards.a', 'inwards.c', 's.inwards.y'):
+        assert name in mr.unknowns
     
-    for name in ('g == 0', 'h - gorilla', 'bsyst.(v == 0)'):
-        assert name in m.residues
+    for name in ('g == 0', 'h equation', 's.(v == 0)'):
+        assert name in mr.residues
 
-    assert m.unknowns['bsyst.inwards.y'] is n.unknowns['inwards.y']
-    assert m.residues['bsyst.(v == 0)'] is n.residues['v == 0']
+    assert mr.unknowns['s.inwards.y'] is ms.unknowns['inwards.y']
+    assert mr.residues['s.(v == 0)'] is ms.residues['v == 0']
+
+
+def test_MathematicalProblem_extend_pulled_target(caplog):
+    def local_test_objects():
+        r, s = SystemA('r'), SystemB('s')
+        # Define mathematical problem on `r`
+        mr = MathematicalProblem('test', r)
+        mr.add_target(["g", "2 * h", "out.m"])
+        # Define mathematical problem on `s`
+        ms = MathematicalProblem('test', s)
+        ms.add_target(["u", "norm(v)"])
+
+        return r, s, mr, ms
+
+    # Test 1
+    r, s, mr, ms = local_test_objects()
+    r.add_child(s, pulling={'v': 'v_alias'})
+
+    caplog.clear()
+    with caplog.at_level(logging.INFO):
+        mx = mr.extend(ms)
+    
+    assert len(caplog.records) > 0
+    assert re.match(
+        "Target on 'norm\(s.v\)' will be based on 'norm\(v_alias\)'",
+        caplog.records[0].message
+    )
+    assert mx is mr
+    assert mx.context is r
+    assert len(mr.deferred_residues) == 5
+    assert all(
+        isinstance(obj.deferred, DeferredResidue)
+        for obj in mx.deferred_residues.values()
+    )
+    assert [deferred.target for deferred in mx.deferred_residues.values()] == [
+        'g', '2 * h', 'out.m', 's.u', 'norm(v_alias)',
+    ]
+
+    # Test 2
+    r, s, mr, ms = local_test_objects()
+    r.add_child(s, pulling={'u': 'U'})
+
+    caplog.clear()
+    with caplog.at_level(logging.INFO):
+        mx = mr.extend(ms)
+    
+    assert len(caplog.records) == 1
+    assert re.match(
+        "Target on 's.u' will be based on 'U'",
+        caplog.records[0].message
+    )
+    assert mx is mr
+    assert mr.context is r
+    assert len(mx.deferred_residues) == 5
+    assert all(
+        isinstance(obj.deferred, DeferredResidue)
+        for obj in mx.deferred_residues.values()
+    )
+    assert [deferred.target for deferred in mx.deferred_residues.values()] == [
+        'g', '2 * h', 'out.m', 'U', 'norm(s.v)',
+    ]
+
+    # Test 3
+    r, s, mr, ms = local_test_objects()
+    s.add_child(r, pulling={'g': 'g', 'h': 'H'})
+
+    caplog.clear()
+    with caplog.at_level(logging.INFO):
+        mx = ms.extend(mr)
+    
+    assert len(caplog.records) == 2
+    assert re.match(
+        "Target on 'r\.g' will be based on 'g'",
+        caplog.records[0].message
+    )
+    assert re.match(
+        "Target on '2 \* r\.h' will be based on '2 \* H'",
+        caplog.records[1].message
+    )
+
+    assert mx is ms
+    assert mx.context is s
+    assert len(mx.deferred_residues) == 5
+    assert all(
+        isinstance(obj.deferred, DeferredResidue)
+        for obj in mx.deferred_residues.values()
+    )
+    assert [deferred.target for deferred in mx.deferred_residues.values()] == [
+        'u', 'norm(v)', 'g', '2 * H', 'r.out.m',
+    ]
+
+    # Test 4
+    r, s, mr, ms = local_test_objects()
+    s.add_child(r, pulling={'out': 'bogus_out', 'g': 'G'})
+
+    caplog.clear()
+    with caplog.at_level(logging.INFO):
+        mx = ms.extend(mr)
+    
+    assert len(caplog.records) == 2
+    assert re.match(
+        "Target on 'r\.g' will be based on 'G'",
+        caplog.records[0].message
+    )
+    assert re.match(
+        "Target on 'r\.out\.m' will be based on 'bogus_out\.m'",
+        caplog.records[1].message
+    )
+    assert mx is ms
+    assert mx.context is s
+    assert len(mx.deferred_residues) == 5
+    assert all(
+        isinstance(obj.deferred, DeferredResidue)
+        for obj in mx.deferred_residues.values()
+    )
+    assert [deferred.target for deferred in mx.deferred_residues.values()] == [
+        'u', 'norm(v)', 'G', '2 * r.h', 'bogus_out.m',
+    ]
 
 
 def test_MathematicalProblem_clear(test_objects):
@@ -518,6 +714,8 @@ def test_MathematicalProblem_clear(test_objects):
     assert len(m.residues) == 2
     assert len(m.transients) == 0
     assert len(m.rates) == 0
+    assert len(m.deferred_residues) == 0
+
     for name in ['inwards.a', 'inwards.c']:
         assert name in m.unknowns
         assert m.unknowns[name].context is s
@@ -532,10 +730,17 @@ def test_MathematicalProblem_clear(test_objects):
     m.add_transient('d', der='g**2')
     assert len(m.transients) == 1
     assert len(m.rates) == 0
+    assert len(m.deferred_residues) == 0
 
     m.add_rate('a', source='b[0]')
     assert len(m.transients) == 1
     assert len(m.rates) == 1
+    assert len(m.deferred_residues) == 0
+
+    m.add_target('g')
+    assert len(m.transients) == 1
+    assert len(m.rates) == 1
+    assert len(m.deferred_residues) == 1
 
     m.clear()
     assert m.context is s
@@ -543,6 +748,7 @@ def test_MathematicalProblem_clear(test_objects):
     assert len(m.residues) == 0
     assert len(m.transients) == 0
     assert len(m.rates) == 0
+    assert len(m.deferred_residues) == 0
 
 
 def test_MathematicalProblem_copy(test_objects):
@@ -566,6 +772,14 @@ def test_MathematicalProblem_copy(test_objects):
     assert len(original.residues) == 2
     assert copy.unknowns.keys() == original.unknowns.keys()
     assert copy.residues.keys() == original.residues.keys()
+    assert all(
+        copy.unknowns[key] is not unknown
+        for key, unknown in original.unknowns.items()
+    )
+    assert all(
+        copy.residues[key] is not residue
+        for key, residue in original.residues.items()
+    )
     
     name = 'inwards.c'
     assert name in copy.unknowns

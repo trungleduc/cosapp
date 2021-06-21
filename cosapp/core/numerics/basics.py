@@ -12,6 +12,7 @@ import numpy
 from cosapp.core.variableref import VariableReference
 from cosapp.core.numerics.boundary import Unknown, TimeUnknown, TimeDerivative
 from cosapp.core.numerics.residues import Residue, DeferredResidue
+from cosapp.utils.naming import natural_varname
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +103,7 @@ class MathematicalProblem:
         self._residues = OrderedDict()  # type: Dict[str, Residue]
         self._transients = OrderedDict()  # type: Dict[str, TimeUnknown]
         self._rates = OrderedDict()  # type: Dict[str, TimeDerivative]
-        self._targets = list()  # type: List[WeakDeferredResidue]
+        self._targets = OrderedDict()  # type: Dict[str, WeakDeferredResidue]
 
     def __str__(self) -> str:
         msg = ""
@@ -171,12 +172,30 @@ class MathematicalProblem:
         return residues
 
     @property
+    def n_unknowns(self) -> int:
+        """int: Number of unknowns."""
+        return sum(
+            numpy.size(unknown.value) 
+            for unknown in self.unknowns.values()
+        )
+
+    @property
+    def n_equations(self) -> int:
+        """int: Number of equations (including deferred equations)."""
+        n_equations = sum(
+            numpy.size(residue.value)
+            for residue in self.residues.values()
+        )
+        n_equations += sum(
+            numpy.size(deferred.target_value())
+            for deferred in self.deferred_residues.values()
+        )
+        return n_equations
+
+    @property
     def shape(self) -> Tuple[int, int]:
         """(int, int) : Number of unknowns and equations."""
-        n_unknowns = 0
-        for unknown in self.unknowns.values():
-            n_unknowns += numpy.size(unknown.value)
-        return n_unknowns, self.residues_vector.size
+        return (self.n_unknowns, self.n_equations)
 
     @property
     def unknowns(self) -> Dict[str, Unknown]:
@@ -368,7 +387,8 @@ class MathematicalProblem:
                 raise NotImplementedError(
                     f"Targets are only supported for single variables; got {deferred.variables}"
                 )
-            self._targets.append(WeakDeferredResidue(deferred, weak))
+            key = self.target_key(deferred.target)
+            self._targets[key] = WeakDeferredResidue(deferred, weak)
 
         if isinstance(expression, str):
             register(expression, reference)
@@ -379,22 +399,22 @@ class MathematicalProblem:
         return self
 
     def get_target_equations(self) -> List[str]:
-        return [deferred.equation() for deferred in self._targets]
+        return [deferred.equation() for deferred in self._targets.values()]
 
     def get_target_residues(self) -> Dict[str, Residue]:
         return dict(
-            (self.target_key(deferred), deferred.make_residue())
-            for deferred in self._targets
+            (key, deferred.make_residue())
+            for key, deferred in self._targets.items()
         )
 
     @staticmethod
-    def target_key(deferred: WeakDeferredResidue) -> str:
-        """Returns dict key to be used for deferred residue `deferred`"""
-        return f"Target[{deferred.target}]"
+    def target_key(target: str) -> str:
+        """Returns dict key to be used for targetted quantity `target`"""
+        return f"Target[{target}]"
 
     @property
-    def deferred_residues(self) -> List[DeferredResidue]:
-        """List[DeferredResidue]: List of deferred residues defined for this system."""
+    def deferred_residues(self) -> Dict[str, WeakDeferredResidue]:
+        """Dict[str, WeakDeferredResidue]: Dict of deferred residues defined for this system."""
         return self._targets
 
     @property
@@ -483,7 +503,7 @@ class MathematicalProblem:
         if system1 is not system2:
             path = system1.get_path_to_child(system2)
             var_name = lambda name: f"{path}.{name}"
-            res_name = lambda name: var_name(name if name.endswith(')') else name.join('()'))
+            res_name = lambda name: var_name(name if name.endswith(')') else f"({name})")
         else:
             var_name = res_name = lambda name: name
         return var_name, res_name
@@ -522,8 +542,31 @@ class MathematicalProblem:
         transfer(self._transients, other.transients, var_name)
         transfer(self._rates, other.rates, var_name)
 
-        for deferred in other._targets:
-            self.add_target(var_name(deferred.target))
+        connectors = self.context.incoming_connectors()
+        name2variable = other.context.name2variable
+
+        for deferred in other._targets.values():
+            targetted = list(deferred.variables)[0]
+            name = deferred.target.replace(targetted, var_name(targetted))  # default
+            ref = name2variable[targetted]
+            port = ref.mapping
+            for connector in connectors:
+                # Check if targetted var is a pulled output
+                if port is connector.source and port.is_output and ref.key in connector.source_variables():
+                    alias = natural_varname(
+                        f"{connector.sink.name}.{connector.sink_variable(ref.key)}"
+                    )
+                    original = name
+                    if deferred.target == targetted:
+                        name = alias
+                    else:
+                        # target is an expression involving `targetted`
+                        name = name.replace(var_name(targetted), alias)
+                    logger.info(
+                        f"Target on {original!r} will be based on {name!r} in the context of {self.context.full_name()!r}"
+                    )
+                    break
+            self.add_target(name, weak=deferred.weak)
 
         return self
 
@@ -533,7 +576,7 @@ class MathematicalProblem:
         self._residues.clear()
         self._transients.clear()
         self._rates.clear()
-        # self._extrema.clear()
+        self._targets.clear()
 
     def copy(self) -> 'MathematicalProblem':
         """Copy the `MathematicalSystem` object.
@@ -575,6 +618,6 @@ class MathematicalProblem:
                 self.name, n_unknowns, n_equations
             )
             logger.error(msg)
-            logger.error(f"Residues: {list(self.residues)}")
+            logger.error(f"Residues: {list(self.residues) + list(self.deferred_residues)}")
             logger.error(f"Variables: {list(self.unknowns)}")
             raise ArithmeticError(msg)

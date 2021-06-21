@@ -1,11 +1,23 @@
 import re
 from typing import Any, List, Tuple
 from cosapp.utils.helpers import check_arg
+from cosapp.ports.enum import CommonPorts
 
 
 def has_time(expression: Any) -> bool:
     """Checks if an expression contains 't'"""
     return re.search(r"\bt\b", str(expression)) is not None
+
+
+def natural_varname(name: str) -> str:
+    """Strip references to 'inwards' and 'outwards' ports from variable name
+    """
+    inwards = CommonPorts.INWARDS.value
+    outwards = CommonPorts.OUTWARDS.value
+    name = name.strip()
+    name = name.replace(f"{inwards}.", "")
+    name = name.replace(f"{outwards}.", "")
+    return name
 
 
 class NameChecker:

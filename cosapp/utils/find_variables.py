@@ -3,23 +3,12 @@ from typing import List, Any, Callable, Set, Union
 from collections.abc import Collection
 import inspect
 
-from cosapp.ports.enum import PortType, CommonPorts
+from cosapp.ports.enum import PortType
 from cosapp.ports.port import BasePort, Port
+from cosapp.utils.naming import natural_varname
 from cosapp.utils.helpers import check_arg
 
 SearchPattern = Union[str, List[str]]
-
-
-def natural_varname(name: str) -> str:
-    """
-    Strip references to 'inwards' and 'outwards' ports from variable name
-    """
-    inwards = CommonPorts.INWARDS.value
-    outwards = CommonPorts.OUTWARDS.value
-    name = name.strip()
-    name = name.replace(f"{inwards}.", "")
-    name = name.replace(f"{outwards}.", "")
-    return name
 
 
 def make_wishlist(wishlist: SearchPattern, name="wishlist") -> List[str]:
