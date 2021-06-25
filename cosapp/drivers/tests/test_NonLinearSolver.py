@@ -14,6 +14,7 @@ from cosapp.drivers import (
     RunOnce,
     RunSingleCase,
 )
+from cosapp.ports import Port
 from cosapp.systems import System
 from cosapp.utils.logging import LogFormat, LogLevel
 from cosapp.tests.library.systems import (
@@ -819,3 +820,43 @@ def test_NonLinearSolver_log_debug_message(format, msg, kwargs, trace, to_log, e
             assert re.search(pattern, args[1]) is not None
     else:
         handler.log.assert_not_called()
+
+
+def test_NonLinearSolver_fixedPointArray():
+    """Integration test for `NonLinearSolver` driver:
+    Solve cyclic dependency between two systems
+    exchanging numpy arrays.
+    """
+    class Port3D(Port):
+        def setup(self):
+            self.add_variable('value', np.r_[-0.2, 1.1, 5.2])
+
+    class SystemA(System):
+        def setup(self):
+            self.add_input(Port3D, 'x')
+            self.add_output(Port3D, 'y')
+        
+        def compute(self):
+            print(self.x.value)
+            self.y.value = 1 - self.x.value
+
+    class SystemB(System):
+        def setup(self):
+            self.add_input(Port3D, 'u')
+            self.add_output(Port3D, 'v')
+        
+        def compute(self):
+            self.v.value = self.u.value**2
+
+    top = System('top')
+    a = top.add_child(SystemA('a'))
+    b = top.add_child(SystemB('b'))
+    top.connect(a.x, b.v)
+    top.connect(a.y, b.u)
+
+    top.add_driver(NonLinearSolver('solver', tol=1e-9))
+    top.run_drivers()
+
+    assert a.x.value[0] == pytest.approx(0.5 * (3 - np.sqrt(5)))
+    assert a.x.value[1] == pytest.approx(0.5 * (3 - np.sqrt(5)))
+    assert a.x.value[2] == pytest.approx(0.5 * (3 + np.sqrt(5)))

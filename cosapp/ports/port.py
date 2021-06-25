@@ -581,18 +581,6 @@ class BasePort:
 class ExtensiblePort(BasePort):
     """Class describing ports with a varying number of variables."""
 
-    def __init__(self, name: str, direction: PortType) -> None:
-        """`ExtensiblePort` constructor.
-
-        Parameters
-        ----------
-        name : str
-            Port name
-        direction : {PortType.IN, PortType.OUT}
-            Port direction
-        """
-        super().__init__(name, direction)
-
     # TODO unused and should be removed -> to dangerous for consistency
     def remove_variable(self, name: str) -> None:
         """Removes a variable from the port.
@@ -671,7 +659,10 @@ class Port(BasePort):
     """
 
     def __init__(
-        self, name: str, direction: PortType, variables: Optional[Dict[str, Any]] = None
+        self,
+        name: str,
+        direction: PortType,
+        variables: Optional[Dict[str, Any]] = None,
     ) -> None:
         """`Port` constructor.
 
