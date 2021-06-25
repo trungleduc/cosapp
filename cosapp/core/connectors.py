@@ -299,13 +299,17 @@ class Connector:
     def transfer(self) -> None:
         """Transfer values from `source` to `sink`."""
         # TODO improve efficiency
+        default_transfer = copy.copy
+        
         def conversion_function(key) -> Callable:
+            converter = default_transfer
             try:
                 slope, offset = self._unit_conversions[key]
             except:
-                converter = copy.deepcopy
+                pass
             else:
-                converter = lambda var: slope * (var + offset)
+                if slope != 1 or offset != 0:
+                    converter = lambda var: slope * (var + offset)
             return converter
 
         source, sink = self.source, self.sink
@@ -320,7 +324,7 @@ class Connector:
                 try:
                     setattr(sink, key, convert(target))
                 except TypeError:
-                    setattr(sink, key, copy.deepcopy(target))
+                    setattr(sink, key, default_transfer(target))
 
     def to_dict(self) -> Dict[str, Union[Tuple[str, str], Tuple[str, str, Dict[str, str]]]]:
         """Convert connector to a single-key dictionary.

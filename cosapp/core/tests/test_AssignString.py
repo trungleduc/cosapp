@@ -57,7 +57,7 @@ def test_AssignString__init__(eval_context, lhs):
     ("x", "MyFunc(b)", NameError),  # note: when lhs is a vector, rhs is evaluated at construction
     ("x", "_b", NameError),
     ("x[1:]", "_b", NameError),
-    ("x", "cos()", ValueError),
+    ("x", "cos()", (TypeError, ValueError)),  # note: actual exception may depend on numpy version
     ("x", "cos(", SyntaxError),
     ("x[1:]", "ones(3)", ValueError),
     ("x", "ones(12)", ValueError),
@@ -67,6 +67,7 @@ def test_AssignString__init__(eval_context, lhs):
     ("a", "MyFunc(b)", NameError),
     ("a", "_", NameError),
     ("x[1]", "MyFunc(b)", NameError),
+    ("x[9]", "0.5", IndexError),
     ])
 def test_AssignString__init__error(eval_context, lhs, rhs, exception):
     """Test expressions expected to raise an exception at instantiation"""
