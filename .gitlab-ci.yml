@@ -177,8 +177,7 @@ deploy:
     CONDA_USERNAME: cosapp
     CONDA_UPLOAD_TOKEN : $CONDA_UPLOAD_TOKEN
   script:
-    - python -m pip install --upgrade pip
-    - pip install $JOB_DEP
+    - mamba install -y $JOB_DEP -c conda-forge
     - python setup.py sdist bdist_wheel
     - twine upload dist/*.tar.gz
     - twine upload dist/*.whl
