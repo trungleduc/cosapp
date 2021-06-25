@@ -1,5 +1,15 @@
 # History
 
+## 0.11.6 (2021-06-25)
+
+### Bug fixes and code quality
+
+* Resolve unknown aliasing for pulled input variables (MR [#58](https://gitlab.com/cosapp/cosapp/-/merge_requests/58)).
+* Resolve bugs and issues related to `add_target` (MR [#61](https://gitlab.com/cosapp/cosapp/-/merge_requests/61)).
+* Fix wrong comparison of Jacobian matrix `jac is None` after converting it as a `numpy` array (MR [#56](https://gitlab.com/cosapp/cosapp/-/merge_requests/56)).
+* Set transparent background in `PortMarkdownFormatter` (MR [#59](https://gitlab.com/cosapp/cosapp/-/merge_requests/59)).
+* Other code quality improvements (MR [#55](https://gitlab.com/cosapp/cosapp/-/merge_requests/55), [#57](https://gitlab.com/cosapp/cosapp/-/merge_requests/57), [#60](https://gitlab.com/cosapp/cosapp/-/merge_requests/60)).
+
 ## 0.11.5 (2021-05-07)
 
 ### New features
