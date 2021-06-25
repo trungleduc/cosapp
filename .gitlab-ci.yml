@@ -19,7 +19,6 @@ variables:
   
   only:
    - pushes
-   - tags
    - merge_requests
 
 # # default windows job parameters
@@ -98,7 +97,6 @@ linux_py39:
 
   only:
    - pushes
-   - tags
    - merge_requests
 
 # windows_py37:
@@ -144,7 +142,6 @@ build_doc:
     paths:
       - docs/$BUILDDIR
   only:
-      - tags
       - master
       - merge_requests
 
@@ -166,7 +163,6 @@ build_pkg:
     paths:
       - dist/
   only:
-      - tags
       - master
       - merge_requests
 
