@@ -28,6 +28,7 @@ class UnitTestCleanDirty(TestCase):
                 desc='get down',
                 scope=Scope.PROTECTED,
             )
+            self.add_inward('useless_inward',0.)
             self.add_outward('tmp',
                 valid_range=(1, 2), invalid_comment='not valid tmp',
                 limits=(0, 3), out_of_limits_comment="I'll be back",
@@ -118,6 +119,11 @@ class UnitTestCleanDirty(TestCase):
         s.sub1.sloss = 0.96
         assert clean_status(PortType.IN) == (False, False, True)
 
+        s.run_once()
+        assert clean_status(PortType.IN) == (True,) * 3
+
+        s.sub1.useless_inward = 1.
+        assert clean_status(PortType.IN) == (False, False, True)
         s.run_once()
         assert clean_status(PortType.IN) == (True,) * 3
 
