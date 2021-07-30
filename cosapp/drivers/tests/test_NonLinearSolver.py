@@ -56,177 +56,259 @@ def test_NonLinearSolver_is_standalone():
 def test_NonLinearSolver__fresidues(set_master_system):
 
     # Simple system with no design equations
-    s = Multiply2("MyMult")
-    d = NonLinearSolver("run_drivers")
-    s.add_driver(d)
-    d.runner.offdesign.add_unknown(["K1", "K2", "p_in.x"])
-    s.call_setup_run()
-    d._precompute()
+    system = Multiply2("MyMult")
+    solver = NonLinearSolver("solver")
+    system.add_driver(solver)
+    solver.add_unknown(["K1", "K2", "p_in.x"])
+    system.call_setup_run()
+    solver._precompute()
 
-    init = np.random.rand(len(d.problem.unknowns))
-    residues = d._fresidues(init, "init")
-    set_init = [var.default_value for var in d.problem.unknowns.values()]
+    init = np.random.rand(len(solver.problem.unknowns))
+    residues = solver._fresidues(init, "init")
+    set_init = [var.default_value for var in solver.problem.unknowns.values()]
     assert set_init == list(init)
-    mask_unknowns = [var.mask for var in d.problem.unknowns.values()]
+    mask_unknowns = [var.mask for var in solver.problem.unknowns.values()]
     assert mask_unknowns == list((None, None, None))
     assert isinstance(residues, np.ndarray)
     assert len(residues) == 0
 
     # More realistic single case
-    s = Multiply2("MyMult")
-    d = NonLinearSolver("run_drivers")
-    s.add_driver(d)
-    d.children[d._default_driver_name].offdesign.add_unknown("p_in.x").add_equation(
-        "p_in.x == 2."
-    )
-    d.children[d._default_driver_name].design.add_unknown("K1").add_equation(
-        "p_out.x == 20."
-    )
-    s.call_setup_run()
-    d._precompute()
+    system = Multiply2("MyMult")
+    solver = NonLinearSolver("solver")
+    system.add_driver(solver)
+    runner = solver.children[solver._default_driver_name]
+    solver.add_unknown("p_in.x").add_equation("p_in.x == 2")  # design unknown, off-design eq.
+    runner.design.add_unknown("K1").add_equation("p_out.x == 20")
+    system.call_setup_run()
+    solver._precompute()
 
-    init = np.random.rand(len(d.problem.unknowns))
-    residues = d._fresidues(init, "init")
-    set_init = [var.default_value for var in d.problem.unknowns.values()]
+    init = np.random.rand(len(solver.problem.unknowns))
+    residues = solver._fresidues(init, "init")
+    set_init = [var.default_value for var in solver.problem.unknowns.values()]
     assert set_init == list(init)
-    mask_unknowns = [var.mask for var in d.problem.unknowns.values()]
+    mask_unknowns = [var.mask for var in solver.problem.unknowns.values()]
     assert mask_unknowns == [None, None]
     assert isinstance(residues, np.ndarray)
     assert len(residues) == 2
 
-    # Multiple cases
-    s = Multiply2("MyMult")
-    d = NonLinearSolver("run_drivers")
-    s.add_driver(d)
-    p1 = RunSingleCase("pt1")
-    d.add_child(p1)
-    p1.offdesign.add_unknown("p_in.x").add_equation("p_in.x == 2.")
-    p1.design.add_unknown("K1").add_equation("p_out.x == 20.")
-    p2 = RunSingleCase("pt2")
-    d.add_child(p2)
-    p2.offdesign.add_unknown("p_in.x").add_equation("p_in.x == 6.")
-    p2.design.add_unknown("K2").add_equation("p_out.x == 15.")
-    s.call_setup_run()
-    d._precompute()
+    # Multiple cases with off-design and design problems
+    system = Multiply2("MyMult")
+    solver = system.add_driver(NonLinearSolver("solver"))
+    # Design points
+    point1 = solver.add_child(RunSingleCase("point1"))
+    point2 = solver.add_child(RunSingleCase("point2"))
 
-    init = np.random.rand(len(d.problem.unknowns))
-    residues = d._fresidues(init, "init")
-    variables = [var.default_value for var in d.problem.unknowns.values()]
+    solver.add_unknown("p_in.x").add_equation("p_in.x == K2")  # design unknown, off-design eq.
+    point1.design.add_unknown("K1").add_equation("p_out.x == 20")
+    point2.design.add_unknown("K2").add_equation("K2 == 2 * K1")
+
+    system.call_setup_run()
+    solver._precompute()
+
+    init = np.random.rand(len(solver.problem.unknowns))
+    residues = solver._fresidues(init, "init")
+    variables = [var.default_value for var in solver.problem.unknowns.values()]
     assert variables == list(init)
-    mask_unknowns = [var.mask for var in d.problem.unknowns.values()]
+    mask_unknowns = [var.mask for var in solver.problem.unknowns.values()]
+    assert mask_unknowns == [None, None, None]
+    assert isinstance(residues, np.ndarray)
+    assert len(residues) == 4
+    assert solver.problem.n_unknowns == 3
+    assert solver.problem.n_equations == 4
+
+    # Multiple cases with off-design and design problems (2)
+    system = Multiply2("MyMult")
+    solver = system.add_driver(NonLinearSolver("solver"))
+    # Design points
+    point1 = solver.add_child(RunSingleCase("point1"))
+    point2 = solver.add_child(RunSingleCase("point2"))
+
+    solver.add_unknown(["K1", "K2"])  # design unknowns
+    # Local problems:
+    point1.add_unknown("p_in.x").add_equation("p_in.x == 2")
+    point2.add_unknown("p_in.x").add_equation("p_in.x**2 == 6")
+    point1.add_equation("p_out.x == 20")
+    point2.add_equation("K2 == 2 * K1")
+
+    system.call_setup_run()
+    solver._precompute()
+
+    init = np.random.rand(len(solver.problem.unknowns))
+    residues = solver._fresidues(init, "init")
+    variables = [var.default_value for var in solver.problem.unknowns.values()]
+    assert variables == list(init)
+    mask_unknowns = [var.mask for var in solver.problem.unknowns.values()]
     assert mask_unknowns == [None, None, None, None]
     assert isinstance(residues, np.ndarray)
     assert len(residues) == 4
+    assert solver.problem.n_unknowns == 4
+    assert solver.problem.n_equations == 4
+
+    # Multiple cases, with design and local problems
+    system = Multiply2("MyMult")
+    solver = system.add_driver(NonLinearSolver("solver"))
+    point1 = solver.add_child(RunSingleCase("point1"))
+    point2 = solver.add_child(RunSingleCase("point2"))
+
+    # Design constraints:
+    point1.design.add_unknown("K1").add_equation("p_out.x == 20")
+    point2.design.add_unknown("K2").add_equation("p_out.x == 15")
+    # Local conditions:
+    point1.add_unknown("p_in.x").add_equation("p_in.x == 2")
+    point2.add_unknown("p_in.x").add_equation("p_in.x**2 == 6")
+
+    system.call_setup_run()
+    solver._precompute()
+
+    init = np.random.rand(len(solver.problem.unknowns))
+    residues = solver._fresidues(init, "init")
+    variables = [var.default_value for var in solver.problem.unknowns.values()]
+    assert variables == list(init)
+    mask_unknowns = [var.mask for var in solver.problem.unknowns.values()]
+    assert mask_unknowns == [None, None, None, None]
+    assert isinstance(residues, np.ndarray)
+    assert len(residues) == 4
+    assert solver.problem.n_unknowns == 4
+    assert solver.problem.n_equations == 4
 
 
 def test_NonLinearSolver__precompute(caplog, set_master_system):
     # Simple system with no design equations
-    s = Multiply2("MyMult")
-    d = NonLinearSolver("run_drivers")
-    s.add_driver(d)
-    d.runner.offdesign.add_unknown(["K1", "K2", "p_in.x"])
-    s.call_setup_run()
-    d._precompute()
-
-    vars = [
-        f"{d._default_driver_name}[{u}]"
-        for u in ("inwards.K1", "inwards.K2", "p_in.x")
-    ]
-    assert set(d.problem.unknowns) == set(vars)
+    system = Multiply2("MyMult")
+    solver = NonLinearSolver("solver")
+    system.add_driver(solver)
+    solver.add_unknown(["K1", "K2", "p_in.x"])
+    system.call_setup_run()
+    solver._precompute()
+    assert set(solver.problem.unknowns) == {
+        "inwards.K1", "inwards.K2", "p_in.x",
+    }
+    assert set(solver.problem.residues) == set()
 
     # More realistic single case
-    s = Multiply2("MyMult")
-    d = NonLinearSolver("run_drivers")
-    s.add_driver(d)
-    d.children[d._default_driver_name].offdesign.add_unknown("p_in.x").add_equation(
-        "p_in.x == 2."
-    )
-    d.children[d._default_driver_name].design.add_unknown("K1").add_equation(
-        "p_out.x == 20."
-    )
+    system = Multiply2("MyMult")
+    solver = system.add_driver(NonLinearSolver("solver"))
+    runner = solver.children[solver._default_driver_name]
+    runner.offdesign.add_unknown("p_in.x").add_equation("p_in.x == 2")
+    runner.design.add_unknown("K1").add_equation("p_out.x == 20")
     init = np.random.rand(2)
-    d.children[d._default_driver_name].set_init({"K1": init[0], "p_in.x": init[1]})
-    assert set(d.children[d._default_driver_name].initial_values) == set(
-        ("inwards.K1", "p_in.x")
-    )
-    assert (
-        d.children[d._default_driver_name].initial_values["inwards.K1"].default_value
-        == init[0]
-    )
-    assert (
-        d.children[d._default_driver_name].initial_values["p_in.x"].default_value
-        == init[1]
-    )
-    s.call_setup_run()
-    d._precompute()
-    assert set(d.problem.unknowns) == set(
-        ("inwards.K1", d._default_driver_name + "[p_in.x]")
-    )
-    assert list(d.initial_values) == list(init)
-    assert (
-        d.children[d._default_driver_name].initial_values["inwards.K1"].default_value
-        == init[0]
-    )
-    assert (
-        d.children[d._default_driver_name].initial_values["p_in.x"].default_value
-        == init[1]
-    )
+    runner.set_init({"K1": init[0], "p_in.x": init[1]})
+    assert set(runner.initial_values) == {"inwards.K1", "p_in.x"}
+    assert runner.initial_values["inwards.K1"].default_value == init[0]
+    assert runner.initial_values["p_in.x"].default_value == init[1]
+    system.call_setup_run()
+    solver._precompute()
+    assert set(solver.problem.unknowns) == {
+        "inwards.K1", f"{runner.name}[p_in.x]",
+    }
+    assert set(solver.problem.residues) == {
+        f"{runner.name}[p_out.x == 20]",
+        f"{runner.name}[p_in.x == 2]",
+    }
+    assert list(solver.initial_values) == list(init)
+    assert runner.initial_values["inwards.K1"].default_value == init[0]
+    assert runner.initial_values["p_in.x"].default_value == init[1]
 
-    s.K1 = 0.8
-    d._precompute()
-    assert list(d.initial_values) == list(init)
-    d.children[d._default_driver_name].solution["inwards.K1"] = 0.8
-    d._precompute()
-    assert list(d.initial_values) == [0.8, init[1]]
+    system.K1 = 0.8
+    solver._precompute()
+    assert list(solver.initial_values) == list(init)
+    solver.children[solver._default_driver_name].solution["inwards.K1"] = 0.8
+    solver._precompute()
+    assert list(solver.initial_values) == [0.8, init[1]]
 
-    d.force_init = True
-    d._precompute()
-    assert list(d.initial_values) == list(init)
+    solver.force_init = True
+    solver._precompute()
+    assert list(solver.initial_values) == list(init)
 
-    # Multiple cases
-    s = Multiply2("MyMult")
-    d = NonLinearSolver("run_drivers")
-    s.add_driver(d)
-    p1 = RunSingleCase("pt1")
+    # Multiple cases, with off-design and design problems
+    # defined at solver and case level.
+    system = Multiply2("MyMult")
+    solver = system.add_driver(NonLinearSolver("solver"))
+    point1 = solver.add_child(RunSingleCase("point1"))
+    point2 = solver.add_child(RunSingleCase("point2"))
+    
+    solver.add_unknown(["K1", "K2"]).add_equation("p_out.x == 20")
+    point1.add_unknown("p_in.x").add_equation("p_in.x == 2")     # local
+    point2.add_unknown("p_in.x").add_equation("p_in.x**2 == 6")  # local
+
     init = np.random.rand(4)
-    d.add_child(p1)
-    p1.offdesign.add_unknown("p_in.x").add_equation("p_in.x == 2.")
-    p1.design.add_unknown("K1").add_equation("p_out.x == 20.")
-    p1.set_init({"K1": init[0], "p_in.x": init[1]})
-    p2 = RunSingleCase("pt2")
-    d.add_child(p2)
-    p2.offdesign.add_unknown("p_in.x").add_equation("p_in.x == 6.")
-    p2.design.add_unknown("K2").add_equation("p_out.x == 15.")
-    p2.set_init({"K2": init[2], "p_in.x": init[3]})
-    s.call_setup_run()
-    d._precompute()
+    point1.set_init({"K1": init[0], "p_in.x": init[1]})
+    point2.set_init({"K2": init[2], "p_in.x": init[3]})
+    # Initial values for K1 and K2 come first, as they
+    # are declared as design unknowns at solver level
+    expected_init = [
+        init[0], init[2],  # initial values for K1, K2
+        init[1], init[3],
+    ]
 
-    assert set(d.problem.unknowns) == set(
-        ("inwards.K1", "pt1[p_in.x]", "inwards.K2", "pt2[p_in.x]")
-    )
-    assert list(d.initial_values) == list(init)
+    system.call_setup_run()
+    solver._precompute()
 
-    s.K1 = 0.2
-    d._precompute()
-    assert list(d.initial_values) == list(init)
-    d.pt1.solution["inwards.K1"] = 0.2
-    d._precompute()
-    assert list(d.initial_values) == [0.2, init[1], init[2], init[3]]
+    assert list(solver.problem.unknowns) == [
+        "inwards.K1", "inwards.K2",  # design unknowns
+        "point1[p_in.x]", "point2[p_in.x]",
+    ]
+    assert set(solver.problem.residues) == {
+        "point1[p_out.x == 20]",
+        "point2[p_out.x == 20]",
+        "point1[p_in.x == 2]",
+        "point2[p_in.x**2 == 6]",
+    }
+    assert list(solver.initial_values) == expected_init
+
+    system.K1 = 0.123
+    solver._precompute()
+    assert list(solver.initial_values) == [0.123] + expected_init[1:]
+
+    system.K1 = expected_init[0]
+    solver.point1.solution["inwards.K1"] = 0.123
+    solver._precompute()
+    assert list(solver.initial_values) == expected_init
+
+    # Multiple cases, with design and local problems
+    system = Multiply2("MyMult")
+    solver = system.add_driver(NonLinearSolver("solver"))
+    point1 = solver.add_child(RunSingleCase("point1"))
+    point2 = solver.add_child(RunSingleCase("point2"))
+
+    point1.design.add_unknown("K1").add_equation("p_out.x == 20")  # design (global)
+    point2.design.add_unknown("K2").add_equation("p_out.x == 15")  # design (global)
+    point1.add_unknown("p_in.x").add_equation("p_in.x == 2")
+    point2.add_unknown("p_in.x").add_equation("p_in.x**2 == 6")
+
+    init = np.random.rand(4)
+    point1.set_init({"K1": init[0], "p_in.x": init[1]})
+    point2.set_init({"K2": init[2], "p_in.x": init[3]})
+
+    system.call_setup_run()
+    solver._precompute()
+
+    assert set(solver.problem.unknowns) == {
+        "inwards.K1", "point1[p_in.x]",
+        "inwards.K2", "point2[p_in.x]",
+    }
+    assert list(solver.initial_values) == list(init)
+
+    system.K1 = 0.2
+    solver._precompute()
+    assert list(solver.initial_values) == list(init)
+    solver.point1.solution["inwards.K1"] = 0.2
+    solver._precompute()
+    assert list(solver.initial_values) == [0.2, init[1], init[2], init[3]]
 
     # Children without iterative
-    s = Multiply2("MyMult")
-    d = NonLinearSolver("run_drivers")
-    s.add_driver(d)
-    p1 = RunSingleCase("pt1")
-    d.add_child(p1)
-    p1.offdesign.add_unknown("p_in.x").add_equation("p_in.x == 2.")
-    p1.design.add_unknown("K1").add_equation("p_out.x == 20.")
-    p2 = RunOnce("pt2")
-    d.add_child(p2)
+    system = Multiply2("MyMult")
+    solver = NonLinearSolver("solver")
+    system.add_driver(solver)
+    point1 = solver.add_child(RunSingleCase("point1"))
+    point2 = solver.add_child(RunOnce("point2"))
+
+    solver.add_unknown("p_in.x").add_equation("p_in.x == 2")
+    point1.add_unknown("K1").add_equation("p_out.x == 20")
     caplog.clear()
     with caplog.at_level(logging.WARNING, NonLinearSolver.__name__):
-        s.call_setup_run()
-        d._precompute()
+        system.call_setup_run()
+        solver._precompute()
 
     warning_messages = list(
         map(
@@ -246,12 +328,11 @@ def test_NonLinearSolver__precompute(caplog, set_master_system):
 
 def test_NonLinearSolver_compute_log_validation(caplog, set_master_system):
     # Simple system with no design equations
-    s = Multiply2("MyMult")
-    d = NonLinearSolver("run_drivers")
-    s.add_driver(d)
-    d.runner.offdesign.add_unknown(["p_in.x", "K1", "K2"])
-    s.call_setup_run()
-    d._precompute()
+    system = Multiply2("MyMult")
+    solver = system.add_driver(NonLinearSolver("solver"))
+    solver.add_unknown(["p_in.x", "K1", "K2"])
+    system.call_setup_run()
+    solver._precompute()
 
     caplog.clear()
     with caplog.at_level(logging.ERROR):
@@ -259,7 +340,7 @@ def test_NonLinearSolver_compute_log_validation(caplog, set_master_system):
             ArithmeticError,
             match=r"Nonlinear problem \w+ error: Mismatch between numbers of params \[\d\] and residues \[\d\]",
         ):
-            d.compute()
+            solver.compute()
     error_messages = list(
         map(
             lambda r: r.msg,
@@ -278,23 +359,19 @@ def test_NonLinearSolver_compute_log_validation(caplog, set_master_system):
     assert re.search(r"Variables: .*", error_messages[2]) is not None
 
     # More realistic single case
-    s = Multiply2("MyMult")
+    system = Multiply2("MyMult")
     # Set max_iter to force failure
-    d = NonLinearSolver("run_drivers", method=NonLinearMethods.NR, max_iter=0)
-    s.add_driver(d)
-    d.children[d._default_driver_name].offdesign.add_unknown("p_in.x").add_equation(
-        "p_in.x == 2."
-    )
-    d.children[d._default_driver_name].design.add_unknown("K1").add_equation(
-        "p_out.x == 20."
-    )
+    solver = system.add_driver(NonLinearSolver("solver", method=NonLinearMethods.NR, max_iter=0))
+    runner = solver.children[solver._default_driver_name]
+    solver.add_unknown("K1").add_equation("p_out.x == 20")
+    runner.add_unknown("p_in.x").add_equation("p_in.x == 2")
     init = np.random.rand(2)
-    d.children[d._default_driver_name].set_init({"K1": init[0], "p_in.x": init[1]})
-    s.call_setup_run()
-    d._precompute()
+    runner.set_init({"K1": init[0], "p_in.x": init[1]})
+    system.call_setup_run()
+    solver._precompute()
     caplog.clear()
     with caplog.at_level(logging.ERROR):
-        d.compute()
+        solver.compute()
 
     error_messages = list(
         map(
@@ -305,30 +382,28 @@ def test_NonLinearSolver_compute_log_validation(caplog, set_master_system):
     assert len(error_messages) == 1
     assert re.search(r"The solver failed: .*", error_messages[0]) is not None
 
-    all_variables = [key for key in d.problem.unknowns]
-    expected = dict([(var, init[i]) for i, var in enumerate(all_variables)])
-    assert d.solution == expected
+    assert solver.solution == dict(zip(solver.problem.unknowns, init))
 
-    # Multiple cases
-    s = Multiply2("MyMult")
-    d = NonLinearSolver("run_drivers", method=NonLinearMethods.NR, max_iter=0)
-    s.add_driver(d)
-    p1 = RunSingleCase("pt1")
-    d.add_child(p1)
-    p1.offdesign.add_unknown("p_in.x").add_equation("p_in.x == 2.")
-    p1.design.add_unknown("K1").add_equation("p_out.x == 20.")
-    p2 = RunSingleCase("pt2")
-    d.add_child(p2)
-    p2.offdesign.add_unknown("p_in.x").add_equation("p_in.x == 6.")
-    p2.design.add_unknown("K2").add_equation("p_out.x == 15.")
+    # Multipoint cases
+    system = Multiply2("MyMult")
+    solver = system.add_driver(NonLinearSolver("solver", method=NonLinearMethods.NR, max_iter=0))
+    point1 = solver.add_child(RunSingleCase("point1"))
+    point2 = solver.add_child(RunSingleCase("point2"))
+
+    solver.add_unknown(["K1", "K2"]).add_equation("p_in.x == 2")
+    point1.add_unknown("p_in.x").add_equation("p_out.x == 20")
+    point2.add_unknown("p_in.x").add_equation("p_out.x == 15")
+
     init = np.random.rand(4)
-    d.children["pt1"].set_init({"K1": init[0], "p_in.x": init[1]})
-    d.children["pt2"].set_init({"K2": init[2], "p_in.x": init[3]})
-    s.call_setup_run()
-    d._precompute()
+    point1.set_init({"K1": init[0], "p_in.x": init[1]})
+    point2.set_init({"K2": init[2], "p_in.x": init[3]})
+    expected_init = [init[i] for i in [0, 2, 1, 3]]
+
+    system.call_setup_run()
+    solver._precompute()
     caplog.clear()
     with caplog.at_level(logging.ERROR):
-        d.compute()
+        solver.compute()
 
     error_messages = list(
         map(
@@ -338,48 +413,38 @@ def test_NonLinearSolver_compute_log_validation(caplog, set_master_system):
     )
     assert len(error_messages) == 1
     assert re.search(r"The solver failed: .*", error_messages[0]) is not None
+    assert solver.solution == dict(zip(solver.problem.unknowns, expected_init))
 
-    all_variables = [key for key in d.problem.unknowns]
-    expected = dict([(var, init[i]) for i, var in enumerate(all_variables)])
-    assert d.solution == expected
-
-    s = Multiply2("MyMult")
-    d = NonLinearSolver("run_drivers", method=NonLinearMethods.NR, max_iter=0)
-    s.add_driver(d)
-    d.children[d._default_driver_name].offdesign.add_unknown("p_in.x").add_equation(
-        "p_in.x == 2."
-    )
-    d.children[d._default_driver_name].design.add_unknown("K1").add_equation(
-        "p_out.x == 20."
-    )
+    system = Multiply2("MyMult")
+    solver = system.add_driver(NonLinearSolver("solver", method=NonLinearMethods.NR, max_iter=0))
+    runner = solver.children[solver._default_driver_name]
+    solver.add_unknown("K1").add_equation("p_out.x == 20")
+    runner.add_unknown("p_in.x").add_equation("p_in.x == 2")
     init = np.random.rand(2)
-    d.children[d._default_driver_name].set_init({"K1": init[0], "p_in.x": init[1]})
+    runner.set_init({"K1": init[0], "p_in.x": init[1]})
+    expected_init = init
 
-    s.call_setup_run()
-    d._precompute()
+    system.call_setup_run()
+    solver._precompute()
     caplog.clear()
     with caplog.at_level(logging.ERROR):
-        d.compute()
+        solver.compute()
 
     error_messages = list(filter(lambda r: r.levelno == logging.ERROR, caplog.records))
     assert len(error_messages) == 1
+    assert solver.solution == dict(zip(solver.problem.unknowns, expected_init))
 
-    all_variables = [key for key in d.problem.unknowns]
-    expected = dict([(var, init[i]) for i, var in enumerate(all_variables)])
-    assert d.solution == expected
 
+def test_NonLinearSolver_compute_empty(caplog, set_master_system):
     # Child without iterative
-    s = System("empty")
-    d = NonLinearSolver("run_drivers")
-    s.add_driver(d)
-    pt = RunSingleCase("pt")
-    d.add_child(pt)
-    s.call_setup_run()
-    d._precompute()
+    system = System("empty")
+    solver = system.add_driver(NonLinearSolver("solver"))
+    system.call_setup_run()
+    solver._precompute()
 
     caplog.clear()
     with caplog.at_level(logging.DEBUG):
-        d.compute()
+        solver.compute()
 
     debug_messages = list(
         map(
@@ -391,7 +456,7 @@ def test_NonLinearSolver_compute_log_validation(caplog, set_master_system):
     assert (
         re.search(
             r"No parameters/residues to solve. Fallback to children execution\.",
-            debug_messages[-1],
+            debug_messages[0],
         )
         is not None
     )
@@ -400,31 +465,24 @@ def test_NonLinearSolver_compute_log_validation(caplog, set_master_system):
 def test_NonLinearSolver_compute(caplog, set_master_system):
     # Single case
     s = Multiply2("MyMult")
-    d = NonLinearSolver("run_drivers", method=NonLinearMethods.POWELL)
+    d = NonLinearSolver("solver", method=NonLinearMethods.POWELL)
     s.add_driver(d)
-    d.children[d._default_driver_name].offdesign.add_unknown("p_in.x").add_equation(
-        "p_in.x == 2."
-    )
-    d.children[d._default_driver_name].design.add_unknown("K1").add_equation(
-        "p_out.x == 20."
-    )
+    d.add_unknown("p_in.x").add_equation("p_in.x == 2")
+    default = d._default_driver_name
+    d.children[default].add_unknown("K1").add_equation("p_out.x == 20")
     init = np.random.rand(2)
-    d.children[d._default_driver_name].set_init({"K1": init[0], "p_in.x": init[1]})
+    d.children[default].set_init({"K1": init[0], "p_in.x": init[1]})
     s.call_setup_run()
     d._precompute()
     caplog.clear()
     with caplog.at_level(logging.INFO):
         d.compute()
 
-    info_messages = list(
-        map(
-            lambda r: r.msg, filter(lambda r: r.levelno == logging.INFO, caplog.records)
-        )
+    info_messages = list(record.msg
+        for record in filter(lambda r: r.levelno == logging.INFO, caplog.records)
     )
     assert len(info_messages) == 1
-    assert (
-        re.search(r"solver : \w+The solution converged\.", info_messages[0]) is not None
-    )
+    assert re.search(r"solver : \w+The solution converged\.", info_messages[0]) is not None
 
     assert len(d.solution) == len(init)
     np.testing.assert_allclose(list(d.solution.values()), (2.0, 2.0))
@@ -432,111 +490,385 @@ def test_NonLinearSolver_compute(caplog, set_master_system):
 
 def test_NonLinearSolver__postcompute(set_master_system):
     # Simple system with no design equations
-    s = Multiply2("MyMult")
-    d = NonLinearSolver("run_drivers")
-    s.add_driver(d)
-    d.runner.offdesign.add_unknown(["K1", "K2", "p_in.x"])
-    s.call_setup_run()
-    d._precompute()
-    d._postcompute()
-    vars = [
-        f"{d._default_driver_name}[{u}]"
-        for u in ("inwards.K1", "inwards.K2", "p_in.x")
-    ]
-    assert set(d.problem.unknowns) == set(vars)
+    system = Multiply2("MyMult")
+    solver = NonLinearSolver("solver")
+    system.add_driver(solver)
+    solver.add_unknown(["K1", "K2", "p_in.x"])
+    system.call_setup_run()
+    solver._precompute()
+    solver._postcompute()
+    assert set(solver.problem.unknowns) == {
+        "inwards.K1", "inwards.K2", "p_in.x",
+    }
+    assert set(solver.problem.residues) == set()
 
     # More realistic single case
-    s = Multiply2("MyMult")
-    d = NonLinearSolver("run_drivers")
-    s.add_driver(d)
-    d.children[d._default_driver_name].offdesign.add_unknown("p_in.x").add_equation(
-        "p_in.x == 2."
-    )
-    d.children[d._default_driver_name].design.add_unknown("K1").add_equation(
-        "p_out.x == 20."
-    )
-    s.call_setup_run()
-    d._precompute()
-    d._postcompute()
-    assert set(d.problem.unknowns), set(
-        ("inwards.K1", d._default_driver_name + "[p_in.x]")
-    )
+    system = Multiply2("MyMult")
+    solver = system.add_driver(NonLinearSolver("solver"))
+    runner = solver.runner
+    solver.add_unknown("K1").add_equation("p_out.x == 20")
+    runner.add_unknown("p_in.x").add_equation("p_in.x == 2")
+    system.call_setup_run()
+    solver._precompute()
+    solver._postcompute()
+    assert set(solver.problem.unknowns) == {
+        "inwards.K1", f"{runner.name}[p_in.x]",
+    }
+    assert set(solver.problem.residues) == {
+        f"{runner.name}[p_out.x == 20]",
+        f"{runner.name}[p_in.x == 2]",
+    }
 
     # Multiple cases
-    s = Multiply2("MyMult")
-    d = NonLinearSolver("run_drivers")
-    s.add_driver(d)
-    p1 = RunSingleCase("pt1")
-    d.add_child(p1)
-    p1.offdesign.add_unknown("p_in.x").add_equation("p_in.x == 2.")
-    p1.design.add_unknown("K1").add_equation("p_out.x == 20.")
-    p2 = RunSingleCase("pt2")
-    d.add_child(p2)
-    p2.offdesign.add_unknown("p_in.x").add_equation("p_in.x == 6.")
-    p2.design.add_unknown("K2").add_equation("p_out.x == 15.")
-    s.call_setup_run()
-    d._precompute()
-    d._postcompute()
-    assert set(d.problem.unknowns) == set(
-        ("inwards.K1", "pt1[p_in.x]", "inwards.K2", "pt2[p_in.x]")
-    )
+    system = Multiply2("MyMult")
+    solver = system.add_driver(NonLinearSolver("solver"))
+    point1 = solver.add_child(RunSingleCase("point1"))
+    point2 = solver.add_child(RunSingleCase("point2"))
+
+    solver.add_unknown(["K1", "K2"]).add_equation("p_out.x == 20")
+    point1.add_unknown("p_in.x").add_equation("p_in.x == 2")
+    point2.add_unknown("p_in.x").add_equation("p_in.x**2 == 6")
+
+    system.call_setup_run()
+    solver._precompute()
+    solver._postcompute()
+    assert set(solver.problem.unknowns) == {
+        "inwards.K1", "point1[p_in.x]",
+        "inwards.K2", "point2[p_in.x]",
+    }
+    assert set(solver.problem.residues) == {
+        "point1[p_out.x == 20]", "point1[p_in.x == 2]",
+        "point2[p_out.x == 20]", "point2[p_in.x**2 == 6]",
+    }
+
+    # Multiple cases, with local problems
+    system = Multiply2("MyMult")
+    solver = system.add_driver(NonLinearSolver("solver"))
+    point1 = solver.add_child(RunSingleCase("point1"))
+    point2 = solver.add_child(RunSingleCase("point2"))
+
+    point1.design.add_unknown("K1").add_equation("p_out.x == 20")
+    point2.design.add_unknown("K2").add_equation("p_out.x == 15")
+
+    point1.add_unknown("p_in.x").add_equation("p_in.x == 2")
+    point2.add_unknown("p_in.x").add_equation("p_in.x**2 == 6")
+
+    system.call_setup_run()
+    solver._precompute()
+    solver._postcompute()
+    assert set(solver.problem.unknowns) == {
+        "inwards.K1", "point1[p_in.x]",
+        "inwards.K2", "point2[p_in.x]",
+    }
+    assert set(solver.problem.residues) == {
+        "point1[p_out.x == 20]", "point1[p_in.x == 2]",
+        "point2[p_out.x == 15]", "point2[p_in.x**2 == 6]",
+    }
 
 
 def test_NonLinearSolver_residues_singlePoint(set_master_system):
     # Simple system with no design equations
-    s = Multiply2("MyMult")
-    d = NonLinearSolver("run_drivers")
-    s.add_driver(d)
-    d.runner.offdesign.add_unknown(["K1", "K2"])
-    s.call_setup_run()
-    d._precompute()
-    init = np.random.rand(len(d.problem.unknowns))
-    d._fresidues(init, "init")
-    assert isinstance(d.problem.residues, OrderedDict)
-    assert len(d.problem.residues) == 0
+    system = Multiply2("MyMult")
+    solver = system.add_driver(NonLinearSolver("solver"))
+    solver.add_unknown(["K1", "K2"])
+    system.call_setup_run()
+    solver._precompute()
+    init = np.random.rand(len(solver.problem.unknowns))
+    solver._fresidues(init, "init")
+    assert isinstance(solver.problem.residues, OrderedDict)
+    assert len(solver.problem.residues) == 0
 
     # More realistic single case
-    s = Multiply2("MyMult")
-    d = NonLinearSolver("run_drivers")
-    s.add_driver(d)
-    d.runner.offdesign.add_unknown("p_in.x")
-    d.children[d._default_driver_name].offdesign.add_equation("p_in.x == 2.")
-    d.children[d._default_driver_name].design.add_unknown("K1").add_equation(
-        "p_out.x == 20."
+    system = Multiply2("MyMult")
+    solver = system.add_driver(NonLinearSolver("solver"))
+    runner = solver.runner
+    solver.add_unknown("K1").add_equation("p_out.x == 20")
+    runner.add_unknown("p_in.x").add_equation("p_in.x == 2")
+    solver.owner.call_setup_run()
+    solver._precompute()
+    solver.compute()
+    assert set(solver.problem.residues) == set(
+        f"{runner.name}[{eq}]"
+        for eq in ("p_in.x == 2", "p_out.x == 20",)
     )
-    d.owner.call_setup_run()
-    d._precompute()
-    d.compute()
-    assert set(d.problem.residues) == set(f"{d._default_driver_name}[{eq}]"
-            for eq in ("p_in.x == 2.", "p_out.x == 20.",)
+    for v in solver.problem.residues.values():
+        assert isinstance(v, Residue)
+
+    # Same, with runner-level problems only
+    system = Multiply2("MyMult")
+    solver = system.add_driver(NonLinearSolver("solver"))
+    runner = solver.runner
+    runner.design.add_unknown("K1").add_equation("p_out.x == 20")
+    runner.add_unknown("p_in.x").add_equation("p_in.x == 2")
+    solver.owner.call_setup_run()
+    solver._precompute()
+    solver.compute()
+    assert set(solver.problem.residues) == set(
+        f"{runner.name}[{eq}]"
+        for eq in ("p_in.x == 2", "p_out.x == 20",)
     )
-    for v in d.problem.residues.values():
+    for v in solver.problem.residues.values():
         assert isinstance(v, Residue)
 
 
-def test_NonLinearSolver_residues_multiPoint(set_master_system):
-    s = Multiply2("MyMult")
-    d = NonLinearSolver("run_drivers")
-    s.add_driver(d)
-    # First point
-    p1 = d.add_child(RunSingleCase("pt1"))
-    p1.offdesign.add_unknown("p_in.x").add_equation("p_in.x == 2.")
-    m1 = p1.design.add_unknown("K1").add_equation("p_out.x == 20.")
-    # Second point
-    p2 = d.add_child(RunSingleCase("pt2"))
-    p2.offdesign.add_unknown("p_in.x").add_equation("p_in.x == 6.")
-    d.owner.call_setup_run()
-    d._precompute()
-    d.compute()
-    assert set(d.problem.residues) == set(
-        (
-            "{}[{}]".format("pt1", "p_in.x == 2."),
-            "{}[{}]".format("pt1", "p_out.x == 20."),
-            "{}[{}]".format("pt2", "p_in.x == 6."),
-        )
-    )
-    for v in d.problem.residues.values():
+def test_NonLinearSolver_problem_multiPoint(set_master_system):
+    """Test combinations of design, local and off-design problems.
+    Problems are not solved (some are ill-posed); only unknowns and
+    equations are checked.
+    """
+    def make_case():
+        system = Multiply2("MyMult")
+        # Add solver and design points
+        solver = system.add_driver(NonLinearSolver("solver", max_iter=50))
+        point1 = solver.add_child(RunSingleCase("point1"))
+        point2 = solver.add_child(RunSingleCase("point2"))
+        return solver, point1, point2
+
+    solver, point1, point2 = make_case()
+    solver.add_unknown(["K1", "K2"]).add_equation("p_in.x == 2")
+    point1.add_unknown("p_in.x").add_equation("p_out.x == 20")  # local
+    point2.add_unknown("p_in.x").add_equation("Ksum == 10")     # local
+
+    solver.owner.call_setup_run()
+    solver._precompute()
+    assert set(solver.problem.unknowns) == {
+        "inwards.K1",
+        "inwards.K2",
+        "point1[p_in.x]",
+        "point2[p_in.x]",
+    }
+    assert set(solver.problem.residues) == {
+        "{}[{}]".format("point1", "p_out.x == 20"),
+        "{}[{}]".format("point2", "Ksum == 10"),
+        "{}[{}]".format("point1", "p_in.x == 2"),
+        "{}[{}]".format("point2", "p_in.x == 2"),
+    }
+    for v in solver.problem.residues.values():
         assert isinstance(v, Residue)
+
+    # Same, with local problems
+    solver, point1, point2 = make_case()
+
+    point1.design.add_unknown("K1").add_equation("p_out.x == 20")
+    point2.add_unknown("K2").add_equation("Ksum == 10")
+    point1.add_unknown("p_in.x").add_equation("p_in.x == 2")
+    point2.add_unknown("p_in.x").add_equation("p_in.x**2 == 6")
+    solver.owner.call_setup_run()
+    solver._precompute()
+    assert set(solver.problem.unknowns) == {
+        "inwards.K1",
+        "point2[inwards.K2]",
+        "point1[p_in.x]",
+        "point2[p_in.x]",
+    }
+    assert set(solver.problem.residues) == {
+        "{}[{}]".format("point1", "p_out.x == 20"),
+        "{}[{}]".format("point2", "Ksum == 10"),
+        "{}[{}]".format("point1", "p_in.x == 2"),
+        "{}[{}]".format("point2", "p_in.x**2 == 6"),
+    }
+    for v in solver.problem.residues.values():
+        assert isinstance(v, Residue)
+
+    # Same, combining off-design, design and local problems
+    solver, point1, point2 = make_case()
+
+    solver.add_unknown("K1")  # common design unknown
+    point1.add_equation("p_out.x == 20")  # design constraint on point1
+    point1.add_unknown("p_in.x").add_equation("p_in.x == 2")
+    point2.add_unknown("p_in.x").add_equation("p_in.x**2 == 6")
+    solver.owner.call_setup_run()
+    solver._precompute()
+    assert set(solver.problem.unknowns) == {
+        "inwards.K1",
+        "point1[p_in.x]",
+        "point2[p_in.x]",
+    }
+    assert set(solver.problem.residues) == {
+        "{}[{}]".format("point1", "p_out.x == 20"),
+        "{}[{}]".format("point1", "p_in.x == 2"),
+        "{}[{}]".format("point2", "p_in.x**2 == 6"),
+    }
+    for v in solver.problem.residues.values():
+        assert isinstance(v, Residue)
+
+
+def test_NonLinearSolver_solve_multiPoint():
+    def make_case():
+        system = Multiply2("s")
+        system.p_in.x = 1
+        # Add solver and design points
+        solver = system.add_driver(NonLinearSolver("solver", max_iter=100))
+        point1 = solver.add_child(RunSingleCase("point1"))
+        point2 = solver.add_child(RunSingleCase("point2"))
+        return system, solver, point1, point2
+
+    s = Multiply2("s")
+    solver = s.add_driver(NonLinearSolver("solver", max_iter=50))
+    solver.add_unknown("K1").add_equation("p_out.x == 6")
+    solver.add_unknown("K2").add_equation("Ksum == 8")
+
+    s.p_in.x = 0.5
+    s.K1 = 0.5
+    s.K2 = 3.1
+
+    s.run_drivers()
+    assert s.K1 == pytest.approx(2)
+    assert s.K2 == pytest.approx(6)
+
+    s, solver, point1, point2 = make_case()
+    # Define design unknowns and off-design equation
+    solver.add_unknown(["K1", "K2"]).add_equation("2 * p_in.x == 1")
+    # Define design point local problems
+    point1.add_unknown("p_in.x").add_equation("p_out.x == 6")
+    point2.add_unknown("p_in.x").add_equation("Ksum == 8")
+
+    s.K1 = 0.5
+    s.K2 = 3.1
+
+    s.run_drivers()
+    assert s.K1 == pytest.approx(2)
+    assert s.K2 == pytest.approx(6)
+
+    # Design problem with different values of `s.p_in.x`
+    s, solver, point1, point2 = make_case()
+    point1.design.add_unknown("K1").add_equation("p_out.x == 6")
+    point2.design.add_unknown("K2").add_equation("p_out.x == 3 * Ksum")
+
+    point1.set_values({"p_in.x": 0.5})
+    point2.set_values({"p_in.x": 2.0})
+    s.K1 = 0.5
+    s.K2 = 3.1
+
+    s.run_drivers()
+    assert s.K1 == pytest.approx(2)
+    assert s.K2 == pytest.approx(6)
+
+    # Same, with design unknowns declared at solver level,
+    # and equations declared in design points
+    s, solver, point1, point2 = make_case()
+    
+    solver.add_unknown(["K1", "K2"])
+    point1.add_equation("p_out.x == 6")
+    point2.add_equation("p_out.x == 3 * Ksum")
+
+    point1.set_values({"p_in.x": 0.5})
+    point2.set_values({"p_in.x": 2.0})
+    s.K1 = 0.5
+    s.K2 = 3.1
+
+    s.run_drivers()
+    assert s.K1 == pytest.approx(2)
+    assert s.K2 == pytest.approx(6)
+
+    # Same, with local problems
+    s, solver, point1, point2 = make_case()
+    point1.design.add_unknown("K1").add_equation("p_out.x == 6")
+    point2.design.add_unknown("K2").add_equation("p_out.x == 3 * Ksum")
+    point1.add_unknown("p_in.x").add_equation("2 * p_in.x == 1")
+    point2.add_unknown("p_in.x").add_equation("p_in.x**3 == 8")
+
+    s.K1 = 0.5
+    s.K2 = 5.1
+
+    s.run_drivers()
+    assert s.K1 == pytest.approx(2)
+    assert s.K2 == pytest.approx(6)
+
+
+def test_NonLinearSolver_multiPoint_error():
+    """Test error caused by declaring variables as design and of-design unknowns"""
+    def make_case():
+        system = Multiply2("s")
+        system.p_in.x = 1
+        # Add solver and design points
+        solver = system.add_driver(NonLinearSolver("solver", max_iter=100))
+        point1 = solver.add_child(RunSingleCase("point1"))
+        point2 = solver.add_child(RunSingleCase("point2"))
+        return system, solver, point1, point2
+
+    # Add local case unknown conflicting with solver unknowns (1)
+    s, solver, point1, point2 = make_case()
+    
+    solver.add_unknown(["K1", "K2"])
+    point1.add_equation("p_out.x == 6")
+    point2.add_equation("p_out.x == 3 * Ksum")
+    point1.add_unknown("K1")  # incompatible with solver design unknowns
+
+    with pytest.raises(
+        ValueError,
+        match="'inwards\.K1' is defined as design and off-design unknown in 'point1'"
+    ):
+        s.run_drivers()
+
+    # Add local case unknown conflicting with solver unknowns (2)
+    s, solver, point1, point2 = make_case()
+    
+    solver.add_unknown(["K1", "K2"])
+    point1.add_equation("p_out.x == 6")
+    point2.add_equation("p_out.x == 3 * Ksum")
+    point2.add_unknown(["K1", "K2"])  # incompatible with solver design unknowns
+
+    with pytest.raises(
+        ValueError,
+        match="\('inwards\.K1', 'inwards\.K2'\) are defined as design and off-design unknowns in 'point2'"
+    ):
+        s.run_drivers()
+
+    # Add case design unknown conflicting with solver unknowns
+    s, solver, point1, point2 = make_case()
+    
+    solver.add_unknown(["K1", "K2"])  # design unknwons
+    point1.add_equation("p_out.x == 6")
+    point2.add_equation("p_out.x == 3 * Ksum")
+    point2.design.add_unknown("K1")  # redundant design unknown
+
+    with pytest.raises(
+        ValueError,
+        match="'inwards\.K1' already exists in 'solver'"
+    ):
+        s.run_drivers()
+
+    # Conflicting case unknowns (1)
+    s, solver, point1, point2 = make_case()
+    
+    point1.design.add_unknown("K1").add_equation("p_out.x == 6")
+    point2.design.add_unknown("K2").add_equation("p_out.x == 3 * Ksum")
+    point2.add_unknown("K1")  # incompatible with point1 design unknown
+
+    with pytest.raises(
+        ValueError,
+        match="'inwards\.K1' is defined as design and off-design unknown in 'point2'"
+    ):
+        s.run_drivers()
+
+    # Conflicting case unknowns (2)
+    s, solver, point1, point2 = make_case()
+    
+    point1.design.add_unknown("K1").add_equation("p_out.x == 6")
+    point2.design.add_unknown("K2").add_equation("p_out.x == 3 * Ksum")
+    point1.add_unknown("K2")  # incompatible with point2 design unknown
+    point2.add_unknown("K1")  # incompatible with point1 design unknown
+
+    # Error is raised for point2, after point1 has been parsed
+    with pytest.raises(
+        ValueError,
+        match="'inwards\.K1' is defined as design and off-design unknown in 'point2'"
+    ):
+        s.run_drivers()
+
+    # Conflict within a single point
+    s, solver, point1, point2 = make_case()
+    
+    point1.design.add_unknown("K1").add_equation("p_out.x == 6")
+    point2.design.add_unknown("K2").add_equation("p_out.x == 3 * Ksum")
+    point1.add_unknown("K1")  # incompatible with point1 design unknown
+
+    with pytest.raises(
+        ValueError,
+        match="'inwards\.K1' is defined as design and off-design unknown in 'point1'"
+    ):
+        s.run_drivers()
 
 
 def test_NonLinearSolver_vector1d_system():
@@ -554,47 +886,45 @@ def test_NonLinearSolver_vector1d_system():
     # Test design and offdesign vector variables
     s.drivers.clear()
     solver = s.add_driver(NonLinearSolver("solver", method=NonLinearMethods.POWELL))
-    case = RunSingleCase("case")
-    solver.add_child(case)
-    case.offdesign.add_unknown("one.a[1]").add_equation("one.out.x[1] == 42.")
+    solver.add_unknown("one.a[1]").add_equation("one.out.x[1] == 42")
     s.run_drivers()
-    assert np.allclose(one.a, np.r_[1.0, 7.0, 1.0])
+    assert one.a == pytest.approx([1, 7, 1])
 
-    solver.pop_child("case")
-    case = RunSingleCase("case")
-    solver.add_child(case)
-    case.offdesign.add_unknown(["one.a[1]", "two.a"]).add_equation(
+    s.drivers.clear()
+    solver = s.add_driver(NonLinearSolver("solver", method=NonLinearMethods.POWELL))
+    solver.add_unknown(["one.a[1]", "two.a"]).add_equation(
         [
             {"equation": "one.out.x[1] == 9"},
             {"equation": "out.x == array([5., 1., 3.])"},
         ]
     )
     s.run_drivers()
-    assert np.allclose(one.a, np.r_[1.0, 1.5, 1.0])
-    assert np.allclose(two.a, np.r_[5.0 / 3.0, 1.0 / 9.0, 1.0 / 3.0])
+    assert one.a == pytest.approx([1, 1.5, 1])
+    assert two.a == pytest.approx([5 / 3, 1 / 9, 1 / 3])
 
     one.a = np.r_[1.0, 1.0, 1.0]
     two.a = np.r_[1.0, 1.0, 1.0]
-    solver.pop_child("case")
-    case = RunSingleCase("case")
-    solver.add_child(case)
-    case.design.add_unknown("one.a[1]").add_equation("one.out.x[1] == 9")
-    case.offdesign.add_unknown("two.a").add_equation("out.x == array([5., 1., 3.])")
+
+    s.drivers.clear()
+    solver = s.add_driver(NonLinearSolver("solver", method=NonLinearMethods.POWELL))
+    case = solver.add_child(RunSingleCase("case"))
+    case.add_unknown("one.a[1]").add_equation("one.out.x[1] == 9")
+    solver.add_unknown("two.a").add_equation("out.x == array([5., 1., 3.])")
     s.run_drivers()
-    assert np.allclose(one.a, np.r_[1.0, 1.5, 1.0])
-    assert np.allclose(two.a, np.r_[5.0 / 3.0, 1.0 / 9.0, 1.0 / 3.0])
+    assert one.a == pytest.approx([1.0, 1.5, 1.0])
+    assert two.a == pytest.approx([5.0 / 3.0, 1.0 / 9.0, 1.0 / 3.0])
 
     one.a = np.r_[1.0, 1.0, 1.0]
     two.a = np.r_[1.0, 1.0, 1.0]
-    solver.pop_child("case")
-    case = RunSingleCase("case")
-    solver.add_child(case)
-    case.design.add_unknown(["one.a[1]", "two.a"]).add_equation(
+    s.drivers.clear()
+    solver = s.add_driver(NonLinearSolver("solver", method=NonLinearMethods.POWELL))
+    case = solver.add_child(RunSingleCase("case"))
+    case.add_unknown(["one.a[1]", "two.a"]).add_equation(
         ["one.out.x[1] == 9", "out.x == array([5., 1., 3.])"]
     )
     s.run_drivers()
-    assert np.allclose(one.a, np.r_[1.0, 1.5, 1.0])
-    assert np.allclose(two.a, np.r_[5.0 / 3.0, 1.0 / 9.0, 1.0 / 3.0])
+    assert one.a == pytest.approx([1.0, 1.5, 1.0])
+    assert two.a == pytest.approx([5.0 / 3.0, 1.0 / 9.0, 1.0 / 3.0])
 
     # Test iterative connector with vector variable
     s = System("hat")
@@ -604,12 +934,10 @@ def test_NonLinearSolver_vector1d_system():
     s.connect(one.in2, two.out2)
     s.drivers.clear()
     solver = s.add_driver(NonLinearSolver("solver", tol=1e-7))
-    case = RunSingleCase("case")
-    solver.add_child(case)
 
     s.run_drivers()
-    assert np.allclose(one.out.x, s.in_.x / two.s)
-    assert np.allclose(s.out.x, s.in_.x)
+    assert one.out.x == pytest.approx(s.in_.x / two.s)
+    assert s.out.x == pytest.approx(s.in_.x)
 
 
 @patch.object(NonLinearSolver, "_postcompute")
@@ -719,50 +1047,34 @@ def test_NonLinearSolver_init_handling_design(mock_postcompute):
 def test_NonLinearSolver_init_handling_offdesign(test_library, test_data):
     s = System.load(str(test_data / "system_config_pressureloss121.json"))
 
-    s.exec_order = ["p1", "sp", "p2", "p3", "mx", "p4"]
+    s.exec_order = "p1", "sp", "p2", "p3", "mx", "p4"
     s.run_once()
 
     assert s.p4.flnum_out.Pt == 74800.0
 
     design = s.add_driver(NonLinearSolver("design", tol=5.0e-8))
-    design.runner.offdesign.add_unknown("sp.x")
+    # design.add_unknown("sp.x")
 
     # System value
     s.run_drivers()
-    np.testing.assert_array_almost_equal(design.initial_values, [0.8])
-    np.testing.assert_allclose(
-        list(design.children[design._default_driver_name].solution.values()),
-        [0.5],
-        rtol=1e-4,
-    )
+    assert design.initial_values == pytest.approx([0.8])
+    assert list(design.runner.solution.values()) == pytest.approx([0.5], rel=1e-4)
 
     # Reuse solution
     s.run_drivers()
-    np.testing.assert_array_almost_equal(design.initial_values, [0.5])
-    np.testing.assert_allclose(
-        list(design.children[design._default_driver_name].solution.values()),
-        [0.5],
-        rtol=1e-4,
-    )
+    assert design.initial_values == pytest.approx([0.5])
+    assert list(design.runner.solution.values()) == pytest.approx([0.5], rel=1e-4)
 
     # Initial value
-    design.children[design._default_driver_name].set_init({"sp.inwards.x": 2.0})
+    design.runner.set_init({"sp.inwards.x": 2.0})
     s.run_drivers()
-    np.testing.assert_array_almost_equal(design.initial_values, [2])
-    np.testing.assert_allclose(
-        list(design.children[design._default_driver_name].solution.values()),
-        [0.5],
-        rtol=1e-4,
-    )
+    assert design.initial_values == pytest.approx([2], abs=0)
+    assert list(design.runner.solution.values()) == pytest.approx([0.5], rel=1e-4)
 
     # Reuse solution
     s.run_drivers()
-    np.testing.assert_array_almost_equal(design.initial_values, [0.5])
-    np.testing.assert_allclose(
-        list(design.children[design._default_driver_name].solution.values()),
-        [0.5],
-        rtol=1e-4,
-    )
+    assert design.initial_values == pytest.approx([0.5])
+    assert list(design.runner.solution.values()) == pytest.approx([0.5], rel=1e-4)
 
 
 @pytest.mark.parametrize("format", LogFormat)
@@ -854,7 +1166,8 @@ def test_NonLinearSolver_fixedPointArray():
     top.connect(a.x, b.v)
     top.connect(a.y, b.u)
 
-    top.add_driver(NonLinearSolver('solver', tol=1e-9))
+    solver = top.add_driver(NonLinearSolver('solver', tol=1e-9))
+    solver.runner.set_init({'a.x.value[:-1]': np.r_[-0.25, 1.04]})
     top.run_drivers()
 
     assert a.x.value[0] == pytest.approx(0.5 * (3 - np.sqrt(5)))

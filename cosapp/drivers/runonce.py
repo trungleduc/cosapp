@@ -1,13 +1,12 @@
-import logging
-from copy import deepcopy
-from typing import Any, Dict, Optional, Union
-
 import numpy
+from copy import deepcopy
+from typing import Any, Dict, Optional
 
 from cosapp.core.numerics.basics import MathematicalProblem
 from cosapp.core.numerics.boundary import Boundary
 from cosapp.drivers.driver import Driver
 
+import logging
 logger = logging.getLogger(__name__)
 
 
@@ -26,8 +25,10 @@ class RunOnce(Driver):
 
     __slots__ = ('initial_values', 'solution')
 
-    def __init__(
-        self, name: str, owner: "Optional[cosapp.systems.System]" = None, **kwargs
+    def __init__(self,
+        name: str,
+        owner: "Optional[cosapp.systems.System]" = None,
+        **kwargs
     ) -> None:
         """Initialize a driver
 
@@ -69,7 +70,7 @@ class RunOnce(Driver):
 
         if not isinstance(modifications, dict):
             raise TypeError(
-                "Initial values must be specified through a dictionary (variable name: value)."
+                "Initial values must be specified through a dictionary of the kind {varname: value}."
             )
 
         for variable, value in modifications.items():
@@ -99,12 +100,13 @@ class RunOnce(Driver):
         Returns
         -------
         numpy.ndarray
-            The list of iteratives initial values.
-            The values should be in the same order as the unknowns in the `get_problem`.
+            List of iteratives initial values,
+            in the same order as the unknowns in `get_problem()`.
         """
         full_init = numpy.empty(0)
+        problem = self.get_problem()
 
-        for name, unknown in self.get_problem().unknowns.items():
+        for name, unknown in problem.unknowns.items():
             if not force_init and name in self.solution:
                 # We ran successfully at least once and are environmental friendly
                 data = self.solution[name]
@@ -172,9 +174,7 @@ class RunOnce(Driver):
         """Actions performed after the `Module.compute` call."""
         # Should be called in _postcompute and not clean_run otherwise it won't work for multi-points cases
         self.solution = dict(
-            [
-                (key, deepcopy(unknown.value))
-                for key, unknown in self.get_problem().unknowns.items()
-            ]
+            (key, deepcopy(unknown.value))
+            for key, unknown in self.get_problem().unknowns.items()
         )
         super()._postcompute()

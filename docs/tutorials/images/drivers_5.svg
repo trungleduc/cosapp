@@ -12,7 +12,7 @@
    width="600"
    version="1.0"
    sodipodi:docname="drivers_5.svg"
-   inkscape:version="1.0.2-2 (e86c870879, 2021-01-15)"
+   inkscape:version="0.92.0 r15299"
    height="200">
   <sodipodi:namedview
      pagecolor="#ffffff"
@@ -28,7 +28,7 @@
      id="namedview987"
      showgrid="false"
      inkscape:zoom="2.1277778"
-     inkscape:cx="420.23239"
+     inkscape:cx="349.73631"
      inkscape:cy="180"
      inkscape:window-x="0"
      inkscape:window-y="0"
@@ -42,7 +42,7 @@
         <dc:format>image/svg+xml</dc:format>
         <dc:type
            rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
-        <dc:title></dc:title>
+        <dc:title />
       </cc:Work>
     </rdf:RDF>
   </metadata>
@@ -58,8 +58,10 @@
   </defs>
   <path
      id="path1188"
-     d="M 89.974752,95.050026 207.03995,-14.289409 H 558.29954 L 675.3646,95.050026 558.29954,204.38947 H 207.03995 Z"
-     style="fill:none;stroke:#4472c4;stroke-width:2.67px;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:8;stroke-dasharray:none;stroke-opacity:1" />
+     d="M 114.38997,93.796507 196.22704,-14.292926 H 554.0807 L 642.15525,91.916229 554.0807,204.39299 H 196.22704 Z"
+     style="fill:none;stroke:#4472c4;stroke-width:2.69498849px;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:8;stroke-dasharray:none;stroke-opacity:1"
+     inkscape:connector-curvature="0"
+     sodipodi:nodetypes="ccccccc" />
   <text
      id="text1194"
      y="3.1566293"
@@ -89,7 +91,7 @@
          id="tspan1198"
          style="font-style:normal;font-variant:normal;font-weight:400;font-size:23.9375px;font-family:Calibri;fill:#4472c4"
          dy="0"
-         dx="0">solve</tspan></tspan></text>
+         dx="0">solver</tspan></tspan></text>
   <text
      id="text1208"
      y="30.020079"
@@ -155,9 +157,9 @@
      id="text1240-4-0"
      y="104.25974"
      x="491.54242"
-     style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:18.688px;line-height:125%;font-family:Calibri;-inkscape-font-specification:'Calibri, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#4472c4;fill-opacity:1;stroke:none"
+     style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:18.68799973px;line-height:125%;font-family:Calibri;-inkscape-font-specification:'Calibri, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#4472c4;fill-opacity:1;stroke:none"
      xml:space="preserve"><tspan
-       id="tspan4506-1-1">offdesign1</tspan></text>
+       id="tspan4506-1-1">offdesign2</tspan></text>
   <text
      id="text1252-7-0"
      y="131.08899"

@@ -23,7 +23,7 @@ class RunOptim(IterativeCase):
         Optional keywords arguments
     """
 
-    __slots__ = ('constraints', )
+    __slots__ = ('_design', 'constraints',)
 
     def __init__(self,
         name: str,
@@ -59,8 +59,8 @@ class RunOptim(IterativeCase):
 
         check_arg(expression, "expression", str, lambda s: "==" not in s)
 
-        self.design.residues.clear()  # Ensure only one objective is defined
-        self.design.add_equation(f"{expression} == 0", name="f_objective", reference=1.)
+        self._design.residues.clear()  # Ensure only one objective is defined
+        self._design.add_equation(f"{expression} == 0", name="f_objective", reference=1.)
 
     def add_unknown(self,
             name: Union[str, Iterable[Union[dict, str, Unknown]]],
@@ -92,7 +92,7 @@ class RunOptim(IterativeCase):
         MathematicalProblem
             The modified MathematicalSystem
         """
-        self.design.add_unknown(name, max_abs_step, max_rel_step, lower_bound, upper_bound)
+        self._design.add_unknown(name, max_abs_step, max_rel_step, lower_bound, upper_bound)
 
     def add_constraints(self,
         expression: Union[str, List[Union[str, Tuple[str, bool]]]],
@@ -132,6 +132,9 @@ class RunOptim(IterativeCase):
                 else:
                     add_constraint(*args)
 
+    def reset_problem(self) -> None:
+        self._design = MathematicalProblem(self.name, self.owner)  # type: MathematicalProblem
+
     def get_problem(self) -> MathematicalProblem:
         """Returns the full mathematical for the case.
 
@@ -141,13 +144,13 @@ class RunOptim(IterativeCase):
             The full mathematical problem to solve for the case
         """
         # TODO Go further to gather optimization unknowns defined in System hierarchy
-        return self.design
+        return self._design
 
     def setup_run(self):
         """Method called once before starting any simulation."""
         super().setup_run()
         
-        unknowns = self.design.unknowns
+        unknowns = self._design.unknowns
 
         for name in list(unknowns):
             unknown = self.get_free_unknown(unknowns[name])

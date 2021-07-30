@@ -27,62 +27,58 @@ def caplog_messages(caplog):
 
 def test_singlept1(set_master_system):
     s = Multiply2("MyMult")
-    d = s.add_driver(NonLinearSolver("run_drivers", method=NonLinearMethods.NR))
-
-    s.p_in.x = 1.0
-    s.K1= s.K2 = 1.0
-
-    d.add_child(RunSingleCase("run")).design.add_unknown("inwards.K1").add_equation(
-        "p_out.x == 100."
-    )
-    s.call_setup_run()
-    d.run_once()
-    assert s.K1 == pytest.approx(100.0, abs=1e-3)
-
-
-def test_singlept2(set_master_system):
-    s = Multiply2("MyMult")
-    d = s.add_driver(NonLinearSolver("run_drivers", method=NonLinearMethods.NR))
+    d = s.add_driver(NonLinearSolver("solver", method=NonLinearMethods.NR))
 
     s.p_in.x = 1.0
     s.K1 = s.K2 = 1.0
 
-    d.add_child(RunSingleCase("run")).design.add_unknown(
-        ["inwards.K1", "inwards.K2"]
-    ).add_equation(["p_out.x == 100.", "inwards.K2 == inwards.K1"])
+    d.add_unknown("inwards.K1").add_equation("p_out.x == 100")
+    s.call_setup_run()
+    d.run_once()
+    assert s.K1 == pytest.approx(100, rel=1e-5)
+
+
+def test_singlept2(set_master_system):
+    s = Multiply2("MyMult")
+    d = s.add_driver(NonLinearSolver("solver", method=NonLinearMethods.NR))
+
+    s.p_in.x = 1.0
+    s.K1 = s.K2 = 1.0
+
+    d.add_unknown(["K1", "K2"]).add_equation(["p_out.x == 100", "K2 == K1"])
 
     s.K1 = 1.0
     s.call_setup_run()
     d.run_once()
 
-    assert s.K1 == pytest.approx(10.0, abs=1e-4)
-    assert s.K2 == pytest.approx(10.0, abs=1e-4)
+    assert s.K1 == pytest.approx(10, rel=1e-5)
+    assert s.K2 == pytest.approx(10, rel=1e-5)
 
 
 def test_multipts1():
-    s2 = MultiplyVector2("multvector")
+    s = MultiplyVector2("multvector")
 
-    design = s2.add_driver(NonLinearSolver("design", method=NonLinearMethods.NR))
+    design = s.add_driver(NonLinearSolver("design", method=NonLinearMethods.NR))
 
-    run1 = design.add_child(RunSingleCase("run 1"))
+    run1 = design.add_child(RunSingleCase("run1"))
 
-    s2.k1 = 10.0
-    s2.k2 = 8.0
+    s.k1 = 10.0
+    s.k2 = 8.0
 
     run1.set_values({"p_in.x1": 4.0, "p_in.x2": 10.0})
-    run1.design.add_unknown("inwards.k1").add_equation("p_out.x == 100.")
+    run1.design.add_unknown("k1").add_equation("p_out.x == 100")
 
-    s2.run_drivers()
-    assert s2.inwards.k1 == pytest.approx(5.0, abs=1e-4)
+    s.run_drivers()
+    assert s.inwards.k1 == pytest.approx(5.0, abs=1e-4)
 
-    run2 = design.add_child(RunSingleCase("run 2"))
+    run2 = design.add_child(RunSingleCase("run2"))
 
     run2.set_values({"p_in.x1": 2, "p_in.x2": 8.0})
-    run2.design.add_unknown("inwards.k2").add_equation("p_out.x == 76.")
+    run2.design.add_unknown("k2").add_equation("p_out.x == 76")
 
-    s2.run_drivers()
-    assert s2.inwards.k1 == pytest.approx(10 / 3, abs=1e-3)
-    assert s2.inwards.k2 == pytest.approx(26 / 3, abs=1e-3)
+    s.run_drivers()
+    assert s.inwards.k1 == pytest.approx(10 / 3, abs=1e-3)
+    assert s.inwards.k2 == pytest.approx(26 / 3, abs=1e-3)
 
 
 def test_multipts2():
@@ -91,23 +87,23 @@ def test_multipts2():
 
     design = sys.add_driver(NonLinearSolver("design", method=NonLinearMethods.NR))
 
-    run1 = design.add_child(RunSingleCase("run 1"))
-    run2 = design.add_child(RunSingleCase("run 2"))
-    run3 = design.add_child(RunSingleCase("run 3"))
+    run1 = design.add_child(RunSingleCase("run1"))
+    run2 = design.add_child(RunSingleCase("run2"))
+    run3 = design.add_child(RunSingleCase("run3"))
 
     run1.set_values({"s3.p_in.x1": 4.0, "s3.p_in.x2": 10.0, "s3.p_in.x3": 1.0})
-    run1.design.add_unknown("s3.inwards.k1").add_equation("s3.p_out.x == 100.")
+    run1.design.add_unknown("s3.k1").add_equation("s3.p_out.x == 100")
 
     run2.set_values({"s3.p_in.x1": 2, "s3.p_in.x2": 8.0, "s3.p_in.x3": 1.0})
-    run2.design.add_unknown("s3.inwards.k2").add_equation("s3.p_out.x == 76.")
+    run2.design.add_unknown("s3.k2").add_equation("s3.p_out.x == 76")
 
     run3.set_values({"s3.p_in.x1": 5, "s3.p_in.x2": 12.0, "s3.p_in.x3": 1.0})
-    run3.design.add_unknown("s3.inwards.k3").add_equation("s3.p_out.x == 150.")
+    run3.design.add_unknown("s3.k3").add_equation("s3.p_out.x == 150")
 
     sys.run_drivers()
-    assert sys.s3.inwards.k1 == pytest.approx(-26, abs=1e-3)
-    assert sys.s3.inwards.k2 == pytest.approx(38.0, abs=1e-3)
-    assert sys.s3.inwards.k3 == pytest.approx(-176.0, abs=1e-2)
+    assert sys.s3.k1 == pytest.approx(-26, abs=1e-3)
+    assert sys.s3.k2 == pytest.approx(38.0, abs=1e-3)
+    assert sys.s3.k3 == pytest.approx(-176.0, abs=1e-2)
 
 
 def test_multipts_nonlinear3():
@@ -116,26 +112,26 @@ def test_multipts_nonlinear3():
 
     design = sys.add_driver(NonLinearSolver("design", method=NonLinearMethods.NR))
 
-    run1 = design.add_child(RunSingleCase("run 1"))
-    run2 = design.add_child(RunSingleCase("run 2"))
-    run3 = design.add_child(RunSingleCase("run 3"))
+    run1 = design.add_child(RunSingleCase("run1"))
+    run2 = design.add_child(RunSingleCase("run2"))
+    run3 = design.add_child(RunSingleCase("run3"))
 
     run1.set_values({"s3.p_in.x1": 4.0, "s3.p_in.x2": 10.0, "s3.p_in.x3": 1.0})
-    run1.design.add_unknown("s3.inwards.k1").add_equation("s3.p_out.x == 100.")
+    run1.design.add_unknown("s3.k1").add_equation("s3.p_out.x == 100")
 
     run2.set_values({"s3.p_in.x1": 2, "s3.p_in.x2": 8.0, "s3.p_in.x3": 1.0})
-    run2.design.add_unknown("s3.inwards.k2").add_equation("s3.p_out.x == 76.")
+    run2.design.add_unknown("s3.k2").add_equation("s3.p_out.x == 76")
 
     run3.set_values({"s3.p_in.x1": 5, "s3.p_in.x2": 12.0, "s3.p_in.x3": 1.0})
-    run3.design.add_unknown("s3.inwards.k3").add_equation("s3.p_out.x == 150.")
+    run3.design.add_unknown("s3.k3").add_equation("s3.p_out.x == 150")
 
     sys.run_drivers()
-    assert sys.s3.inwards.k1 == pytest.approx(227.4029139, abs=1e-2)
-    assert sys.s3.inwards.k2 == pytest.approx(72465.89971, abs=10)
-    assert sys.s3.inwards.k3 == pytest.approx(-26454.1762, abs=10)
+    assert sys.s3.k1 == pytest.approx(227.4029139, abs=1e-2)
+    assert sys.s3.k2 == pytest.approx(72465.89971, abs=10)
+    assert sys.s3.k3 == pytest.approx(-26454.1762, abs=10)
 
 
-def test_multipts_iterative_non_linear():
+def test_multipts_iterative_nonlinear():
     snl = IterativeNonLinear("nl")
 
     design = snl.add_driver(NonLinearSolver("design", method=NonLinearMethods.NR))
@@ -146,19 +142,17 @@ def test_multipts_iterative_non_linear():
     snl.nonlinear.inwards.k1 = 1
     snl.nonlinear.inwards.k2 = 0.5
 
-    run1 = design.add_child(RunSingleCase("run 1"))
-    run2 = design.add_child(RunSingleCase("run 2"))
+    run1 = design.add_child(RunSingleCase("run1"))
+    run2 = design.add_child(RunSingleCase("run2"))
 
     run1.set_values({"p_in.x": 1.0})
-    run1.design.add_unknown("nonlinear.inwards.k1").add_equation(
-        "splitter.p2_out.x == 10."
-    )
+    run1.design.add_unknown("nonlinear.inwards.k1").add_equation("splitter.p2_out.x == 10")
 
     run2.set_values({"p_in.x": 10.0})
     run2.design.add_unknown(
         ["mult2.inwards.K1", "nonlinear.inwards.k2", "splitter.inwards.split_ratio"]
     ).add_equation(
-        ["splitter.p2_out.x == 50.", "merger.p_out.x == 30.", "splitter.p1_out.x == 5."]
+        ["splitter.p2_out.x == 50", "merger.p_out.x == 30", "splitter.p1_out.x == 5"]
     )
 
     snl.run_drivers()
@@ -169,23 +163,21 @@ def test_multipts_iterative_non_linear():
     assert snl.splitter.split_ratio == pytest.approx(0.090909091, abs=1e-4)
 
 
-def test_completejacobian(caplog, caplog_messages, set_master_system):
+def test_completejacobian(caplog, caplog_messages):
     s = Multiply2("MyMult")
     d = s.add_driver(
-        NonLinearSolver("run_drivers", method=NonLinearMethods.NR, verbose=True)
+        NonLinearSolver("solver", method=NonLinearMethods.NR, verbose=True)
     )
 
-    s.p_in.x = 1.0
+    s.p_in.x = 2.0
     s.K1 = s.K2 = 1.0
 
-    problem = d.add_child(RunSingleCase("run")).design
-    problem.add_unknown("inwards.K1").add_equation("p_out.x == 100")
+    d.add_unknown("inwards.K1").add_equation("p_out.x == 100")
 
     caplog.clear()
     with caplog.at_level(logging.INFO, root.__name__):
-        s.call_setup_run()
-        d.run_once()
-    assert s.K1 == pytest.approx(100, rel=1e-5)
+        s.run_drivers()
+    assert s.K1 == pytest.approx(50, rel=1e-5)
 
     info_messages = caplog_messages(logging.INFO)
     assert "Jacobian matrix: full update" in info_messages
@@ -193,15 +185,13 @@ def test_completejacobian(caplog, caplog_messages, set_master_system):
 
 def test_reusejacobian(caplog, caplog_messages, set_master_system):
     s = Multiply2("MyMult")
-    d = s.add_driver(NonLinearSolver("run_drivers", method=NonLinearMethods.NR))
+    d = s.add_driver(NonLinearSolver("solver", method=NonLinearMethods.NR))
 
     s.p_in.x = 1.0
     s.K1 = 1.0
     s.K2 = 1.0
 
-    d.add_child(RunSingleCase("run")).design.add_unknown("inwards.K1").add_equation(
-        "p_out.x == 100."
-    )
+    d.add_unknown("inwards.K1").add_equation("p_out.x == 100")
     s.call_setup_run()
     d.run_once()
 
@@ -209,14 +199,14 @@ def test_reusejacobian(caplog, caplog_messages, set_master_system):
     caplog.clear()
     with caplog.at_level(logging.DEBUG):
         d.run_once()
-    assert s.K1 == pytest.approx(100.0, abs=1e-3)
+    assert s.K1 == pytest.approx(100, rel=1e-5)
 
     info_messages = caplog_messages(logging.INFO)
     assert len(info_messages) >= 2
     matches = map(
-        lambda r: re.search(
+        lambda message: re.search(
             r"Converged \((\d)+(?:\.\d*)(?:[eE][-]\d+)\) in \d+ iterations, 0 complete, 0 partial Jacobian and 0 Broyden",
-            r,
+            message,
         ),
         info_messages,
     )
@@ -229,29 +219,27 @@ def test_reusejacobian(caplog, caplog_messages, set_master_system):
 def test_partialjacobian(caplog, caplog_messages, set_master_system):
     s = Multiply2("MyMult")
     d = s.add_driver(
-        NonLinearSolver("run_drivers", method=NonLinearMethods.NR, verbose=True)
+        NonLinearSolver("solver", method=NonLinearMethods.NR, verbose=True)
     )
 
     s.p_in.x = 1.0
     s.K1 = s.K2 = 1.0
 
-    d.options["tol"] = 1e-5
-    d.add_child(RunSingleCase("run")).design.add_unknown("inwards.K1").add_equation(
-        "p_out.x == 100."
-    )
+    d.options["tol"] = 1e-6
+    d.add_unknown("inwards.K1").add_equation("p_out.x == 100")
     s.call_setup_run()
     d.run_once()
-    assert s.K1 == pytest.approx(100.0, abs=1e-3)
+    assert s.K1 == pytest.approx(100)
 
     s.K1 = 1.0
     d.jac = np.linalg.inv(np.array([[10.0]]))
     d.jac_lup = lu_factor(d.jac)
-    d.run.solution.clear()
+    d.runner.solution.clear()
 
     caplog.clear()
     with caplog.at_level(logging.INFO):
         d.run_once()
-    assert s.K1 == pytest.approx(100.0, abs=1e-3)
+    assert s.K1 == pytest.approx(100)
 
     info_messages = caplog_messages(logging.INFO)
     assert len(info_messages) >= 2
@@ -275,16 +263,16 @@ def test_partialjacobian_coupledmatrix(caplog, caplog_messages, set_master_syste
     """Trivial linear problem with imposed incorrect Jacobian matrix"""
     s = Multiply2("MyMult")
     d = s.add_driver(
-        NonLinearSolver("run_drivers", method=NonLinearMethods.NR, factor=0.1)
+        NonLinearSolver("solver", method=NonLinearMethods.NR, factor=0.1)
     )
 
     s.p_in.x = 1.0
     s.K1 = s.K2 = 1.0
 
     run = d.add_child(RunSingleCase("run"))
-    run.design.add_unknown(["K1", "K2"])
-    run.design.add_equation("K1 == 100", reference="norm")
-    run.design.add_equation("K2 == 50", reference="norm")
+    run.add_unknown(["K1", "K2"])
+    run.add_equation("K1 == 100", reference="norm")
+    run.add_equation("K2 == 50", reference="norm")
     s.call_setup_run()
     # Set tolerance level for Jacobian update criterion
     d.options['jac_update_tol'] = 0.05
@@ -324,17 +312,16 @@ def test_partialjacobian_independentmatrix(caplog, caplog_messages, set_master_s
     """Trivial linear problem with imposed incorrect Jacobian matrix"""
     s = Multiply2("MyMult")
     d = s.add_driver(
-        NonLinearSolver("run_drivers", method=NonLinearMethods.NR, factor=0.1)
+        NonLinearSolver("solver", method=NonLinearMethods.NR, factor=0.1)
     )
 
     s.p_in.x = 1.0
     s.K1 = 1.0
     s.K2 = 1.0
 
-    run = d.add_child(RunSingleCase("run"))
-    run.design.add_unknown(["K1", "K2"])
-    run.design.add_equation("K1 == 100", reference="norm")
-    run.design.add_equation("K2 == 50", reference="norm")
+    d.add_unknown(["K1", "K2"])
+    d.add_equation("K1 == 100", reference="norm")
+    d.add_equation("K2 == 50", reference="norm")
     s.call_setup_run()
     # Set tolerance level for Jacobian update criterion
     d.options['jac_update_tol'] = 0.1
@@ -345,7 +332,7 @@ def test_partialjacobian_independentmatrix(caplog, caplog_messages, set_master_s
     s.K1 = s.K2 = 1.0
     d.jac = np.array([[0.039, 0], [0, -3]])
     d.jac_lup = lu_factor(d.jac)
-    d.run.solution.clear()
+    d.runner.solution.clear()
 
     caplog.clear()
     with caplog.at_level(logging.DEBUG):
@@ -372,7 +359,7 @@ def test_partialjacobian_independentmatrix(caplog, caplog_messages, set_master_s
 def test_NumericalSolver_linear_nonlinear_diag(caplog, caplog_messages, set_master_system):
     """
     Test related to issue https://gitlab.com/cosapp/cosapp/-/issues/22
-    Design problem with one linear equation, and one highly nonlinear equation.
+    Mathematical problem with one linear equation, and one highly nonlinear equation.
     Each residue depends on one parameter only, such that the jacobian matrix
     remains diagonal.
     """
@@ -381,8 +368,7 @@ def test_NumericalSolver_linear_nonlinear_diag(caplog, caplog_messages, set_mast
         NonLinearSolver("solver", method=NonLinearMethods.NR, tol=1e-6)
     )
 
-    design = solver.runner.design
-    design.add_unknown(["K1", "K2"]).add_equation(["K1 == 2", "K2**4 == 1"])
+    solver.add_unknown(["K1", "K2"]).add_equation(["K1 == 2", "K2**4 == 1"])
 
     s.call_setup_run()
     s.p_in.x = 1.0
@@ -405,7 +391,7 @@ def test_NumericalSolver_linear_nonlinear_diag(caplog, caplog_messages, set_mast
 def test_NumericalSolver_linear_nonlinear(caplog, caplog_messages, set_master_system):
     """
     Test related to issue https://gitlab.com/cosapp/cosapp/-/issues/22
-    Design problem with one linear equation, and one highly nonlinear equation.
+    Mathematical problem with one linear equation, and one highly nonlinear equation.
     The nonlinear residue depends on both unknowns, such that no partial jacobian
     update is possible, even though the other residue is linear.
     """
@@ -414,8 +400,7 @@ def test_NumericalSolver_linear_nonlinear(caplog, caplog_messages, set_master_sy
         NonLinearSolver("solver", method=NonLinearMethods.NR, tol=1e-6)
     )
 
-    design = solver.runner.design
-    design.add_unknown(["K1", "K2"]).add_equation(["K1 == 2", "K1 * K2**4 == 2"])
+    solver.add_unknown(["K1", "K2"]).add_equation(["K1 == 2", "K1 * K2**4 == 2"])
 
     s.call_setup_run()
     s.p_in.x = 1.0

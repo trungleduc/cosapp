@@ -2,10 +2,8 @@
 Classes driving simulation on CoSApp :py:class:`~cosapp.systems.system.System`.
 """
 import logging
-import re
 import time
-from collections import OrderedDict
-from typing import List, Dict, Optional, Any
+from typing import Optional
 
 from cosapp.core.module import Module
 from cosapp.recorders.recorder import BaseRecorder
@@ -24,9 +22,9 @@ class Driver(Module):
     name : str
         Name of the driver
     owner : System, optional
-        :py:class:`~cosapp.systems.system.System` to which this driver belong; default None
+        :py:class:`~cosapp.systems.system.System` to which this driver belongs; default None
     **kwargs : Any
-        Keyword arguments will be used to set driver options
+        Keyword arguments used to set driver options
 
     Attributes
     ----------
@@ -125,7 +123,7 @@ class Driver(Module):
 
         self._owner = system
         if self._recorder is not None:
-            self._recorder.watched_object = self._owner
+            self._recorder.watched_object = system
         for child in self.children.values():
             child.owner = system
 

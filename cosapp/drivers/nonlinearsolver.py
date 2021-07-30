@@ -1,22 +1,23 @@
-import logging
+import copy
+import numpy
+import pandas
 from io import StringIO
 from typing import (
     Any, Callable, Dict, List, Optional,
-    Sequence, Tuple, Union,
+    Sequence, Tuple, Union, Iterable,
 )
 
-import numpy
-import pandas
-
-from cosapp.core.numerics.basics import SolverResults
+from cosapp.core.numerics.basics import MathematicalProblem, SolverResults
 from cosapp.core.numerics.enum import NonLinearMethods
 from cosapp.core.numerics.root import root
 from cosapp.drivers.abstractsolver import AbstractSolver
 from cosapp.drivers.driver import Driver
-from cosapp.drivers.iterativecase import IterativeCase
+from cosapp.drivers.runsinglecase import RunSingleCase
+from cosapp.drivers.utils import DesignProblemHandler
 from cosapp.utils.helpers import check_arg
 from cosapp.utils.logging import LogFormat, LogLevel
 
+import logging
 logger = logging.getLogger(__name__)
 
 
@@ -34,8 +35,8 @@ class NonLinearSolver(AbstractSolver):
     """
 
     __slots__ = (
-        '__method', '__option_aliases', '__trace',
-        'compute_jacobian', 'jac_lup', 'jac'
+        '__method', '__option_aliases', '__trace', '__raw_problem',
+        '__design_unknowns', 'compute_jacobian', 'jac_lup', 'jac',
     )
 
     def __init__(self, 
@@ -74,8 +75,24 @@ class NonLinearSolver(AbstractSolver):
         self.jac = None  # type: Optional[numpy.ndarray]
             # desc='Latest computed Jacobian matrix (if available).'
 
-        from cosapp.drivers.runsinglecase import RunSingleCase
         self.add_child(RunSingleCase(self._default_driver_name))
+
+    @property
+    def raw_problem(self) -> MathematicalProblem:
+        return self.__raw_problem
+
+    @AbstractSolver.owner.setter
+    def owner(self, system: "Optional[cosapp.systems.System]") -> None:
+        defined = self.owner is not None
+        changed = system is not self.owner
+        cls = NonLinearSolver
+        super(cls, cls).owner.__set__(self, system)
+        if changed:
+            if defined:
+                logger.warning(
+                    f"System owner of Driver {self.name!r} has changed. Mathematical problem has been cleared."
+                )
+            self.__raw_problem = MathematicalProblem(self.name, system)
 
     @property
     def method(self) -> NonLinearMethods:
@@ -104,8 +121,9 @@ class NonLinearSolver(AbstractSolver):
         -----
         The added child will have its owner set to match the one of the current driver.
         """
-        if len(self.children) == 1 and self._default_driver_name in self.children.keys():
-            self.pop_child(self._default_driver_name)
+        default_driver = self._default_driver_name
+        if len(self.children) == 1 and default_driver in self.children:
+            self.pop_child(default_driver)
         self.compute_jacobian = True
         return super().add_child(child, execution_index)
 
@@ -129,7 +147,7 @@ class NonLinearSolver(AbstractSolver):
         if self.method == NonLinearMethods.NR:
             self.options.update(self._get_solver_limits())
 
-        this_options = dict([(key, options[key]) for key in self.options if key in options])
+        this_options = dict((key, options[key]) for key in self.options if key in options)
 
         if self.method == NonLinearMethods.NR:
             this_options['compute_jacobian'] = self.compute_jacobian
@@ -145,6 +163,10 @@ class NonLinearSolver(AbstractSolver):
 
         return results
 
+    def setup_run(self) -> None:
+        super().setup_run()
+        self.problem = MathematicalProblem(self.name, self.owner)
+
     def _print_solution(self) -> None:  # TODO better returning a string
         """Print the solution in the log."""
         if self.options['verbose']:
@@ -158,7 +180,7 @@ class NonLinearSolver(AbstractSolver):
                 if value.ndim > 0:
                     spacing = " " * len(name)
                     msg = f"Residues [{len(self.problem.residues)}]: \n   # ({name}"
-                    msg += f"\n   #  {spacing}".join([f", {v:.5g}" for v in value])
+                    msg += f"\n   #  {spacing}".join(f", {v:.5g}" for v in value)
                     msg += ")\n"
                 else:
                     logger.info(f"   # ({name}, {value:.5g})")
@@ -174,20 +196,79 @@ class NonLinearSolver(AbstractSolver):
     def _precompute(self) -> None:
         """List all iteratives variables and get the initial values."""
         super()._precompute()
+        handler = DesignProblemHandler(self.owner)
+        handler.design.extend(self.__raw_problem, equations=False)
+        handler.offdesign.extend(self.__raw_problem, unknowns=False)
+        handler.problems = handler.export_problems()  # resolve aliasing
+        design_unknowns = self.__design_unknowns = set(handler.design.unknowns)
+        self.problem.extend(handler.design)
+        # handler.offdesign.extend(self.owner.get_unsolved_problem(), copy=True)
+        self.initial_values = numpy.append(self.initial_values, self.get_init())
 
         for child in self.children.values():
-            if isinstance(child, IterativeCase):
-                self.problem.extend(child.get_problem(), copy=False)
+            if isinstance(child, RunSingleCase):
+                local = child.processed_problems
+                design_unknowns |= set(local.design.unknowns)
+                common = design_unknowns.intersection(local.offdesign.unknowns)
+                if common:
+                    kind = "unknown"
+                    if len(common) > 1:
+                        names = ", ".join(repr(v) for v in sorted(common))
+                        names = f"({names}) are"
+                        kind += "s"
+                    else:
+                        names = f"{common.pop()!r} is"
+                    raise ValueError(
+                        f"{names} defined as design and off-design {kind} in {child.name!r}"
+                    )
+                # Enforce solver-level off-design problem to child case
+                case_problem = child.add_offdesign_problem(handler.offdesign)
+                self.problem.extend(case_problem, copy=False)
                 self.initial_values = numpy.append(self.initial_values, child.get_init(self.force_init))
+
             else:
                 logger.warning(
                     f"Including Driver {child.name!r} without iteratives in Driver {self.name!r} is not numerically advised."
                 )
+        return self.problem
+
+    def get_init(self) -> numpy.ndarray:
+        """Get the System iteratives initial values for this driver.
+
+        Returns
+        -------
+        numpy.ndarray
+            The list of iteratives initial values.
+            The values should be in the same order as the unknowns in the `get_problem`.
+        """
+        full_init = numpy.empty(0)
+
+        for unknown in self.__raw_problem.unknowns.values():
+            data = copy.deepcopy(unknown.value)
+            full_init = numpy.append(full_init, data)
+
+        return full_init
+
+    def set_iteratives(self, x: Sequence[float]) -> None:
+        x = numpy.asarray(x)
+        counter = 0
+        for name, unknown in self.problem.unknowns.items():
+            if unknown.mask is None:
+                unknown.set_default_value(x[counter])
+                counter += 1
+            else:
+                n = numpy.count_nonzero(unknown.mask)
+                unknown.set_default_value(x[counter : counter + n])
+                counter += n
+            # Set all design variables at once
+            if name in self.__design_unknowns:
+                # Set the variable to the new x
+                if not numpy.array_equal(unknown.value, unknown.default_value):
+                    unknown.set_to_default()
 
     def compute(self) -> None:
-        """Run the resolution method to find free vars values that annul residues
+        """Run the resolution method to find free vars values that zero out residues
         """
-
         # Reset status
         self.status = ''
         self.error_code = '0'
@@ -242,19 +323,22 @@ class NonLinearSolver(AbstractSolver):
                 else:
                     logger.error(error_msg)
 
-            self.solution = dict((key, unknown.default_value) for key, unknown in self.problem.unknowns.items())
+            self.solution = dict(
+                (key, unknown.default_value)
+                for key, unknown in self.problem.unknowns.items()
+            )
             self._print_solution()
+
         else:
-            self.owner.run_children_drivers()
             logger.debug('No parameters/residues to solve. Fallback to children execution.')
+            self.owner.run_children_drivers()
 
         if self._recorder is not None:
             for child in self.children.values():
                 child.run_once()
                 self._recorder.record_state(child.name, self.status, self.error_code)
 
-    def log_debug_message(
-        self,
+    def log_debug_message(self,
         handler: "HandlerWithContextFilters",
         record: logging.LogRecord,
         format: LogFormat = LogFormat.RAW
@@ -414,3 +498,64 @@ class NonLinearSolver(AbstractSolver):
                 desc='Options for the respective Jacobian approximation. restart, simple or svd')
 
         self._filter_options(options, self.__option_aliases)
+
+    def extend(self, problem: MathematicalProblem, *args, **kwargs) -> MathematicalProblem:
+        """Extend solver inner problem.
+        
+        Parameters
+        ----------
+        - problem [MathematicalProblem]:
+            Source mathematical problem.
+        - *args, **kwargs:
+            Additional arguments forwarded to `MathematicalProblem.extend`.
+
+        Returns
+        -------
+        - MathematicalProblem:
+            The extended problem.
+        """
+        return self.__raw_problem.extend(problem, *args, **kwargs)
+
+    def add_unknown(self,
+        name: Union[str, Iterable[Union[dict, str]]],
+        *args, **kwargs,
+    ) -> MathematicalProblem:
+        """Add design unknown(s).
+
+        More details in `MathematicalProblem.add_unknown`.
+
+        Parameters
+        ----------
+        - name [str or Iterable of dictionary or str]:
+            Name of the variable or collection of variables to be added.
+        - *args, **kwargs:
+            Additional arguments forwarded to `MathematicalProblem.add_unknown`.
+
+        Returns
+        -------
+        - MathematicalProblem:
+            The updated problem.
+        """
+        return self.__raw_problem.add_unknown(name, *args, **kwargs)
+
+    def add_equation(self,
+        equation: Union[str, Iterable[Union[dict, str]]],
+        *args, **kwargs,
+    ) -> MathematicalProblem:
+        """Add off-design equation(s).
+
+        More details in `MathematicalProblem.add_equation`.
+
+        Parameters
+        ----------
+        - equation [str or Iterable of str of the kind 'lhs == rhs']:
+            Equation or collection of equations to be added.
+        - *args, **kwargs:
+            Additional arguments forwarded to `MathematicalProblem.add_equation`.
+
+        Returns
+        -------
+        - MathematicalProblem:
+            The updated problem.
+        """
+        return self.__raw_problem.add_equation(equation, *args, **kwargs)

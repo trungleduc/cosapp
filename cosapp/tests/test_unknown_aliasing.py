@@ -36,7 +36,7 @@ def test_design_unknown_aliasing_1(caplog):
     """
     top = NestedQuad('top')
     solver = top.add_driver(NonLinearSolver('solver', tol=1e-9))
-    solver.runner.design.add_equation('foo.y == 7').add_unknown('foo.k')
+    solver.runner.add_equation('foo.y == 7').add_unknown('foo.k')
     solver.runner.set_values({
         'foo.x': 2,
         'bar.x': 0.1,
@@ -74,7 +74,7 @@ def test_design_unknown_aliasing_2(caplog):
     assert top.foo.k == top.c
 
     solver = top.foo.add_driver(NonLinearSolver('solver', tol=1e-9))
-    solver.runner.design.add_unknown('k').add_equation('y == 7')
+    solver.runner.add_unknown('k').add_equation('y == 7')
     solver.runner.set_values({'x': 2})
 
     caplog.clear()
@@ -82,9 +82,12 @@ def test_design_unknown_aliasing_2(caplog):
         top.run_drivers()
     
     assert len(caplog.records) > 0
-    assert re.match(
-        "Unknown 'foo.inwards.k' is aliased by 'top.inwards.c', defined outside the context of 'foo'",
-        caplog.records[0].message
+    assert any(
+        re.match(
+            "Unknown 'foo.inwards.k' is aliased by 'top.inwards.c', defined outside the context of 'foo'",
+            record.message
+        )
+        for record in caplog.records
     )
     assert top.foo.k == pytest.approx(1.5)
     assert top.c == 0.1  # unchanged top value
@@ -100,7 +103,7 @@ def test_design_unknown_aliasing_3(caplog):
     top.connect(sub1.outwards, sub2.inwards, {'y': 'c'})  # sub2.c is no longer free
 
     solver = top.add_driver(NonLinearSolver('solver'))
-    design = solver.runner.design
+    design = solver.runner
     # Use input `bar.k` connected to an output as unknown:
     design.add_equation('sub2.foo.y == 7').add_unknown('sub2.bar.k')
 
@@ -120,7 +123,7 @@ def test_design_connected_unknown_1(caplog):
     """Tests that unknowns connected to an output variable are discarded"""
     top = NestedQuad('top')
     solver = top.add_driver(NonLinearSolver('solver'))
-    design = solver.runner.design
+    design = solver.runner
     # Use input `bar.k` connected to an output as unknown:
     design.add_equation('bar.y == 7').add_unknown('bar.k')
 
@@ -145,7 +148,7 @@ def test_design_connected_unknown_2(caplog):
     top = NestedQuad('top')
     # Attach driver to sub-system `bar`
     solver = top.bar.add_driver(NonLinearSolver('solver', tol=1e-9))
-    solver.runner.design.add_unknown('k').add_equation('y == 7')
+    solver.runner.add_unknown('k').add_equation('y == 7')
 
     caplog.clear()
     with pytest.raises(ArithmeticError, match="numbers of params \[0\] and residues \[1\]"):
@@ -178,15 +181,17 @@ def test_design_offdesign_aliasing_1(caplog):
     solver.runner.design.add_equation('foo.y == 7').add_unknown('foo.k')
 
     caplog.clear()
-    with pytest.raises(ValueError, match="'inwards.c' is defined as design and offdesign unknown"):
+    with pytest.raises(ValueError, match="'inwards.c' is defined as design and off-design unknown"):
         with caplog.at_level(logging.INFO):
             top.run_drivers()
-            print(solver.problem)
     
     assert len(caplog.records) > 0
-    assert re.match(
-        "Replace unknown 'foo.inwards.k' by 'inwards.c'",
-        caplog.records[0].message
+    assert any(
+        re.match(
+            "Replace unknown 'foo.inwards.k' by 'inwards.c'",
+            record.message
+        )
+        for record in caplog.records
     )
 
 
@@ -209,13 +214,49 @@ def test_design_offdesign_aliasing_2(caplog):
     solver.runner.design.add_equation('foo.y == 7').add_unknown('c')
 
     caplog.clear()
-    with pytest.raises(ValueError, match="'foo.inwards.k' is defined as design and offdesign unknown"):
+    with pytest.raises(ValueError, match="'inwards.c' is defined as design and off-design unknown"):
         with caplog.at_level(logging.INFO):
             top.run_drivers()
-            print(solver.problem)
     
     assert len(caplog.records) > 0
-    assert re.match(
-        "Replace unknown 'foo.inwards.k' by 'inwards.c'",
-        caplog.records[0].message
+    assert any(
+        re.match(
+            "Replace unknown 'foo.inwards.k' by 'inwards.c'",
+            record.message
+        )
+        for record in caplog.records
+    )
+
+
+def test_design_offdesign_aliasing_3(caplog):
+    """Design test involving off-design and design unknowns
+    aliased by the same variable.
+
+    Case 3: free unknown is off-design; design unknown defined at solver level
+    """
+    class TopSystem(NestedQuad):
+        """NestedQuad with off-design problem"""
+        def setup(self):
+            super().setup()
+            # Use parent (free) variable 'c' as off-design unknown
+            self.add_unknown('c').add_equation('c == 0')
+    
+    top = TopSystem('top')
+    solver = top.add_driver(NonLinearSolver('solver', tol=1e-9))
+    # Use pulled variable `foo.k` as design unknown:
+    solver.add_equation('foo.y == 7').add_unknown('foo.k')
+
+    caplog.clear()
+    with pytest.raises(ValueError, match="'inwards.c' is defined as design and off-design unknown"):
+        with caplog.at_level(logging.INFO):
+            top.run_drivers()
+            # print(solver.problem)
+    
+    assert len(caplog.records) > 0
+    assert any(
+        re.match(
+            "Replace unknown 'foo.inwards.k' by 'inwards.c'",
+            record.message
+        )
+        for record in caplog.records
     )

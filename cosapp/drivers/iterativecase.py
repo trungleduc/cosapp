@@ -1,9 +1,8 @@
+import abc
 import logging
-import numpy
 
 from cosapp.drivers.runonce import RunOnce
 from cosapp.core.variableref import VariableReference
-from cosapp.core.numerics.basics import MathematicalProblem
 from cosapp.core.numerics.boundary import Unknown
 from cosapp.utils.graph_analysis import get_free_inputs
 
@@ -25,7 +24,7 @@ class IterativeCase(RunOnce):
         Optional keywords arguments
     """
 
-    __slots__ = ('design', '_input_mapping')
+    __slots__ = ('_design', '_input_mapping',)
 
     def __init__(
         self, name: str, owner: "Optional[cosapp.systems.System]" = None, **kwargs
@@ -43,50 +42,27 @@ class IterativeCase(RunOnce):
         """
         super().__init__(name, owner, **kwargs)
 
-        self.design = MathematicalProblem(self.name, self.owner)  # type: MathematicalProblem
-            # desc="Additional mathematical problem to solve for the case.",
+        self.reset_problem()
         self._input_mapping = dict()  # type: Dict[str, VariableReference]
 
     @RunOnce.owner.setter
-    def owner(self, value: "Optional[cosapp.systems.System]") -> None:
+    def owner(self, system: "Optional[cosapp.systems.System]") -> None:
         # Trick to call super setter (see: https://bugs.python.org/issue14965)
-        if self.owner is not value:
-            if self.owner is not None:
+        defined = self.owner is not None
+        changed = self.owner is not system
+        cls = IterativeCase
+        super(cls, cls).owner.__set__(self, system)
+        if changed:
+            if defined:
                 logger.warning(
-                    f"System owner of Driver {self.name!r} has changed. Optimization equations have been cleared."
+                    f"System owner of Driver {self.name!r} has changed. Mathematical problem has been cleared."
                 )
-            self.design = MathematicalProblem(self.design.name, value)
-        super(IterativeCase, IterativeCase).owner.__set__(self, value)
+            self.reset_problem()
 
-    def set_iteratives(self, x: numpy.ndarray) -> int:
-        """Set iteratives from the vector x.
-
-        Parameters
-        ----------
-        x : numpy.ndarray
-            The non-consumed new iteratives vector
-
-        Returns
-        -------
-        int
-            The number of value consumed.
-        """
-        counter = 0
-        for name, unknown in self.get_problem().unknowns.items():
-            if unknown.mask is None:
-                unknown.set_default_value(x[counter])
-                counter += 1
-            else:
-                n = numpy.count_nonzero(unknown.mask)
-                unknown.set_default_value(x[counter : counter + n])
-                counter += n
-            # Set all design variables at once
-            if name in self.design.unknowns:
-                # Set the variable to the new x
-                if not numpy.array_equal(unknown.value, unknown.default_value):
-                    unknown.set_to_default()
-
-        return counter
+    @abc.abstractmethod
+    def reset_problem(self) -> None:
+        """Reset mathematical problem(s) defined on case."""
+        pass
 
     def setup_run(self):
         """Method called once before starting any simulation."""

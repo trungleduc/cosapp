@@ -1,11 +1,9 @@
 """Test export to FMU"""
 import importlib
 import itertools
-import pathlib
 import re
 import uuid
 import zipfile
-from xml.etree.ElementTree import parse, tostring
 
 import numpy
 import pandas
@@ -120,7 +118,7 @@ def test_FMUBuilder__get_default_value(testtype):
 
     for k, v in variables.items():
         if k == "k":
-            assert_almost_equal(v, getattr(testtype, k))
+            assert v == pytest.approx(getattr(testtype, k))
         else:
             assert v == getattr(testtype, k)
 
@@ -230,7 +228,7 @@ def test_FMU_export_non_linear_multipoints(tmp_path, ode):
     solver.add_child(RunSingleCase("pt2"))
 
     with pytest.raises(ValueError):
-        to_fmu(ode, dest=tmp_path, non_linear_solver=solver)
+        to_fmu(ode, dest=tmp_path, nonlinear_solver=solver)
 
 
 def test_FMU_export_non_linear_bad_child(tmp_path, ode):
@@ -238,7 +236,7 @@ def test_FMU_export_non_linear_bad_child(tmp_path, ode):
     solver.add_child(MonteCarlo("dummy"))
 
     with pytest.raises(TypeError):
-        to_fmu(ode, dest=tmp_path, non_linear_solver=solver)
+        to_fmu(ode, dest=tmp_path, nonlinear_solver=solver)
 
 
 def test_FMU_handle_vector_variable(tmp_path, vector_syst):
@@ -314,21 +312,14 @@ def test_FMU_integration_simple(tmp_path, ode):
     assert results["f"][-1] == pytest.approx(ref, rel=1e-7)
 
 
-def test_FMU_integration_nonlinear(tmp_path, iterativenonlinear):
+def test_FMU_integration_nonlinear_design(tmp_path, iterativenonlinear):
+    """Same as `test_FMU_integration_nonlinear_local` with additional
+    problem defined at solver level (off-design problem).
+    """
     pyfmi = pytest.importorskip("pyfmi")
 
-    # Setup the system
-    iterativenonlinear.splitter.split_ratio = 0.1
-    iterativenonlinear.mult2.K1 = 1
-    iterativenonlinear.mult2.K2 = 1
-    iterativenonlinear.nonlinear.k1 = 1
-    iterativenonlinear.nonlinear.k2 = 0.5
-    iterativenonlinear.p_in.x = 1.0
-
     solver = NonLinearSolver("solver", iterativenonlinear)
-    solver.runner.offdesign.add_unknown("nonlinear.k1").add_equation(
-        "splitter.p2_out.x == 10."
-    )
+    solver.add_unknown("nonlinear.k1").add_equation("splitter.p2_out.x == 10")
 
     # Init
     t_driver = iterativenonlinear.add_driver(
@@ -338,7 +329,8 @@ def test_FMU_integration_nonlinear(tmp_path, iterativenonlinear):
 
     # Set BC
     t_driver.set_scenario(
-        init={"p_in.x": 1.0}, values={"p_in.x": "5. - 4. * exp(- t / 0.1)"}
+        init = {"p_in.x": 1.0},
+        values = {"p_in.x": "5 - 4 * exp(-t / 0.1)"},
     )
     recorder = t_driver.add_recorder(
         DataFrameRecorder(includes=["p_in.x", "p_out.x", "nonlinear.k1"]), period=0.1
@@ -353,7 +345,60 @@ def test_FMU_integration_nonlinear(tmp_path, iterativenonlinear):
     fmu_file = to_fmu(
         iterativenonlinear,
         dest=tmp_path,
-        non_linear_solver=solver,
+        nonlinear_solver=solver,
+        locals=["nonlinear.k1"],
+        fmu_name_suffix=str(uuid.uuid4()).replace("-", ""),
+    )
+
+    # Load the FMU
+    model = pyfmi.load_fmu(str(fmu_file))
+
+    # Run the FMU simulation
+    inputs = ("p_in.x", lambda t: 5.0 - 4.0 * numpy.exp(-t / 0.1))
+    results = model.simulate(final_time=0.3, input=inputs, options={"ncp": 3})
+    results = pandas.DataFrame(
+        results.data_matrix.T[1:, :],
+        columns=["time"] + list(model.get_model_variables()),
+    )
+
+    for column in filter(lambda c: c != "time", results.columns):
+        assert results[column].values == pytest.approx(data[column].values)
+
+
+def test_FMU_integration_nonlinear_local(tmp_path, iterativenonlinear):
+    pyfmi = pytest.importorskip("pyfmi")
+
+    solver = NonLinearSolver("solver", iterativenonlinear)
+    solver.runner.add_unknown("nonlinear.k1").add_equation(
+        "splitter.p2_out.x == 10"
+    )
+
+    # Init
+    t_driver = iterativenonlinear.add_driver(
+        RungeKutta(order=4, dt=0.1, time_interval=[0, 0.2])
+    )
+    t_driver.add_child(solver)
+
+    # Set BC
+    t_driver.set_scenario(
+        init = {"p_in.x": 1.0},
+        values = {"p_in.x": "5 - 4 * exp(-t / 0.1)"},
+    )
+    recorder = t_driver.add_recorder(
+        DataFrameRecorder(includes=["p_in.x", "p_out.x", "nonlinear.k1"]),
+        period=0.1,
+    )
+    iterativenonlinear.run_drivers()
+
+    # Reference
+    data = recorder.export_data()
+    assert_almost_equal(data["p_out.x"], numpy.full(len(data), 10.0))
+
+    # Convert to FMU
+    fmu_file = to_fmu(
+        iterativenonlinear,
+        dest=tmp_path,
+        nonlinear_solver=solver,
         locals=["nonlinear.k1"],
         fmu_name_suffix=str(uuid.uuid4()).replace("-", ""),
     )
@@ -380,7 +425,7 @@ def test_FMU_integration_vector_problem(tmp_path, vector_problem):
     solver = NonLinearSolver("solver", vector_problem)
 
     # Init
-    vector_problem.in_ = 1.0
+    vector_problem.x = 1.0
     vector_problem.add_driver(solver)
     vector_problem.run_drivers()
 
@@ -388,9 +433,9 @@ def test_FMU_integration_vector_problem(tmp_path, vector_problem):
     fmu_file = to_fmu(
         vector_problem,
         dest=tmp_path,
-        non_linear_solver=solver,
-        inputs=["in_"],
-        outputs=["out"],
+        nonlinear_solver=solver,
+        inputs=["x"],
+        outputs=["y"],
         locals=["dummy_coef[0]"],
         fmu_name_suffix=str(uuid.uuid4()).replace("-", ""),
     )
@@ -399,11 +444,11 @@ def test_FMU_integration_vector_problem(tmp_path, vector_problem):
     model = pyfmi.load_fmu(str(fmu_file))
 
     # Run the FMU simulation
-    inputs = ("in_", lambda t: 5.0 - 4.0 * numpy.exp(-t / 0.1))
+    inputs = ("x", lambda t: 5.0 - 4.0 * numpy.exp(-t / 0.1))
     results = model.simulate(final_time=0.3, input=inputs, options={"ncp": 3})
     r = pandas.DataFrame(
         results.data_matrix.T[1:, :],
         columns=["time"] + list(model.get_model_variables()),
     )
 
-    assert_almost_equal(r["dummy_coef[0]"].values, 0.5 * (r["in_"] + r["out"]))
+    assert_almost_equal(r["dummy_coef[0]"].values, 0.5 * (r["x"] + r["y"]))

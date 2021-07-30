@@ -151,11 +151,11 @@ class TestUnknownIntegration:
             return s, solver, solver.add_child(RunSingleCase('run'))
 
         if inner_unknown:  # system with embedded unknown
-            s, solver, run = make_case(CustomSystem)
-            run.offdesign.add_equation(equation)
+            s, solver, runner = make_case(CustomSystem)
+            runner.offdesign.add_equation(equation)
         else:
-            s, solver, run = make_case(TestUnknownIntegration.CustomSystem)
-            run.design.add_unknown('p_in.y', **unknown_options).add_equation(equation)
+            s, solver, runner = make_case(TestUnknownIntegration.CustomSystem)
+            runner.design.add_unknown('p_in.y', **unknown_options).add_equation(equation)
 
         caplog.clear()
         with caplog.at_level(logging.ERROR):

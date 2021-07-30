@@ -82,11 +82,12 @@ def vector_syst():
 @pytest.fixture(scope='function')
 def iterativenonlinear():
     snl = IterativeNonLinear('nl')
-    snl.splitter.inwards.split_ratio = 0.1
-    snl.mult2.inwards.K1 = 1
-    snl.mult2.inwards.K2 = 1
-    snl.nonlinear.inwards.k1 = 1
-    snl.nonlinear.inwards.k2 = 0.5
+    snl.splitter.split_ratio = 0.1
+    snl.mult2.K1 = 1
+    snl.mult2.K2 = 1
+    snl.nonlinear.k1 = 1
+    snl.nonlinear.k2 = 0.5
+    snl.p_in.x = 1.0
 
     return snl
 
@@ -94,15 +95,15 @@ def iterativenonlinear():
 class VectorProblem(System):
 
     def setup(self):
-        self.add_inward("in_")
-        self.add_outward("out")
+        self.add_inward("x")
+        self.add_outward("y")
 
         self.add_inward("dummy_coef", np.array([1., 2.]))
 
-        self.add_unknown("dummy_coef[0]").add_equation("dummy_coef[0] == 0.5 * (in_ + out)")
+        self.add_unknown("dummy_coef[0]").add_equation("dummy_coef[0] == 0.5 * (x + y)")
 
     def compute(self):
-        self.out = self.dummy_coef[1] + self.in_
+        self.y = self.dummy_coef[1] + self.x
 
 @pytest.fixture(scope='function')
 def vector_problem():

@@ -160,11 +160,11 @@ def test_DataframeRecorder_record_expressions(SystemWithProps):
 
 def test_DataframeRecorder_restore():
     s = Multiply2("mult2")
-    solve = s.add_driver(NonLinearSolver("solve", method=NonLinearMethods.NR))
-    design = solve.add_child(RunSingleCase("design"))
-    recorder = solve.add_recorder(DataFrameRecorder(hold=True))
+    solver = s.add_driver(NonLinearSolver("solver", method=NonLinearMethods.NR))
+    solver.add_unknown("p_in.x").add_equation("p_out.x == 10")
 
-    design.design.add_unknown("p_in.x").add_equation("p_out.x == 10")
+    recorder = solver.add_recorder(DataFrameRecorder(hold=True))
+    
     s.run_drivers()
 
     s.K1 = 1

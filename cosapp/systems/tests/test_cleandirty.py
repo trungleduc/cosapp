@@ -417,13 +417,25 @@ class NumpyArrayCleanDirtyTest(TestCase):
         def setup(self):
             self.add_child(NumpyArrayCleanDirtyTest.IssueSystem1('sub'))
 
-    def test_main(self):
+    def test_main_design(self):
         s = NumpyArrayCleanDirtyTest.IssueSystem2('s')
         solver = s.add_driver(NonLinearSolver('solver', tol=1e-6, max_iter=1))
-        run = solver.add_child(RunSingleCase('run'))
+        case = solver.add_child(RunSingleCase('case'))
 
-        run.design.add_unknown(['sub.array_var[-1]']).add_equation('sub.array_res[-1] == 3')
-        run.design.add_unknown(['sub.float_var']).add_equation('sub.float_res == 2')
+        case.design.add_unknown(['sub.array_var[-1]']).add_equation('sub.array_res[-1] == 3')
+        case.design.add_unknown(['sub.float_var']).add_equation('sub.float_res == 2')
+
+        s.run_drivers()
+        
+        assert s.sub.array_var[-1] == pytest.approx(3, abs=1e-12)
+        assert s.sub.float_var == pytest.approx(2, abs=1e-12)
+
+    def test_main_offdesign(self):
+        s = NumpyArrayCleanDirtyTest.IssueSystem2('s')
+        solver = s.add_driver(NonLinearSolver('solver', tol=1e-6, max_iter=1))
+        case = solver.add_child(RunSingleCase('case'))
+        case.add_unknown(['sub.array_var[-1]']).add_equation('sub.array_res[-1] == 3')
+        case.add_unknown(['sub.float_var']).add_equation('sub.float_res == 2')
 
         s.run_drivers()
         
