@@ -1,10 +1,11 @@
 import numpy
-from typing import Any, Callable, Dict, Optional, Union
+from typing import Any, Iterable, Dict, Optional, Union, List
 
 from cosapp.core.eval_str import AssignString
 from cosapp.core.numerics.basics import MathematicalProblem
 from cosapp.core.numerics.boundary import Boundary
 from cosapp.drivers.iterativecase import IterativeCase
+from cosapp.drivers.utils import DesignProblemHandler
 from cosapp.ports.enum import PortType
 from cosapp.systems import System
 from cosapp.utils.helpers import check_arg
@@ -35,7 +36,7 @@ class RunSingleCase(IterativeCase):
         Keyword arguments will be used to set driver options
     """
 
-    __slots__ = ('__case_values', 'offdesign', 'problem')
+    __slots__ = ('__case_values', '__raw_problem', '__processed', 'problem')
 
     def __init__(self,
         name: str,
@@ -56,65 +57,74 @@ class RunSingleCase(IterativeCase):
         super().__init__(name, owner, **kwargs)
         self.__case_values = []  # type: List[AssignString]
             # desc="List of assignments 'lhs <- rhs' to perform in the present case.")
-        self.owner = owner
-        self.offdesign = MathematicalProblem(f"{self.name} - offdesign", self.owner)  # type: MathematicalProblem
-            # desc="Additional mathematical problem to solve for on this case only.")
-        self.problem = None  # type: Optional[MathematicalProblem]
+        self.problem = None # type: Optional[MathematicalProblem]
             # desc='Full mathematical problem to be solved on this case.'
+        self.__raw_problem = DesignProblemHandler(owner)
+        self.__processed = DesignProblemHandler(owner)
+        self.owner = owner
+
+    @property
+    def design(self) -> MathematicalProblem:
+        """MathematicalProblem: Design problem solved for case"""
+        return self.__raw_problem.design
+
+    @property
+    def offdesign(self) -> MathematicalProblem:
+        """MathematicalProblem: Local problem solved for case"""
+        return self.__raw_problem.offdesign
+
+    @property
+    def processed_problems(self) -> DesignProblemHandler:
+        """DesignProblemHandler: design/off-design problem handler"""
+        return self.__processed
+
+    def reset_problem(self):
+        self.__raw_problem = DesignProblemHandler(self.owner)
+        self.__processed = DesignProblemHandler(self.owner)
+        self.problem = None
+
+    def merge_problems(self) -> None:
+        self.problem = self.merged_problem()
+
+    def merged_problem(self) -> MathematicalProblem:
+        handler = self.__processed
+        name = self.name
+        try:
+            return handler.merged_problem(name=name, offdesign_prefix=name)
+        except ValueError as error:
+            error.args = (f"{error.args[0]} in {name!r}",)
+            raise
 
     def setup_run(self):
         """Method called once before starting any simulation."""
         super().setup_run()
         
-        local_name = lambda name: f"{self.name}[{name}]"
+        raw = self.__raw_problem
+        processed = self.__processed
+        # Transfer problem copies from `raw` to `processed`
+        processed.problems = raw.export_problems(prune=False)
 
-        self.problem = problem = MathematicalProblem(self.name, self.owner)
-        unknown_list = []
+        # Add owner off-design problem to `processed.offdesign`
+        processed.offdesign.extend(self.owner.get_unsolved_problem())
 
-        def add_problem(other: MathematicalProblem, rename_unknowns=True, copy=False) -> None:
-            nonlocal problem, unknown_list
-            rename = local_name if rename_unknowns else lambda name: name
+        # Resolve unknown aliasing in `processed`
+        processed.problems = processed.export_problems()
+        self.merge_problems()
 
-            # Add unknowns
-            for name, unknown in other.unknowns.items():
-                unknown = self.get_free_unknown(unknown, name)
-                if unknown is None:
-                    continue
-                aliased = (unknown is not other.unknowns[name])
-                uname = unknown.name if aliased else name
-                if uname in unknown_list:
-                    raise ValueError(
-                        f"{name!r} is defined as design and offdesign unknown in driver {self.name!r}"
-                    )
-                name = rename(name)
-                problem.unknowns[name] = unknown.copy() if copy else unknown
-                unknown_list.append(rename(uname))
-            
-            # Add residues
-            for name, residue in other.residues.items():
-                fullname = local_name(name)
-                if fullname in problem.residues:
-                    raise ValueError(
-                        f"{name!r} is defined as design and offdesign equation in driver {self.name!r}"
-                    )
-                problem.residues[fullname] = residue.copy() if copy else residue
+    def add_offdesign_problem(self, offdesign: MathematicalProblem) -> MathematicalProblem:
+        """Add outer off-design problem to inner problem.
 
-            for name, residue in other.get_target_residues().items():
-                problem.residues[local_name(name)] = residue.copy() if copy else residue
-
-        # Add design unknowns & equations
-        # Warning:
-        #   Even if unknowns are modified, `unknowns` dict keys
-        #   must be preserved for later comparison between
-        #   self.problem and self.design; hence, no renaming.
-        add_problem(self.design, rename_unknowns=False)
-
-        # Add off-design unknowns & equations
-        add_problem(self.offdesign)
-
-        # Add owner system's off-design problem to be solved on each point
+        Returns:
+        ----------
+        - `MathematicalProblem`
+            The modified mathematical problem
+        """
         # Unknowns & residues are duplicated to avoid side effects between points
-        add_problem(self.owner.get_unsolved_problem(), copy=True)
+        # Existing unknowns and equations are silently overwritten.
+        if offdesign.shape != (0, 0):
+            self.__processed.offdesign.extend(offdesign, copy=True, overwrite=True)
+            self.merge_problems()
+        return self.problem
 
     def _precompute(self) -> None:
         """Actions to carry out before the :py:meth:`~cosapp.drivers.runonce.RunOnce.compute` method call.
@@ -123,32 +133,24 @@ class RunSingleCase(IterativeCase):
         """
         super()._precompute()
 
-        # Set the boundary conditions
+        # Set boundary conditions
         for assignment in self.case_values:
             value, changed = assignment.exec()
             if changed:
                 self.owner.set_dirty(PortType.IN)
 
-        # Set the offdesign variables
-        for name, unknown in self.get_problem().unknowns.items():
-            if name not in self.design.unknowns and not numpy.array_equal(unknown.value, unknown.default_value):
+        # Set offdesign variables
+        design_unknowns = set(self.design.unknowns)
+        problem = self.get_problem()
+        for name, unknown in problem.unknowns.items():
+            if name in design_unknowns:
+                continue
+            if not numpy.array_equal(unknown.value, unknown.default_value):
                 unknown.set_to_default()
 
     def clean_run(self):
         """Method called once after any simulation."""
         self.problem = None
-
-    @IterativeCase.owner.setter
-    def owner(self, owner: Optional[System]) -> None:
-        # Trick to call super setter (see: https://bugs.python.org/issue14965)
-        if self.owner is not owner:
-            if self.owner is not None:
-                logger.warning(
-                    f"System owner of Driver {self.name!r} has changed. Design and offdesign equations have been cleared."
-                )
-            self.offdesign = MathematicalProblem(self.offdesign.name, owner)
-        cls = self.__class__
-        super(cls, cls).owner.__set__(self, owner)
 
     def get_problem(self) -> MathematicalProblem:
         """Returns the full mathematical for the case.
@@ -198,10 +200,16 @@ class RunSingleCase(IterativeCase):
         --------
         >>> driver.add_values({'myvar': 42, 'port.dummy': 'banana'})
         """
+        owner = self.owner
+        if owner is None:
+            raise AttributeError(
+                f"Driver {self.name!r} must be attached to a System to set case values."
+            )
         check_arg(modifications, 'modifications', dict)
 
         for variable, value in modifications.items():
-            self.add_value(variable, value)
+            Boundary.parse(owner, variable)  # checks that variable is valid
+            self.__case_values.append(AssignString(variable, value, owner))
 
     def add_value(self, variable: str, value: Any) -> None:
         """Add a single variable to list of case values.
@@ -220,17 +228,91 @@ class RunSingleCase(IterativeCase):
         --------
         >>> driver.add_value('myvar', 42)
         """
-        if self.owner is None:
-            raise AttributeError(
-                f"Driver {self.name!r} must be attached to a System to set case values."
-            )
-        else:
-            Boundary.parse(self.owner, variable)  # checks that variable is valid
-            self.__case_values.append(AssignString(variable, value, self.owner))
+        self.add_values({variable: value})
 
     def clear_values(self):
         self.__case_values.clear()
 
     @property
-    def case_values(self):
+    def case_values(self) -> List[AssignString]:
         return self.__case_values
+
+    def extend(self, problem: MathematicalProblem) -> MathematicalProblem:
+        """Extend local problem. Shortcut to `self.offdesign.extend(problem)`.
+        
+        Parameters
+        ----------
+        - problem: MathematicalProblem
+
+        Returns
+        -------
+        MathematicalProblem
+            The extended mathematical problem
+        """
+        return self.offdesign.extend(problem)
+
+    def add_unknown(self,
+        name: Union[str, Iterable[Union[dict, str]]],
+        *args, **kwargs,
+    ) -> MathematicalProblem:
+        """Add local unknown(s).
+        Shortcut to `self.offdesign.add_unknown(name, *args, **kwargs)`.
+
+        More details in `MathematicalProblem.add_unknown`.
+
+        Parameters
+        ----------
+        - name: str or Iterable of dictionary or str
+            Name of the variable or list of variables to add
+        - *args, **kwargs: Forwarded to `MathematicalProblem.add_unknown`
+
+        Returns
+        -------
+        MathematicalProblem
+            The modified mathematical problem
+        """
+        return self.offdesign.add_unknown(name, *args, **kwargs)
+
+    def add_equation(self,
+        equation: Union[str, Iterable[Union[dict, str]]],
+        *args, **kwargs,
+    ) -> MathematicalProblem:
+        """Add local equation(s).
+        Shortcut to `self.offdesign.add_equation(equation, *args, **kwargs)`.
+
+        More details in `MathematicalProblem.add_equation`.
+
+        Parameters
+        ----------
+        - equation: str or Iterable of str of the kind 'lhs == rhs'
+            Equation or list of equations to add
+        - *args, **kwargs: Forwarded to `MathematicalProblem.add_equation`
+
+        Returns
+        -------
+        MathematicalProblem
+            The modified mathematical problem
+        """
+        return self.offdesign.add_equation(equation, *args, **kwargs)
+
+    def add_target(self,
+        expression: Union[str, Iterable[str]],
+        *args, **kwargs,
+    ) -> MathematicalProblem:
+        """Add deferred equation(s) on current point.
+        Shortcut to `self.offdesign.add_target(expression, *args, **kwargs)`.
+
+        More details in `MathematicalProblem.add_target`.
+
+        Parameters
+        ----------
+        - expression: str
+            Targetted expression
+        - *args, **kwargs : Forwarded to `MathematicalProblem.add_target`
+
+        Returns
+        -------
+        MathematicalProblem
+            The modified mathematical problem
+        """
+        return self.offdesign.add_target(expression, *args, **kwargs)

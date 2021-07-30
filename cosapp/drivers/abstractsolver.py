@@ -1,18 +1,23 @@
 import abc
 import json
 import logging
+import re
 from copy import copy
 from numbers import Number
-from typing import (Any, AnyStr, Callable, Dict, List, Optional,
-                    Sequence, Tuple, Union)
+from typing import (
+    AnyStr, Callable, Dict, List, Optional,
+    Sequence, Tuple, Union,
+)
 
 import numpy
 
 from cosapp.core.numerics.basics import MathematicalProblem, SolverResults
+from cosapp.core.numerics.boundary import Unknown
 from cosapp.drivers.driver import Driver
 from cosapp.drivers.iterativecase import IterativeCase
 from cosapp.drivers.runonce import RunOnce
 from cosapp.utils.options_dictionary import OptionsDictionary
+from cosapp.utils.graph_analysis import get_free_inputs
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +36,7 @@ class AbstractSolver(Driver):
         Keyword arguments will be used to set driver options
     """
 
-    __slots__ = ('force_init', 'problem', 'initial_values', 'solution')
+    __slots__ = ('force_init', 'problem', 'initial_values', 'solution', '_input_mapping')
 
     def __init__(self,
         name: str,
@@ -101,32 +106,32 @@ class AbstractSolver(Driver):
         Dict[str, numpy.ndarray]
             Dictionary with the limits for all iteratives.
         """
-        options = {
-            name : []
-            for name in ("lower_bound", "upper_bound", "abs_step", "rel_step")
+        mapping = {
+            "lower_bound": "lower_bound",
+            "upper_bound": "upper_bound",
+            "abs_step": "max_abs_step",
+            "rel_step": "max_rel_step",
         }
+        options = dict.fromkeys(mapping, [])
 
         for unknown in self.problem.unknowns.values():
-            def append(name, const):
+            for name, attr_name in mapping.items():
+                const = getattr(unknown, attr_name)
                 array = numpy.full_like(unknown.value, const, dtype=type(const))
                 options[name] = numpy.concatenate((options[name], array.flatten()))
-            append("lower_bound", unknown.lower_bound)
-            append("upper_bound", unknown.upper_bound)
-            append("abs_step", unknown.max_abs_step)
-            append("rel_step", unknown.max_rel_step)
 
         return options
+
+    def setup_run(self):
+        """Method called once before starting any simulation."""
+        super().setup_run()
+        self._input_mapping = get_free_inputs(self.owner)
 
     def compute_before(self):
         """Contains the customized `Module` calculation, to execute before children.
         """
         logger.debug(f"Set unknowns initial values: {self.initial_values}")
-        x = self.initial_values
-        counter = 0
-        # Pass the x vector to all driver so they set the new x (at appropriate time)
-        for child in self.children.values():
-            if isinstance(child, IterativeCase):
-                counter += child.set_iteratives(x[counter:])
+        self.set_iteratives(self.initial_values)
 
     def _precompute(self) -> None:
         """Set up the mathematical problem."""
@@ -158,11 +163,7 @@ class AbstractSolver(Driver):
         """
         x = numpy.asarray(x)
         logger.debug(f"Call fresidues with x = {x!r}")
-        counter = 0
-        # Pass the x vector to all driver so they set the new x (at appropriate time)
-        for child in self.children.values():
-            if isinstance(child, IterativeCase):
-                counter += child.set_iteratives(x[counter:])
+        self.set_iteratives(x)
 
         # Run all points
         for child in self.exec_order:
@@ -172,6 +173,10 @@ class AbstractSolver(Driver):
         residues = self.problem.residues_vector
         logger.debug(f"Residues: {residues!r}")
         return residues
+
+    @abc.abstractmethod
+    def set_iteratives(self, x: Sequence[float]) -> None:
+        pass
 
     @abc.abstractmethod
     def resolution_method(self,
@@ -255,18 +260,22 @@ class AbstractSolver(Driver):
         #   In case the solution does not cover all offdesign unknowns, the later should be better.
         from cosapp.systems import System
 
-        if not isinstance(solution, (dict, str)):
-            raise TypeError(
-                "Answer expected as dict or str name of the json file, got {}".format(
-                    type(solution).__qualname__
-                )
-            )
-
         if isinstance(solution, str):
             with open(solution, "r") as f:
                 data = json.load(f)
-        else:
+        elif isinstance(solution, dict):
             data = solution
+        else:
+            raise TypeError(
+                f"Solution expected as dict or json file name; got {type(solution).__qualname__!r}."
+            )
+
+        def extract_varname(driver, key: str):
+            matches = re.findall(f"{driver.name}\[(.*)\]", key)
+            if matches:  # Off-design variable
+                return matches[0]
+            else:
+                return key
 
         with System.set_master(repr(self.owner)) as is_master:
             if is_master:
@@ -278,30 +287,30 @@ class AbstractSolver(Driver):
                         for child in filter(
                             lambda d: isinstance(d, RunOnce), self.children.values()
                         ):
-                            if name.startswith(child.name):  # We got a offdesign variable
-                                name = name[len(child.name) + 1 : -1]
-                                if name in self.owner:
-                                    child.set_init({name: numpy.asarray(value)})
+                            varname = extract_varname(child, name)
+                            if varname != name:  # Off-design variable
+                                try:
+                                    child.set_init({varname: numpy.asarray(value)})
+                                except:
+                                    continue
+                                else:
                                     break
-                            elif (
-                                name in child.design.unknowns
-                            ):  # We may have a design variable
-                                child.set_init({name: numpy.asarray(value)})
+                            elif varname in child.design.unknowns:  # We may have a design variable
+                                child.set_init({varname: numpy.asarray(value)})
                                 break
                 else:
                     child = self.children[case]
                     if not isinstance(child, RunOnce):
                         raise TypeError(
-                            "Only driver derived from RunOnce can be initialized; got '{}' for driver '{}'.".format(
-                                type(child).__qualname__, case
-                            )
+                            "Only drivers derived from RunOnce can be initialized"
+                            f"; got { type(child).__qualname__!r} for driver {case!r}."
                         )
-
                     for name, value in data.items():
-                        if name.startswith(child.name):
-                            name = name[len(child.name) + 1 : -1]
-                        if name in self.owner:
-                            child.set_init({name: numpy.asarray(value)})
+                        varname = extract_varname(child, name)
+                        try:
+                            child.set_init({varname: numpy.asarray(value)})
+                        except:
+                            continue
 
             finally:  # Ensure to clean the system
                 if is_master:

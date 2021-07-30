@@ -1,11 +1,24 @@
+import pytest
+from unittest.mock import patch
 from typing import Callable, Sequence, Union, Tuple, Optional
 
 import numpy as np
 
-from cosapp.systems import System
 from cosapp.core.numerics.basics import SolverResults
 from cosapp.drivers.abstractsolver import AbstractSolver
 from cosapp.utils.options_dictionary import OptionsDictionary
+
+
+@pytest.fixture(autouse=True)
+def PatchExplicitTimeDriver():
+    """Patch ExplicitTimeDriver to make it instanciable for tests"""
+    patcher = patch.multiple(
+        AbstractSolver,
+        __abstractmethods__ = set(),
+    )
+    patcher.start()
+    yield
+    patcher.stop()
 
 
 class FailureSolver(AbstractSolver):
@@ -41,7 +54,7 @@ class SuccessSolver(AbstractSolver):
 
 
 def test_AbstractSolver_setup():
-    d = FailureSolver("dummy")
+    d = AbstractSolver("dummy")
 
     assert len(d.children) == 0
     assert d.problem is None

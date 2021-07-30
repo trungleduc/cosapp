@@ -7,7 +7,6 @@ from cosapp.drivers import RunSingleCase
 from cosapp.core.numerics.basics import MathematicalProblem
 from cosapp.core.numerics.boundary import Boundary
 from cosapp.core.numerics.residues import Residue
-from cosapp.tests.library.systems.vectors import Strait1dLine
 from cosapp.utils.testing import assert_keys, assert_all_type
 
 
@@ -17,7 +16,7 @@ from cosapp.utils.testing import assert_keys, assert_all_type
 # - set_values
 # - set_init
 # - design equations
-# - offdesign equations
+# - local equations
 
 # <codecell>
 
@@ -69,7 +68,7 @@ def test_RunSingleCase_setup_run(DummyFactory):
         assert unknown.context is mult
 
     # Test with subsystems
-    s = System("compute")
+    s = System("top")
     s.add_child(Dummy("mult"))
     d = RunSingleCase("compute")
     s.add_driver(d)
@@ -130,16 +129,15 @@ def test_RunSingleCase__precompute_equations(DummyFactory):
 
     s = System("compute")
     s.add_child(Dummy("mult"))
-    s.exec_order = ["mult"]
     d = RunSingleCase("compute")
     s.add_driver(d)
 
-    d.offdesign.add_unknown("mult.inwards.K1").add_equation("mult.p_out.x == 50")
+    d.add_equation("mult.p_out.x == 50")
 
     d.setup_run()
     d._precompute()
     check_problem(d.problem, 1, 1)
-    assert "compute[mult.inwards.K1]" in d.problem.unknowns
+    assert set(d.problem.unknowns) == {"compute[mult.inwards.K1]"}
 
 
 def test_RunSingleCase_set_values(DummyFactory, hat_case):
@@ -240,6 +238,37 @@ def test_RunSingleCase_run_once(DummyFactory):
     assert s.mult.p_out.x == 20
 
 
+def test_RunSingleCase_owner(DummyFactory):
+    case = RunSingleCase("case")
+    assert case.owner is None
+    assert case.problem is None
+    assert case.offdesign.shape == (0, 0)
+    assert case.design.shape == (0, 0)
+
+    class Dummy(System):
+        def setup(self):
+            self.add_inward('x', 0.0)
+            self.add_inward('y', 0.0)
+            self.add_outward('z', 0.0)
+
+    a = Dummy("a")
+    a.add_driver(case)
+    assert case.owner is a
+    assert case.problem is None
+    case.design.add_unknown('x').add_equation('z == 0')
+    case.add_unknown('y')
+    assert case.problem is None
+    assert case.offdesign.shape == (1, 0)
+    assert case.design.shape == (1, 1)
+
+    b = System("b")
+    b.add_driver(case)
+    assert case.owner is b
+    assert case.problem is None
+    assert case.offdesign.shape == (0, 0)
+    assert case.design.shape == (0, 0)
+
+
 def test_RunSingleCase_add_working_equations(DummyFactory, hat_case):
     # TODO Fred test partial couple - only variable or only equation
     s = System("compute")
@@ -253,12 +282,11 @@ def test_RunSingleCase_add_working_equations(DummyFactory, hat_case):
     check_problem(d.design, 0, 0)
     check_problem(d.offdesign, 1, 1)
 
-    problem = d.offdesign
-    assert problem.context is d.owner
-    assert_keys(problem.unknowns, "mult.inwards.K1")
-    assert_keys(problem.residues, "mult.p_out.x == 50")
-    assert_all_type(problem.residues, Residue)
-    assert problem.residues["mult.p_out.x == 50"].context is d.owner
+    assert d.offdesign.context is d.owner
+    assert_keys(d.offdesign.unknowns, "mult.inwards.K1")
+    assert_keys(d.offdesign.residues, "mult.p_out.x == 50")
+    assert_all_type(d.offdesign.residues, Residue)
+    assert d.offdesign.residues["mult.p_out.x == 50"].context is d.owner
 
     d.setup_run()
     check_problem(d.problem, 1, 1)
@@ -278,15 +306,15 @@ def test_RunSingleCase_add_working_equations(DummyFactory, hat_case):
 
     d = RunSingleCase("compute")
     with pytest.raises(AttributeError, match="Owner System is required to define unknowns"):
-        d.offdesign.add_unknown("mult.inwards.K1")
+        d.add_unknown("mult.inwards.K1")
 
     with pytest.raises(AttributeError, match="Owner System is required to define equations"):
-        d.offdesign.add_equation("mult.p_out.x == 50")
+        d.add_equation("mult.p_out.x == 50")
 
     # Test full vector variable
     s, case = hat_case(RunSingleCase)
 
-    case.offdesign.add_unknown("one.a").add_equation("out.x == [20, -2, 10]")
+    case.add_unknown("one.a").add_equation("out.x == [20, -2, 10]")
     check_problem(case.design, 0, 0)
     check_problem(case.offdesign, 1, 1)
     assert_keys(case.offdesign.unknowns, "one.inwards.a")
@@ -303,7 +331,7 @@ def test_RunSingleCase_add_working_equations(DummyFactory, hat_case):
     # Test vector variable with mask
     s, case = hat_case(RunSingleCase)
 
-    case.offdesign.add_unknown("one.a[1]").add_equation("out.x[1] == 42")
+    case.add_unknown("one.a[1]").add_equation("out.x[1] == 42")
     check_problem(case.design, 0, 0)
     check_problem(case.offdesign, 1, 1)
     assert_keys(case.offdesign.unknowns, "one.inwards.a")
@@ -382,9 +410,9 @@ def test_RunSingleCase_clean_run(DummyFactory):
     assert d.problem is None
     d.setup_run()
     check_problem(d.problem, 2, 0)
-    assert_keys(d.problem.unknowns, "compute[inwards.K2]", "compute[p_in.x]")
+    assert_keys(d.problem.unknowns, f"{d.name}[inwards.K2]", f"{d.name}[p_in.x]")
     for name in ("inwards.K2", "p_in.x"):
-        key = f"compute[{name}]"
+        key = f"{d.name}[{name}]"
         unknown = d.problem.unknowns[key]
         assert unknown.name == name
         assert unknown.context is mult
@@ -461,54 +489,6 @@ def test_RunSingleCase_get_problem(DummyFactory):
 
     # TODO write more tests
     #   - checking case of mixture of design and offdesign equations
-
-
-def test_RunSingleCase_set_iteratives(DummyFactory):
-    def Dummy(name):
-        return DummyFactory(name, unknown=["p_in.x"])
-
-    def make_case():
-        s = System("compute")
-        s.add_child(Dummy("mult"))
-        d = RunSingleCase("compute")
-        s.add_driver(d)
-        return s, d
-
-    s, d = make_case()
-    assert "mult_data" not in s.inputs
-
-    d.offdesign.add_unknown("mult.inwards.K1").add_equation("mult.p_out.x == 50")
-
-    d.setup_run()
-    assert s.mult.K1 == 5
-    assert s.mult.p_in.x == 1
-    d.set_iteratives(np.array([22.0, 42.0]))
-    assert s.mult.K1 == 5
-    assert s.mult.p_in.x == 1
-    d._precompute()
-    assert s.mult.K1 == 22
-    assert s.mult.p_in.x == 42
-
-    s, d = make_case()
-    s.mult.p_out.x = 1.0
-    d.design.add_unknown(["mult.inwards.K1", "mult.inwards.K2"]).add_equation(
-        [
-            {"equation": "mult.p_out.x == 40"},
-            {"equation": "mult.p_out.x == 30"},
-        ]
-    )
-    d.setup_run()
-    assert s.mult.K1 == 5
-    assert s.mult.K2 == 5
-    assert s.mult.p_in.x == 1
-    d.set_iteratives(np.asarray([22.0, 42.0, 33.0]))
-    assert s.mult.K1 == 22
-    assert s.mult.K2 == 42
-    assert s.mult.p_in.x == 1
-    d._precompute()
-    assert s.mult.K1 == 22
-    assert s.mult.K2 == 42
-    assert s.mult.p_in.x == 33
 
 
 def test_RunSingleCase_get_init(DummyFactory):

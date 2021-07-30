@@ -105,7 +105,7 @@ def test_MonteCarlo_add_random_variable():
     with pytest.raises(TypeError):
         mc.add_random_variable(1.0)
     with pytest.raises(
-        TypeError, match=r"'[\w\.]+' is not an input variable of '[\w\.]+'"
+        TypeError, match=r"'p_out.x' is not an input variable"
     ):
         mc.add_random_variable("p_out.x")
 
@@ -218,24 +218,23 @@ def test_MonteCarlo__precase():
 
     mc._precompute()
     mc._precase(1, mc.cases[1])
-    assert s.K1 != pytest.approx(5.0, abs=1e-4)
-    assert s.K2 != pytest.approx(10.0, abs=1e-4)
+    assert s.K1 != pytest.approx(5, abs=1e-4)
+    assert s.K2 != pytest.approx(10, abs=1e-4)
 
-    s.drivers.clear()
     # With connected variable
+    t = System("top")
+    s = t.add_child(Multiply2("mult"), pulling="p_in")
     s.p_in.x = 22.0
     s.K2 = 10.0
-    t = System("top")
     s.p_in.get_details("x").distribution = Normal(best=-1.0, worst=-3.0)
-    t.add_child(s, pulling="p_in")
     mc = t.add_driver(MonteCarlo("mc"))
     mc.add_random_variable({"mult.p_in.x", "mult.K2"})
 
     mc._precompute()
     mc._precase(1, mc.cases[1])
     t.run_once()
-    assert t.mult.p_in.x != pytest.approx(22.0, abs=1e-4)
-    assert t.mult.K2 != pytest.approx(10.0, abs=1e-4)
+    assert t.mult.p_in.x != pytest.approx(22, abs=1e-4)
+    assert t.mult.K2 != pytest.approx(10, abs=1e-4)
 
 
 def test_MonteCarlo__postcase():
@@ -310,6 +309,7 @@ def test_MonteCarlo_cases_uncentered():
     assert df["K1"].std() == pytest.approx(distribution._rv.kwds["scale"], abs=1.0e-2)
 
 
+@pytest.mark.skip("Incorrect behaviour - remove test altogether")
 def test_MonteCarlo_run_driver_perturbation_internal():
 
     s = MultiplySystem2("s")
@@ -389,7 +389,7 @@ def test_MonteCarlo_run_driver_perturbation_combined():
     assert df["mult2.p_out.x"].std() != pytest.approx(0.0, abs=1.0e-2)
 
 
-def test_MonteCarlo_multipts_iterative_non_linear():
+def test_MonteCarlo_multipts_iterative_nonlinear():
     snl = IterativeNonLinear("nl")
 
     design = NonLinearSolver("design", method=NonLinearMethods.NR, factor=0.4)
@@ -401,13 +401,11 @@ def test_MonteCarlo_multipts_iterative_non_linear():
     snl.nonlinear.inwards.k1 = 1
     snl.nonlinear.inwards.k2 = 0.5
 
-    run1 = design.add_child(RunSingleCase("run 1"))
-    run2 = design.add_child(RunSingleCase("run 2"))
+    run1 = design.add_child(RunSingleCase("run1"))
+    run2 = design.add_child(RunSingleCase("run2"))
 
     run1.set_values({"p_in.x": 1})
-    run1.design.add_unknown("nonlinear.inwards.k1").add_equation(
-        "splitter.p2_out.x == 10"
-    )
+    run1.design.add_unknown("nonlinear.inwards.k1").add_equation("splitter.p2_out.x == 10")
 
     run2.set_values({"p_in.x": 10})
     run2.design.add_unknown(
@@ -440,8 +438,8 @@ def test_MonteCarlo_multipts_iterative_non_linear():
     df = rec.export_data()
     # Skip the initial execution
     stat = df.iloc[4:].groupby("Reference").describe()
-    run1 = stat.loc["run 1"]
-    run2 = stat.loc["run 2"]
+    run1 = stat.loc["run1"]
+    run2 = stat.loc["run2"]
     # Check the imposed distribution
     assert run1[("mult2.K2", "mean")] == pytest.approx(snl.mult2.K2, abs=5e-3)
     assert run1[("mult2.K2", "std")] == pytest.approx(std, abs=1e-2)
@@ -449,28 +447,28 @@ def test_MonteCarlo_multipts_iterative_non_linear():
     assert run2[("mult2.K2", "std")] == pytest.approx(std, abs=1e-2)
 
     # snl.p_out.x == snl.spliter.p2_out.x => Always constraint
-    assert run1[("p_out.x", "mean")] == pytest.approx(10.0, abs=1e-3)
-    assert run1[("p_out.x", "std")] == pytest.approx(0.0, abs=1e-2)
-    assert run2[("p_out.x", "mean")] == pytest.approx(50.0, abs=1e-3)
-    assert run2[("p_out.x", "std")] == pytest.approx(0.0, abs=1e-2)
+    assert run1[("p_out.x", "mean")] == pytest.approx(10, abs=1e-3)
+    assert run1[("p_out.x", "std")] == pytest.approx(0, abs=1e-2)
+    assert run2[("p_out.x", "mean")] == pytest.approx(50, abs=1e-3)
+    assert run2[("p_out.x", "std")] == pytest.approx(0, abs=1e-2)
 
     # Check that the design variables are impacted
-    assert run1[("mult2.K1", "std")] != pytest.approx(0.0, abs=1e-3)
-    assert run2[("mult2.K1", "std")] != pytest.approx(0.0, abs=1e-3)
+    assert run1[("mult2.K1", "std")] != pytest.approx(0, abs=1e-3)
+    assert run2[("mult2.K1", "std")] != pytest.approx(0, abs=1e-3)
 
 
 @pytest.mark.skip("TODO linearization does not support multipoint cases")
-def test_MonteCarlo_multipts_iterative_non_linear_linearized():
+def test_MonteCarlo_multipts_iterative_nonlinear_linearized():
     snl = IterativeNonLinear("nl")
 
     design = NonLinearSolver("design", method=NonLinearMethods.NR)
     design = snl.add_driver(design)
 
-    snl.splitter.inwards.split_ratio = 0.1
-    snl.mult2.inwards.K1 = 1
-    snl.mult2.inwards.K2 = 1
-    snl.nonlinear.inwards.k1 = 1
-    snl.nonlinear.inwards.k2 = 0.5
+    snl.splitter.split_ratio = 0.1
+    snl.mult2.K1 = 1
+    snl.mult2.K2 = 1
+    snl.nonlinear.k1 = 1
+    snl.nonlinear.k2 = 0.5
 
     run1 = design.add_child(RunSingleCase("run 1"))
     run2 = design.add_child(RunSingleCase("run 2"))
@@ -523,14 +521,14 @@ def test_MonteCarlo_multipts_iterative_non_linear_linearized():
     assert run2[("mult2.K2", "std")] == pytest.approx(std, abs=1e-2)
 
     # snl.p_out.x == snl.spliter.p2_out.x => Always constraint
-    assert run1[("p_out.x", "mean")] == pytest.approx(10.0, abs=1e-3)
-    assert run1[("p_out.x", "std")] == pytest.approx(0.0, abs=1e-2)
-    assert run2[("p_out.x", "mean")] == pytest.approx(50.0, abs=1e-3)
-    assert run2[("p_out.x", "std")] == pytest.approx(0.0, abs=1e-2)
+    assert run1[("p_out.x", "mean")] == pytest.approx(10, abs=1e-3)
+    assert run1[("p_out.x", "std")] == pytest.approx(0, abs=1e-2)
+    assert run2[("p_out.x", "mean")] == pytest.approx(50, abs=1e-3)
+    assert run2[("p_out.x", "std")] == pytest.approx(0, abs=1e-2)
 
     # Check that the design variables are impacted
-    assert run1[("mult2.K1", "std")] != pytest.approx(0.0, abs=1e-3)
-    assert run2[("mult2.K1", "std")] != pytest.approx(0.0, abs=1e-3)
+    assert run1[("mult2.K1", "std")] != pytest.approx(0, abs=1e-3)
+    assert run2[("mult2.K1", "std")] != pytest.approx(0, abs=1e-3)
 
 
 def test_MonteCarlo_embedded_solver():

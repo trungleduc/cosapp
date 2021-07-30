@@ -5,7 +5,7 @@ from typing import Any, Iterable, List, Optional, Union
 import numpy
 
 from cosapp.core.numerics import sobol_seq
-from cosapp.ports.port import BasePort, PortType
+from cosapp.ports.port import BasePort
 from cosapp.drivers.abstractsetofcases import AbstractSetOfCases
 from cosapp.drivers.abstractsolver import AbstractSolver
 from cosapp.utils.helpers import check_arg
@@ -83,24 +83,23 @@ class MonteCarlo(AbstractSetOfCases):
             List of variables to be perturbated
         """
         # TODO it should be possible to set the distribution directly
+        name2variable = self.owner.name2variable
 
         def add_unique_input_var(name: str):
             self.check_owner_attr(name)
-            ref = self.owner.name2variable[name]
+            ref = name2variable[name]
             port = ref.mapping
 
             if not isinstance(port, BasePort):
                 raise TypeError(f"{name!r} is not a variable.")
 
-            if port.direction != PortType.IN:
-                raise TypeError(
-                    f"{ref.key!r} is not an input variable of {port.contextual_name!r}"
-                )
+            if not port.is_input:
+                raise TypeError(f"{name!r} is not an input variable.")
 
             distribution = port.get_details(ref.key).distribution
             if distribution is None:
                 raise ValueError(
-                    f"No distribution specified for '{port.contextual_name}.{ref.key}'"
+                    f"No distribution specified for {name!r}"
                 )
 
             # Test if the variable is connected
@@ -120,7 +119,7 @@ class MonteCarlo(AbstractSetOfCases):
             add_unique_input_var(names)
         else:
             for name in names:
-                check_arg(name, name + " in 'names'", str)
+                check_arg(name, f"{name} in 'names'", str)
                 add_unique_input_var(name)
 
     def add_response(self, name: Union[str, Iterable[str]]) -> None:

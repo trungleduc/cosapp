@@ -186,8 +186,7 @@ def test_integration_Influence_singlept1():
     solver = influence.add_driver(
         NonLinearSolver("solver", factor=1.0, method=NonLinearMethods.NR)
     )
-    run = solver.add_driver(RunSingleCase("run"))
-    run.design.add_unknown("inwards.K1").add_equation("inwards.K1 == inwards.K2")
+    solver.add_unknown("inwards.K1").add_equation("inwards.K1 == inwards.K2")
 
     s.run_drivers()
 
@@ -196,7 +195,7 @@ def test_integration_Influence_singlept1():
     assert influence.influence_matrix.shape == (3, 2)
 
 
-def test_integration_Influence_non_linear():
+def test_integration_Influence_nonlinear():
     snl = IterativeNonLinear("nl")
     design = snl.add_driver(NonLinearSolver("design", method=NonLinearMethods.NR))
 
@@ -206,10 +205,10 @@ def test_integration_Influence_non_linear():
     snl.nonlinear.inwards.k1 = 1.0
     snl.nonlinear.inwards.k2 = 0.5
 
-    run1 = design.add_child(RunSingleCase("run 1"))
+    run1 = design.add_child(RunSingleCase("run1"))
 
     run1.set_values({"p_in.x": 1.0})
-    run1.design.add_unknown("nonlinear.inwards.k1").add_equation(
+    run1.add_unknown("nonlinear.inwards.k1").add_equation(
         "splitter.p2_out.x == 10."
     )
 

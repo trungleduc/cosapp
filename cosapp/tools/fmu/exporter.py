@@ -17,6 +17,7 @@ from cosapp.drivers.abstractsolver import AbstractSolver
 from cosapp.ports.port import BasePort
 from cosapp.systems import System
 from cosapp.utils.helpers import check_arg
+from cosapp.utils.naming import natural_varname
 
 try:
     from pythonfmu import Fmi2Causality, Fmi2Variability, FmuBuilder as PyFmuBuilder
@@ -183,10 +184,7 @@ class FmuBuilder:
         vars = dict()
         for port_name, port in ports.items():
             for name in port:
-                if port_name not in (System.INWARDS, System.OUTWARDS):
-                    full_name = f"{port_name}.{name}"
-                else:
-                    full_name = name
+                full_name = natural_varname(f"{port_name}.{name}")
                 if full_name in to_skip:
                     continue
 
@@ -195,7 +193,7 @@ class FmuBuilder:
                     FmuBuilder._get_variable_type(value)
                 except TypeError:
                     logger.debug(
-                        f"Variable '{full_name}' has unsupported type for FMI."
+                        f"Variable {full_name!r} has unsupported type for FMI."
                     )
                 else:
                     vars[full_name] = value
@@ -279,7 +277,7 @@ class FmuBuilder:
         outputs: Iterable[str] = None,
         locals: Iterable[str] = None,
         time_integrator: Union[TimeIntegrator, str] = TimeIntegrator.RK4,
-        non_linear_solver: Optional[AbstractSolver] = None,
+        nonlinear_solver: Optional[AbstractSolver] = None,
         dest: Union[Path, str] = os.curdir,
         python_env: Union[Path, str, None] = None,
         version: Optional[str] = None,
@@ -296,40 +294,40 @@ class FmuBuilder:
         to set an empty list, set the corresponding argument with a empty dictionary.
 
         You can add a mathematical problem to the system by passing the proper
-        non_linear_solver. If it contains a RunSingleCase, its equations will be
+        nonlinear_solver. If it contains a RunSingleCase, its equations will be
         passed to the FMU. 
         
         Parameters
         ----------
-        system : System
+        - system : System
             System to be exported
-        inputs : Iterable[str], optional
+        - inputs : Iterable[str], optional
             List of input variables with initial values; default None
-        parameters : Iterable[str], optional
+        - parameters : Iterable[str], optional
             List of parameter variables with initial values; default None
-        outputs : Iterable[str], optional
+        - outputs : Iterable[str], optional
             List of output variables with initial values; default None
-        locals : Iterable[str], optional
+        - locals : Iterable[str], optional
             List of local variables with initial values; default None
-        time_integrator : TimeIntegrator, optional
+        - time_integrator : TimeIntegrator, optional
             Time integrator algorithm; default Runge-Kutta 4th order
-        non_linear_solver : AbstractSolver, optional
+        - nonlinear_solver : AbstractSolver, optional
             Non linear Driver to use for solving the system at a given instant
-        dest : str or Path, optional
+        - dest : str or Path, optional
             Destination folder; default current directory
-        python_env : str or Path, optional
+        - python_env : str or Path, optional
             File listing the python dependency; default None
-        version : str, optional
+        - version : str, optional
             FMU version; default None
-        author : str, optional
+        - author : str, optional
             FMU author; default None
-        description : str, optional
+        - description : str, optional
             System description; default None
-        license : str, optional
+        - license : str, optional
             FMU license; default ""
-        copyright : str, optional
+        - copyright : str, optional
             FMU copyright; default ""
-        fmu_name_suffix : str, optional
+        - fmu_name_suffix : str, optional
             FMU name; default ""
 
         Returns
@@ -351,7 +349,7 @@ class FmuBuilder:
         check_arg(outputs, "outputs", (Collection, nonetype))
         check_arg(locals, "locals", (Collection, nonetype))
         check_arg(time_integrator, "time_integrator", (TimeIntegrator, str))
-        check_arg(non_linear_solver, "non_linear_solver", (AbstractSolver, nonetype))
+        check_arg(nonlinear_solver, "nonlinear_solver", (AbstractSolver, nonetype))
         check_arg(dest, "dest", (Path, str))
         check_arg(python_env, "python_env", (Path, str, nonetype))
         local_vars = dict()
@@ -436,18 +434,24 @@ class FmuBuilder:
             FmuBuilder._add_variables(locals, Fmi2Causality.local)
         )
 
-        if non_linear_solver is not None:
-            children_driver = list(non_linear_solver.children.values())
+        if nonlinear_solver is not None:
+            children_driver = list(nonlinear_solver.children.values())
             if len(children_driver) > 1:
-                raise ValueError("The non-linear solver can only have one child.")
-            runsinglecase = children_driver[0]
-            if not isinstance(runsinglecase, RunSingleCase):
+                raise ValueError("The nonlinear solver can only have one child.")
+            runSingleCase = children_driver[0]
+            if not isinstance(runSingleCase, RunSingleCase):
                 raise TypeError(
-                    "The non-linear solver child must be of type RunSingleCase."
+                    "The nonlinear solver child must be of type RunSingleCase."
                 )
-
-            problem = runsinglecase.offdesign.copy()
-            problem.extend(runsinglecase.design)
+            # Note:
+            #   Since `RunSingleCase` child is unique, a simple merging
+            #   of the various mathematical problems by extension works.
+            #   It would not be the case in a multi-point design problem,
+            #   for example, where off-design, design and local problems
+            #   must be assembled with care.
+            problem = nonlinear_solver.raw_problem.copy()
+            problem.extend(runSingleCase.offdesign)
+            problem.extend(runSingleCase.design)
             params["problem"] = problem.to_dict()
 
         env = Environment(
@@ -480,7 +484,7 @@ class FmuBuilder:
 
             python_env.write_text(
                 "\n".join(
-                    [f"{name}~={version}" for name, version in package_list.items()]
+                    f"{name}~={version}" for name, version in package_list.items()
                 )
             )
 
@@ -507,7 +511,7 @@ class FmuBuilder:
         outputs: Iterable[str] = None,
         locals: Iterable[str] = None,
         time_integrator: Union[TimeIntegrator, str] = TimeIntegrator.RK4,
-        non_linear_solver: Optional[AbstractSolver] = None,
+        nonlinear_solver: Optional[AbstractSolver] = None,
         dest: Union[Path, str] = os.curdir,
         python_env: Union[Path, str, None] = None,
         project_files: Iterable[Union[Path, str]] = set(),
@@ -525,7 +529,7 @@ class FmuBuilder:
         to set an empty list, set the corresponding argument with a empty dictionary.
 
         You can add a mathematical problem to the system by passing the proper
-        non_linear_solver. If it contains a RunSingleCase, its equations will be
+        nonlinear_solver. If it contains a RunSingleCase, its equations will be
         passed to the FMU. 
         
         Parameters
@@ -542,7 +546,7 @@ class FmuBuilder:
             List of local variables with initial values; default None
         time_integrator : TimeIntegrator, optional
             Time integrator algorithm; default Runge-Kutta 4th order
-        non_linear_solver : AbstractSolver, optional
+        nonlinear_solver : AbstractSolver, optional
             Non linear Driver to use for solving the system at a given instant
         dest : str or Path, optional
             Destination folder; default current directory
@@ -578,7 +582,7 @@ class FmuBuilder:
             outputs,
             locals,
             time_integrator,
-            non_linear_solver,
+            nonlinear_solver,
             temp_dest,
             python_env,
             version,

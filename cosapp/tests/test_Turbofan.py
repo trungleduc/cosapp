@@ -82,7 +82,7 @@ def test_AdvancedTurbofan_running_80():
     s.duct.inwards.cst_loss = 0.98
 
     design = s.add_driver(NonLinearSolver("design"))
-    design.runner.offdesign.add_unknown("fan.mech_in.PW")
+    design.add_unknown("fan.mech_in.PW")
 
     s.fan.mech_in.XN = 80
     s.run_drivers()
@@ -106,7 +106,7 @@ def test_AdvancedTurbofan_running_100():
     s.duct.inwards.cst_loss = 0.98
 
     design = s.add_driver(NonLinearSolver("design"))
-    design.runner.offdesign.add_unknown("fan.mech_in.PW")
+    design.add_unknown("fan.mech_in.PW")
 
     s.fan.mech_in.XN = 100
     s.run_drivers()
@@ -132,7 +132,7 @@ def test_ComplexTurbofan_set_inputs():
     s.bleed.inwards.split_ratio = 0.99
 
     design = s.add_driver(NonLinearSolver("design", tol=1e-7))
-    design.runner.offdesign.add_unknown("fanC.mech_in.PW")
+    design.add_unknown("fanC.mech_in.PW")
 
     s.fanC.mech_in.XN = 80
     # test inlet XN value
@@ -149,7 +149,7 @@ def test_ComplexTurbofan_running_80():
     s.bleed.inwards.split_ratio = 0.99
 
     design = s.add_driver(NonLinearSolver("design", tol=1e-7))
-    design.runner.offdesign.add_unknown("fanC.mech_in.PW")
+    design.add_unknown("fanC.mech_in.PW")
 
     s.fanC.mech_in.XN = 80
     s.run_drivers()
@@ -175,7 +175,7 @@ def test_ComplexTurbofan_internal_loop_ductC_running_80():
     s.bleed.inwards.split_ratio = 0.99
 
     design = s.add_driver(NonLinearSolver("design", tol=1e-7))
-    design.runner.offdesign.add_unknown("fanC.mech_in.PW")
+    design.add_unknown("fanC.mech_in.PW")
 
     s.fanC.mech_in.XN = 80
     s.fanC.ductC.add_driver(NonLinearSolver("design", method=NonLinearMethods.POWELL))
@@ -213,7 +213,7 @@ def test_ComplexTurbofan_internal_loop_fanC_running_80():
 
     s.fanC.mech_in.XN = 80
     design = s.fanC.add_driver(NonLinearSolver("design", tol=1e-7))
-    design.runner.offdesign.add_unknown("mech_in.PW")
+    design.add_unknown("mech_in.PW")
     s.run_drivers()
 
     assert s.fanC.mech_in.XN == 80.0
@@ -244,7 +244,7 @@ def test_ComplexTurbofan_running_100():
     s.bleed.inwards.split_ratio = 0.99
 
     design = s.add_driver(NonLinearSolver("design", tol=1e-7))
-    design.runner.offdesign.add_unknown("fanC.mech_in.PW")
+    design.add_unknown("fanC.mech_in.PW")
 
     s.fanC.mech_in.XN = 100
     s.run_drivers()

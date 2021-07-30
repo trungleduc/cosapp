@@ -339,7 +339,7 @@ def test_RungeKutta_point_mass_target(point_mass_solution, exec_order, case_sett
     driver = target.add_child(RungeKutta(**settings))
 
     target.set_init({'v0': np.array([1, 1, 1])})
-    target.design.add_unknown('v0').add_equation(f"x == {target_point}")
+    target.add_unknown('v0').add_equation(f"x == {target_point}")
 
     # Define a simulation scenario
     driver.set_scenario(

@@ -110,11 +110,11 @@ class MathematicalProblem:
         if len(self.unknowns) > 0:
             msg += "Unknowns\n"
             for name in self.unknowns:
-                msg += "  " + name + "\n"
+                msg += f"  {name}\n"
         if len(self.residues) > 0:
             msg += "Equations\n"
             for residue in self.residues.values():
-                msg += "  " + str(residue) + "\n"
+                msg += f"  {residue!s}\n"
         return msg
 
     def __repr__(self) -> str:
@@ -122,11 +122,11 @@ class MathematicalProblem:
         if len(self.unknowns) > 0:
             msg += "Unknowns\n"
             for unknown in self.unknowns.values():
-                msg += "  " + repr(unknown) + "\n"
+                msg += f"  {unknown!r}\n"
         if len(self.residues) > 0:
             msg += "Equations\n"
             for residue in self.residues.values():
-                msg += "  " + str(residue) + "\n"
+                msg += f"  {residue!s}\n"
         return msg
 
     @property
@@ -141,10 +141,10 @@ class MathematicalProblem:
 
     @context.setter
     def context(self, context: 'Optional[cosapp.systems.System]'):
-        if self.context is None:
+        if self._context is None:
             self._context = context
-        else:
-            raise ValueError(f"Context is already set to {self.context.name!r}.")
+        elif context is not self._context:
+            raise ValueError(f"Context is already set to {self._context.name!r}.")
 
     @property
     def residues(self) -> Dict[str, Residue]:
@@ -158,7 +158,7 @@ class MathematicalProblem:
         for name, residue in self.residues.items():
             n_values = numpy.size(residue.value)
             if n_values > 1:
-                names.extend([f"{name}[{i}]" for i in range(n_values)])
+                names.extend(f"{name}[{i}]" for i in range(n_values))
             else:
                 names.append(name)
         return tuple(names)
@@ -166,10 +166,10 @@ class MathematicalProblem:
     @property
     def residues_vector(self) -> numpy.ndarray:
         """numpy.ndarray : Vector of residues."""
-        residues = numpy.empty(0)
-        for residue in self.residues.values():
-            residues = numpy.append(residues, residue.value)
-        return residues
+        values = tuple(
+            residue.value for residue in self.residues.values()
+        )
+        return numpy.hstack(values) if values else numpy.empty(0)
 
     @property
     def n_unknowns(self) -> int:
@@ -357,7 +357,7 @@ class MathematicalProblem:
         return self
 
     def add_target(self,
-        expression: str,
+        expression: Union[str, Iterable[str]],
         reference: Union[Number, numpy.ndarray, str] = 1,
         weak = False,
     ) -> "MathematicalProblem":
@@ -490,7 +490,7 @@ class MathematicalProblem:
             raise AttributeError(f"Owner System is required to define {name}.")
 
     @staticmethod
-    def residue_naming(system1, system2) -> Tuple[Callable[[str], str], Callable[[str], str]]:
+    def naming_functions(system1, system2) -> Tuple[Callable[[str], str], Callable[[str], str]]:
         """Returns name mapping functions for variables and residues,
         based on contexts `system1` and `system2`.
         Each function maps a str to a str.
@@ -508,15 +508,28 @@ class MathematicalProblem:
             var_name = res_name = lambda name: name
         return var_name, res_name
 
-    def extend(self, other: "MathematicalProblem", copy=True) -> "MathematicalProblem":
+    def extend(self,
+        other: "MathematicalProblem",
+        copy = True,
+        unknowns = True,
+        equations = True,
+        overwrite = False,
+    ) -> "MathematicalProblem":
         """Extend the current mathematical system with the other one.
 
         Parameters
         ----------
-        other : MathematicalProblem
+        - other [MathematicalProblem]:
             The other mathematical system to add
-        copy : bool, optional
-            Should the objects be copied; default True
+        - copy [bool, optional]:
+            Should the objects be copied; default is `True`.
+        - unknowns [bool, optional]:
+            If `False`, unknowns are discarded; default is `True`.
+        - equations [bool, optional]:
+            If `False`, equations are discarded; default is `True`.
+        - overwrite [bool, optional]:
+            If `False` (default), common unknowns/equations raise `ValueError`.
+            If `True`, attributes are silently overwritten.
 
         Returns
         -------
@@ -526,47 +539,50 @@ class MathematicalProblem:
         if other is self and not copy:
             return self  # quick return
 
-        var_name, residue_name = self.residue_naming(self.context, other.context)
+        var_name, residue_name = self.naming_functions(self.context, other.context)
 
         get = (lambda obj: obj.copy()) if copy else (lambda obj: obj)
 
         def transfer(self_dict, other_dict, get_fullname):
             for name, elem in other_dict.items():
                 fullname = get_fullname(name)
-                if fullname in self_dict:
-                    raise ValueError(f"{fullname!r} already exists in system {self.name!r}.")
+                if not overwrite and fullname in self_dict:
+                    raise ValueError(f"{fullname!r} already exists in {self.name!r}.")
                 self_dict[fullname] = get(elem)
 
-        transfer(self._unknowns, other.unknowns, var_name)
-        transfer(self._residues, other.residues, residue_name)
-        transfer(self._transients, other.transients, var_name)
-        transfer(self._rates, other.rates, var_name)
+        if unknowns:
+            transfer(self._unknowns, other.unknowns, var_name)
+            transfer(self._transients, other.transients, var_name)
+            transfer(self._rates, other.rates, var_name)
 
-        connectors = self.context.incoming_connectors()
-        name2variable = other.context.name2variable
+        if equations:
+            transfer(self._residues, other.residues, residue_name)
 
-        for deferred in other._targets.values():
-            targetted = list(deferred.variables)[0]
-            name = deferred.target.replace(targetted, var_name(targetted))  # default
-            ref = name2variable[targetted]
-            port = ref.mapping
-            for connector in connectors:
-                # Check if targetted var is a pulled output
-                if port is connector.source and port.is_output and ref.key in connector.source_variables():
-                    alias = natural_varname(
-                        f"{connector.sink.name}.{connector.sink_variable(ref.key)}"
-                    )
-                    original = name
-                    if deferred.target == targetted:
-                        name = alias
-                    else:
-                        # target is an expression involving `targetted`
-                        name = name.replace(var_name(targetted), alias)
-                    logger.info(
-                        f"Target on {original!r} will be based on {name!r} in the context of {self.context.full_name()!r}"
-                    )
-                    break
-            self.add_target(name, weak=deferred.weak)
+            connectors = self.context.incoming_connectors()
+            name2variable = other.context.name2variable
+
+            for deferred in other._targets.values():
+                targetted = list(deferred.variables)[0]
+                name = deferred.target.replace(targetted, var_name(targetted))  # default
+                ref = name2variable[targetted]
+                port = ref.mapping
+                for connector in connectors:
+                    # Check if targetted var is a pulled output
+                    if port is connector.source and port.is_output and ref.key in connector.source_variables():
+                        alias = natural_varname(
+                            f"{connector.sink.name}.{connector.sink_variable(ref.key)}"
+                        )
+                        original = name
+                        if deferred.target == targetted:
+                            name = alias
+                        else:
+                            # target is an expression involving `targetted`
+                            name = name.replace(var_name(targetted), alias)
+                        logger.info(
+                            f"Target on {original!r} will be based on {name!r} in the context of {self.context.full_name()!r}"
+                        )
+                        break
+                self.add_target(name, weak=deferred.weak)
 
         return self
 
@@ -598,10 +614,10 @@ class MathematicalProblem:
             JSONable representation
         """
         return {
-            "unknowns": dict([(name, unknown.to_dict()) for name, unknown in self.unknowns.items()]),
-            "equations": dict([(name, equation.to_dict()) for name, equation in self.residues.items()]),
-            "transients": dict([(name, transient.to_dict()) for name, transient in self.transients.items()]),
-            "rates": dict([(name, rate.to_dict()) for name, rate in self.rates.items()])
+            "unknowns": dict((name, unknown.to_dict()) for name, unknown in self.unknowns.items()),
+            "equations": dict((name, equation.to_dict()) for name, equation in self.residues.items()),
+            "transients": dict((name, transient.to_dict()) for name, transient in self.transients.items()),
+            "rates": dict((name, rate.to_dict()) for name, rate in self.rates.items())
         }
 
     def validate(self) -> None:

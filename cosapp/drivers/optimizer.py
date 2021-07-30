@@ -191,6 +191,21 @@ class Optimizer(AbstractSolver):
         """
         return super()._fresidues(x, update_residues_ref)[0]
 
+    def set_iteratives(self, x: Sequence[float]) -> None:
+        x = numpy.asarray(x)
+        counter = 0
+        for unknown in self.problem.unknowns.values():
+            if unknown.mask is None:
+                unknown.set_default_value(x[counter])
+                counter += 1
+            else:
+                n = numpy.count_nonzero(unknown.mask)
+                unknown.set_default_value(x[counter : counter + n])
+                counter += n
+            # Set variable to new x
+            if not numpy.array_equal(unknown.value, unknown.default_value):
+                unknown.set_to_default()
+
     def resolution_method(self,
         fresidues: Callable[[Sequence[float]], float],
         x0: numpy.ndarray,
