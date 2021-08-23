@@ -21,18 +21,29 @@ class PortMarkdownFormatter:
         Returns
         -------
         List[str]
-            List of Markdown strings representing port variables as a table.
+            List of Markdown strings representing port variables as a table, with header.
         """
         port = self.port
         name = port.full_name() if contextual else port.name
-        content = [
-            f"  {value._repr_markdown_()}"
-            for value in port.get_details().values()
-        ]
         doc = []
         doc.extend([f"`{name}`: {type(port).__name__}", ""])
-        doc.extend(self.wrap(content))
+        doc.extend(self.var_repr())
         return doc
+
+    def var_repr(self) -> List[str]:
+        """Returns the representation of port variables in Markdown format,
+        as a list of strings (same as `content`, without name header).
+
+        Returns
+        -------
+        List[str]
+            List of Markdown strings representing port variables as a table.
+        """
+        content = [
+            f"  {value._repr_markdown_()}"
+            for value in self.port.get_details().values()
+        ]
+        return self.wrap(content)
 
     def markdown(self, contextual=True) -> str:
         """Returns the port representation in Markdown format.

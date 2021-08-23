@@ -127,7 +127,7 @@ def test_system_to_md():
         (DummyPortWithDesc, "  **foo**: 1 | Foo variable\n  **bar**: 2 | Bar variable"),
     ],
 )
-def test_port_to_md(PortCls: Port, direction, expected):
+def test_port_to_md(PortCls: type, direction, expected):
     p = PortCls("p", direction)
     div_header = PortMarkdownFormatter.div_header()
     table_header = f"{div_header}\n\n<!-- -->|<!-- -->\n---|---\n"
@@ -197,10 +197,33 @@ def test_PortMarkdownFormatter_wrap():
         ],
     ),
 ])
-def test_PortMarkdownFormatter_content(PortCls: Port, direction, expected):
+def test_PortMarkdownFormatter_content(PortCls: type, direction, expected):
     p = PortCls("p", direction)
     mdt = PortMarkdownFormatter(p)
     assert mdt.content() == expected
+
+
+@pytest.mark.parametrize("direction", PortType)
+@pytest.mark.parametrize("PortCls, expected", [
+    (
+        DummyPort,
+        PortMarkdownFormatter.wrap([
+            "  **a**: 1 |",
+            "  **b**: 2 |",
+        ]),
+    ),
+    (
+        DummyPortWithDesc,
+        PortMarkdownFormatter.wrap([
+            "  **foo**: 1 | Foo variable",
+            "  **bar**: 2 | Bar variable",
+        ]),
+    ),
+])
+def test_PortMarkdownFormatter_var_repr(PortCls: type, direction, expected):
+    p = PortCls("p", direction)
+    mdt = PortMarkdownFormatter(p)
+    assert mdt.var_repr() == expected
 
 
 def test_PortMarkdownFormatter_markdown(composite):
