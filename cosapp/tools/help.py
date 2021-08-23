@@ -5,7 +5,8 @@ from typing import Union
 
 from cosapp.core.module import Module
 from cosapp.ports.enum import PortType
-from cosapp.ports.port import BasePort
+from cosapp.ports.port import BasePort, Port
+from cosapp.tools.views.markdown import PortMarkdownFormatter
 
 
 class DocDisplay:
@@ -75,10 +76,10 @@ class DocDisplay:
         if isinstance(obj, Module):
             doc.append(obj._repr_markdown_())
 
-        elif isinstance(obj, Port):
-            if len(obj) > 0:
-                doc.extend(["", "###  Variables", ""])
-                doc.append(obj._repr_markdown_())
+        elif isinstance(obj, Port) and len(obj) > 0:
+            formatter = PortMarkdownFormatter(obj)
+            doc.extend(["", "###  Variables", ""])
+            doc.extend(formatter.var_repr())
 
         return "\n".join(doc)
 
