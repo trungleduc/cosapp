@@ -3,10 +3,58 @@ Tool to print the description of a CoSApp object.
 """
 from typing import Union
 
+from cosapp.patterns.visitor import Visitor
 from cosapp.core.module import Module
 from cosapp.ports.enum import PortType
-from cosapp.ports.port import BasePort, Port
+from cosapp.ports.port import BasePort
 from cosapp.tools.views.markdown import PortMarkdownFormatter
+
+
+class DocVisitor(Visitor):
+    """Visitor collecting and reformatting Markdown
+    representations of systems and ports.
+    """
+    def __init__(self) -> None:
+        self.doc = []
+
+    def visit_port(self, port) -> None:
+        """Formatting of port Markdown representation"""
+        self.add_doc(port)
+        if len(port) > 0:
+            formatter = PortMarkdownFormatter(port)
+            self.doc.extend(["", "###  Variables", ""])
+            self.doc.extend(formatter.var_repr())
+
+    def visit_default(self, obj) -> None:
+        """Default formatting of `obj` Markdown representation"""
+        self.add_doc(obj)
+        self.doc.append(obj._repr_markdown_())
+
+    def visit_system(self, system) -> None:
+        """Formatting of system Markdown representation"""
+        self.visit_default(system)
+
+    def visit_driver(self, driver) -> None:
+        """Formatting of driver Markdown representation"""
+        self.visit_default(driver)
+
+    def add_doc(self, obj) -> None:
+        """Add header with `obj` class name, and docstring (if any)."""
+        obj_type = type(obj)
+        doc = self.doc
+        doc.extend([f"## Class: {obj_type.__name__}", ""])
+
+        indent = 0
+        if obj_type.__doc__:
+            doc.extend(["### Documentation", ""])
+            for line in obj_type.__doc__.split("\n"):
+                if indent == 0:
+                    stripped = line.lstrip()
+                    if len(stripped) > 0:
+                        indent = len(line) - len(stripped)
+                else:
+                    stripped = line[indent:]
+                doc.append(stripped)
 
 
 class DocDisplay:
@@ -57,31 +105,9 @@ class DocDisplay:
         str
             Documentation markdown formatted string.
         """
-        obj = self._obj
-        obj_type = type(self._obj)
-
-        indent = 0
-        doc = [f"## Class: {obj_type.__name__}", ""]
-        if obj_type.__doc__:
-            doc.extend(["### Documentation", ""])
-            for line in obj_type.__doc__.split("\n"):
-                if indent == 0:
-                    stripped = line.lstrip()
-                    if len(stripped) > 0:
-                        indent = len(line) - len(stripped)
-                else:
-                    stripped = line[indent:]
-                doc.append(stripped)
-
-        if isinstance(obj, Module):
-            doc.append(obj._repr_markdown_())
-
-        elif isinstance(obj, Port) and len(obj) > 0:
-            formatter = PortMarkdownFormatter(obj)
-            doc.extend(["", "###  Variables", ""])
-            doc.extend(formatter.var_repr())
-
-        return "\n".join(doc)
+        visitor = DocVisitor()
+        self._obj.accept(visitor)
+        return "\n".join(visitor.doc)
 
     @classmethod
     def display_doc(cls, obj: Union[type, BasePort, Module]) -> "DocDisplay":
