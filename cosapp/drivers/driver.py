@@ -5,6 +5,7 @@ import logging
 import time
 from typing import Optional
 
+from cosapp.patterns.visitor import Visitor
 from cosapp.core.module import Module
 from cosapp.recorders.recorder import BaseRecorder
 from cosapp.utils.options_dictionary import OptionsDictionary
@@ -105,6 +106,10 @@ class Driver(Module):
                 self.options[key] = kwargs.pop(key)
             except KeyError:
                 continue
+
+    def accept(self, visitor: Visitor) -> None:
+        """Specifies course of action when visited by `visitor`"""
+        visitor.visit_driver(self)
 
     def __repr__(self) -> str:
         context = "alone" if self.owner is None else f"on System {self.owner.name!r}"

@@ -44,6 +44,31 @@ def fake():
     return Module("fake")
 
 
+@pytest.fixture
+def composite():
+    """Generates test module tree:
+
+                 a
+         ________|________
+        |        |        |
+       aa       ab        ac
+      __|__           ____|____
+     |     |         |    |    |
+    aaa   aab       aca  acb  acc
+    """
+    def add_children(module, names):
+        prefix = module.name
+        for name in names:
+            module.add_child(Module(f"{prefix}{name}"))
+
+    a = Module('a')
+    add_children(a, list('abc'))
+    add_children(a.aa, list('ab'))
+    add_children(a.ac, list('abc'))
+
+    return a
+
+
 @pytest.mark.parametrize("name, error", [
     ("a", None),
     ("A", None),
@@ -283,3 +308,28 @@ def test_Module_log_debug_message(format, msg, kwargs, to_log, emitted):
         assert re.match(emitted["pattern"], args[1]) is not None
     else:
         handler.log.assert_not_called()
+
+
+def test_Module_tree_default(composite):
+    names = [elem.name for elem in composite.tree()]
+    assert names == [
+        'aaa', 'aab', 'aa',
+        'ab',
+        'aca', 'acb', 'acc', 'ac',
+        'a',
+    ]
+
+
+@pytest.mark.parametrize("downwards, expected", [
+    (True,  ['a', 'aa', 'aaa', 'aab', 'ab', 'ac', 'aca', 'acb', 'acc']),
+    (False, ['aaa', 'aab', 'aa', 'ab', 'aca', 'acb', 'acc', 'ac', 'a']),
+])
+def test_Module_tree(composite, downwards, expected):
+    """Test top-to-bottom and bottom-to-top `Module.tree` generator"""
+    names = [elem.name for elem in composite.tree(downwards)]
+    assert names == expected
+
+
+def test_Module_iter_tree(composite):
+    elems = iter(composite.tree(downwards=True))
+    assert next(elems) is composite

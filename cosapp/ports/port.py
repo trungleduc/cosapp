@@ -9,6 +9,7 @@ from typing import Any, Dict, Iterator, Optional, Tuple, Union
 from types import MappingProxyType
 import numpy
 
+from cosapp.patterns import visitor
 from cosapp.core.numerics.distributions.distribution import Distribution
 from cosapp.ports.enum import PortType, Scope, Validity
 from cosapp.ports.exceptions import ScopeError
@@ -19,7 +20,7 @@ from cosapp.utils.naming import NameChecker
 logger = logging.getLogger(__name__)
 
 
-class BasePort:
+class BasePort(visitor.Component):
     """Base class for ports, containers gathering variables.
 
     Common users should not use this class directly.
@@ -53,6 +54,10 @@ class BasePort:
         self._owner = None  # type: Optional[cosapp.systems.System]
         self.__clearance = None
         self.scope_clearance = Scope.PRIVATE
+
+    def accept(self, visitor: visitor.Visitor) -> None:
+        """Specifies course of action when visited by `visitor`"""
+        visitor.visit_port(self)
 
     @property
     def owner(self) -> "Optional[cosapp.systems.System]":

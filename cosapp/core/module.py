@@ -4,8 +4,9 @@ Basic class handling model tree structure.
 import abc
 import collections
 import logging
-from typing import Any, Optional, List
+from typing import Any, Optional, List, Generator
 
+from cosapp.patterns.visitor import Visitor, Component as VisitedComponent
 from cosapp.core.signal import Signal
 from cosapp.utils.naming import NameChecker
 from cosapp.utils.helpers import check_arg
@@ -15,7 +16,7 @@ from cosapp.utils.orderedset import OrderedSet
 logger = logging.getLogger(__name__)
 
 
-class Module(LoggerContext, metaclass=abc.ABCMeta):
+class Module(LoggerContext, VisitedComponent, metaclass=abc.ABCMeta):
     # class Module does not inherit directly from abc.ABC, due to 
     # a bug in Python 3.6 preventing the use of __weakref__ in slots.
     # Ref: https://bugs.python.org/issue30463
@@ -84,6 +85,27 @@ class Module(LoggerContext, metaclass=abc.ABCMeta):
         self.computed = Signal(name="cosapp.core.module.Module.computed")
         self.clean_ran = Signal(name="cosapp.core.module.Module.clean_ran")
 
+    def tree(self, downwards=False) -> Generator["Module", None, None]:
+        """Generator recursively yielding all elements in module tree.
+        
+        Parameters:
+        -----------
+        - downwards [bool, optional]:
+            If `True`, yields elements from top to bottom.
+            If `False` (default), yields elements from bottom to top.
+        """
+        if downwards:
+            yield self
+        for child in self.children.values():
+            yield from child.tree(downwards)
+        if not downwards:
+            yield self
+
+    def send_visitor(self, visitor: Visitor, downwards=False) -> None:
+        """Recursively accept visitor throughout module tree."""
+        for module in self.tree(downwards):
+            module.accept(visitor)
+
     def __getattr__(self, name: str) -> Any:
         try:  # Faster than testing
             return self.children[name]
@@ -122,43 +144,47 @@ class Module(LoggerContext, metaclass=abc.ABCMeta):
 
     @property
     def size(self) -> int:
-        """int : System size (= number of children + 1)."""
-        size = 1
-        for child in self.children.values():
-            size += child.size
-        return size
+        """int: Total number of elements in tree."""
+        return sum(1 for _ in self.tree())
+
+    def path_to_root(self) -> Generator["Module", None, None]:
+        """Generator recursively yielding all elements up to root module.
+        """
+        current = self
+        yield current
+        while current.parent is not None:
+            current = current.parent
+            yield current
 
     def root(self) -> "Module":
-        return self.path()[0]
+        for root in self.path_to_root():
+            continue
+        return root
 
     def path(self) -> List["Module"]:
-        """Returns full path up to root Module as a list.
+        """Returns full path from root Module as a list.
         
         Returns
         -------
         List[Module]
             Full module list from root to self
         """
-        current = self
-        path = [current]
-        while current.parent is not None:
-            current = current.parent
-            path.append(current)
-        path.reverse()
-        return path
+        path = list(self.path_to_root())
+        return list(reversed(path))
 
     def path_namelist(self) -> List[str]:
-        """Returns full name list up to root Module.
+        """Returns full name list from root Module.
         
         Returns
         -------
         List[str]
             The module full name list
         """
-        return [module.name for module in self.path()]
+        names = [elem.name for elem in self.path_to_root()]
+        return list(reversed(names))
 
     def full_name(self, trim_root=False) -> str:
-        """Returns full name up to root Module.
+        """Returns full name from root Module.
         
         Parameters
         ----------

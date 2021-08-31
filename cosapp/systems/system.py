@@ -25,6 +25,7 @@ import jsonschema
 import numpy
 import pandas
 
+from cosapp.patterns.visitor import Visitor
 from cosapp.core.connectors import Connector, ConnectorError
 from cosapp.core.eval_str import EvalString
 from cosapp.core.module import Module
@@ -244,9 +245,13 @@ class System(Module, TimeObserver):
         self._locked = True
 
     def _update(self, dt) -> None:
-        """Required by TimeObserver base class"""
+        """Required by `TimeObserver` base class"""
         pass
-        
+
+    def accept(self, visitor: Visitor) -> None:
+        """Specifies course of action when visited by `visitor`"""
+        visitor.visit_system(self)
+    
     def is_clean(self, direction: Optional[PortType] = None) -> bool:
         """Are the `System` ports with the given direction clean?
         If no direction is specified, checks if both directions are clean.
