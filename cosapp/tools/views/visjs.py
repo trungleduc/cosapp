@@ -81,16 +81,15 @@ class VisJsRenderer(BaseRenderer):
                 def get_driver2id(driver, cmpt2id, node_id, edges):
                     if driver not in cmpt2id:
                         cmpt2id[driver] = node_id
-                        node_id = node_id + 1
+                        node_id += 1
 
                     previous_child = None
                     for child in driver.children.values():
                         cmpt2id, node_id, edges = get_driver2id(
                             child, cmpt2id, node_id, edges
                         )
-                        if (
-                            previous_child is not None
-                        ):  # Connection between same level driver
+                        # Connection between same level drivers
+                        if previous_child is not None: 
                             edges.append(
                                 {
                                     "from": cmpt2id[previous_child],
@@ -147,7 +146,7 @@ class VisJsRenderer(BaseRenderer):
 
                         if supplier not in component_id:
                             component_id[supplier] = node_id
-                            node_id = node_id + 1
+                            node_id += 1
 
                         target = connection.sink.owner
                         if target.children:  # Insert port as node
@@ -155,7 +154,7 @@ class VisJsRenderer(BaseRenderer):
 
                         if target not in component_id:
                             component_id[target] = node_id
-                            node_id = node_id + 1
+                            node_id += 1
 
                         edge = {
                             "from": component_id[supplier],
@@ -189,7 +188,7 @@ class VisJsRenderer(BaseRenderer):
                 for cpt in system.children.values():
                     if cpt not in cmpt2id:
                         cmpt2id[cpt] = node_id
-                        node_id = node_id + 1
+                        node_id += 1
 
                     if cpt.children:
                         cmpt2id, node_id, edges = get_component2id(cpt, cmpt2id, node_id, edges)
@@ -303,13 +302,13 @@ class VisJsRenderer(BaseRenderer):
 
                     ref["group"] = f"{c.parent.full_name()}"
 
-                if "level" not in ref:
-                    ref["level"] = 0
-                ref["level"] += ref["group"].count(".") + 1  # Set hierarchical level
+                group = ref["group"]
+                ref.setdefault("level", 0)
+                ref["level"] += group.count(".") + 1  # Set hierarchical level
 
                 nodes.append(ref)
-                if "group" in ref and ref["group"] not in groups:
-                    groups.append(ref["group"])
+                if group not in groups:
+                    groups.append(group)
 
             # Sort the groups by system to ensure that levels are clustered bottom-up
             groups.sort(reverse=True)

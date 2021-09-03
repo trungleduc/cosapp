@@ -330,9 +330,8 @@ class EvalString:
 
     @property
     def constant(self) -> bool:
-        """
-        Returns a boolean indicating whether or not the evaluated expression
-        is constant, that is independent of its context.
+        """bool: `True` if evaluated expression is constant,
+        that is independent of its context; `False` otherwise.
         """
         return self.__constant
 
@@ -397,17 +396,22 @@ class AssignString:
 
     @property
     def eval_context(self) -> "System":
-        """Evaluation context of the assignment."""
+        """cosapp.systems.System: Evaluation context of the assignment."""
         return self.__context
 
     @property
     def lhs(self) -> str:
-        """Left-hand side of the assignment, as a string"""
+        """str: Left-hand side of the assignment."""
         return self.__raw_sides[0]
 
     @property
+    def contextual_lhs(self) -> str:
+        """str: Contextual name of assignment left-hand side."""
+        return f"{self.__context.name}.{self.lhs}"
+
+    @property
     def rhs(self) -> str:
-        """Right-hand side of the assignment, as a string"""
+        """str: Right-hand side of the assignment."""
         return self.__raw_sides[1]
 
     @rhs.setter
@@ -436,7 +440,7 @@ class AssignString:
 
     @property
     def constant(self) -> bool:
-        """Bool: is the right-hand side of the assignment constant?"""
+        """bool: `True` if assignment right-hand side is constant, `False` otherwise."""
         return self.__constant
 
     def exec(self, context=None) -> Tuple[Any, bool]:
@@ -458,7 +462,7 @@ class AssignString:
 
     @property
     def shape(self) -> Union[Tuple[int, int], None]:
-        """Returns the shape of the assigned object (lhs) if it is an array, else None."""
+        """Union[Tuple[int, int], None]: shape of assigned object (lhs) if it is an array, else None."""
         return self.__shape
 
     def variables(self) -> Set[str]:

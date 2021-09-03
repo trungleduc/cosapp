@@ -169,8 +169,8 @@ class LoggerContext:
 
     __slots__ = ()
 
-    CONTEXT_ENTER_MESSAGE: ClassVar[str] = "Entering "
-    CONTEXT_EXIT_MESSAGE: ClassVar[str] = "Exiting "
+    CONTEXT_ENTER_MESSAGE: ClassVar[str] = "Entering"
+    CONTEXT_EXIT_MESSAGE: ClassVar[str] = "Exiting"
 
     @contextmanager
     def log_context(self, suffix: str = "") -> None:
@@ -182,11 +182,11 @@ class LoggerContext:
             Suffix text to append to the log message
         """
         try:
-            msg = LoggerContext.CONTEXT_ENTER_MESSAGE + repr(self) + suffix
+            msg = f"{LoggerContext.CONTEXT_ENTER_MESSAGE} {self!r}{suffix}"
             logger.log(VERBOSE_LEVEL, msg, extra={"activate": True, "context": self})
             yield
         finally:
-            msg = LoggerContext.CONTEXT_EXIT_MESSAGE + repr(self) + suffix
+            msg = f"{LoggerContext.CONTEXT_EXIT_MESSAGE} {self!r}{suffix}"
             logger.log(VERBOSE_LEVEL, msg, extra={"activate": False, "context": self})
 
     def log_debug_message(

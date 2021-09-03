@@ -79,15 +79,18 @@ class InterpolAssignString:
     def __init__(self, variable, function, context):
         # Strict type check (as opposed to `isinstance`), to ensure the type of
         # `function` is `Interpolator`, and is not derived from `Interpolator`.
-        if type(function) is not Interpolator:
-            raise TypeError(f"Functions used in time boundary conditions may only be of type `Interpolator`; got {type(function)}")
+        ftype = type(function)
+        if ftype is not Interpolator:
+            raise TypeError(
+                f"Functions used in time boundary conditions may only be of type `Interpolator`; got {ftype}"
+            )
         Boundary.parse(context, variable)  # checks that variable is valid
         fname = f"BC{id(function)}"
         assignment = f"{context.name}.{variable} = float({fname}(t))"
         self.__context = context
         self.__locals = {fname: function, context.name: context, 't': 0}
         self.__code = compile(assignment, "<string>", "exec")  # type: CodeType
-        self.__str = f"{variable} = {function.__class__.__name__}(t)"
+        self.__str = f"{variable} = {ftype.__name__}(t)"
 
     def exec(self) -> None:
         """
@@ -268,14 +271,11 @@ class Scenario:
         return AssignString(variable, value, context)
 
     def __repr__(self) -> str:
-        s = f"{self.__class__.__qualname__} {self.name!r}, in {self.context.name!r}"
+        s = f"{type(self).__name__} {self.name!r}, in {self.context.name!r}"
         def conditions(assigments, title):
-            output = ""
-            prefix = f"\n{title.title()}:\n\t"
-            for assignment in assigments:
-                output += prefix + str(assignment)
-                prefix = "\n\t"
-            return output
+            return "\n  - ".join(
+                [f"\n{title.title()}:"] + [str(a) for a in assigments]
+             ) if assigments else ""
         s += conditions(self.init_values, "Initial values")
         s += conditions(self.case_values, "Boundary conditions")
         return s

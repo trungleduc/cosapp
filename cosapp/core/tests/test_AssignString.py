@@ -24,6 +24,7 @@ def test_AssignString__init__(eval_context, lhs):
     assert str(s) == f"{lhs} = {rhs}"
     assert s.eval_context is context
     assert context.x[2] == 0.1
+    assert s.contextual_lhs == f"bogus.{lhs}"
     
     context.a = 0.9
     context.b = 1.7
