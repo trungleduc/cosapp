@@ -4,14 +4,13 @@ Basic class handling model tree structure.
 import abc
 import collections
 import logging
-from typing import Any, Optional, List, Generator
+from typing import Any, Optional, List, Generator, MappingView, OrderedDict, Sequence
 
 from cosapp.patterns.visitor import Visitor, Component as VisitedComponent
 from cosapp.core.signal import Signal
 from cosapp.utils.naming import NameChecker
 from cosapp.utils.helpers import check_arg
 from cosapp.utils.logging import LoggerContext, LogFormat, LogLevel
-from cosapp.utils.orderedset import OrderedSet
 
 logger = logging.getLogger(__name__)
 
@@ -36,11 +35,11 @@ class Module(LoggerContext, VisitedComponent, metaclass=abc.ABCMeta):
     name : str
         `Module` name
     children : Dict[str, Module]
-        Child `Module` of this `Module`
+        Sub-modules of current `Module`, referenced by names.
     parent : Module
-        Parent `Module` of this `Module`; None if there is no parent.
-    exec_order : OrderedSet[str]
-        Execution order in which the child `Module` should be solved.
+        Parent `Module` of current `Module`; `None` if there is no parent.
+    exec_order : MappingView[str]
+        Execution order in which sub-modules should be computed.
 
     _active : bool
         If False, the `Module` will not execute its `run_once` method
@@ -58,7 +57,7 @@ class Module(LoggerContext, VisitedComponent, metaclass=abc.ABCMeta):
     """
 
     __slots__ = (
-        '__weakref__', '_name', 'children', 'parent', '__exec_order', '_active',
+        '__weakref__', '_name', 'children', 'parent', '_active',
         '_compute_calls', 'setup_ran', 'computed', 'clean_ran',
     )
 
@@ -75,9 +74,7 @@ class Module(LoggerContext, VisitedComponent, metaclass=abc.ABCMeta):
         self._name = self._name_check(name)  # type: str
         self.children = collections.OrderedDict()
         self.parent = None  # type: Optional[Module]
-        self.__exec_order = OrderedSet()  # type: OrderedSet[str]
         self._active = True  # type: bool
-
         self._compute_calls = 0  # type: int
 
         # Signals
@@ -132,15 +129,32 @@ class Module(LoggerContext, VisitedComponent, metaclass=abc.ABCMeta):
         self._name = self._name_check(name)
 
     @property
-    def exec_order(self) -> "OrderedSet[str]":
-        return self.__exec_order
+    def exec_order(self) -> MappingView[str]:
+        """MappingView[str]: sub-module execution order, as a name iterator"""
+        return self.children.keys()
 
     @exec_order.setter
-    def exec_order(self, iterable) -> None:
-        new_set = OrderedSet(iterable)
-        if not all(isinstance(elem, str) for elem in new_set):
-            raise TypeError(f"All elements of {self.name}.exec_order must be strings")
-        self.__exec_order = new_set
+    def exec_order(self, namelist: Sequence[str]) -> None:
+        if not isinstance(namelist, Sequence):
+            raise TypeError("exec_order must be an ordered sequence of strings")
+        nameset = set(self.children)
+        if set(namelist) != nameset:
+            if nameset:
+                msg = f"exec_order must be a permutation of {list(self.children)}"
+            else:
+                msg = f"Can't set exec_order, as {self.name!r} has no children"
+            logger.error(f"{msg}; got {namelist}.")
+            raise ValueError(msg)
+        elif len(namelist) > len(self.children):
+            repeated = list(namelist)
+            for name in set(namelist):
+                repeated.remove(name)
+            raise ValueError(f"Repeated items {sorted(set(repeated))}")
+        # Rearrange children in a new dictionary
+        self.children = OrderedDict(
+            (name, self.children[name])
+            for name in namelist
+        )
 
     @property
     def size(self) -> int:
@@ -267,8 +281,12 @@ class Module(LoggerContext, VisitedComponent, metaclass=abc.ABCMeta):
         """
         # Type validation
         check_arg(child, 'child', Module)
+
+        specific_order = None
         if execution_index is not None:
             check_arg(execution_index, 'execution_index', int)
+            specific_order = list(self.exec_order)
+            specific_order.insert(execution_index, child.name)
 
         if child.name in self.children:
             raise ValueError(
@@ -280,10 +298,8 @@ class Module(LoggerContext, VisitedComponent, metaclass=abc.ABCMeta):
         children = self.children
         children[child.name] = child
 
-        if execution_index is None:
-            self.__exec_order.append(child.name)
-        else:
-            self.__exec_order.insert(execution_index, child.name)
+        if specific_order:
+            self.exec_order = specific_order
 
         return child
 
@@ -310,34 +326,7 @@ class Module(LoggerContext, VisitedComponent, metaclass=abc.ABCMeta):
         child = children.pop(name)
         child.parent = None
 
-        self.__exec_order.remove(name)
-
         return child
-
-    def _set_execution_order(self):
-        # TODO doc + unit test
-
-        # if self.execution_algorithm != ExecutionOrdering.MANUAL:
-        #     pass  # TODO implement alternative
-        # Warning the execution order should not be set for standalone sub-multisystems. They
-        # should take care of them self.
-
-        # Check if all the children are listed in execution order list. Warn if not
-        for key, component in self.children.items():
-            if key not in self.exec_order:
-                logger.info(
-                    f"Missing module '{key}' has been appended to the execution order list."
-                )
-                self.exec_order.add(key)
-            component._set_execution_order()
-
-        if len(self.children) != len(self.exec_order):
-            for c in self.exec_order:
-                if c not in self.children:
-                    logger.info(
-                        f"Module {c} in execution order list without component matching. The entry will be removed."
-                    )
-                    self.exec_order.discard(c)
 
     def _precompute(self) -> None:
         """Actions performed prior to the `Module.compute` call."""

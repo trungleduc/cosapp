@@ -80,7 +80,7 @@ class SystemFamily(System):
         new_obj = converter()
         new_obj.name = name = self.name
         # TODO this is really ugly and should be done by the parent...
-        execution_idx = parent.exec_order.index(name)
+        execution_idx = list(parent.exec_order).index(name)
         parent.pop_child(name)
         parent.add_child(new_obj, execution_index=execution_idx)
         for c in to_restore:
@@ -98,7 +98,6 @@ class SystemFamily(System):
         new_system : System
             The new type `System` in which the current `System` has been converted into
         """
-
         for name, port in self.inputs.items():
             if name in new_system.inputs:
                 new_system.inputs[name].morph(port)

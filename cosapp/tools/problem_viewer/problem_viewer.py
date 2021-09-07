@@ -51,11 +51,8 @@ def _get_tree_dict(
 
         add_ports(system.inputs.values())
 
-        if len(system.exec_order) != len(system.children):
-            system.exec_order = list(system.children)
-        
-        children.extend(system_tree(system.children[name])
-            for name in system.exec_order
+        children.extend(system_tree(child)
+            for child in system.children.values()
         )
         # outputs come after child list for a matter of visualization
         add_ports(system.outputs.values())
