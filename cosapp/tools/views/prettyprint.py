@@ -194,13 +194,10 @@ def get_list_outputs(
                     list_out.append((pathname, outs))
 
     parent_name = parent_name + system.name + "."
-    comp = [child for child in system.children]
-    for child in system.exec_order:
-        # if child in system.exec_order:  # respect the executive order in priority
-        c = system.children[child]
+    for child in system.children.values():
         list_out.extend(
             get_list_outputs(
-                c,
+                child,
                 values=values,
                 local=local,
                 residuals=residuals,
@@ -208,19 +205,6 @@ def get_list_outputs(
                 itself=itself,
             )
         )
-    for child in comp:
-        if child not in system.exec_order:
-            c = system.children[child]
-            list_out.extend(
-                get_list_outputs(
-                    c,
-                    values=values,
-                    local=local,
-                    residuals=residuals,
-                    parent_name=parent_name,
-                    itself=itself,
-                )
-            )
     return list_out
 
 
@@ -282,30 +266,16 @@ def get_list_inputs(
                         list_in.append((pathname, outs))
 
     parent_name = parent_name + system.name + "."
-    comp = [child for child in system.children]
-    for child in system.exec_order:
-        c = system.children[child]
+    for child in system.children.values():
         list_in.extend(
             get_list_inputs(
-                c,
+                child,
                 values=values,
                 inwards=inwards,
                 parent_name=parent_name,
                 itself=itself,
             )
         )
-    for child in comp:
-        if child not in system.exec_order:
-            c = system.children[child]
-            list_in.extend(
-                get_list_inputs(
-                    c,
-                    values=values,
-                    inwards=inwards,
-                    parent_name=parent_name,
-                    itself=itself,
-                )
-            )
     return list_in
 
 

@@ -85,8 +85,8 @@ class D3JsRenderer(BaseRenderer):
             rtn = {"name": system.name, "full_name": full_name}
             if system.children:
                 rtn["children"] = [
-                    build_d3_json(system[child], parent_name=full_name, nlevels=nlevels)
-                    for child in system.exec_order
+                    build_d3_json(child, parent_name=full_name, nlevels=nlevels)
+                    for child in system.children.values()
                 ]
             else:
                 rtn["size"] = (nlevels / level) ** 5

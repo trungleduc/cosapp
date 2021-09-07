@@ -2,13 +2,15 @@ import pytest
 import logging
 import re
 import weakref
+import itertools
+from typing import MappingView
 from unittest import mock
+from contextlib import nullcontext as does_not_raise
 
 from cosapp.core.module import Module
 from cosapp.core.signal import Slot
 from cosapp.drivers import Driver
 from cosapp.utils.logging import LogFormat, LogLevel
-from cosapp.utils.orderedset import OrderedSet
 from cosapp.utils.testing import no_exception
 
 
@@ -230,25 +232,44 @@ def test_Module_pop_child_driver():
         d.pop_child("mydriver")
 
 
-@pytest.mark.parametrize("values, expected", [
-    ([], dict(values=[])),
-    (None, dict(values=[])),
-    (['foo', 'bar'], dict(values=['foo', 'bar'])),
-    (['foo', 'bar', 'foo'], dict(values=['foo', 'bar'])),
-    (('foo', 'bar', 'foo'), dict(values=['foo', 'bar'])),
-    ([1, 'foo'], dict(error=TypeError, match="All elements of .*exec_order must be strings")),
-    (2, dict(error=TypeError, match="object is not iterable")),
+@pytest.mark.parametrize("child_name, values, expected", [
+    (None, ['ab', 'ac', 'aa'], does_not_raise()),
+    (None, ['aa', 'ac', 'ab'], does_not_raise()),
+    (None, ('aa', 'ac', 'ab'), does_not_raise()),  # tuples work
+    (None, {'aa', 'ac', 'ab'}, pytest.raises(TypeError,
+        match="exec_order must be an ordered sequence")),  # sets fail
+    (None, ['foo', 1, True], pytest.raises(ValueError,
+        match="exec_order must be a permutation of \['aa', 'ab', 'ac'\]")),
+    (None, ['aa', 'ac', 'aa', 'ab', 'ac', 'aa'],
+        pytest.raises(ValueError, match="Repeated items \['aa', 'ac'\]")),
+    ('aa', ['aab', 'aaa'], does_not_raise()),
+    ('aa', ['aab', 'aaa', 'extra'], pytest.raises(ValueError)),  # too many elements
+    ('aa', ['aab'], pytest.raises(ValueError)),  # too few elements
+    ('ab', ['foo'], pytest.raises(ValueError, match="'ab' has no children")),
+    ('ab', [], does_not_raise()),
 ])
-def test_Module_exec_order(fake, values, expected):
-    error = expected.get("error", None)
-    if error is None:
-        fake.exec_order = values
-        assert isinstance(fake.exec_order, OrderedSet)
-        assert list(fake.exec_order) == expected["values"]
-    else:
-        pattern = expected.get("match", None)
-        with pytest.raises(error, match=pattern):
-            fake.exec_order = values
+def test_Module_exec_order(composite, child_name, values, expected):
+    try:
+        system = composite.children[child_name]
+    except KeyError:
+        system = composite
+
+    with expected:
+        system.exec_order = values
+        assert isinstance(system.exec_order, MappingView)
+        exec_order = list(system.exec_order)
+        assert exec_order == list(values)
+        assert exec_order == list(system.children)
+
+
+@pytest.mark.parametrize("names", itertools.permutations(['aa', 'ab', 'ac']))
+def test_Module_exec_order_perms(composite, names):
+    composite.exec_order = names
+    print(type(composite.exec_order))
+    assert isinstance(composite.exec_order, MappingView)
+    exec_order = list(composite.exec_order)
+    assert exec_order == list(names)
+    assert exec_order == list(composite.children)
 
 
 def test_Module_setup_ran(fake):
@@ -331,5 +352,54 @@ def test_Module_tree(composite, downwards, expected):
 
 
 def test_Module_iter_tree(composite):
-    elems = iter(composite.tree(downwards=True))
-    assert next(elems) is composite
+    a = composite
+    elems = a.tree(downwards=True)
+    assert next(elems) is a
+    assert next(elems) is a.aa
+    assert next(elems) is a.aa.aaa
+    assert next(elems) is a.aa.aab
+
+
+@pytest.mark.parametrize("downwards, order, expected", [
+    (True,  ['aa', 'ac', 'ab'], ['a', 'aa', 'aaa', 'aab', 'ac', 'aca', 'acb', 'acc', 'ab']),
+    (True,  ['ac', 'ab', 'aa'], ['a', 'ac', 'aca', 'acb', 'acc', 'ab', 'aa', 'aaa', 'aab']),
+    (False, ['aa', 'ac', 'ab'], ['aaa', 'aab', 'aa', 'aca', 'acb', 'acc', 'ac', 'ab', 'a']),
+    (False, ['ac', 'ab', 'aa'], ['aca', 'acb', 'acc', 'ac', 'ab', 'aaa', 'aab', 'aa', 'a']),
+])
+def test_Module_tree_exec_order_top(composite, downwards, order, expected):
+    """Check that `Module.tree` is consistent with `exec_order`"""
+    composite.exec_order = order
+    names = [elem.name for elem in composite.tree(downwards)]
+    assert names == expected
+
+
+def test_Module_tree_exec_order_sub(composite):
+    """Check that `Module.tree` is consistent with `exec_order`"""
+    a = composite
+    names = lambda system, downwards=False: [s.name for s in system.tree(downwards)]
+
+    a.exec_order = ('ac', 'ab', 'aa')
+    assert names(a) == ['aca', 'acb', 'acc', 'ac', 'ab', 'aaa', 'aab', 'aa', 'a']
+
+    a.aa.exec_order = ('aab', 'aaa')
+    assert names(a) == ['aca', 'acb', 'acc', 'ac', 'ab', 'aab', 'aaa', 'aa', 'a']
+
+    a.ac.exec_order = ('acb', 'acc', 'aca')
+    assert names(a) == ['acb', 'acc', 'aca', 'ac', 'ab', 'aab', 'aaa', 'aa', 'a']
+    assert names(a.aa) == ['aab', 'aaa', 'aa']
+    assert names(a.ab) == ['ab']
+    assert names(a.ac) == ['acb', 'acc', 'aca', 'ac']
+
+    # Test downward iterator
+    assert names(a, True) == ['a', 'ac', 'acb', 'acc', 'aca', 'ab', 'aa', 'aab', 'aaa']
+    assert names(a.aa, True) == ['aa', 'aab', 'aaa']
+
+
+def test_Module_tree_reverse(composite):
+    """Check that changing `Module.tree` direction in a composite system
+     does *not* produce a globally reversed iterator, owing to recursion.
+    """
+    downwards = list(composite.tree(downwards=True))
+    upwards = list(composite.tree(downwards=False))
+
+    assert upwards != list(reversed(downwards))

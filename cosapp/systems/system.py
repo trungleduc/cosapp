@@ -94,10 +94,10 @@ class System(Module, TimeObserver):
         Child `System` of this `System`
     parent : System
         Parent `System` of this `System`; None if there is no parent.
-    exec_order : List[str]
-        Execution order in which the child `System` should be solved.
+    exec_order : MappingView[str]
+        Execution order in which sub-systems are computed.
     properties : Dict[str, Any]
-
+        Dictionary of immutable parameters of the system.
     design_methods : Dict[Equations]
         `System` pre-defined design methods
     name2variable : Dict[str, VariableReference]
@@ -1823,8 +1823,7 @@ class System(Module, TimeObserver):
 
             if self.drivers and self.any_active_driver:
                 if self.is_standalone():  # System not standalone can't set the mathematical problem
-                    self._set_execution_order()
-                    logger.debug(f"Exec order for {self.name}: {self.exec_order}")
+                    logger.debug(f"Exec order for {self.name}: {list(self.exec_order)}")
 
                 for driver in self.drivers.values():
                     logger.debug(f"Call driver {driver.name}.run_once on {self.name}")
@@ -2416,20 +2415,13 @@ class System(Module, TimeObserver):
                 sink, source, mapping = connection
             top_system.connect(top_system[sink], top_system[source], mapping)
 
-        if 'exec_order' in parameters:
-            top_system.exec_order = list()
-            for c in parameters['exec_order']:
-                if c in top_system.children:
-                    top_system.exec_order.append(c)
-                else:
-                    logger.warning(
-                        "Component {} is specified in the execution order of {}, but is not defined as subsystem".format(
-                            c, top_system.name))
-
-            if len(top_system.exec_order) != len(top_system.children):
-                logger.warning(
-                    "Execution order length does not match the number of subsystems in system {}".format(
-                        top_system.name))
+        try:
+            exec_order = parameters['exec_order']
+        except KeyError:
+            pass
+        else:
+            if exec_order != list(top_system.exec_order):
+                top_system.exec_order = exec_order
 
         return top_system
 
@@ -2450,7 +2442,6 @@ class System(Module, TimeObserver):
                 filepath.write(self.to_json(indent, sort_keys))
         else:
             fp.write(self.to_json(indent, sort_keys))
-
 
     def export_structure(self) -> Dict:
         """
@@ -2542,9 +2533,7 @@ class System(Module, TimeObserver):
             tmp['subsystems'] = dict()
             for name, component in self.children.items():
                 tmp['subsystems'][name] = component._System__to_dict(with_struct, port_cls_data)[name]
-
-            if self.exec_order:
-                tmp['exec_order'] = list(self.exec_order)
+            tmp['exec_order'] = list(self.exec_order)
 
         return {self.name: tmp}
 

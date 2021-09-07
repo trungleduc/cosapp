@@ -385,7 +385,7 @@ def test_System_add_child():
     assert_keys(s.children, "sub")
     assert s.children['sub'] is s2
     assert s2.parent is s
-    assert s.exec_order.last == s2.name
+    assert list(s.exec_order) == [s2.name]
 
     to_check = {
         "sub": s2,
@@ -401,7 +401,7 @@ def test_System_add_child():
     s3 = SubSystem("sub2")
     assert s.add_child(s3, execution_index=0) is s3
     assert_keys(s.children, "sub", "sub2")
-    assert s.exec_order.first == s3.name
+    assert list(s.exec_order) == [s3.name, s2.name]
     assert s.children['sub2'] is s3
     assert s3.parent is s
 

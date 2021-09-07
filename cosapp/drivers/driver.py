@@ -168,10 +168,6 @@ class Driver(Module):
         if self._recorder is not None:
             self._recorder.start()
 
-        # Set execution order as Driver appending order
-        if len(self.exec_order) != len(self.children):
-            self.exec_order = list(self.children)
-
         self.start_time = time.time()
 
         if self.owner.parent is None and self.parent is None:

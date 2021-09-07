@@ -71,7 +71,6 @@ class {{ class_name }}FMU(Fmi2Slave):
     def exit_initialization_mode(self):
         # Set variables can be done before exit_initialization_mode call
         self.__master.call_setup_run()
-        self.__master._set_execution_order()
 
         # Initialize the problem
         self.__driver._precompute()
