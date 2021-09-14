@@ -1,6 +1,6 @@
 # Contributing
 
-Contributions are welcome, and they are greatly appreciated!
+Contributions are welcome, and greatly appreciated!
 Every little bit helps, and credit will always be given.
 
 You can contribute in many ways:
@@ -29,18 +29,16 @@ and "To do" is open to whoever wants to implement it.
 
 ### Write Documentation
 
-CoSApp could always use more documentation, whether as part of the
-official CoSApp docs, in docstrings, or even on the web in blog posts,
-articles, and such.
+CoSApp can always use more documentation, whether as part of the official CoSApp docs, in docstrings, or even in blog posts, online articles, and such.
 
 ### Submit Feedback
 
 The best way to send feedback is to file a [Feature Proposal](https://gitlab.com/CoSApp/cosapp/issues/new?issuable_template=FeatureProposal).
 
-If you are proposing a feature:
+If you wish to propose a feature:
 
 * Explain in detail how it would work.
-* Keep the scope as narrow as possible, to make it easier to implement.
+* Keep the scope as narrow as possible, to make its implementation easier.
 * Remember that this is a volunteer-driven project, and that contributions are welcome :)
 
 ## Get Started!
@@ -60,31 +58,37 @@ python -m pip install -e .
 ```
 4. Create a branch for local development::
 ```
-git checkout -b name-of-your-bugfix-or-feature
+git checkout -b name-of-your-branch
 ```
+   If your revision tackles an existing issue, starting your branch name by the issue number will automatically close the issue after your branch is merged.
+   For example, if issue 37 concerns a solver problem, say, you may name your branch `37-solver-fix`, e.g.
+   Alternatively, you can specify the general category of your revision, followed by its short name, as in `feature/lightsaber`, `bugfix/solver`, `doc/tutorials`, *etc.*
+
    Now you can make your changes locally.
 
-5. When you're done making changes, check that your changes pass the tests::
+5. When you're done, check that your revisions pass the tests, by running:
 ```
-pytest cosapp
+pytest
 ```
-6. Commit your changes and push your branch to GitLab::
+6. Commit your changes and push your branch to GitLab:
 ```
 git add .
 git commit -m "Your detailed description of your changes."
-git push origin name-of-your-bugfix-or-feature
+git push origin name-of-your-branch
 ```
 7. Submit a pull request through the GitLab website.
+   Go to https://gitlab.com/cosapp/cosapp/-/branches, and click the "Merge Request" button next to your branch name.
 
 ## Merge Request Guidelines
 
-Before you submit a merge request, check that it meets these guidelines:
+Before you submit a merge request, please follow these guidelines:
 
-1. The pull request should include tests.
-2. If the pull request adds functionality, the docs should be updated. Put
-   your new functionality into a function with a docstring, and add the
-   feature to the list in `HISTORY.md`.
-3. Make sure that the tests pass for all supported Python versions.
+1. The merge request must include tests.
+2. If the merge request adds new features, newly added code must come with its own set of tests. The docs should also be updated, if required. Make sure that
+   docstrings and type hints are updated.
+3. Importantly, write a brief revision letter explaining your changes in the description of the MR.
+
+The CI stack will check that your revision passes the tests for all supported versions of Python, as a necessary condition for merging.
 
 ## Tips
 

@@ -80,7 +80,6 @@ Modules
    cosapp.utils.logging
    cosapp.utils.naming
    cosapp.utils.options_dictionary
-   cosapp.utils.orderedset
    cosapp.utils.parsing
    cosapp.utils.pull_variables
    cosapp.utils.find_variables
