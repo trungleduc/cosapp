@@ -78,7 +78,8 @@ class RunSingleCase(IterativeCase):
         """DesignProblemHandler: design/off-design problem handler"""
         return self.__processed
 
-    def reset_problem(self):
+    def reset_problem(self) -> None:
+        """Reset design and off-design problems defined on case."""
         self.__raw_problem = DesignProblemHandler(self.owner)
         self.__processed = DesignProblemHandler(self.owner)
         self.problem = None
@@ -100,12 +101,15 @@ class RunSingleCase(IterativeCase):
         super().setup_run()
         
         raw = self.__raw_problem
+        # Force graph analysis by creating new problem handler
+        self.__processed = DesignProblemHandler(self.owner)
         processed = self.__processed
         # Transfer problem copies from `raw` to `processed`
         processed.problems = raw.export_problems(prune=False)
 
         # Add owner off-design problem to `processed.offdesign`
-        processed.offdesign.extend(self.owner.get_unsolved_problem())
+        owner_problem = self.owner.get_unsolved_problem()
+        processed.offdesign.extend(owner_problem)
 
         # Resolve unknown aliasing in `processed`
         processed.problems = processed.export_problems()

@@ -79,6 +79,7 @@ class NonLinearSolver(AbstractSolver):
 
     @property
     def raw_problem(self) -> MathematicalProblem:
+        """MathematicalProblem: raw problem defined at solver level"""
         return self.__raw_problem
 
     @AbstractSolver.owner.setter
@@ -93,6 +94,7 @@ class NonLinearSolver(AbstractSolver):
                     f"System owner of Driver {self.name!r} has changed. Mathematical problem has been cleared."
                 )
             self.__raw_problem = MathematicalProblem(self.name, system)
+            self.__design_unknowns = dict()
 
     @property
     def method(self) -> NonLinearMethods:
@@ -200,10 +202,12 @@ class NonLinearSolver(AbstractSolver):
         handler.design.extend(self.__raw_problem, equations=False)
         handler.offdesign.extend(self.__raw_problem, unknowns=False)
         handler.problems = handler.export_problems()  # resolve aliasing
-        design_unknowns = self.__design_unknowns = set(handler.design.unknowns)
+        self.__design_unknowns = handler.design.unknowns
         self.problem.extend(handler.design)
         # handler.offdesign.extend(self.owner.get_unsolved_problem(), copy=True)
         self.initial_values = numpy.append(self.initial_values, self.get_init())
+        # Set of unknown names to detect design/offdesign conflicts
+        design_unknowns = set(handler.design.unknowns)
 
         for child in self.children.values():
             if isinstance(child, RunSingleCase):
@@ -221,6 +225,7 @@ class NonLinearSolver(AbstractSolver):
                     raise ValueError(
                         f"{names} defined as design and off-design {kind} in {child.name!r}"
                     )
+                self.__design_unknowns.update(local.design.unknowns)
                 # Enforce solver-level off-design problem to child case
                 case_problem = child.add_offdesign_problem(handler.offdesign)
                 self.problem.extend(case_problem, copy=False)
@@ -243,7 +248,7 @@ class NonLinearSolver(AbstractSolver):
         """
         full_init = numpy.empty(0)
 
-        for unknown in self.__raw_problem.unknowns.values():
+        for unknown in self.__design_unknowns.values():
             data = copy.deepcopy(unknown.value)
             full_init = numpy.append(full_init, data)
 
