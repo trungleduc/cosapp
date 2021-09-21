@@ -1,5 +1,76 @@
 # History
 
+## 0.11.7 (2021-09-21)
+
+### New features
+
+* Possibility to define unknowns and equations at solver level (MR [#65](https://gitlab.com/cosapp/cosapp/-/merge_requests/65)).
+Minor API evolution facilitating the definition of nonlinear problems and of multi-point design problems.
+```python
+engine = Turbofan('engine')
+solver = engine.add_driver(NonLinearSolver('solver'))
+
+# Add design points:
+takeoff = solver.add_child(RunSingleCase('takeoff'))
+cruise = solver.add_child(RunSingleCase('cruise'))
+
+# Unknowns defined at solver level regarded as *design* unknowns
+solver.add_unknown(['fan.diameter', 'core.turbine.inlet.area'])
+
+# Local off-design equations can be directly defined at case level
+takeoff.add_equation('thrust == 1.2e5')
+cruise.add_equation('Mach == 0.8')
+```
+
+* New recursive iterator `tree()` for systems and drivers, yielding all elements in a composite tree (MR [#68](https://gitlab.com/cosapp/cosapp/-/merge_requests/68)).
+```python
+head = CompositeSystem('head')
+
+bottom_to_top = [s.name for s in head.tree()]
+top_to_bottom = [s.name for s in head.tree(downwards=True)]
+```
+
+* Visitor pattern for composite collections of systems, drivers and ports (MR [#68](https://gitlab.com/cosapp/cosapp/-/merge_requests/68)).
+```python
+from cosapp.patterns.visitor import Visitor, send as send_visitor
+
+class DataCollector(Visitor):
+    def __init__(self):
+        self.data = {}
+
+    def visit_system(self, system):
+        key = system.full_name()
+        self.data.setdefault(key, {})
+        self.data[key]['children'] = [
+            child.name for child in system.children.values()
+        ]
+        send_visitor(self, system.inputs.values())
+
+    def visit_port(self, port):
+        # specify what to do with a port
+
+    def visit_driver(self, driver):
+        # specify what to do with a driver
+
+head = CompositeSystem('head')
+collector = DataCollector()
+
+send_visitor(collector, head.tree())
+print(collector.data)
+```
+
+### Documentation
+
+* New tutorials, and new "Tips & Tricks" notebook (MR [#71](https://gitlab.com/cosapp/cosapp/-/merge_requests/71)).
+
+### Bug fixes and code quality
+
+* Improved tests on clean/dirty status (MR [#66](https://gitlab.com/cosapp/cosapp/-/merge_requests/66)).
+* Bug fix in tutorial notebook on validation (MR [#67](https://gitlab.com/cosapp/cosapp/-/merge_requests/67)).
+* Code quality improvements (MR [#69](https://gitlab.com/cosapp/cosapp/-/merge_requests/69)).
+* Make `System.exec_order` a view on `System.children` dictionary keys, rather than an independent attribute (MR [#70](https://gitlab.com/cosapp/cosapp/-/merge_requests/70)). Execution order can still be specified, via a dedicated setter for `exec_order`.
+* Fix solver bugs occurring when system structure changes (MR [#73](https://gitlab.com/cosapp/cosapp/-/merge_requests/73)).
+
 ## 0.11.6 (2021-06-25)
 
 ### Bug fixes and code quality
