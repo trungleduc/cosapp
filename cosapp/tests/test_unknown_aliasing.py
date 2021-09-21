@@ -1,6 +1,7 @@
 """Test problems with unknown aliased by pulling"""
 import pytest
 import logging, re
+from numpy import sqrt, cbrt
 
 from cosapp.systems import System
 from cosapp.drivers import NonLinearSolver
@@ -260,3 +261,68 @@ def test_design_offdesign_aliasing_3(caplog):
         )
         for record in caplog.records
     )
+
+
+def test_connected_unknown_changing_conf(caplog):
+    """Test with an originally free input variable,
+    later connected to an output after a first design problem.
+    """
+    class DoubleQuad(System):
+        def setup(self):
+            self.add_child(Quadratic('foo'))
+            self.add_child(Quadratic('bar'))
+
+    top = DoubleQuad('top')
+    foo, bar = top.foo, top.bar
+    solver = top.add_driver(NonLinearSolver('solver', tol=1e-9, max_iter=100))
+
+    # First problem: `bar.x` is unknown
+    solver.add_unknown('bar.x').add_equation('bar.y == 5.5')
+
+    foo.k = 1
+    bar.k = 2
+    top.run_drivers()
+    assert bar.y == pytest.approx(5.5)
+    assert bar.x == pytest.approx(1.5)
+
+    # Add a connector; unknown `bar.x` is no longer free
+    top.connect(foo.outwards, bar.inwards, {'y': 'x'})
+
+    caplog.clear()
+    with pytest.raises(ArithmeticError, match="numbers of params \[0\] and residues \[1\]"):
+        with caplog.at_level(logging.WARNING):
+            top.run_drivers()
+    
+    assert len(caplog.records) > 0
+    assert re.match(
+        "Skip connected unknown 'bar.inwards.x'",
+        caplog.records[0].message
+    )
+
+    # Declare `foo.x` as unknown - problem is balanced again
+    solver.add_unknown('foo.x')
+
+    top.run_drivers()
+    assert foo.x == pytest.approx(sqrt(0.5))
+
+    # Introduce cyclic dependency with new sub-system
+    class CubicRoot(System):
+        def setup(self):
+            self.add_inward('x', 1.0)
+            self.add_outward('y', 1.0)
+        
+        def compute(self) -> None:
+            self.y = cbrt(self.x)
+
+    coupling = CubicRoot('coupling')
+    top.add_child(coupling)
+    # Make `foo.k` a function of `bar.y`
+    top.connect(bar.outwards, coupling.inwards, {'y': 'x'})
+    top.connect(coupling.outwards, foo.inwards, {'y': 'k'})
+
+    # Cyclic dependency induces a change in system structure,
+    # which must be captured at driver execution
+    top.run_drivers()
+    assert bar.y == pytest.approx(5.5)
+    assert foo.k == pytest.approx(cbrt(5.5))
+    assert foo.x == pytest.approx(0.5322200367)

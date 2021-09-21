@@ -1,13 +1,17 @@
 from numbers import Number
-from typing import Iterable, List, Tuple, Union
+from typing import Iterable, List, Tuple, Union, Optional
 
+import logging
 import numpy
 
 from cosapp.core.eval_str import EvalString
 from cosapp.core.numerics.basics import MathematicalProblem
 from cosapp.core.numerics.boundary import Unknown
 from cosapp.drivers.iterativecase import IterativeCase
+from cosapp.drivers.utils import UnknownAnalyzer
 from cosapp.utils.helpers import check_arg
+
+logger = logging.getLogger(__name__)
 
 
 class RunOptim(IterativeCase):
@@ -23,7 +27,7 @@ class RunOptim(IterativeCase):
         Optional keywords arguments
     """
 
-    __slots__ = ('_design', 'constraints',)
+    __slots__ = ('__problem', 'constraints',)
 
     def __init__(self,
         name: str,
@@ -59,8 +63,8 @@ class RunOptim(IterativeCase):
 
         check_arg(expression, "expression", str, lambda s: "==" not in s)
 
-        self._design.residues.clear()  # Ensure only one objective is defined
-        self._design.add_equation(f"{expression} == 0", name="f_objective", reference=1.)
+        self.__problem.residues.clear()  # Ensure only one objective is defined
+        self.__problem.add_equation(f"{expression} == 0", name="f_objective", reference=1.)
 
     def add_unknown(self,
             name: Union[str, Iterable[Union[dict, str, Unknown]]],
@@ -92,7 +96,7 @@ class RunOptim(IterativeCase):
         MathematicalProblem
             The modified MathematicalSystem
         """
-        self._design.add_unknown(name, max_abs_step, max_rel_step, lower_bound, upper_bound)
+        self.__problem.add_unknown(name, max_abs_step, max_rel_step, lower_bound, upper_bound)
 
     def add_constraints(self,
         expression: Union[str, List[Union[str, Tuple[str, bool]]]],
@@ -107,7 +111,6 @@ class RunOptim(IterativeCase):
         inequality : bool
             If True, expression must be non-negative; else must be zero.
         """
-
         def add_constraint(expression: str, inequality: bool) -> None:
             check_arg(expression, 'expression', str)
             check_arg(inequality, 'inequality', bool)
@@ -133,7 +136,7 @@ class RunOptim(IterativeCase):
                     add_constraint(*args)
 
     def reset_problem(self) -> None:
-        self._design = MathematicalProblem(self.name, self.owner)  # type: MathematicalProblem
+        self.__problem = MathematicalProblem(self.name, self.owner)  # type: MathematicalProblem
 
     def get_problem(self) -> MathematicalProblem:
         """Returns the full mathematical for the case.
@@ -144,17 +147,12 @@ class RunOptim(IterativeCase):
             The full mathematical problem to solve for the case
         """
         # TODO Go further to gather optimization unknowns defined in System hierarchy
-        return self._design
+        return self.__problem
 
     def setup_run(self):
         """Method called once before starting any simulation."""
         super().setup_run()
         
-        unknowns = self._design.unknowns
-
-        for name in list(unknowns):
-            unknown = self.get_free_unknown(unknowns[name])
-            if unknown is None:
-                unknowns.pop(name)
-            else:
-                unknowns[name] = unknown
+        # Resolve unknown aliasing and connected unknowns
+        analyzer = UnknownAnalyzer(self.owner)
+        self.__problem = analyzer.filter_problem(self.__problem)

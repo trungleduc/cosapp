@@ -36,7 +36,7 @@ class AbstractSolver(Driver):
         Keyword arguments will be used to set driver options
     """
 
-    __slots__ = ('force_init', 'problem', 'initial_values', 'solution', '_input_mapping')
+    __slots__ = ('force_init', 'problem', 'initial_values', 'solution')
 
     def __init__(self,
         name: str,
@@ -121,11 +121,6 @@ class AbstractSolver(Driver):
                 options[name] = numpy.concatenate((options[name], array.flatten()))
 
         return options
-
-    def setup_run(self):
-        """Method called once before starting any simulation."""
-        super().setup_run()
-        self._input_mapping = get_free_inputs(self.owner)
 
     def compute_before(self):
         """Contains the customized `Module` calculation, to execute before children.
