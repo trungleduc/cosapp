@@ -2,7 +2,6 @@ from typing import Optional, Union, Dict, Tuple
 
 from cosapp.core.numerics.boundary import Unknown
 from cosapp.core.numerics.basics import MathematicalProblem
-from cosapp.utils.graph_analysis import get_free_inputs
 from cosapp.utils.helpers import check_arg
 
 import logging
@@ -57,12 +56,7 @@ class UnknownAnalyzer(SystemAnalyzer):
 
     @property
     def input_mapping(self):
-        key = 'input_mapping'
-        try:
-            mapping = self.data[key]
-        except KeyError:
-            mapping = self.data[key] = get_free_inputs(self.system)
-        return mapping
+        return self.system.input_mapping
 
     def filter_problem(self, problem: MathematicalProblem, name=None) -> MathematicalProblem:
         self.check_system()

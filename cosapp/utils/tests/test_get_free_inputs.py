@@ -2,7 +2,6 @@ import pytest
 
 from cosapp.utils.graph_analysis import get_free_inputs
 from cosapp.core.variableref import VariableReference
-from cosapp.tests.library.systems import AllTypesSystem
 from cosapp.ports.enum import PortType
 from cosapp.ports.port import BasePort, Port
 from cosapp.systems import System

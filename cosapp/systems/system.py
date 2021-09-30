@@ -154,7 +154,7 @@ class System(Module, TimeObserver):
     __slots__ = (
         '_context_lock', '_systems_connectors', '_is_clean', '_locked', '_math',
         'design_methods', 'drivers', 'inputs', 'name2variable', 'outputs',
-        '__readonly', '_meta', '__runner',
+        '__readonly', '_meta', '__runner', '__input_mapping',
     )
 
     INWARDS = CommonPorts.INWARDS.value  # type: ClassVar[str]
@@ -222,8 +222,9 @@ class System(Module, TimeObserver):
         self._is_clean = { PortType.IN: False, PortType.OUT: False }  # type: Dict[PortType, bool]
         self._meta = None
         self.__runner = self  # type: Union[System, SystemSurrogate]
-        # For efficiency purpose, link to object are stored as reference
-        # !! Must be the latest attribute set 
+        self.__input_mapping = None  # type: Dict[str, VariableReference]
+        # For efficiency purpose, links to objects are stored as reference
+        # !! name2variable must be the latest attribute set 
         # => KeyError will be raised instead of AttributeError in __setattr__ 
         # => lock __setattr__ on previously defined attributes
         self.name2variable = dict()  # type: Dict[str, VariableReference]
@@ -491,6 +492,25 @@ class System(Module, TimeObserver):
     def __repr__(self) -> str:
         return f"{self.name} - {type(self).__name__}"
 
+    @property
+    def input_mapping(self) -> Dict[str, VariableReference]:
+        """Dict[str, VariableReference]: free input mapping"""
+        if self.__input_mapping is None:
+            self._update_input_mapping()
+        return MappingProxyType(self.__input_mapping)
+    
+    def _update_input_mapping(self) -> None:
+        """Run graph analysis to identify free inputs,
+        and store data in self.__input_mapping dict."""
+        from cosapp.utils.graph_analysis import get_free_inputs
+        self.__input_mapping = get_free_inputs(self)
+    
+    def __reset_input_mapping(self) -> None:
+        self.__input_mapping = None
+        parent = self.parent
+        if parent is not None:
+            parent.__reset_input_mapping()
+
     def append_name2variable(
         self, additional_mapping: Iterable[Tuple[str, VariableReference]]
     ) -> None:
@@ -595,6 +615,7 @@ class System(Module, TimeObserver):
 
         new_port = port_class(name, PortType.IN, variables=variables)
         self._add_port(new_port)
+        self.__reset_input_mapping()
         return new_port
 
     def add_output(self,
@@ -803,6 +824,8 @@ class System(Module, TimeObserver):
             self.append_name2variable(
                 [(f"{System.INWARDS}.{name}", reference), (name, reference)]
             )
+
+        self.__reset_input_mapping()
 
         if isinstance(definition, dict):
             for key, value in definition.items():
@@ -1404,6 +1427,7 @@ class System(Module, TimeObserver):
         mapping_generator = map(rel2absname, child.name2variable.items())
         keys.extend(mapping_generator)
         self.append_name2variable(keys)
+        self.__reset_input_mapping()
 
         if pulling is not None:
             try:
@@ -1444,6 +1468,7 @@ class System(Module, TimeObserver):
         mapping_generator = map(rel2absname, iter(child.name2variable))
         keys.extend(mapping_generator)
         self.pop_name2variable(keys)
+        self.__reset_input_mapping()
 
         return child
 
@@ -1983,7 +2008,7 @@ class System(Module, TimeObserver):
 
         systems_connectors = self._systems_connectors
 
-        def create_connector(sink, source, mapping):
+        def create_connector(sink: BasePort, source: BasePort, mapping: Dict[str, str]):
             # Additional validation for sink Port
             # - Source should be Port (the opposite case is possible == connect sensor)
             # - If mapping does not cover all variables, print a log message
@@ -2003,8 +2028,8 @@ class System(Module, TimeObserver):
                     )
                     
             name = f"{source_name}_to_{sink_name}".replace(".", "_")
-
             new_connector = Connector(name, sink, source, mapping)
+
             connectors = self.connectors
             # Check that variables are set only once
             for connector in connectors.values():
@@ -2031,8 +2056,13 @@ class System(Module, TimeObserver):
                     systems_connectors[target] = list()
                 systems_connectors[target].append(new_connector)
 
-        port1_dir = port1.direction
-        port2_dir = port2.direction
+            if sink.owner is source.owner.parent:
+                lower = source
+            elif source.owner is sink.owner.parent:
+                lower = sink
+            else:
+                lower = sink
+            lower.owner.__reset_input_mapping()
 
         err_msg = f"Ports {port1.contextual_name!r} and {port2.contextual_name!r} cannot be connected"
 
@@ -2040,7 +2070,7 @@ class System(Module, TimeObserver):
             raise ConnectorError(
                 f"{err_msg}. Connecting ports of the same system is forbidden."
             )
-        if port1_dir != port2_dir:  # one port is IN and the other is OUT
+        if port1.direction != port2.direction:  # one port is IN and the other is OUT
             if port1.owner is port2.owner.parent or port2.owner is port1.owner.parent:
                 raise ConnectorError(
                     f"{err_msg}, as they are of different types, and link a child to its parent."
@@ -2061,27 +2091,26 @@ class System(Module, TimeObserver):
 
         reciprocal = lambda d: dict((v, k) for k, v in d.items())
 
-        if port1_dir == PortType.IN and port2_dir == PortType.OUT:
+        if port1.is_input and port2.is_output:
             create_connector(port1, port2, mapping)
 
-        elif port1_dir == PortType.OUT and port2_dir == PortType.IN:
+        elif port1.is_output and port2.is_input:
             create_connector(port2, port1, reciprocal(mapping))
 
         else:
             if port1.owner is port2.owner.parent:
-                if port1_dir == PortType.IN:
+                if port1.is_input:
                     create_connector(port2, port1, reciprocal(mapping))
-                else:  # port1_dir == PortType.OUT
+                else:  # port1.is_output
                     create_connector(port1, port2, mapping)
-                return
-            elif port2.owner is port1.owner.parent:
-                if port2_dir == PortType.IN:
-                    create_connector(port1, port2, mapping)
-                else:  # port2_dir == PortType.OUT
-                    create_connector(port2, port1, reciprocal(mapping))
-                return
 
-            if port1_dir == PortType.IN:  # Both port are inputs
+            elif port2.owner is port1.owner.parent:
+                if port2.is_input:
+                    create_connector(port1, port2, mapping)
+                else:  # port2.is_output
+                    create_connector(port2, port1, reciprocal(mapping))
+
+            elif port1.is_input:  # Both port are inputs
                 # In this case the port is transfer on the parent to serve as
                 # true source for all subsystems.
                 # For Port, the port is duplicated in the parent. For ExtensiblePort,
