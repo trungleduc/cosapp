@@ -646,31 +646,26 @@ def test_Connector_transfer():
         ('fake.p1', 'fake.p2', {'z': 'z'})
     ),
 ])
-def test_Connector_to_dict(ConnectorFactory, settings, expected):
+def test_Connector_info(ConnectorFactory, settings, expected):
+    """Test related methods `info` and `to_dict`."""
     c = ConnectorFactory(**settings)
-    d = c.to_dict()
-    assert_keys(d, c.name)
-    assert d[c.name] == expected
+    info = c.info()
+    assert info == expected
+    assert c.to_dict() == {c.name: expected}
 
 
-def test_Connector_to_dict_system():
+def test_Connector_info_system():
     p1 = Q('p1', PortType.IN, {'x': 1, 'y': 2, 'z': 3})
     p2 = R('p2', PortType.OUT, {'v': 2, 'w': 4, 'z': 3})
     c = Connector('p2_to_p1', p1, p2, 'z')
-    d = c.to_dict()
-    assert_keys(d, c.name)
-    assert d[c.name] == ('fake.p1', 'fake.p2', {'z': 'z'})
+    assert c.info() == ('fake.p1', 'fake.p2', {'z': 'z'})
 
     s = System('system')
     s.parent = MagicMock()
     p1.owner = s
     s2 = System('system2')
     p2.owner = s2
-    d = c.to_dict()
-    assert_keys(d, c.name)
-    assert d[c.name] == ('system.p1', 'system2.p2', {'z': 'z'})
+    assert c.info() == ('system.p1', 'system2.p2', {'z': 'z'})
 
     s.parent = s2
-    d = c.to_dict()
-    assert_keys(d, c.name)
-    assert d[c.name] == ('system.p1', 'p2', {'z': 'z'})
+    assert c.info() == ('system.p1', 'p2', {'z': 'z'})

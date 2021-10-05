@@ -1149,7 +1149,6 @@ def test_NonLinearSolver_fixedPointArray():
             self.add_output(Port3D, 'y')
         
         def compute(self):
-            print(self.x.value)
             self.y.value = 1 - self.x.value
 
     class SystemB(System):
@@ -1167,7 +1166,7 @@ def test_NonLinearSolver_fixedPointArray():
     top.connect(a.y, b.u)
 
     solver = top.add_driver(NonLinearSolver('solver', tol=1e-9))
-    solver.runner.set_init({'a.x.value[:-1]': np.r_[-0.25, 1.04]})
+    solver.runner.set_init({'a.x.value': np.r_[-0.25, 1.04, 5.2]})
     top.run_drivers()
 
     assert a.x.value[0] == pytest.approx(0.5 * (3 - np.sqrt(5)))

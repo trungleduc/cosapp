@@ -12,12 +12,9 @@ from typing import (
 import numpy
 
 from cosapp.core.numerics.basics import MathematicalProblem, SolverResults
-from cosapp.core.numerics.boundary import Unknown
 from cosapp.drivers.driver import Driver
-from cosapp.drivers.iterativecase import IterativeCase
 from cosapp.drivers.runonce import RunOnce
 from cosapp.utils.options_dictionary import OptionsDictionary
-from cosapp.utils.graph_analysis import get_free_inputs
 
 logger = logging.getLogger(__name__)
 

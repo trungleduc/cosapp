@@ -16,7 +16,7 @@ from numbers import Number
 from pathlib import Path
 from typing import (
     Any, Callable, ClassVar, Dict, FrozenSet,
-    Iterable, List,
+    Iterable, Iterator, List,
     Optional, Tuple, Union,
 )
 from types import MappingProxyType
@@ -152,9 +152,9 @@ class System(Module, TimeObserver):
     """
 
     __slots__ = (
-        '_context_lock', '_systems_connectors', '_is_clean', '_locked', '_math',
+        '_context_lock', '__sys_connectors', '_is_clean', '_locked', '_math',
         'design_methods', 'drivers', 'inputs', 'name2variable', 'outputs',
-        '__readonly', '_meta', '__runner', '__input_mapping',
+        '__readonly', '_meta', '__runner', '__input_mapping', '__loop_problem',
     )
 
     INWARDS = CommonPorts.INWARDS.value  # type: ClassVar[str]
@@ -208,6 +208,7 @@ class System(Module, TimeObserver):
         TimeObserver.__init__(self, sign_in=False)
 
         self._math = MathematicalProblem(name, self)  # type: MathematicalProblem
+        self.__loop_problem = MathematicalProblem('loop', self)  # type: MathematicalProblem
         self.drivers = collections.OrderedDict()  # type: Dict[str, cosapp.Driver]
         self.design_methods = dict()  # type: Dict[str, Tuple[Tuple[Unknown], Tuple[AbstractResidue]]]
         self.__readonly = dict()  # type: Dict[str, Any]
@@ -216,7 +217,7 @@ class System(Module, TimeObserver):
         self.inputs = collections.OrderedDict()  # type: Dict[str, BasePort]
         self.outputs = dict()  # type: Dict[str, BasePort]
         # Connectors are grouped in a dictionary where the key is the sink system i.e. the receiving system
-        self._systems_connectors = dict()  # type: Dict[str, List[Connector]]
+        self.__sys_connectors = dict()  # type: Dict[str, List[Connector]]
         
         self._locked = False  # type: bool
         self._is_clean = { PortType.IN: False, PortType.OUT: False }  # type: Dict[PortType, bool]
@@ -1272,25 +1273,27 @@ class System(Module, TimeObserver):
     @property
     def systems_connectors(self) -> Dict[str, List[Connector]]:
         """Dict[str, List[Connector]] : Connectors within system, referenced by sub-system names."""
-        return MappingProxyType(self._systems_connectors)
+        return MappingProxyType(self.__sys_connectors)
 
     @property
     def connectors(self) -> Dict[str, Connector]:
         """Dict[str, Connector] : Connectors within system, referenced by connector name."""
-        result = dict()
-        for connectors in self._systems_connectors.values():
-            for connector in connectors:
-                result[connector.name] = connector
-        return result
+        return dict(
+            (connector.name, connector)
+            for connector in self.all_connectors()
+        )
 
-    def incoming_connectors(self) -> List[Connector]:
-        """Returns the list of connectors targetting current system"""
-        connectors = self._systems_connectors.get(self.name, [])
-        connectors = list(connectors)  # make shallow copy to avoid side effects
+    def all_connectors(self) -> Iterator[Connector]:
+        """Iterator yielding all connectors within system."""
+        for connectors in self.__sys_connectors.values():
+            yield from connectors
+
+    def incoming_connectors(self) -> Iterator[Connector]:
+        """Iterator yielding all connectors targetting system."""
+        yield from self.__sys_connectors.get(self.name, [])
         parent = self.parent
-        if parent is not None:
-            connectors.extend(parent._systems_connectors.get(self.name, []))
-        return connectors
+        if parent:
+            yield from parent.__sys_connectors.get(self.name, [])
 
     def get_unsolved_problem(self) -> MathematicalProblem:
         """Returns the unsolved mathematical problem.
@@ -1333,7 +1336,7 @@ class System(Module, TimeObserver):
                 continue
 
             child_problem = child.get_unsolved_problem()
-            connectors = self._systems_connectors.get(child.name, [])
+            connectors = self.__sys_connectors.get(child.name, [])
             transfer_items = [
                 (child_problem.unknowns, transfer_unknown),
                 (child_problem.transients, transfer_transient),
@@ -1377,7 +1380,7 @@ class System(Module, TimeObserver):
 
             problem.extend(child_problem, copy=False)
 
-        return problem
+        return problem.extend(self.__loop_problem)
 
     def add_child(self,
         child: "System",
@@ -1452,7 +1455,7 @@ class System(Module, TimeObserver):
             The removed `System` or None if no match found
         """
         child = super().pop_child(name)
-        systems_connectors = self._systems_connectors
+        systems_connectors = self.__sys_connectors
         
         # Remove the connection to the system
         systems_connectors.pop(name, None)
@@ -1804,14 +1807,14 @@ class System(Module, TimeObserver):
                     if not self.is_clean():
                         for child in self.exec_order:
                             # Update connectors
-                            for connector in self._systems_connectors.get(child, []):
+                            for connector in self.__sys_connectors.get(child, []):
                                 connector.transfer()
                             # Execute the child
                             logger.debug(f"Call {self.name}.{child}.run_once()")
                             self.children[child].run_once()
 
                         # Pull values from inside Modules to top shelve border
-                        for connector in self._systems_connectors.get(self.name, []):
+                        for connector in self.__sys_connectors.get(self.name, []):
                             connector.transfer()
                     else:
                         logger.debug(f"Skip {self.name} children execution - Clean interfaces")
@@ -1883,13 +1886,13 @@ class System(Module, TimeObserver):
                     if not self.is_clean():
                         for child in self.exec_order:
                             # Update connectors
-                            for connector in self._systems_connectors.get(child, []):
+                            for connector in self.__sys_connectors.get(child, []):
                                 connector.transfer()
                             # Execute the child
                             self.children[child].run_drivers()
 
                         # Pull values from inside Modules to top shelve border
-                        for connector in self._systems_connectors.get(self.name, []):
+                        for connector in self.__sys_connectors.get(self.name, []):
                             connector.transfer()
                     else:
                         logger.debug(f"Skip {self.name} children execution - Clean interfaces")
@@ -2006,7 +2009,7 @@ class System(Module, TimeObserver):
         elif not isinstance(mapping, dict):
             mapping = dict(zip(mapping, mapping))
 
-        systems_connectors = self._systems_connectors
+        systems_connectors = self.__sys_connectors
 
         def create_connector(sink: BasePort, source: BasePort, mapping: Dict[str, str]):
             # Additional validation for sink Port
@@ -2175,102 +2178,74 @@ class System(Module, TimeObserver):
     def open_loops(self):
         """Open closed loops in children relations."""
         logger.debug(f"Call {self.name}.open_loops")
-        connections_to_open = list()  # type: List[Connector]
+        connectors_to_open = list()  # type: List[Connector]
+        systems_connectors = self.__sys_connectors
+        self.__input_mapping = None
+        loop = self.__loop_problem
+        loop.clear()
 
         # Add top system in the execution loop so connection to it won't be opened
-        execution_loop = [self.name, ]  # type: List[str]
+        execution_loop = [self, ]  # type: List[System]
 
-        for name in self.exec_order:
-            child = self.children[name]
-            execution_loop.append(name)
-
+        for name, child in self.children.items():
+            execution_loop.append(child)
             child.open_loops()
 
-            # Check that child inputs do not depend on not already executed system
-            connectors = list()
-            systems_connectors = self._systems_connectors
             for connector in systems_connectors.get(name, []):
-                if connector.source.owner.name in execution_loop:
-                    connectors.append(connector)
-                else:
-                    connections_to_open.append(connector)
-            if name in systems_connectors:  # Set only if the standard system has connections
-                systems_connectors[name] = connectors
+                if connector.source.owner not in execution_loop:
+                    connectors_to_open.append(connector)
 
-        for connector in connections_to_open:
+        for connector in connectors_to_open:
             logger.debug(f"Connector {connector!r} to be opened.")
-            # Compute the connection residues 
-            # => pull source values only if max(residues) > 1e-4
-            #   History: converged non-linear system was iterating again if re-run twice in a row
-            connection = IterativeConnector(connector)
-            residues = connection.get_unsolved_problem().residues_vector
-
-            if numpy.linalg.norm(residues, numpy.inf) > 1e-4:
-                connector.source.owner.set_dirty(PortType.OUT)
-                connector.transfer()  # Pull source values for a better initialization.
-
-            self.add_child(connection)
-            self.connect(
-                connection.inputs[IterativeConnector.GUESS], 
-                connector.sink, 
-                list(connector.sink_variables())
-            )
-            self.connect(
-                connection.inputs[IterativeConnector.RESULT], 
-                connector.source, 
-                list(connector.source_variables())
-            )
+            sink, source = connector.sink, connector.source
+            if sink.is_output:
+                raise ValueError(
+                    f"Connector {connector.name!r} cannot be opened, as its sink is an output."
+                )
+            # Check that all variables are of numerical types
+            for name in connector.sink_variables():
+                value = sink[name]
+                if not is_numerical(value):
+                    raise TypeError(
+                        f"Cannot open connector {connector.name!r} to resolve system"
+                        f", as variable {name!r} is non-numerical (type is {type(value).__name__})."
+                    )
+            connector.deactivate()
+            # Set mathematical problem
+            sink_name = sink.contextual_name
+            source_name = source.contextual_name
+            owner_unknowns = sink.owner.unknowns
+            for target, origin in connector.mapping.items():
+                unknown_name = f"{sink_name}.{target}"
+                options = {}
+                try:
+                    unknown = owner_unknowns[unknown_name]
+                except KeyError:
+                    pass
+                else:
+                    options = {
+                        attr: getattr(unknown, attr)
+                        for attr in (
+                            'max_abs_step',
+                            'max_rel_step',
+                            'upper_bound',
+                            'lower_bound',
+                        )
+                    }
+                loop.add_unknown(unknown_name, **options)
+                loop.add_equation(
+                    f"{unknown_name} == {source_name}.{origin}",
+                    reference = 'norm',
+                )
 
     def close_loops(self):
         """Close loops opened to allow system resolution."""
         logger.debug(f"Call {self.name}.close_loops")
 
-        def restore_connector(connection: IterativeConnector) -> None:
-            # Remove the IterativeConnector instance
-            self.pop_child(connection.name)
-
-            sink, source, mapping = connection.get_connection()
-
-            # We need to remove the pulled port or variables.
-            if sink.name == System.INWARDS:
-                src_port = self.inputs[System.INWARDS]
-                src_names = [f"{sink.owner.name}_{v}" for v in mapping]
-            else:
-                src_port = self.inputs[f"{sink.owner.name}_{sink.name}"]
-                src_names = None
-
-            keys = []
-            rel2absname = lambda relname: f"{src_port.name}.{relname}"
-            keys.extend(map(rel2absname, src_names or mapping))
-            if sink.name == System.INWARDS:
-                keys.extend(src_names)
-                for n in src_names:
-                    self.inputs[System.INWARDS].remove_variable(n)
-            else:
-                keys.append(src_port.name)
-                self.inputs.pop(src_port.name)
-            self.pop_name2variable(keys)
-
-            # Remove connections
-            systems_connectors = self._systems_connectors
-            for index, connector in enumerate(systems_connectors[sink.owner.name][:]):
-                if connector.source is src_port:
-                    if src_names is not None:
-                        connector.remove_variables(
-                            # remove_variables needs the sink name not the source
-                            [k for k, v in connector.mapping.items() if v in src_names]
-                        )
-                    if len(connector) == 0 or src_names is None:
-                        systems_connectors[sink.owner.name].pop(index)
-
-            # Restore the connections
-            self.connect(sink, source, mapping)
-
-        for child in list(self.children.values()):
-            if isinstance(child, IterativeConnector):
-                restore_connector(child)
-            else:
-                child.close_loops()
+        for elem in self.tree():
+            elem.__loop_problem.clear()
+            for connector in elem.all_connectors():
+                connector.activate()
 
     def convert_to(self, *args, **kwargs) -> None:
         """Convert system into another `System`.
@@ -2425,7 +2400,7 @@ class System(Module, TimeObserver):
             top_system.name2variable.pop(name)
         # Remove children and connectors --> the source of truth is the json file
         top_system.children.clear()
-        top_system._systems_connectors.clear()
+        top_system.__sys_connectors.clear()
 
         top_system.__readonly = parameters.get('properties', {}).copy()
 
@@ -2551,10 +2526,10 @@ class System(Module, TimeObserver):
             if len(inputs) > 0:
                 tmp['inputs'] = inputs
 
-        connections = []
-        for connectors in self._systems_connectors.values():
-            for c in connectors:
-                connections.append(c.to_dict()[c.name])
+        connections = [
+            connector.info()
+            for connector in self.all_connectors()
+        ]
         if len(connections) > 0:
             tmp['connections'] = connections
 
@@ -2752,115 +2727,3 @@ class System(Module, TimeObserver):
         for child in self.children.values():
             logger.debug(f"Targeted child for system recursive deactivate is {child}")
             child._set_recursive_active_status(active_status)
-
-
-class IterativeConnector(System):
-    """Generate residues on close loop connector to mathematical close the equations set.
-
-    The replaced connector is presumed to be removed prior to the construction of a
-    `IterativeConnector`.
-
-    Parameters
-    ----------
-    connector : Connector
-        Connector to replace
-
-    Attributes
-    ----------
-    _sink : BasePort
-        Original connector port sink
-    _source : BasePort
-        Original connector port source
-    _mapping : Dict[str, str]
-        Variable names mapping between source and sink
-    """
-
-    GUESS = "guess"
-    RESULT = "result"
-
-    # TODO check and complete documentation
-
-    def __init__(self, connector: Connector) -> None:
-        """`IterativeConnector` constructor."""
-        check_arg(connector, 'connector', Connector)
-        sink, source = connector.sink, connector.source
-
-        if sink.direction != PortType.IN:
-            raise ValueError(
-                f"Connector {connector.name!r} cannot be opened.\n"
-                "IterativeConnector can only be inserted if the sink is an input."
-            )
-        # Check that all variables are of numerical types
-        for name in connector.sink_variables():
-            if not is_numerical(sink[name]):
-                raise TypeError(
-                    "Cannot open connector {!r} to solve the system, as variable {!r} is non-numerical; got {}.".format(
-                        connector.name, name, sink[name]))
-
-        super().__init__(connector.name)
-        object.__setattr__(self, '_sink', sink)
-        object.__setattr__(self, '_source', source)
-        object.__setattr__(self, '_mapping', connector.mapping)
-
-        # Create ports
-        if isinstance(sink, Port):
-            sink_copy = sink.copy(name=IterativeConnector.GUESS, direction=PortType.IN)
-        else:
-            sink_copy = ExtensiblePort(IterativeConnector.GUESS, PortType.IN)
-            for name in connector.sink_variables():
-                details = sink.get_details(name)
-                sink_copy.add_variable(name, getattr(sink, name), unit=details.unit, dtype=details.dtype)
-        self._add_port(sink_copy)
-
-        if isinstance(source, Port):
-            source_copy = source.copy(name=IterativeConnector.RESULT, direction=PortType.IN)
-        else:
-            source_copy = ExtensiblePort(IterativeConnector.RESULT, PortType.IN)
-            for name in connector.source_variables():
-                details = source.get_details(name)
-                source_copy.add_variable(name, getattr(source, name), unit=details.unit, dtype=details.dtype)
-        self._add_port(source_copy)
-
-        # Set the mathematical problem
-        sink_unknowns = sink.owner.unknowns
-        self._locked = False  # add_unknown and add_equation not allow outside `setup`
-        for to_, from_ in self._mapping.items():
-            sink_name = f"{sink.name}.{to_}"
-            unknown = f"{IterativeConnector.GUESS}.{to_}"
-            if sink_name in sink_unknowns:  # Copy numerical feature from user specifications
-                self.add_unknown(
-                    unknown, 
-                    max_abs_step=sink_unknowns[sink_name].max_abs_step,
-                    max_rel_step=sink_unknowns[sink_name].max_rel_step,
-                    upper_bound=sink_unknowns[sink_name].upper_bound,
-                    lower_bound=sink_unknowns[sink_name].lower_bound,
-                )
-            else:
-                self.add_unknown(unknown)
-            rhs = f"{IterativeConnector.RESULT}.{from_}"
-            self.add_equation(
-                f"{unknown} == {rhs}",
-                name=f"iterative_{to_}",
-                reference=1.,
-            )
-        self._locked = True
-
-    def get_connection(self) -> Tuple[BasePort, BasePort, Dict[str, str]]:
-        """Tuple[BasePort, BasePort, Dict[str, str]] : Returns the connection elements.
-        
-        The first element is the sink port, the second the source port and the latest is the 
-        variable mapping.
-        """
-        return (self._sink, self._source, self._mapping)
-
-    def set_dirty(self, direction: PortType) -> None:
-        """Set to dirty ports of a certain direction.
-
-        Parameters
-        ----------
-        direction : PortType
-            Direction to set
-        """
-        # TODO Do not propagate to parent otherwise this will kill the benefit
-        # of clean-dirty => one more reason to move it at port level
-        self._is_clean[direction] = False

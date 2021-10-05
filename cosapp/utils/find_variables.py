@@ -76,7 +76,7 @@ def find_variables(
     .. note::
         Inward and outward variables will appear without the prefix `inwards.` or `outwards.`.
     """
-    from cosapp.systems.system import System, IterativeConnector  # Local import to avoid recursion
+    from cosapp.systems.system import System  # Local import to avoid recursion
     check_arg(watched_object, 'watched_object', System)
 
     if not (inputs or outputs):
@@ -112,14 +112,12 @@ def find_variables(
     names = set()
 
     for name, ref in watched_object.name2variable.items():
-        # Save variable for non virtual port and skip IterativeConnector as open_loops append before
-        # Driver._precompute
+        # Save variable for non virtual port
         # Suppress duplicates INWARDS and OUTWARDS
         port = ref.mapping
         valid = (
             is_valid(port)
             and name == natural_varname(name)
-            and not isinstance(port.owner, IterativeConnector)
         )
         if not valid:
             continue  # skip `name`
