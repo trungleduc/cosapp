@@ -59,7 +59,7 @@ class Influence(AbstractSetOfCases):
             # desc="Variable names varying between cases"        
         self.response_vars = ["*"]  # type: List[str]
             # desc="Variable names to monitor between cases"
-        self.influence_matrix = None  # type: Optional[numpy.ndarray]
+        self.influence_matrix = None  # type: pandas.DataFrame
             # desc="Influence matrix d/d output(d/d input)"
         self.delta = 1e-3  # type: float
             # desc="Relative influence to apply for influence matrix computation"
@@ -214,7 +214,7 @@ class Influence(AbstractSetOfCases):
             warnings.simplefilter("ignore")
             deltas = pandas.DataFrame(
                 results.values / self.reference.values - 1.0,
-                columns=self.reference.columns,
+                columns = self.reference.columns,
             )
 
         # TODO Improve coverage of no influence cases and absolute vs relative influence or mix of influences
@@ -230,9 +230,11 @@ class Influence(AbstractSetOfCases):
         # find inputs modified during the children drivers exec (connected port, variable iterated, etc.)
         coeff = numpy.where(abs(inputs_diag - self.delta) < 1e-10, 1. / inputs_diag, 0.)
 
-        self.influence_matrix = pandas.DataFrame(outputs.values * coeff,
-                                                columns=outputs.columns,
-                                                index=inputs.columns).fillna(0)
+        self.influence_matrix = pandas.DataFrame(
+            outputs.values * coeff,
+            columns = outputs.columns,
+            index = inputs.columns,
+        ).fillna(0)
 
     def show_influence_matrix(self,
         cleaned: bool = True,

@@ -38,6 +38,8 @@ def get_free_inputs(system: System) -> Dict[str, VariableReference]:
             })
 
         for connector in system.incoming_connectors():
+            if not connector.is_active:
+                continue
             sink, source = connector.sink, connector.source
             if sink.is_output:
                 continue

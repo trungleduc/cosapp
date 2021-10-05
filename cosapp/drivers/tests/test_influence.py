@@ -216,7 +216,7 @@ def test_integration_Influence_nonlinear():
     influence.add_driver(design)
 
     snl.run_drivers()
-    assert influence.influence_matrix.shape == (12, 7)
+    assert influence.influence_matrix.shape == (11, 7)
 
 
 def test_integration_Influence_zerodivisionerror():

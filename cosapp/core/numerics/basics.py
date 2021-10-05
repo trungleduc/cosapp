@@ -558,7 +558,7 @@ class MathematicalProblem:
         if equations:
             transfer(self._residues, other.residues, residue_name)
 
-            connectors = self.context.incoming_connectors()
+            connectors = list(self.context.incoming_connectors())
             name2variable = other.context.name2variable
 
             for deferred in other._targets.values():

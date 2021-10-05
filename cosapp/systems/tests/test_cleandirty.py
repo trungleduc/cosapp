@@ -175,72 +175,51 @@ class UnitTestCleanDirty(TestCase):
 
     def test_iterative_system(self):
         s = UnitTestCleanDirty.IterativeSystem('s')
-        s.call_clean_run = mock.MagicMock(name='call_clean_run')
-        s.open_loops()
         s1 = s.sub1
         s2 = s.sub2
+        s.open_loops()
+        s.call_clean_run = mock.MagicMock(name='call_clean_run')
         s1.call_clean_run = mock.MagicMock(name='call_clean_run')
         s2.call_clean_run = mock.MagicMock(name='call_clean_run')
-        s.sub2_out_to_sub1_in_.call_clean_run = mock.MagicMock(name='call_clean_run')
 
         clean_status = lambda direction=None: (
             s.is_clean(direction),
             s1.is_clean(direction),
             s2.is_clean(direction),
-            s.sub2_out_to_sub1_in_.is_clean(direction),
         )
 
-        assert clean_status(PortType.IN) == (False, False, False, False)
+        assert clean_status(PortType.IN) == (False, False, False)
+        assert clean_status(PortType.OUT) == (False, False, False)
 
         s.run_once()
-        assert clean_status(PortType.IN) == (True, True, True, True)
+        assert clean_status(PortType.IN) == (True, True, True)
+        assert clean_status(PortType.OUT) == (False, False, False)
 
-        s.sub1_in_.W = 100.
-        assert clean_status(PortType.IN) == (False, True, True, True)
-
-        # Fake action run before running the iterative connector
-        for c in filter(lambda c: "_to_sub2_out_to_sub1_in__" in c, s.connectors):
-            s.connectors[c].transfer()
-        assert clean_status(PortType.IN) == (False, True, True, False)
-
-        residue = s.sub2_out_to_sub1_in_.residues['iterative_W']
-        assert Residue.evaluate_residue(1., 0.95**2, residue.reference) == pytest.approx(residue.value, abs=1e-5)
+        for connector in s.all_connectors():
+            connector.transfer()
+        # s1 remains clean, since loops have been open
+        assert clean_status(PortType.IN) == (False, True, False)
 
         s.run_once()
-        residue = s.sub2_out_to_sub1_in_.residues['iterative_W']
-        assert s.sub2_out_to_sub1_in_.guess.W == 100
-        assert Residue.evaluate_residue(100., 100 * 0.95**2, residue.reference) == pytest.approx(residue.value, abs=1e-5)
-
-        s.sub1_in_.W = 10.
-        s.run_once()
-        residue = s.sub2_out_to_sub1_in_.residues['iterative_W']
-        assert s.sub2_out_to_sub1_in_.guess.W == 10
-        assert Residue.evaluate_residue(10., 10 * 0.95 * 0.95, residue.reference) == pytest.approx(residue.value, abs=1e-5)
-        assert clean_status(PortType.IN) == (True,) * 4
+        assert clean_status(PortType.IN) == (True,) * 3
+        assert clean_status(PortType.OUT) == (False, True, False)
 
         s.sub2.sloss = 0.9
         s.run_once()
-        residue = s.sub2_out_to_sub1_in_.residues['iterative_W']
-        assert s.sub2_out_to_sub1_in_.guess.W == 10
-        assert Residue.evaluate_residue(10., 10 * 0.9 * 0.95, residue.reference) == pytest.approx(residue.value, abs=1e-5)
-        assert clean_status(PortType.IN) == (True,) * 4
-        assert clean_status(PortType.OUT) == (False,) * 4
+        assert clean_status(PortType.IN) == (True,) * 3
+        assert clean_status(PortType.OUT) == (False, True, False)
 
         s1.run_once()
-        assert clean_status(PortType.IN) == (True,) * 4
-        assert clean_status(PortType.OUT) == (False, True, False, False)
+        assert clean_status(PortType.IN) == (True,) * 3
+        assert clean_status(PortType.OUT) == (False, True, False)
 
         s2.run_once()
-        assert clean_status(PortType.IN) == (True,) * 4
-        assert clean_status(PortType.OUT) == (False, True, True, False)
-
-        s.sub2_out_to_sub1_in_.run_once()
-        assert clean_status(PortType.IN) == (True,) * 4
-        assert clean_status(PortType.OUT) == (False, True, True, True)
+        assert clean_status(PortType.IN) == (True,) * 3
+        assert clean_status(PortType.OUT) == (False, True, True)
 
         s.run_once()
-        assert clean_status(PortType.IN) == (True,) * 4
-        assert clean_status(PortType.OUT) == (True,) * 4
+        assert clean_status(PortType.IN) == (True,) * 3
+        assert clean_status(PortType.OUT) == (True,) * 3
 
 
 class IntegrationTestCleanDirty(TestCase):

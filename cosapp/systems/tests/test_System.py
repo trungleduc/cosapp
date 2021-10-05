@@ -20,7 +20,7 @@ from cosapp.ports.units import UnitError
 from cosapp.drivers import Driver, RunOnce, NonLinearSolver
 from cosapp.systems import system as system_module
 from cosapp.systems import System
-from cosapp.systems.system import VariableReference, IterativeConnector
+from cosapp.systems.system import VariableReference
 
 from cosapp.tests.library.systems import Multiply1
 from cosapp.tests.library.systems.vectors import Strait1dLine
@@ -1093,13 +1093,23 @@ def test_System_pop_name2variable():
         assert abs_key not in s.name2variable
 
 
-def test_System_open_loops():
-    class S(System):
+def test_System_loops_1():
+    """Test mathematical problem created by `open_loops`,
+    and check that `close_loops` restores the initial configuration.
+
+    Case: system with 2 sub-systems, each with ports and orphan vars.
+    """
+    class XvPort(Port):
+        def setup(self):
+            self.add_variable('x', 1.0)
+            self.add_variable('v', np.ones(2))
+
+    class SomeSystem(System):
         def setup(self):
             self.add_inward("a_in")
             self.add_inward("b_in")
-            self.add_input(XPort, "entry")
-            self.add_output(XPort, "exit")
+            self.add_input(XvPort, "entry")
+            self.add_output(XvPort, "exit")
             self.add_outward("a_out")
             self.add_outward("b_out")
 
@@ -1108,290 +1118,248 @@ def test_System_open_loops():
             self.a_out = self.entry.x * self.a_in
             self.b_out = self.b_in / self.a_in
 
-    # Breaking link between Port
-    s = System("group")
-    a = s.add_child(S("a"))
-    b = s.add_child(S("b"))
+    def make_case():
+        s = System("top")
+        a = s.add_child(SomeSystem("a"))
+        b = s.add_child(SomeSystem("b"))
+        return s, a, b
+
+    # Case 1
+    s, a, b = make_case()
     s.connect(b.exit, a.entry)
     s.connect(a.exit, b.entry)
+    # Test initial config
+    connectors = s.connectors
+    assert set(connectors) == {
+        'a_exit_to_b_entry',
+        'b_exit_to_a_entry',
+    }
+    # Sanity check between `all_connectors()` and `connectors.values()`
+    assert list(s.all_connectors()) == list(connectors.values())
+    assert all(connector.is_active for connector in s.all_connectors())
+    assert s.get_unsolved_problem().shape == (0, 0)
 
     s.open_loops()
-    child = s.children["b_exit_to_a_entry"]
-    assert isinstance(child, IterativeConnector)
-
-    assert_keys(child.inputs, System.INWARDS,
-        IterativeConnector.GUESS, IterativeConnector.RESULT)
-    assert all(isinstance(obj, BasePort) for obj in child.inputs.values())
-    assert len(child.inputs[System.INWARDS]) == 0
-    c_input = child.inputs[IterativeConnector.GUESS]
-    assert isinstance(c_input, Port)
-    assert len(c_input) == len(a.entry)
-    c_input = child.inputs[IterativeConnector.RESULT]
-    assert isinstance(c_input, Port)
-    assert len(c_input) == len(b.exit)
-
+    problem = s.get_unsolved_problem()
+    assert problem.shape == (3, 3)
+    assert set(problem.unknowns) == {
+        'a.entry.x',
+        'a.entry.v',
+    }
+    assert set(problem.residues) == {
+        'a.entry.x == b.exit.x',
+        'a.entry.v == b.exit.v',
+    }
     connectors = s.connectors
-    connector = connectors["group_a_entry_to_b_exit_to_a_entry_guess"]
-    assert connector.source is s.inputs["a_entry"]
-    connector = connectors["b_exit_to_b_exit_to_a_entry_result"]
-    assert connector.source is b.outputs["exit"]
-    connector = connectors["group_a_entry_to_a_entry"]
-    assert connector.sink is a.inputs["entry"]
+    assert set(connectors) == {
+        'a_exit_to_b_entry',
+        'b_exit_to_a_entry',
+    }
+    assert connectors["a_exit_to_b_entry"].is_active
+    assert not connectors["b_exit_to_a_entry"].is_active
+    # Check that `close_loops` restores all connections
+    s.close_loops()
+    assert connectors["a_exit_to_b_entry"].is_active
+    assert connectors["b_exit_to_a_entry"].is_active
+    assert all(connector.is_active for connector in s.all_connectors())
+    assert s.get_unsolved_problem().shape == (0, 0)
 
-    # Breaking link between ExtensiblePort
-    s = System("group")
-    a = s.add_child(S("a"))
-    b = s.add_child(S("b"))
+    # Case 2 - same as #1 with different exec order
+    s, a, b = make_case()
+    s.connect(b.exit, a.entry)
+    s.connect(a.exit, b.entry)
+    s.exec_order = ['b', 'a']
+
+    problem = s.get_unsolved_problem()
+    assert problem.shape == (0, 0)
+
+    s.open_loops()
+    problem = s.get_unsolved_problem()
+    assert problem.shape == (3, 3)
+    assert set(problem.unknowns) == {
+        'b.entry.x',
+        'b.entry.v',
+    }
+    assert set(problem.residues) == {
+        'b.entry.x == a.exit.x',
+        'b.entry.v == a.exit.v',
+    }
+    connectors = s.connectors
+    assert set(connectors) == {
+        'a_exit_to_b_entry',
+        'b_exit_to_a_entry',
+    }
+    assert not connectors["a_exit_to_b_entry"].is_active
+    assert connectors["b_exit_to_a_entry"].is_active
+    # Check that `close_loops` restores all connections
+    s.close_loops()
+    assert all(connector.is_active for connector in s.all_connectors())
+    assert s.get_unsolved_problem().shape == (0, 0)
+
+    # Breaking link between ExtensiblePort (1)
+    s, a, b = make_case()
     s.connect(a.inwards, b.outwards, {"a_in": "a_out"})
     s.connect(a.exit, b.entry)
 
     s.open_loops()
-    child = s.children["b_outwards_to_a_inwards"]
-    assert isinstance(child, IterativeConnector)
-    assert_keys(child.inputs, System.INWARDS,
-        IterativeConnector.GUESS, IterativeConnector.RESULT)
-    assert all(isinstance(obj, BasePort) for obj in child.inputs.values())
-    assert len(child.inputs[System.INWARDS]) == 0
-    c_input = child.inputs[IterativeConnector.GUESS]
-    assert len(c_input) == 1
-    assert "a_in" in c_input
-    c_input = child.inputs[IterativeConnector.RESULT]
-    assert len(c_input) == 1
-    assert "a_out" in c_input
-
+    problem = s.get_unsolved_problem()
+    assert problem.shape == (1, 1)
+    assert set(problem.unknowns) == {
+        'a.inwards.a_in',
+    }
+    assert set(problem.residues) == {
+        'a.inwards.a_in == b.outwards.a_out',
+    }
     connectors = s.connectors
-    connector = connectors["group_inwards_to_b_outwards_to_a_inwards_guess"]
-    assert connector.source is s.inputs["inwards"]
-    connector = connectors["b_outwards_to_b_outwards_to_a_inwards_result"]
-    assert connector.source is b.outputs["outwards"]
-    connector = connectors["group_inwards_to_a_inwards"]
-    assert connector.sink is a.inputs["inwards"]
-    assert "a_a_in" in s.inputs[System.INWARDS]
-
-    # Breaking a link between a Port and an ExtensiblePort
-    s = System("group")
-    a = s.add_child(S("a"))
-    b = s.add_child(S("b"))
-    s.connect(a.inwards, b.exit, {"a_in": "x"})
-    s.connect(a.exit, b.entry)
-
-    s.open_loops()
-    child = s.children["b_exit_to_a_inwards"]
-    assert isinstance(child, IterativeConnector)
-    assert_keys(child.inputs, System.INWARDS,
-        IterativeConnector.GUESS, IterativeConnector.RESULT)
-    assert all(isinstance(obj, BasePort) for obj in child.inputs.values())
-    assert len(child[System.INWARDS]) == 0
-    assert isinstance(child[IterativeConnector.RESULT], Port)
-    c_input = child.inputs[IterativeConnector.GUESS]
-    assert len(c_input) == 1
-    assert "a_in" in c_input
-    c_input = child.inputs[IterativeConnector.RESULT]
-    assert len(c_input) == len(b.exit)
-
-    connectors = s.connectors
-    connector = connectors["group_inwards_to_b_exit_to_a_inwards_guess"]
-    assert connector.source is s.inputs["inwards"]
-    connector = connectors["b_exit_to_b_exit_to_a_inwards_result"]
-    assert connector.source is b.outputs["exit"]
-    connector = connectors["group_inwards_to_a_inwards"]
-    assert connector.sink is a.inputs["inwards"]
-    assert "a_a_in" in s.inputs[System.INWARDS]
-
-    # Test forcing transfer
-    s = System("group")
-    a = s.add_child(S("a"))
-    b = s.add_child(S("b"))
-    s.connect(b.exit, a.entry)
-    s.connect(a.exit, b.entry)
-    b.exit.x = 123
-    a.entry.x = 123
-    s.open_loops()
-    assert a.entry.x == b.exit.x == 123
-
-    s = System("group")
-    a = s.add_child(S("a"))
-    b = s.add_child(S("b"))
-    s.connect(b.exit, a.entry)
-    s.connect(a.exit, b.entry)
-    b.exit.x = 123
-    a.entry.x = 1
-    s.open_loops()
-    assert a.entry.x == b.exit.x == 123
-
-    # Test system depending on two others not already executed
-    class SimpleSystem(System):
-        def setup(self):
-            self.add_inward("x")
-            self.add_inward("y")
-            self.add_outward("z")
-
-    top = System("top")
-    top.add_child(SimpleSystem("s1"))
-    top.add_child(SimpleSystem("s2"))
-    top.add_child(SimpleSystem("s3"))
-    top.connect(top.s1.inwards, top.s2.outwards, {"x": "z"})
-    top.connect(top.s1.inwards, top.s3.outwards, {"y": "z"})
-    top.open_loops()
-
-    assert "s2_outwards_to_s1_inwards" in top.children
-    assert "s3_outwards_to_s1_inwards" in top.children
-    assert "s1_x" in top.inputs[System.INWARDS]
-    assert "s1_y" in top.inputs[System.INWARDS]
-    connectors = top.connectors
-    assert "top_inwards_to_s1_inwards" in connectors
-    assert connectors["top_inwards_to_s1_inwards"].sink is top.s1.inputs[System.INWARDS]
-    assert connectors["top_inwards_to_s1_inwards"].source is top.inputs[System.INWARDS]
-    assert connectors["top_inwards_to_s1_inwards"].mapping == {"x": "s1_x", "y": "s1_y"}
-
-    # Test system depending on two others not already executed
-    class SimpleSystem(System):
-        def setup(self):
-            self.add_inward("x")
-            self.add_inward("y")
-            self.add_outward("z")
-
-    top = System("top")
-    top.add_child(SimpleSystem("s1"))
-    top.add_child(SimpleSystem("s2"))
-    top.add_child(SimpleSystem("s3"))
-    top.connect(top.s1.inwards, top.s2.outwards, {"x": "z"})
-    top.connect(top.s1.inwards, top.s3.outwards, {"y": "z"})
-    top.open_loops()
-
-    assert "s2_outwards_to_s1_inwards" in top.children
-    assert "s3_outwards_to_s1_inwards" in top.children
-    assert "s1_x" in top.inputs[System.INWARDS]
-    assert "s1_y" in top.inputs[System.INWARDS]
-    connectors = top.connectors
-    assert "top_inwards_to_s1_inwards" in connectors
-    assert connectors["top_inwards_to_s1_inwards"].sink is top.s1.inputs[System.INWARDS]
-    assert connectors["top_inwards_to_s1_inwards"].source is top.inputs[System.INWARDS]
-    assert connectors["top_inwards_to_s1_inwards"].mapping == {"x": "s1_x", "y": "s1_y"}
-
-    # Test system depending on two others not already executed
-    top = System("top")
-    top.add_child(SimpleSystem("s1"))
-    top.add_child(SimpleSystem("s2"))
-    top.add_child(SimpleSystem("s3"))
-    top.connect(top.s1.inwards, top.s2.outwards, {"x": "z"})
-    top.connect(top.s1.inwards, top.s3.outwards, {"y": "z"})
-    top.open_loops()
-
-    assert "s2_outwards_to_s1_inwards" in top.children
-    assert "s3_outwards_to_s1_inwards" in top.children
-    assert "s1_x" in top.inputs[System.INWARDS]
-    assert "s1_y" in top.inputs[System.INWARDS]
-    connectors = top.connectors
-    assert "top_inwards_to_s1_inwards" in connectors
-    assert connectors["top_inwards_to_s1_inwards"].sink is top.s1.inputs[System.INWARDS]
-    assert connectors["top_inwards_to_s1_inwards"].source is top.inputs[System.INWARDS]
-    assert connectors["top_inwards_to_s1_inwards"].mapping == {"x": "s1_x", "y": "s1_y"}
-
-
-def test_System_close_loops():
-    class S(System):
-        def setup(self):
-            self.add_inward("a_in")
-            self.add_inward("b_in")
-            self.add_input(XPort, "entry")
-            self.add_output(XPort, "exit")
-            self.add_outward("a_out")
-            self.add_outward("b_out")
-
-        def compute(self):
-            self.exit.x = self.entry.x * self.a_in + self.b_in
-            self.a_out = self.entry.x * self.a_in
-            self.b_out = self.b_in / self.a_in
-
-    # Breaking link between Port
-    s = System("group")
-    a = s.add_child(S("a"))
-    b = s.add_child(S("b"))
-    s.connect(b.exit, a.entry)
-    s.connect(a.exit, b.entry)
-
-    s.open_loops()
+    assert set(connectors) == {
+        'a_exit_to_b_entry',
+        'b_outwards_to_a_inwards',
+    }
+    assert connectors["a_exit_to_b_entry"].is_active
+    assert not connectors["b_outwards_to_a_inwards"].is_active
+    # Check that `close_loops` restores all connections
     s.close_loops()
-    # Connection is restored
-    connector = s.connectors["b_exit_to_a_entry"]
-    assert connector.sink is s.a.entry
-    assert connector.source is s.b.exit
+    assert all(connector.is_active for connector in s.all_connectors())
+    assert s.get_unsolved_problem().shape == (0, 0)
 
-    # Parent has no more pulled port
-    assert "a_entry" not in s.inputs
-    # Parent has no trace in name2variable
-    for key in ("a_entry", "a_entry.x"):
-        assert key not in s.name2variable
-
-    # Breaking link between ExtensiblePort
-    s = System("group")
-    a = s.add_child(S("a"))
-    b = s.add_child(S("b"))
+    # Breaking link between ExtensiblePort (2)
+    s, a, b = make_case()
     s.connect(a.inwards, b.outwards, {"a_in": "a_out"})
-    s.connect(a.exit, b.entry)
+    s.connect(a.entry, b.exit)
 
     s.open_loops()
+    problem = s.get_unsolved_problem()
+    assert problem.shape == (4, 4)
+    assert set(problem.unknowns) == {
+        'a.entry.x',
+        'a.entry.v',
+        'a.inwards.a_in',
+    }
+    assert set(problem.residues) == {
+        'a.entry.x == b.exit.x',
+        'a.entry.v == b.exit.v',
+        'a.inwards.a_in == b.outwards.a_out',
+    }
+    connectors = s.connectors
+    assert set(connectors) == {
+        'b_exit_to_a_entry',
+        'b_outwards_to_a_inwards',
+    }
+    assert not connectors["b_outwards_to_a_inwards"].is_active
+    assert not connectors["b_exit_to_a_entry"].is_active
+    # Check that `close_loops` restores all connections
     s.close_loops()
+    assert all(connector.is_active for connector in s.all_connectors())
+    assert s.get_unsolved_problem().shape == (0, 0)
 
-    connector = s.connectors["b_outwards_to_a_inwards"]
-    assert connector.sink is s.a.inwards
-    assert connector.source is s.b.outwards
-    assert connector.mapping == {"a_in": "a_out"}
 
-    for key in ("a_a_in", "inwards.a_a_in"):
-        assert key not in s.name2variable
-    assert "inwards" in s.name2variable
+def test_System_loops_2():
+    """Test mathematical problem created by `open_loops`,
+    and check that `close_loops` restores the initial configuration.
 
-    # Breaking a link between a Port and an ExtensiblePort
-    s = System("group")
-    a = s.add_child(S("a"))
-    b = s.add_child(S("b"))
-    s.connect(a.inwards, b.exit, {"a_in": "x"})
-    s.connect(a.exit, b.entry)
-
-    s.open_loops()
-    s.close_loops()
-
-    connector = s.connectors["b_exit_to_a_inwards"]
-    assert connector.sink is s.a.inwards
-    assert connector.source is s.b.exit
-    assert connector.mapping == {"a_in": "x"}
-
-    for key in ("a_a_in", "inwards.a_a_in"):
-        assert key not in s.name2variable
-    assert "inwards" in s.name2variable
-
-    # Breaking a link between two Ports with mapping
-    class YPort(Port):
+    Case: system with 3 simple sub-systems.
+    """
+    # Test system depending on two others not already executed
+    class Surface(System):
+        """Interface for z = f(x, y)"""
         def setup(self):
-            self.add_variable("y")
+            self.add_inward("x", 1.0)
+            self.add_inward("y", 0.5)
+            self.add_outward("z", 0.0)
 
-    class T(System):
-        def setup(self):
-            self.add_input(YPort, "entry")
-            self.add_output(XPort, "exit")
+    def make_case():
+        top = System("top")
+        top.add_child(Surface("s1"))
+        top.add_child(Surface("s2"))
+        top.add_child(Surface("s3"))
+        return top
 
-    s = System("group")
-    a = s.add_child(T("a"))
-    b = s.add_child(S("b"))
-    s.connect(b.exit, a.entry, {"x": "y"})
-    s.connect(a.exit, b.entry)
+    # Test system depending on two others not already executed
+    top = make_case()
+    assert list(top.exec_order) == ['s1', 's2', 's3']
+    top.connect(top.s2.outwards, top.s1.inwards, {"z": "x"})
+    top.connect(top.s3.outwards, top.s1.inwards, {"z": "y"})
 
-    s.open_loops()
-    s.close_loops()
+    top.open_loops()
+    problem = top.get_unsolved_problem()
+    assert problem.shape == (2, 2)
+    assert set(problem.unknowns) == {
+        's1.inwards.x',
+        's1.inwards.y',
+    }
+    assert set(problem.residues) == {
+        's1.inwards.x == s2.outwards.z',
+        's1.inwards.y == s3.outwards.z',
+    }
+    connectors = top.connectors
+    assert set(connectors) == {
+        's2_outwards_to_s1_inwards',
+        's3_outwards_to_s1_inwards',
+    }
+    assert not connectors["s2_outwards_to_s1_inwards"].is_active
+    assert not connectors["s2_outwards_to_s1_inwards"].is_active
+    # Check that `close_loops` restores all connections
+    top.close_loops()
+    assert all(connector.is_active for connector in top.all_connectors())
+    assert top.get_unsolved_problem().shape == (0, 0)
 
-    # Connection is restored
-    connector = s.connectors["b_exit_to_a_entry"]
-    assert connector.sink is s.a.entry
-    assert connector.source is s.b.exit
-    assert connector.mapping == {"y": "x"}
+    # Backward dependencies: information flow opposite to exec order
+    # s1 <-- s2 <-- s3
+    top = make_case()
+    top.connect(top.s2.outwards, top.s1.inwards, {"z": "x"})
+    top.connect(top.s3.outwards, top.s2.inwards, {"z": "y"})
+    top.open_loops()
+    problem = top.get_unsolved_problem()
+    assert problem.shape == (2, 2)
+    assert set(problem.unknowns) == {
+        's1.inwards.x',
+        's2.inwards.y',
+    }
+    assert set(problem.residues) == {
+        's1.inwards.x == s2.outwards.z',
+        's2.inwards.y == s3.outwards.z',
+    }
+    connectors = top.connectors
+    assert set(connectors) == {
+        's2_outwards_to_s1_inwards',
+        's3_outwards_to_s2_inwards',
+    }
+    assert not connectors["s2_outwards_to_s1_inwards"].is_active
+    assert not connectors["s3_outwards_to_s2_inwards"].is_active
+    # Check that `close_loops` restores all connections
+    top.close_loops()
+    assert all(connector.is_active for connector in top.all_connectors())
+    assert top.get_unsolved_problem().shape == (0, 0)
 
-    # Parent has no more pulled port
-    assert "a_entry" not in s.inputs
-    # Parent has no trace in name2variable
-    for key in ("a_entry", "a_entry.y"):
-        assert key not in s.name2variable
+    # Same as previous, with s1 --> s3 connector
+    top = make_case()
+    top.connect(top.s1.outwards, top.s3.inwards, {"z": "x"})
+    top.connect(top.s2.outwards, top.s1.inwards, {"z": "x"})
+    top.connect(top.s3.outwards, top.s2.inwards, {"z": "y"})
+    top.open_loops()
+    problem = top.get_unsolved_problem()
+    assert problem.shape == (2, 2)
+    assert set(problem.unknowns) == {
+        's1.inwards.x',
+        's2.inwards.y',
+    }
+    assert set(problem.residues) == {
+        's1.inwards.x == s2.outwards.z',
+        's2.inwards.y == s3.outwards.z',
+    }
+    connectors = top.connectors
+    assert set(connectors) == {
+        's1_outwards_to_s3_inwards',
+        's2_outwards_to_s1_inwards',
+        's3_outwards_to_s2_inwards',
+    }
+    assert connectors["s1_outwards_to_s3_inwards"].is_active
+    assert not connectors["s2_outwards_to_s1_inwards"].is_active
+    assert not connectors["s3_outwards_to_s2_inwards"].is_active
+    # Check that `close_loops` restores all connections
+    top.close_loops()
+    assert all(connector.is_active for connector in top.all_connectors())
+    assert top.get_unsolved_problem().shape == (0, 0)
 
 
 def test_System_is_input_var(DummyFactory):
@@ -1449,15 +1417,25 @@ def test_System_clean_partial_inwards():
     top.exec_order = ['sink', 'source']
 
     top.open_loops()
-    assert 'sink_loop' in top
-    assert 'inwards.sink_loop' in top
-    assert 'user' in top
-    assert 'inwards.user' in top
+    problem = top.get_unsolved_problem()
+    assert problem.shape == (1, 1)
+    assert set(problem.unknowns) == {
+        'sink.inwards.loop',
+    }
+    assert set(problem.residues) == {
+        'sink.inwards.loop == source.outwards.loop',
+    }
+    connectors = top.connectors
+    assert set(connectors) == {
+        "top_inwards_to_sink_inwards",  # pulling
+        "source_outwards_to_sink_inwards",
+    }
+    assert connectors["top_inwards_to_sink_inwards"].is_active
+    assert not connectors["source_outwards_to_sink_inwards"].is_active
     top.close_loops()
-    assert 'sink_loop' not in top
-    assert 'inwards.sink_loop' not in top
-    assert 'user' in top
-    assert 'inwards.user' in top
+    assert all(connector.is_active for connector in top.all_connectors())
+    assert top.get_unsolved_problem().shape == (0, 0)
+
 
 def test_System_check():
     T = TopSystem("test")

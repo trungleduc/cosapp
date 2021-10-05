@@ -83,6 +83,7 @@ class Connector:
         self.__check_port(sink, 'sink')
         self.__check_port(source, 'source')
         self._name = name  # type: str
+        self.activate()
 
         if source is sink:
             raise ConnectorError("Source and sink cannot be the same object.")
@@ -139,6 +140,16 @@ class Connector:
     def sink(self, port: BasePort) -> None:
         self._sink = self.__get_port(port, sink=True, check=True)
         self.update_unit_conversion()
+
+    @property
+    def is_active(self) -> bool:
+        return self.__active
+
+    def activate(self) -> None:
+        self.__active = True
+
+    def deactivate(self) -> None:
+        self.__active = False
 
     def __get_port(self, port: BasePort, sink: bool, check=True) -> "weakref.ref[BasePort]":
         """Returns a weakref to `port`, after compatibility check with internal mapping."""
@@ -298,6 +309,8 @@ class Connector:
 
     def transfer(self) -> None:
         """Transfer values from `source` to `sink`."""
+        if not self.__active:
+            return
         # TODO improve efficiency
         default_transfer = copy.copy
         
@@ -326,41 +339,43 @@ class Connector:
                 except TypeError:
                     setattr(sink, key, default_transfer(target))
 
-    def to_dict(self) -> Dict[str, Union[Tuple[str, str], Tuple[str, str, Dict[str, str]]]]:
-        """Convert connector to a single-key dictionary.
+    def info(self) -> Union[Tuple[str, str], Tuple[str, str, Dict[str, str]]]:
+        """Returns connector information in a tuple.
 
-        The key is the connector name; the associated value
-        depends on the variable name mapping.
+        If the name mapping is complete, with identical names,
+        it is omitted, and the output tuple is formatted as:
+            (target_name, source_name)
 
-        If the mapping is complete, with identical names,
-        the name mapping is omitted, and the output
-        dictionary is formatted as:
-            {name: (target_name, source_name)}
-
-        Otherwise, it is formatted as:
-            {name: (target_name, source_name, name_mapping)}
+        Otherwise, output is formatted as:
+            (target_name, source_name, name_mapping)
 
         Returns
         -------
-        dict
-            Dictionary representing this connector
+        tuple
+            Tuple representing connector
         """
         # If the mapping is full and with the same nomenclature
+        target, origin = self.port_names()
         same_nomenclature = False
         if len(self._mapping) == len(self.source) == len(self.sink):
-            same_nomenclature = True
-            for k, v in self._mapping.items():
-                if k != v:
-                    same_nomenclature = False
-                    break
-
-        target, origin = self.port_names()
+            same_nomenclature = self.preserves_names()
         if same_nomenclature:
             info = (target, origin)
         else:
             info = (target, origin, self._mapping.copy())
+        return info
 
-        return {self.name: info}
+    def to_dict(self) -> Dict[str, Union[Tuple[str, str], Tuple[str, str, Dict[str, str]]]]:
+        """Converts connector into a single-key dictionary.
+        The key is the connector name; associated value
+        is the tuple returned by method `info()`.
+
+        Returns
+        -------
+        dict
+            Dictionary {name: info_tuple} representing connector
+        """
+        return {self.name: self.info()}
 
     def port_names(self) -> Tuple[str, str]:
         """Returns source and sink contextual names as a str tuple.
