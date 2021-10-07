@@ -6,6 +6,7 @@
 
 * Possibility to define unknowns and equations at solver level (MR [#65](https://gitlab.com/cosapp/cosapp/-/merge_requests/65)).
 Minor API evolution facilitating the definition of nonlinear problems and of multi-point design problems.
+
 ```python
 engine = Turbofan('engine')
 solver = engine.add_driver(NonLinearSolver('solver'))
@@ -23,6 +24,7 @@ cruise.add_equation('Mach == 0.8')
 ```
 
 * New recursive iterator `tree()` for systems and drivers, yielding all elements in a composite tree (MR [#68](https://gitlab.com/cosapp/cosapp/-/merge_requests/68)).
+
 ```python
 head = CompositeSystem('head')
 
@@ -31,6 +33,7 @@ top_to_bottom = [s.name for s in head.tree(downwards=True)]
 ```
 
 * Visitor pattern for composite collections of systems, drivers and ports (MR [#68](https://gitlab.com/cosapp/cosapp/-/merge_requests/68)).
+
 ```python
 from cosapp.patterns.visitor import Visitor, send as send_visitor
 
