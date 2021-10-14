@@ -83,7 +83,6 @@ class Connector:
         self.__check_port(sink, 'sink')
         self.__check_port(source, 'source')
         self._name = name  # type: str
-        self.activate()
 
         if source is sink:
             raise ConnectorError("Source and sink cannot be the same object.")
@@ -140,16 +139,6 @@ class Connector:
     def sink(self, port: BasePort) -> None:
         self._sink = self.__get_port(port, sink=True, check=True)
         self.update_unit_conversion()
-
-    @property
-    def is_active(self) -> bool:
-        return self.__active
-
-    def activate(self) -> None:
-        self.__active = True
-
-    def deactivate(self) -> None:
-        self.__active = False
 
     def __get_port(self, port: BasePort, sink: bool, check=True) -> "weakref.ref[BasePort]":
         """Returns a weakref to `port`, after compatibility check with internal mapping."""
@@ -309,8 +298,6 @@ class Connector:
 
     def transfer(self) -> None:
         """Transfer values from `source` to `sink`."""
-        if not self.__active:
-            return
         # TODO improve efficiency
         default_transfer = copy.copy
         

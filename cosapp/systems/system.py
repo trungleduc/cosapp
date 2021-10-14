@@ -44,6 +44,7 @@ from cosapp.utils.json import JSONEncoder, decode_cosapp_dict
 from cosapp.utils.logging import LogFormat, LogLevel, rollover_logfile
 from cosapp.utils.pull_variables import pull_variables
 from cosapp.utils.find_variables import get_attributes
+from cosapp.systems.systemConnector import SystemConnector
 from cosapp.systems.systemSurrogate import SystemSurrogate
 from cosapp.systems.surrogate_models.kriging import FloatKrigingSurrogate
 
@@ -2031,7 +2032,9 @@ class System(Module, TimeObserver):
                     )
                     
             name = f"{source_name}_to_{sink_name}".replace(".", "_")
-            new_connector = Connector(name, sink, source, mapping)
+            new_connector = SystemConnector(
+                Connector(name, sink, source, mapping)
+            )
 
             connectors = self.connectors
             # Check that variables are set only once
