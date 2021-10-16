@@ -1,6 +1,6 @@
 import pytest
 
-from wrapt.wrappers import ObjectProxy as Proxy
+from cosapp.patterns import Proxy
 from cosapp.systems.systemConnector import SystemConnector, Connector
 from cosapp.ports.port import PortType, Port
 from cosapp.systems import System

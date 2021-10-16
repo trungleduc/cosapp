@@ -1,8 +1,8 @@
-from wrapt.wrappers import ObjectProxy
+from cosapp.patterns import Proxy
 from cosapp.core.connectors import Connector
 
 
-class SystemConnector(ObjectProxy):
+class SystemConnector(Proxy):
     """Connector proxy used in `System`
     """
     def __init__(self, connector: Connector):
