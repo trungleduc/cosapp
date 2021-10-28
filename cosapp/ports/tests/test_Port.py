@@ -3,11 +3,10 @@ import pytest
 import numpy as np
 import copy
 
-from cosapp.utils.testing import get_args, assert_keys
 from cosapp.systems import System
-from cosapp.core.numerics.distributions.distribution import Distribution
-from cosapp.core.numerics.distributions.uniform import Uniform
 from cosapp.ports.port import PortType
+from cosapp.utils.distributions import Distribution, Uniform
+from cosapp.utils.testing import get_args, assert_keys
 
 
 @pytest.mark.parametrize("direction", PortType)

@@ -1,6 +1,4 @@
-from typing import Optional
-
-from cosapp.core.numerics.distributions.uniform import Uniform
+from cosapp.utils.distributions import Uniform
 from cosapp.systems import SystemFamily, System
 from cosapp.tests.library.ports import XPort, X2Port, X3Port
 import numpy as np

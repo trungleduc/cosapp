@@ -10,10 +10,10 @@ from types import MappingProxyType
 import numpy
 
 from cosapp.patterns import visitor
-from cosapp.core.numerics.distributions.distribution import Distribution
 from cosapp.ports.enum import PortType, Scope, Validity
 from cosapp.ports.exceptions import ScopeError
 from cosapp.ports.variable import RangeValue, Types, Variable
+from cosapp.utils.distributions import Distribution
 from cosapp.utils.helpers import check_arg
 from cosapp.utils.naming import NameChecker
 
@@ -342,6 +342,10 @@ class BasePort(visitor.Component):
 
     def __len__(self) -> int:
         return len(self._variables)
+
+    def items(self):
+        for name in self._variables:
+            yield (name, getattr(self, name))
 
     @property
     def scope_clearance(self) -> Scope:

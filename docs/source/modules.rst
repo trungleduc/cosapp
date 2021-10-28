@@ -14,11 +14,6 @@ Modules
    cosapp.core.numerics.root
    cosapp.core.numerics.sobol_seq
 
-   cosapp.core.numerics.distributions.distribution
-   cosapp.core.numerics.distributions.normal
-   cosapp.core.numerics.distributions.triangular
-   cosapp.core.numerics.distributions.uniform
-
    cosapp.core.signal.signal
    cosapp.core.signal.slot
 
@@ -73,6 +68,11 @@ Modules
    cosapp.tools.problem_viewer.webview
    cosapp.tools.help
    cosapp.tools.trigger
+
+   cosapp.utils.distributions.distribution
+   cosapp.utils.distributions.normal
+   cosapp.utils.distributions.triangular
+   cosapp.utils.distributions.uniform
 
    cosapp.utils.context
    cosapp.utils.helpers

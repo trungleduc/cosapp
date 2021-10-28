@@ -1,6 +1,6 @@
 import numpy as np
 
-from cosapp.core.numerics import distributions
+from cosapp.utils import distributions
 from cosapp.ports import Port
 
 

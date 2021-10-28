@@ -8,10 +8,10 @@ from collections import OrderedDict
 
 import numpy as np
 
-from cosapp.utils.testing import assert_keys, get_args
+from cosapp.utils.testing import assert_keys, get_args, no_exception
 from cosapp.utils.logging import LogFormat, LogLevel
 from cosapp.core.signal import Slot
-from cosapp.core.connectors import Connector, ConnectorError
+from cosapp.core.connectors import BaseConnector, Connector, ConnectorError
 from cosapp.core.numerics.basics import MathematicalProblem
 from cosapp.core.numerics.boundary import Unknown
 from cosapp.core.numerics.residues import Residue
@@ -2584,6 +2584,45 @@ def test_System_connect_partial():
     assert connector.sink is group.s4.entry
     assert connector.mapping == {"a": "a", "b": "b"}
     assert connector._unit_conversions == {"a": (1, 0), "b": (1, 0)}
+
+
+def test_System_connect_custom():
+    s1 = SubSystem("s1")
+    s2 = SubSystem("s2")
+    top = System("top")
+    top.add_child(s1)
+    top.add_child(s2)
+
+    with pytest.raises(TypeError, match="ctype"):
+        top.connect(s1.out, s2.in_, ctype="Foo")
+
+    class Foo:
+        pass
+
+    with pytest.raises(ValueError, match="ctype"):
+        top.connect(s1.out, s2.in_, ctype=Foo)
+
+    class PlainConnector(BaseConnector):
+        """Simple assignment connector.
+        """
+        def transfer(self) -> None:
+            source, sink = self.source, self.sink
+
+            for target, origin in self.mapping.items():
+                value = getattr(source, origin)
+                setattr(sink, target, value)
+
+    with no_exception():
+        top.connect(s1.out, s2.in_, ctype=PlainConnector)
+
+    assert all(isinstance(c, BaseConnector) for c in top.all_connectors())
+    connectors = top.connectors
+    assert set(connectors) == {"s1_out_to_s2_in_"}
+    connector = connectors["s1_out_to_s2_in_"]
+    assert isinstance(connector, PlainConnector)
+    assert connector.source is top.s1.out
+    assert connector.sink is top.s2.in_
+    assert connector.mapping == {'Pt': 'Pt', 'W': 'W'}
 
 
 def test_System_add_property():

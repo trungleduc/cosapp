@@ -1,10 +1,7 @@
-import math
-
-import numpy as np
-import pandas as pd
 import pytest
+import numpy as np
 
-from cosapp.core.numerics.distributions import Normal, Uniform
+from cosapp.utils.distributions import Normal, Uniform
 from cosapp.drivers import (
     MonteCarlo,
     NonLinearMethods,
@@ -91,15 +88,15 @@ def test_MonteCarlo_add_random_variable():
 
     mc.random_variables.clear()
     mc.add_random_variable(["K1"])
-    assert set(mc.random_variables) == set(("K1",))
+    assert set(mc.random_variables) == {"K1"}
 
     mc.random_variables.clear()
     mc.add_random_variable("K1")
-    assert set(mc.random_variables) == set(("K1",))
+    assert set(mc.random_variables) == {"K1"}
 
     # Don't duplicate input
     mc.add_random_variable("K1")
-    assert set(mc.random_variables) == set(("K1",))
+    assert set(mc.random_variables) == {"K1"}
 
     # Protection
     with pytest.raises(TypeError):
@@ -130,8 +127,8 @@ def test_MonteCarlo_add_random_variable():
     s.p_in.get_details("x").distribution = dummy
     mc = t.add_driver(MonteCarlo("mc"))
     mc.add_random_variable("mult.p_in.x")
-    connector = list(filter(lambda c: c.sink is s.p_in, t.connectors.values()))[0]
-    assert len(mc.random_variables) == 1
+    connector = list(filter(lambda c: c.sink is s.p_in, t.all_connectors()))[0]
+    assert set(mc.random_variables) == {"mult.p_in.x"}
     assert mc.random_variables["mult.p_in.x"] == (
         t.name2variable["mult.p_in.x"],
         connector,
@@ -145,21 +142,22 @@ def test_MonteCarlo_add_response():
 
     mc.add_response("K1")
     assert "K1" in mc.responses
+    assert set(mc.responses) == {"K1"}
 
     mc.add_response("K1")
-    assert "K1" in mc.responses
-    assert len(mc.responses) == 1
+    assert set(mc.responses) == {"K1"}
 
     mc.add_response("K2")
-    assert set(mc.responses) == set(("K1", "K2"))
+    assert set(mc.responses) == {"K1", "K2"}
 
     mc.responses.clear()
     mc.add_response(["K1", "K2"])
-    assert set(mc.responses) == set(("K1", "K2"))
+    assert mc.responses == ["K1", "K2"]
+    assert set(mc.responses) == {"K1", "K2"}
 
     mc.responses.clear()
     mc.add_response({"K1", "K2"})
-    assert set(mc.responses) == set(("K1", "K2"))
+    assert set(mc.responses) == {"K1", "K2"}
 
     mc.responses.clear()
     with pytest.raises(TypeError):
@@ -285,9 +283,9 @@ def test_MonteCarlo_cases_centered():
     mc.draws = 100
     s.run_drivers()
     df = rec.export_data()
-    assert df["K1"].mean() == pytest.approx(s.K1, abs=1.0e-3)
+    assert df["K1"].mean() == pytest.approx(s.K1, abs=1e-3)
     # Trick to get std from scipy object
-    assert df["K1"].std() == pytest.approx(distribution._rv.kwds["scale"], abs=1.0e-2)
+    assert df["K1"].std() == pytest.approx(distribution._rv.kwds["scale"], abs=1e-2)
 
 
 def test_MonteCarlo_cases_uncentered():
@@ -305,11 +303,11 @@ def test_MonteCarlo_cases_uncentered():
     s.run_drivers()
     df = rec.export_data()
     # Trick to get mean and std from scipy object
-    assert df["K1"].mean() == pytest.approx(s.K1 + distribution._rv.kwds["loc"], abs=1.0e-3)
-    assert df["K1"].std() == pytest.approx(distribution._rv.kwds["scale"], abs=1.0e-2)
+    assert df["K1"].mean() == pytest.approx(s.K1 + distribution._rv.kwds["loc"], abs=1e-3)
+    assert df["K1"].std() == pytest.approx(distribution._rv.kwds["scale"], abs=1e-2)
 
 
-@pytest.mark.skip("Incorrect behaviour - remove test altogether")
+# @pytest.mark.skip("Incorrect behaviour - remove test altogether")
 def test_MonteCarlo_run_driver_perturbation_internal():
 
     s = MultiplySystem2("s")
@@ -328,8 +326,8 @@ def test_MonteCarlo_run_driver_perturbation_internal():
     mc.draws = 1000
     s.run_drivers()
     df = rec.export_data()
-    assert df["mult2.p_in.x"].mean() == pytest.approx(initial_value, abs=1.0e-3)
-    assert df["mult2.p_in.x"].std() == pytest.approx(std, abs=2.0e-3)
+    assert df["mult2.p_in.x"].mean() == pytest.approx(initial_value, abs=1e-3)
+    assert df["mult2.p_in.x"].std() == pytest.approx(std, abs=2e-3)
 
 
 def test_MonteCarlo_run_driver_perturbation_input():
@@ -383,10 +381,10 @@ def test_MonteCarlo_run_driver_perturbation_combined():
     assert df["mult1.p_in.x"].mean() == pytest.approx(s.mult1.p_in.x, abs=1e-3)
     assert df["mult1.p_in.x"].std() == pytest.approx(std1, abs=1e-2)
     assert df["mult1.p_out.x"].mean() == pytest.approx(init_mult1_p_out_x, abs=1e-3)
-    assert df["mult1.p_out.x"].std() != pytest.approx(0.0, abs=1e-2)
+    assert df["mult1.p_out.x"].std() != pytest.approx(0, abs=1e-2)
     assert df["mult2.p_in.x"].mean() == pytest.approx(init_mult2_p_in_x, abs=1e-3)
     assert df["mult2.p_in.x"].std() >= std2
-    assert df["mult2.p_out.x"].std() != pytest.approx(0.0, abs=1.0e-2)
+    assert df["mult2.p_out.x"].std() != pytest.approx(0, abs=1e-2)
 
 
 def test_MonteCarlo_multipts_iterative_nonlinear():
