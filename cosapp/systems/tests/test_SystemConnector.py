@@ -1,7 +1,9 @@
 import pytest
+from contextlib import nullcontext as does_not_raise
 
 from cosapp.patterns import Proxy
-from cosapp.systems.systemConnector import SystemConnector, Connector
+from cosapp.core.connectors import BaseConnector, Connector
+from cosapp.systems.systemConnector import SystemConnector
 from cosapp.ports.port import PortType, Port
 from cosapp.systems import System
 
@@ -36,11 +38,22 @@ class UvPort(Port):
         self.owner = fake
 
 
+class PlainConnector(BaseConnector):
+    """Simple assignment connector.
+    """
+    def transfer(self) -> None:
+        source, sink = self.source, self.sink
+
+        for target, origin in self.mapping.items():
+            value = getattr(source, origin)
+            setattr(sink, target, value)
+
+
 @pytest.fixture
 def proxy():
     p1 = AbcdPort('p1', PortType.IN)
     p2 = AbcdPort('p2', PortType.OUT)
-    return SystemConnector.make('p2_to_p1', p1, p2)
+    return SystemConnector(Connector('p2_to_p1', p1, p2))
 
 
 def test_Connector__init__():
@@ -61,14 +74,24 @@ def test_Connector__init__():
         SystemConnector('not a connector')
 
 
-def test_SystemConnector_make():
-    p1 = AbcdPort('p1', PortType.OUT)
-    p2 = AbcdPort('p2', PortType.IN)
-    c = SystemConnector.make('p2_to_p1', p1, p2)
-    assert isinstance(c, Proxy)
-    assert isinstance(c, Connector)
-    assert isinstance(c, SystemConnector)
-    assert c.is_active
+@pytest.mark.parametrize("wrappee, expected", [
+    (Connector, does_not_raise()),
+    (PlainConnector, does_not_raise()),
+    (
+        PlainConnector(
+            'p2_to_p1',
+            AbcdPort('p1', PortType.IN),
+            AbcdPort('p2', PortType.OUT),
+        ),
+        does_not_raise()
+    ),
+    (BaseConnector, pytest.raises(ValueError)),
+    (System, pytest.raises(ValueError)),
+    (System('foo'), pytest.raises(TypeError)),
+])
+def test_Connector_check(wrappee, expected):
+    with expected:
+        SystemConnector.check(wrappee)
 
 
 def test_Connector_activate(proxy):
@@ -83,7 +106,7 @@ def test_SystemConnector_transfer():
     """Test transfer with and without activation"""
     p1 = XyPort('p1', PortType.IN, {'x': 1, 'y': 2})
     p2 = UvPort('p2', PortType.OUT, {'u': 2, 'v': 4})
-    c = SystemConnector.make('p2_to_p1', p1, p2, dict(zip(p1, p2)))
+    c = SystemConnector(Connector('p2_to_p1', p1, p2, dict(zip(p1, p2))))
     assert p1.x == 1
     assert p1.y == 2
     c.deactivate()
@@ -97,7 +120,7 @@ def test_SystemConnector_transfer():
 
     p1 = XyPort('p1', PortType.IN, dict(x=0, y=0))
     p2 = XyImperialPort('p2', PortType.OUT, dict(x=10, y=100))
-    c = SystemConnector.make('p2_to_p1', p1, p2)
+    c = SystemConnector(Connector('p2_to_p1', p1, p2))
     assert p1.x == 0
     assert p1.y == 0
     c.deactivate()

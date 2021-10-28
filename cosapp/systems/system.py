@@ -16,7 +16,7 @@ from numbers import Number
 from pathlib import Path
 from typing import (
     Any, Callable, ClassVar, Dict, FrozenSet,
-    Iterable, Iterator, List,
+    Iterable, Iterator, List, Type,
     Optional, Tuple, Union,
 )
 from types import MappingProxyType
@@ -26,18 +26,18 @@ import numpy
 import pandas
 
 from cosapp.patterns.visitor import Visitor
-from cosapp.core.connectors import Connector, ConnectorError
+from cosapp.core.connectors import BaseConnector, Connector, ConnectorError
 from cosapp.core.eval_str import EvalString
 from cosapp.core.module import Module
 from cosapp.core.variableref import VariableReference
 from cosapp.core.numerics.basics import MathematicalProblem
 from cosapp.core.numerics.boundary import TimeDerivative, TimeUnknown, Unknown
-from cosapp.core.numerics.distributions import Distribution
 from cosapp.core.numerics.residues import AbstractResidue, Residue
 from cosapp.core.time import TimeObserver
 from cosapp.ports.enum import CommonPorts, PortType, Scope, Validity
 from cosapp.ports.port import BasePort, ExtensiblePort, Port
 from cosapp.ports.variable import RangeValue, Types, Variable
+from cosapp.utils.distributions import Distribution
 from cosapp.utils.context import ContextLock
 from cosapp.utils.helpers import check_arg, is_number, is_numerical
 from cosapp.utils.json import JSONEncoder, decode_cosapp_dict
@@ -1932,6 +1932,8 @@ class System(Module, TimeObserver):
         port1: BasePort,
         port2: BasePort,
         mapping: Union[str, List[str], Dict[str, str], None] = None,
+        ctype: Type[BaseConnector] = Connector,
+        *args, **kwargs
     ) -> None:
         """Connect two ports together. 
 
@@ -1956,11 +1958,15 @@ class System(Module, TimeObserver):
         Parameters
         ----------
         port1 : BasePort
-            The port to connect.
+            First end-point of connector.
         port2 : BasePort
-            The port to connect to.
+            Second end-point of connector.
         mapping : str or List[str] or Dict[str, str], optional
             (List of) common name(s) or mapping name dictionary; default None (i.e. no mapping).
+        ctype : Type[BaseConnector], optional
+            Connector type. Defaults to `Connector`.
+        *args, **kwargs :
+            Additional arguments forwarded to `ctype`.
         
         Examples
         --------
@@ -2001,6 +2007,14 @@ class System(Module, TimeObserver):
         check_port(port1, 'port1')
         check_port(port2, 'port2')
         check_arg(mapping, 'mapping', (str, list, dict, type(None)))
+        if ctype is not Connector:
+            try:
+                SystemConnector.check(ctype)
+            except (TypeError, ValueError) as error:
+                error.args = (
+                    f"`ctype` must be a concrete implementation of `BaseConnector; got {ctype!r}",
+                )
+                raise
 
         # Generate mapping dictionary
         if mapping is None:
@@ -2033,9 +2047,8 @@ class System(Module, TimeObserver):
                     
             name = f"{source_name}_to_{sink_name}".replace(".", "_")
             new_connector = SystemConnector(
-                Connector(name, sink, source, mapping)
+                ctype(name, sink, source, mapping, *args, **kwargs)
             )
-
             connectors = self.connectors
             # Check that variables are set only once
             for connector in connectors.values():

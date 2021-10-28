@@ -9,7 +9,6 @@ from cosapp.systems import System
 from cosapp.drivers import RunOnce
 from cosapp.drivers import runonce
 from cosapp.core.numerics.boundary import Boundary
-from cosapp.core.numerics.distributions.uniform import Uniform
 from cosapp.tests.library.ports import XPort
 from cosapp.tests.library.systems import Fan, Mixer21, Strait1dLine
 from cosapp.utils.testing import assert_keys, assert_all_type

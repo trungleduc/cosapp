@@ -1,34 +1,46 @@
+import inspect
 from cosapp.patterns import Proxy
-from cosapp.core.connectors import Connector
+from cosapp.core.connectors import BaseConnector
+from cosapp.ports.enum import PortType
+from typing import Dict, Any
 
 
 class SystemConnector(Proxy):
     """Connector proxy used in `System`
     """
-    def __init__(self, connector: Connector):
-        if not isinstance(connector, Connector):
-            raise TypeError(
-                "SystemConnector can only wrap objects of type Connector"
-            )
+    def __init__(self, connector: BaseConnector):
+        self.check(connector)
         super().__init__(connector)
+        self.__noise: Dict[str, Any] = {}
         self.activate()
 
-    @classmethod
-    def make(cls, *args, **kwargs) -> "SystemConnector":
-        """Factory returning a new connector proxy from
-        `Connector` constructor arguments.
+    @staticmethod
+    def check(wrappee: Any) -> None:
+        """Checks whether `wrappee` can be wrapped in a `SystemConnector`
+        proxy; raises an exception if not.
 
         Parameters:
         -----------
-        *args, **kwargs [Any]:
-            Arguments forwarded to `Connector` constructor.
-
-        Returns:
-        --------
-        connector [SystemConnector]:
-            Newly created `SystemConnector` proxy.
+        - wrappee [Any]:
+            If wrappee is a class, check that it is a concrete implementation of
+            `BaseConnector`. If it is an object, check that its type is derived from
+            `BaseConnector`.
+        
+        Raises:
+        -------
+        - `ValueError` if `wrappee` is a class not derived from `BaseConnector`
+        - `TypeError` if `wrappee` is an object not derived from `BaseConnector`
         """
-        return cls(Connector(*args, **kwargs))
+        if inspect.isclass(wrappee):
+            ok = lambda t, base: issubclass(t, base) and t is not base
+            error = ValueError
+        else:
+            ok = isinstance
+            error = TypeError
+        if not ok(wrappee, BaseConnector):
+            raise error(
+                "`SystemConnector` can only wrap objects derived from `BaseConnector`"
+            )
 
     @property
     def is_active(self) -> bool:
@@ -43,7 +55,40 @@ class SystemConnector(Proxy):
         """Deactivate connector transfer."""
         self.__is_active = False
 
+    def set_perturbation(self, name: str, value: Any) -> None:
+        """Add a perturbation on a connector.
+        
+        Parameters
+        ----------
+        name : str
+            Name of the sink variable to perturb
+        value : Any
+            Perturbation value
+        """
+        if name not in self.sink_variables():
+            raise ValueError(
+                "Perturbations can only be added on sink variables"
+            )
+        self.__noise[name] = value
+        self.source.owner.set_dirty(PortType.IN)
+
+    def clear_noise(self) -> None:
+        self.__noise.clear()
+
+    def __add_noise(self) -> None:
+        if len(self.__noise) == 0:
+            return
+        sink = self.sink
+        for var, perturbation in self.__noise.items():
+            sink[var] += perturbation
+        sink.owner.set_dirty(sink.direction)
+
     def transfer(self) -> None:
         """Transfer values from `source` to `sink`."""
+        source, sink = self.source, self.sink
+
         if self.__is_active:
-            self.__wrapped__.transfer()
+            if not source.owner.is_clean(source.direction):
+                sink.owner.set_dirty(sink.direction)
+                self.__wrapped__.transfer()
+            self.__add_noise()

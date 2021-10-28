@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 import cosapp.tests as test
-from cosapp.core.numerics.distributions.uniform import Uniform
+from cosapp.utils.distributions import Uniform
 from cosapp.systems import System
 from cosapp.tests.library.ports import XPort
 from cosapp.tests.library.systems.vectors import Strait1dLine

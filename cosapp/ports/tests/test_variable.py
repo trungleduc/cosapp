@@ -9,10 +9,9 @@ import pytest
 
 from cosapp.ports.variable import Variable
 from cosapp.ports.port import BasePort
-from cosapp.core.numerics.distributions.distribution import Distribution
-from cosapp.core.numerics.distributions.uniform import Uniform
 from cosapp.ports.enum import Scope, Validity
 from cosapp.ports.units import UnitError
+from cosapp.utils.distributions import Distribution, Uniform
 from cosapp.utils.testing import  get_args
 
 

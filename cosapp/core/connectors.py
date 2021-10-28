@@ -1,13 +1,14 @@
 """
 Classes connecting `Port` of foreign `System` to transfer variable values.
 """
+import abc
 import copy
 import logging
 import weakref
 from typing import Callable, Dict, Iterable, Iterator, List, Optional, Tuple, Union
 
 from cosapp.ports import units
-from cosapp.ports.port import BasePort, Port, PortType
+from cosapp.ports.port import BasePort, Port
 from cosapp.utils.helpers import check_arg, is_numerical
 
 logger = logging.getLogger(__name__)
@@ -33,7 +34,7 @@ class ConnectorError(Exception):
         self.message = message
 
 
-class Connector:
+class BaseConnector(abc.ABC):
     """This class connect two ports without enforcing that all port variables are connected.
 
     The link is oriented from the source to the sink.
@@ -99,11 +100,10 @@ class Connector:
         self._source = self.__get_port(source, sink=False, check=False)  # type: weakref.ReferenceType[BasePort]
         self._sink = self.__get_port(sink, sink=True, check=False)  # type: weakref.ReferenceType[BasePort]
 
-        self._unit_conversions = dict(
-            (name, None) for name in self._mapping
-        )  # type: Dict[str, Optional[Tuple[float, float]]]
-
-        self.update_unit_conversion()
+    @abc.abstractmethod
+    def transfer(self) -> None:
+        """Transfer values from `source` to `sink`."""
+        pass
 
     def __repr__(self) -> str:
         mapping = self._mapping
@@ -208,23 +208,6 @@ class Connector:
             and self.preserves_names()
         )
 
-    def set_perturbation(self, name: str, value: float) -> None:
-        """Add a perturbation on a connector.
-        
-        Parameters
-        ----------
-        name : str
-            Name of the sink variable to perturb
-        value : float
-            Perturbation value
-        """
-        if self._unit_conversions[name] is None:
-            ValueError(f"{name!r} does not have a numerical type.")
-
-        s, a = self._unit_conversions[name]
-        self._unit_conversions[name] = s, a + value
-        self.source.owner.set_dirty(PortType.IN)
-
     def remove_variables(self, names: Iterable[str]) -> None:
         """Remove the provided variables from this connection.
 
@@ -237,94 +220,6 @@ class Connector:
         """
         for variable in names:
             del self._mapping[variable]
-            del self._unit_conversions[variable]
-
-    def update_unit_conversion(self, name: Optional[str] = None) -> None:
-        """Update the physical unit conversion on the connector.
-
-        If `name` is not `None`, update the conversion only for the connexion towards that variable.
-
-        Parameters
-        ----------
-        name : str, optional
-            Name of the variable for which unit conversion needs an update; default None (i.e. all
-            conversions will be updated).
-
-        Raises
-        ------
-        UnitError
-            If unit conversion from source to sink is not possible
-        """
-        source, sink = self.source, self.sink
-        mapping = self.mapping
-
-        def update_one_connection(key: str) -> None:
-            """Update the unit converter of the connected key.
-
-            Parameters
-            ----------
-            key : str
-                Name of the connected variable for which the unit converter should be updated.
-            """
-            source_name = mapping[key]
-            origin = source.get_details(source_name)
-            target = sink.get_details(key)
-            # Get the conversion between unit and check it is valid
-            converter = units.get_conversion(origin.unit, target.unit)
-            if converter is None:
-                # Print a warning if one hand of the connexion is a valid unit but not the other one
-                message = lambda origin_status, target_status: (
-                    f"Connector source {origin.full_name!r} {origin_status}, but target {target.full_name!r} {target_status}."
-                )
-                if units.is_valid_units(origin.unit):
-                    logger.warning(
-                        message(f"has physical unit {origin.unit}", "is dimensionless")
-                    )
-                elif units.is_valid_units(target.unit):
-                    logger.warning(
-                        message("is dimensionless", f"has physical unit {target.unit}")
-                    )
-
-                if is_numerical(sink[key]):
-                    converter = (1.0, 0.0)
-
-            self._unit_conversions[key] = converter
-
-        if name is None:
-            for name in self._unit_conversions:
-                update_one_connection(name)
-        else:
-            update_one_connection(name)
-
-    def transfer(self) -> None:
-        """Transfer values from `source` to `sink`."""
-        # TODO improve efficiency
-        default_transfer = copy.copy
-        
-        def conversion_function(key) -> Callable:
-            converter = default_transfer
-            try:
-                slope, offset = self._unit_conversions[key]
-            except:
-                pass
-            else:
-                if slope != 1 or offset != 0:
-                    converter = lambda var: slope * (var + offset)
-            return converter
-
-        source, sink = self.source, self.sink
-
-        if not source.owner.is_clean(source.direction):
-            sink.owner.set_dirty(sink.direction)
-
-            for key, item in self._mapping.items():
-                # get/setattr faster for Port
-                target = getattr(source, item)
-                convert = conversion_function(key)
-                try:
-                    setattr(sink, key, convert(target))
-                except TypeError:
-                    setattr(sink, key, default_transfer(target))
 
     def info(self) -> Union[Tuple[str, str], Tuple[str, str, Dict[str, str]]]:
         """Returns connector information in a tuple.
@@ -385,3 +280,123 @@ class Connector:
             target = sink.contextual_name
         
         return target, origin
+
+
+class Connector(BaseConnector):
+    """Shallow copy connector.
+    See `BaseConnector` for base class details.
+    """
+    def __init__(
+        self,
+        name: str,
+        sink: BasePort,
+        source: BasePort,
+        mapping: Union[str, List[str], Dict[str, str], None] = None,
+    ):
+        super().__init__(name, sink, source, mapping)
+
+        self._unit_conversions = dict(
+            (name, None) for name in self._mapping
+        )  # type: Dict[str, Optional[Tuple[float, float]]]
+
+        self.update_unit_conversion()
+
+    def remove_variables(self, names: Iterable[str]) -> None:
+        super().remove_variables(names)
+        for variable in names:
+            del self._unit_conversions[variable]
+
+    def update_unit_conversion(self, name: Optional[str] = None) -> None:
+        """Update the physical unit conversion on the connector.
+
+        If `name` is not `None`, update the conversion only for the connexion towards that variable.
+
+        Parameters
+        ----------
+        name : str, optional
+            Name of the variable for which unit conversion needs an update; default None (i.e. all
+            conversions will be updated).
+
+        Raises
+        ------
+        UnitError
+            If unit conversion from source to sink is not possible
+        """
+        source, sink = self.source, self.sink
+        mapping = self.mapping
+
+        def update_one_connection(key: str) -> None:
+            """Update the unit converter of the connected key.
+
+            Parameters
+            ----------
+            key : str
+                Name of the connected variable for which the unit converter should be updated.
+            """
+            source_name = mapping[key]
+            origin = source.get_details(source_name)
+            target = sink.get_details(key)
+            # Get the conversion between unit and check it is valid
+            converter = units.get_conversion(origin.unit, target.unit)
+            if converter is None:
+                # Print a warning if one hand of the connexion is a valid unit but not the other one
+                message = lambda origin_status, target_status: (
+                    f"Connector source {origin.full_name!r} {origin_status}, but target {target.full_name!r} {target_status}."
+                )
+                if units.is_valid_units(origin.unit):
+                    logger.warning(
+                        message(f"has physical unit {origin.unit}", "is dimensionless")
+                    )
+                elif units.is_valid_units(target.unit):
+                    logger.warning(
+                        message("is dimensionless", f"has physical unit {target.unit}")
+                    )
+
+                if is_numerical(sink[key]):
+                    converter = (1.0, 0.0)
+
+            self._unit_conversions[key] = converter
+
+        if name is None:
+            for name in self._unit_conversions:
+                update_one_connection(name)
+        else:
+            update_one_connection(name)
+
+    def transfer(self) -> None:
+        # TODO improve efficiency
+        default_transfer = copy.copy
+        
+        def conversion_function(key) -> Callable:
+            converter = default_transfer
+            try:
+                slope, offset = self._unit_conversions[key]
+            except:
+                pass
+            else:
+                if slope != 1 or offset != 0:
+                    converter = lambda var: slope * (var + offset)
+            return converter
+
+        source, sink = self.source, self.sink
+
+        for key, item in self._mapping.items():
+            # get/setattr faster for Port
+            target = getattr(source, item)
+            convert = conversion_function(key)
+            try:
+                setattr(sink, key, convert(target))
+            except TypeError:
+                setattr(sink, key, default_transfer(target))
+
+
+class DeepCopyConnector(BaseConnector):
+    """Deep copy connector.
+    See `BaseConnector` for base class details.
+    """
+    def transfer(self) -> None:
+        source, sink = self.source, self.sink
+
+        for target, origin in self.mapping.items():
+            value = getattr(source, origin)
+            setattr(sink, target, copy.deepcopy(value))

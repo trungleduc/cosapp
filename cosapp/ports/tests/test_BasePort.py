@@ -5,7 +5,6 @@ import logging, re
 import numpy as np
 
 from cosapp.ports.variable import Variable
-from cosapp.core.numerics.distributions.uniform import Uniform
 from cosapp.ports.port import (
     PortType,
     BasePort,
@@ -15,6 +14,7 @@ from cosapp.ports.port import (
 from cosapp.ports.units import UnitError
 from cosapp.ports.exceptions import ScopeError
 from cosapp.systems import System
+from cosapp.utils.distributions import Uniform
 from cosapp.utils.testing import no_exception, get_args
 
 

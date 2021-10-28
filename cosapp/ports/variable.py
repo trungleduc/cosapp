@@ -7,9 +7,9 @@ from numbers import Number
 from typing import Any, Dict, Iterable, Optional, Tuple, Union, NoReturn
 
 
-from cosapp.core.numerics.distributions.distribution import Distribution
 from cosapp.ports import units
 from cosapp.ports.enum import Scope, Validity, RangeType
+from cosapp.utils.distributions import Distribution
 from cosapp.utils.helpers import check_arg, is_numerical, get_typename
 from cosapp.utils.naming import NameChecker
 
