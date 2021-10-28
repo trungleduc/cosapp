@@ -75,16 +75,14 @@ def test_MonteCarlo_add_random_variable():
 
     mc.add_random_variable({"K1", "K2"})
     assert set(mc.random_variables) == {"K1", "K2"}
-    assert mc.random_variables["K1"] == (
-        s.name2variable["K1"],
-        None,
-        s.inwards.get_details("K1").distribution,
-    )
-    assert mc.random_variables["K2"] == (
-        s.name2variable["K2"],
-        None,
-        s.inwards.get_details("K2").distribution,
-    )
+    
+    assert mc.random_variables["K1"].variable is s.name2variable["K1"]
+    assert mc.random_variables["K1"].connector is None
+    assert mc.random_variables["K1"].distribution is s.inwards.get_details("K1").distribution
+
+    assert mc.random_variables["K2"].variable is s.name2variable["K2"]
+    assert mc.random_variables["K2"].connector is None
+    assert mc.random_variables["K2"].distribution is s.inwards.get_details("K2").distribution
 
     mc.random_variables.clear()
     mc.add_random_variable(["K1"])
@@ -129,11 +127,10 @@ def test_MonteCarlo_add_random_variable():
     mc.add_random_variable("mult.p_in.x")
     connector = list(filter(lambda c: c.sink is s.p_in, t.all_connectors()))[0]
     assert set(mc.random_variables) == {"mult.p_in.x"}
-    assert mc.random_variables["mult.p_in.x"] == (
-        t.name2variable["mult.p_in.x"],
-        connector,
-        dummy,
-    )
+    random_variable = mc.random_variables["mult.p_in.x"]
+    assert random_variable.variable is t.name2variable["mult.p_in.x"]
+    assert random_variable.connector is connector
+    assert random_variable.distribution is dummy
 
 
 def test_MonteCarlo_add_response():
@@ -307,7 +304,6 @@ def test_MonteCarlo_cases_uncentered():
     assert df["K1"].std() == pytest.approx(distribution._rv.kwds["scale"], abs=1e-2)
 
 
-# @pytest.mark.skip("Incorrect behaviour - remove test altogether")
 def test_MonteCarlo_run_driver_perturbation_internal():
 
     s = MultiplySystem2("s")

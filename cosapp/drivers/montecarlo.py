@@ -1,6 +1,6 @@
 import logging
 from collections import OrderedDict
-from typing import Any, Iterable, List, Optional, Union
+from typing import Any, Iterable, Dict, List, Optional, Union, NamedTuple
 
 import numpy
 
@@ -8,9 +8,31 @@ from cosapp.core.numerics import sobol_seq
 from cosapp.ports.port import BasePort
 from cosapp.drivers.abstractsetofcases import AbstractSetOfCases
 from cosapp.drivers.abstractsolver import AbstractSolver
+from cosapp.utils.distributions import Distribution
 from cosapp.utils.helpers import check_arg
 
 logger = logging.getLogger(__name__)
+
+
+class RandomVariable(NamedTuple):
+    variable: "VariableReference"
+    distribution: Distribution
+    connector: Optional["SystemConnector"] = None
+
+    def add_noise(self, quantile=None) -> float:
+        delta = self.draw(quantile)
+        self.set_perturbation(delta)
+        return delta
+
+    def draw(self, quantile=None) -> float:
+        return self.distribution.draw(quantile)
+
+    def set_perturbation(self, value) -> None:
+        connector = self.connector
+        if connector is None:
+            self.variable.value += value
+        else:
+            connector.set_perturbation(self.variable.key, value)
 
 
 # TODO linearization does not support multipoint cases
@@ -49,7 +71,7 @@ class MonteCarlo(AbstractSetOfCases):
         self.linear = False  # type: bool
             # desc="True for linearisation of system before Montecarlo calculation. Default False."
 
-        self.random_variables = OrderedDict()  # type: Dict[str, Tuple[VariableReference, Optional[Connector], Distribution]]
+        self.random_variables: Dict[str, RandomVariable] = OrderedDict()
             # desc="Random variables in the system."
         self.responses = list()  # type: List[str]
             # We need a list as set is not ordered
@@ -105,13 +127,13 @@ class MonteCarlo(AbstractSetOfCases):
             # Test if the variable is connected
             connection = None
             if port.owner.parent is not None:
-                connectors = port.owner.parent.connectors.values()
+                connectors = port.owner.parent.all_connectors()
                 for connector in filter(lambda c: c.sink is port, connectors):
-                    if ref.key in connector.mapping:
+                    if ref.key in connector.sink_variables():
                         connection = connector
                         break
 
-            self.random_variables[name] = (ref, connection, distribution)
+            self.random_variables[name] = RandomVariable(ref, distribution, connection)
 
         check_arg(names, 'names', (str, set, list))
 
@@ -141,7 +163,7 @@ class MonteCarlo(AbstractSetOfCases):
             add_unique_response_var(name)
         else:
             for n in name:
-                check_arg(n, n + " in 'name'", str)
+                check_arg(n, f"{n} in 'name'", str)
                 add_unique_response_var(n)
 
     def _build_cases(self) -> None:
@@ -211,13 +233,9 @@ class MonteCarlo(AbstractSetOfCases):
 
         # Set perturbation
         self.perturbations = numpy.zeros(len(self.random_variables))
-        for i, params in enumerate(self.random_variables.values()):
-            ref, connector, distribution = params
-            self.perturbations[i] = distribution.draw(case[i])
-            if connector is None:
-                ref.value += self.perturbations[i]
-            else:
-                connector.set_perturbation(ref.key, self.perturbations[i])
+        for i, variable in enumerate(self.random_variables.values()):
+            perturbation = variable.add_noise(case[i])
+            self.perturbations[i] = perturbation
 
         if len(self.reference_case_solution) > 0:
             self.solver.load_solution(self.reference_case_solution)
@@ -261,9 +279,8 @@ class MonteCarlo(AbstractSetOfCases):
         super()._postcase(case_idx, case)
 
         # Remove the perturbation
-        for i, params in enumerate(self.random_variables.values()):
-            ref, connector = params[:2]
-            if connector is None:
-                ref.value -= self.perturbations[i]
+        for variable, delta in zip(self.random_variables.values(), self.perturbations):
+            if variable.connector is None:
+                variable.set_perturbation(-delta)
             else:
-                connector.set_perturbation(ref.key, -self.perturbations[i])
+                variable.connector.clear_noise()
