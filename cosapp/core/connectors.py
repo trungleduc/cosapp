@@ -128,7 +128,6 @@ class BaseConnector(abc.ABC):
     @source.setter
     def source(self, port: BasePort) -> None:
         self._source = self.__get_port(port, sink=False, check=True)
-        self.update_unit_conversion()
 
     @property
     def sink(self) -> BasePort:
@@ -138,7 +137,6 @@ class BaseConnector(abc.ABC):
     @sink.setter
     def sink(self, port: BasePort) -> None:
         self._sink = self.__get_port(port, sink=True, check=True)
-        self.update_unit_conversion()
 
     def __get_port(self, port: BasePort, sink: bool, check=True) -> "weakref.ref[BasePort]":
         """Returns a weakref to `port`, after compatibility check with internal mapping."""
@@ -299,6 +297,18 @@ class Connector(BaseConnector):
             (name, None) for name in self._mapping
         )  # type: Dict[str, Optional[Tuple[float, float]]]
 
+        self.update_unit_conversion()
+
+    @BaseConnector.source.setter
+    def source(self, port: BasePort) -> None:
+        cls = self.__class__
+        super(cls, cls).source.__set__(self, port)
+        self.update_unit_conversion()
+
+    @BaseConnector.sink.setter
+    def sink(self, port: BasePort) -> None:
+        cls = self.__class__
+        super(cls, cls).sink.__set__(self, port)
         self.update_unit_conversion()
 
     def remove_variables(self, names: Iterable[str]) -> None:
