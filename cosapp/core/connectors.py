@@ -279,6 +279,27 @@ class BaseConnector(abc.ABC):
         
         return target, origin
 
+    @staticmethod
+    def format_mapping(mapping: Union[str, List[str], Dict[str, str]]) -> Dict[str, str]:
+        """Returns suitable name mapping for connectors,
+        from different kinds of argument `mapping`.
+
+        Parameters:
+        -----------
+        - mapping, Union[str, List[str], Dict[str, str]]:
+            Name mapping, given as either a string (single variable),
+            a list of strings, or a full name mapping, as a dictionary.
+        
+        Returns:
+        --------
+        Dict[str, str]: suitable mapping for connectors.
+        """
+        if isinstance(mapping, str):
+            mapping = {mapping: mapping}
+        elif not isinstance(mapping, dict):
+            mapping = dict(zip(mapping, mapping))
+        return mapping
+
 
 class Connector(BaseConnector):
     """Shallow copy connector.

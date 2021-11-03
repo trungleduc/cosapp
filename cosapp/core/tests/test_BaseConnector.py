@@ -272,6 +272,18 @@ def test_BaseConnector__init__(ConnectorFactory, settings, expected):
             c = ConnectorFactory(**settings)
 
 
+@pytest.mark.parametrize("data, expected", [
+    ('x', {'x': 'x'}),
+    (['x', 'y'], {'x': 'x', 'y': 'y'}),  # list
+    (('x', 'y'), {'x': 'x', 'y': 'y'}),  # tuple
+    ({'x', 'y'}, {'x': 'x', 'y': 'y'}),  # set
+    ({'x': 'v', 'y': 'w'}, {'x': 'v', 'y': 'w'}),
+])
+def test_BaseConnector_format_mapping(data, expected):
+    """Test static method `BaseConnector.format_mapping`"""
+    assert BaseConnector.format_mapping(data) == expected
+
+
 def test_BaseConnector_empty():
     port1 = XYZPort('p1', PortType.IN)
     port2 = AbcPort('p2', PortType.OUT)
