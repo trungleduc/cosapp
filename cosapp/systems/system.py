@@ -1929,6 +1929,177 @@ class System(Module, TimeObserver):
         return False
 
     def connect(self,
+        object1: Union[BasePort, "System"],
+        object2: Union[BasePort, "System"],
+        mapping: Union[str, List[str], Dict[str, str], None] = None,
+        ctype: Type[BaseConnector] = Connector,
+        *args, **kwargs
+    ) -> None:
+        """Connect two systems or two ports. 
+
+        This method connects `object1` to `object2`. If no mapping is provided, connection
+        will be made between variables based on their names. If a name mapping is provided as a list, 
+        the name should be present in both objects. If the mapping is specified as a dictionary, 
+        keys are expected to belong to `object1`, and values to `object2`.
+
+        If both objects are systems, mapping is mandatory (full system connections are forbidden).
+        In this case, each (key, value) pair of the mapping leads to a port-to-port connection.
+
+        Connections are oriented (i.e. the direction of value transfer is fixed). The decision tree
+        is as following:
+
+        - If one port is of type input and the other one of type output, the connection flows from
+          the output to the input.
+        - Else if one port (portA) belong to the parent `System` of the other port (portB), the
+          connection flows from portA to portB if portA is an input. And it flows from portB to
+          portA if portA is an output.
+        - Else if both are inputs, the port is pulled on the parent and connected to the two children.
+
+        Connectors can only connect systems at the same level or a system with its parent. In all
+        cases the connectors will be stored by the parent hosting the two connected systems.
+
+        Parameters
+        ----------
+        object1 : Union[BasePort, System]
+            First end-point of connector.
+        object2 : Union[BasePort, System]
+            Second end-point of connector.
+        mapping : str or List[str] or Dict[str, str], optional
+            (List of) common name(s) or mapping name dictionary; default None (i.e. no mapping).
+        ctype : Type[BaseConnector], optional
+            Connector type. Defaults to `Connector`.
+        *args, **kwargs :
+            Additional arguments forwarded to `ctype`.
+        
+        Examples
+        --------
+
+        Here is an example, in which we assume a port `p_in` has inputs of a system `s1`
+        that come from some output port `p_out` of another system `s2`. In the last example,
+        `connect` is called with two child systems, rather than ports. The container system
+        being called `top`:
+
+        >>> class DemoPort(Port):
+        >>>     def setup(self):
+        >>>         self.add_variable('a', 1.0)
+        >>>         self.add_variable('b', 2.0)
+        >>>         self.add_variable('c', 3.0)
+        >>>
+        >>> class DummySystem(Port):
+        >>>     def setup(self):
+        >>>         self.add_inward('x', 1.0)
+        >>>         self.add_outward('y', 0.0)
+        >>>         self.add_input(DemoPort, 'p_in')
+        >>>         self.add_output(DemoPort, 'p_out')
+        >>>
+        >>> top = System('top')
+        >>> top.add(DummySystem('s1'))
+        >>> top.add(DummySystem('s2'))
+        >>>
+        >>> top.connect(top.s1.p_in, top.s2.p_out, 'a')
+        >>> top.s1.p_in.a = 4
+        >>> top.run_once()
+        >>> assert top.s1.p_in.a == top.s2.p_out.a
+        >>>
+        >>> top.connect(top.s1.p_in, top.s2.p_out, {'b': 'c'})
+        >>> top.run_once()
+        >>> assert top.s1.p_in.b == top.s2.p_out.c
+        >>>
+        >>> top.connect(top.s1, top.s2, {'x': 'y', 'p_in.c': 'p_out.b'})
+        >>> top.run_once()
+        >>> assert top.s1.x == top.s2.y
+        >>> assert top.s1.p_in.c == top.s2.p_out.b
+        """
+        same_kind = lambda base: isinstance(object1, base) and isinstance(object2, base)
+
+        if same_kind(BasePort):
+            self.__connect_ports(object1, object2, mapping, ctype, *args, **kwargs)
+
+        elif same_kind(System):
+            self.__connect_systems(object1, object2, mapping, ctype, *args, **kwargs)
+            
+        else:
+            raise TypeError(
+                f"Connected objects must be either two ports or two systems"
+                f"; got {type(object1).__name__!r} and {type(object2).__name__!r}"
+            )
+
+    def __connect_systems(self,
+        system1: "System",
+        system2: "System",
+        mapping: Union[str, List[str], Dict[str, str]],
+        ctype: Type[BaseConnector] = Connector,
+        *args, **kwargs
+    ) -> None:
+        """Connect two sub-systems together. 
+
+        This method connects `system1` to `system2`. Full system connections are forbidden, as they
+        are potentially ambiguous. As a consequence, name mapping is mandatory.
+        If name mapping is provided as a collection, the name should be present in both systems.
+        If it is specified as a dictionary, keys pertain to `system1`, values to `system2`.
+
+        Each (key, value) pair of the mapping gives rise to a port-to-port connector.
+
+        Connections are oriented (i.e. the direction of value transfer is fixed). The decision tree
+        is as following:
+
+        - If one port is of type input and the other one of type output, the connection flows from
+          the output to the input.
+        - Else if one port (portA) belong to the parent `System` of the other port (portB), the
+          connection flows from portA to portB if portA is an input. And it flows from portB to
+          portA if portA is an output.
+        - Else if both are inputs, the port is pulled on the parent and connected to the two children.
+
+        Connectors can only connect systems at the same level or a system with its parent. In all
+        cases the connectors will be stored by the parent hosting the two connected systems.
+
+        Parameters
+        ----------
+        port1 : BasePort
+            First end-point of connector.
+        port2 : BasePort
+            Second end-point of connector.
+        mapping : str or List[str] or Dict[str, str], optional
+            (List of) common name(s) or mapping name dictionary; default None (i.e. no mapping).
+        ctype : Type[BaseConnector], optional
+            Connector type. Defaults to `Connector`.
+        *args, **kwargs :
+            Additional arguments forwarded to `ctype`.
+        """
+        if mapping is None:
+            raise ConnectorError(
+                "Full system connections are forbidden; please provide port or variable mapping."
+            )
+        def get_variable(system: System, varname: str):
+            key = varname if system is self else f"{system.name}.{varname}"
+            try:
+                return self.name2variable[key]
+            except KeyError:
+                raise AttributeError(
+                    f"{key!r} not found in {self.name!r}"
+                )
+        mapping = BaseConnector.format_mapping(mapping)
+
+        for name1, name2 in mapping.items():
+            obj1 = getattr(system1, name1)
+            obj2 = getattr(system2, name2)
+            same_kind = lambda base: isinstance(obj1, base) and isinstance(obj2, base)
+            if same_kind(BasePort):
+                self.__connect_ports(obj1, obj2, ctype=ctype, *args, **kwargs)
+            elif same_kind(System):
+                self.__connect_systems(obj1, obj2, mapping=None)  # raises ValueError
+            else:
+                # Mapping between variables
+                obj1 = get_variable(system1, name1)
+                obj2 = get_variable(system2, name2)
+                self.__connect_ports(
+                    obj1.mapping,
+                    obj2.mapping,
+                    {obj1.key: obj2.key},
+                    ctype, *args, **kwargs,
+                )
+
+    def __connect_ports(self,
         port1: BasePort,
         port2: BasePort,
         mapping: Union[str, List[str], Dict[str, str], None] = None,
@@ -1937,10 +2108,10 @@ class System(Module, TimeObserver):
     ) -> None:
         """Connect two ports together. 
 
-        This method connect ``port1`` to ``port2``. If no mapping is provided, connection
+        This method connects `port1` to `port2`. If no mapping is provided, connection
         will be made between variables based on their names. If a name mapping is provided as a list, 
         the name should be present in both port. And if the mapping is specified as a dictionary, 
-        the keys belong to ``port1`` and the values to ``port2``.
+        the keys belong to `port1` and the values to `port2`.
 
         An connection is oriented (i.e. the direction of value transfer is fixed). The decision tree
         is as following:
@@ -1967,37 +2138,6 @@ class System(Module, TimeObserver):
             Connector type. Defaults to `Connector`.
         *args, **kwargs :
             Additional arguments forwarded to `ctype`.
-        
-        Examples
-        --------
-
-        Here is an example, in which we assume a port ``p1`` has inputs of a system ``s1``
-        that come from some output port ``p2`` of another system ``s2``. The container system
-        being called ``top``:
-
-        >>> class DemoPort(Port):
-        >>>     def setup(self):
-        >>>         self.add_variable('a',1)
-        >>>         self.add_variable('b',2)
-        >>>         self.add_variable('c',3)
-        >>>
-        >>> class DummySystem(Port):
-        >>>     def setup(self):
-        >>>         self.add_input(DemoPort, 'p1')
-        >>>         self.add_output(DemoPort, 'p2')
-        >>>
-        >>> top = System('top')
-        >>> top.add(DummySystem('s1'))
-        >>> top.add(DummySystem('s2'))
-        >>>
-        >>> top.connect(top.s1.p1, top.s2.p2, 'a')
-        >>> top.s2.p2.a = 4
-        >>> top.run_once()
-        >>> assert top.s1.p1.a == top.s2.p2.a
-        >>>
-        >>> top.connect(top.s1.p1, top.s2.p2, {'b': 'c'})
-        >>> top.run_once()
-        >>> assert top.s1.p1.b == top.s2.p2.c
         """
         # Type validation
         def check_port(port: BasePort, argname: str):
@@ -2018,11 +2158,9 @@ class System(Module, TimeObserver):
 
         # Generate mapping dictionary
         if mapping is None:
-            mapping = dict([(v, v) for v in port1 if v in port2])
-        elif isinstance(mapping, str):
-            mapping = dict([(mapping, mapping)])
-        elif not isinstance(mapping, dict):
-            mapping = dict(zip(mapping, mapping))
+            mapping = dict((v, v) for v in port1 if v in port2)
+        else:
+            mapping = BaseConnector.format_mapping(mapping)
 
         systems_connectors = self.__sys_connectors
 

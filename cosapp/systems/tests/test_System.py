@@ -62,7 +62,7 @@ class System2(System):
         self.add_output(AnotherPort, "other")
 
 
-class System3(System):
+class EntryExit(System):
     def setup(self):
         self.add_input(DummyPort, "entry")
         self.add_output(DummyPort, "exit")
@@ -125,6 +125,7 @@ class TopSystem(System):
         self.add_child(
             SubSystem("sub"), pulling={"in_": "in_", "out": "out"}
         )
+
 
 @pytest.mark.parametrize("check_type", [True, False])
 def test_System_set_master_for_master(caplog, check_type):
@@ -317,8 +318,8 @@ def test_System_load_group():
     group = System("hat")
     group.add_child(System1("s1"))
     group.add_child(System2("s2"))
-    group.add_child(System3("s3"))
-    group.add_child(System3("s4"))
+    group.add_child(EntryExit("s3"))
+    group.add_child(EntryExit("s4"))
 
     group.connect(group.s1.inwards, group.s3.exit)
     group.connect(group.s2.outwards, group.s4.entry)
@@ -333,6 +334,7 @@ def test_System_load_group():
 
     with pytest.raises(TypeError):
         System.load(1.0)
+
 
 @mock.patch.object(System, 'setup_run')
 @mock.patch.object(RunOnce, 'setup_run')
@@ -2323,11 +2325,6 @@ def test_System_connect_hybrid(DummyFactory):
 
 
 def test_System_connect_full():
-    class DummyPort(Port):
-        def setup(self):
-            self.add_variable("a", 1)
-            self.add_variable("b", 2)
-
     class System1(System):
         def setup(self):
             self.add_inward({"test": 7.0, "a": 25.0, "b": 42.0})
@@ -2338,16 +2335,11 @@ def test_System_connect_full():
             self.add_inward({"data1": 9.0, "data2": 11.0, "data3": 13.0})
             self.add_outward({"test": 7.0, "a": 14.0, "b": 21.0})
 
-    class System3(System):
-        def setup(self):
-            self.add_input(DummyPort, "entry")
-            self.add_output(DummyPort, "exit")
-
     group = System("hat")
     group.add_child(System1("s1"))
     group.add_child(System2("s2"))
-    group.add_child(System3("s3"))
-    group.add_child(System3("s4"))
+    group.add_child(EntryExit("s3"))
+    group.add_child(EntryExit("s4"))
 
     group.connect(group.s1.inwards, group.s3.entry)
     connectors = group.connectors
@@ -2372,8 +2364,8 @@ def test_System_connect_full():
     group = System("hat")
     group.add_child(System1("s1"))
     group.add_child(System2("s2"))
-    group.add_child(System3("s3"))
-    group.add_child(System3("s4"))
+    group.add_child(EntryExit("s3"))
+    group.add_child(EntryExit("s4"))
 
     group.connect(group.s1.inwards, group.s3.exit)
     connectors = group.connectors
@@ -2401,8 +2393,8 @@ def test_System_connect_full():
     group = System("hat")
     group.add_child(System1("s1"))
     group.add_child(System2("s2"))
-    group.add_child(System3("s3"))
-    group.add_child(System3("s4"))
+    group.add_child(EntryExit("s3"))
+    group.add_child(EntryExit("s4"))
 
     group.connect(group.s1.inwards, group.s2.outwards)
     connectors = group.connectors
@@ -2432,16 +2424,11 @@ def test_System_connect_partial():
             self.add_inward({"d1": 9.0, "d2": 11.0, "d3": 13.0, "a": 17.0})
             self.add_outward({"l1": 7.0, "l2": 14.0, "l3": 21.0, "b": 28})
 
-    class System3(System):
-        def setup(self):
-            self.add_input(DummyPort, "entry")
-            self.add_output(DummyPort, "exit")
-
     group = System("hat")
     group.add_child(System1("s1"))
     group.add_child(System2("s2"))
-    group.add_child(System3("s3"))
-    group.add_child(System3("s4"))
+    group.add_child(EntryExit("s3"))
+    group.add_child(EntryExit("s4"))
 
     group.connect(group.s1.inwards, group.s3.entry, "b")
     connectors = group.connectors
@@ -2466,8 +2453,8 @@ def test_System_connect_partial():
     group = System("hat")
     group.add_child(System1("s1"))
     group.add_child(System2("s2"))
-    group.add_child(System3("s3"))
-    group.add_child(System3("s4"))
+    group.add_child(EntryExit("s3"))
+    group.add_child(EntryExit("s4"))
 
     group.connect(group.s1.inwards, group.s3.exit, "b")
     connectors = group.connectors
@@ -2491,8 +2478,8 @@ def test_System_connect_partial():
     group = System("hat")
     group.add_child(System1("s1"))
     group.add_child(System2("s2"))
-    group.add_child(System3("s3"))
-    group.add_child(System3("s4"))
+    group.add_child(EntryExit("s3"))
+    group.add_child(EntryExit("s4"))
 
     group.connect(group.s1.inwards, group.s2.inwards, {"data1": "d1"})
     connectors = group.connectors
@@ -2512,8 +2499,8 @@ def test_System_connect_partial():
     group = System("hat")
     group.add_child(System1("s1"))
     group.add_child(System2("s2"))
-    group.add_child(System3("s3"))
-    group.add_child(System3("s4"))
+    group.add_child(EntryExit("s3"))
+    group.add_child(EntryExit("s4"))
 
     group.connect(group.s3.exit, group.s4.entry, {"a": "a", "b": "b"})
     connectors = group.connectors
@@ -2546,9 +2533,9 @@ def test_System_connect_partial():
     assert connector.mapping == {"data1": "l1", "data2": "l2"}
 
     g1 = System("group1")
-    s1 = g1.add_child(System3("s1"))
+    s1 = g1.add_child(EntryExit("s1"))
     g2 = System("group2")
-    s2 = g2.add_child(System3("s2"))
+    s2 = g2.add_child(EntryExit("s2"))
     top = System("top")
     top.add_child(g1)
     top.add_child(g2)
@@ -2560,8 +2547,8 @@ def test_System_connect_partial():
     group = System("hat")
     group.add_child(System1("s1"))
     group.add_child(System2("s2"))
-    group.add_child(System3("s3"))
-    group.add_child(System3("s4"))
+    group.add_child(EntryExit("s3"))
+    group.add_child(EntryExit("s4"))
 
     # First partial connection
     group.connect(group.s4.entry, group.s3.exit, "b")
@@ -2623,6 +2610,80 @@ def test_System_connect_custom():
     assert connector.source is top.s1.out
     assert connector.sink is top.s2.in_
     assert connector.mapping == {'Pt': 'Pt', 'W': 'W'}
+
+
+def test_System_connect_systems():
+    """Tests system/system connections"""
+    top = System("top")
+    s1 = top.add_child(SubSystem("s1"))
+    s2 = top.add_child(SubSystem("s2"))
+    s3 = top.add_child(EntryExit("s3"))
+
+    with pytest.raises(TypeError, match="either two ports or two systems"):
+        top.connect(s1, s2.out)
+
+    with pytest.raises(TypeError, match="either two ports or two systems"):
+        top.connect(s2.out, s1)
+
+    with pytest.raises(ConnectorError, match="Full system connections are forbidden"):
+        top.connect(s1, s2)
+
+    with pytest.raises(TypeError, match="port2"):
+        top.connect(s2, s3, {'out.Pt': 'entry'})
+
+    top.connect(s1, s2, {'out': 'in_'})
+    top.connect(s2, s3, {'out.Pt': 'entry.b', 'sloss': 'exit.a'})
+
+    connectors = top.connectors
+    assert set(connectors) == {
+        "s1_out_to_s2_in_",
+        "s2_out_to_s3_entry",
+        "s3_exit_to_s2_inwards",
+    }
+    connectors['s1_out_to_s2_in_'].mapping == {'Pt': 'Pt', 'W': 'W'}
+    connectors['s2_out_to_s3_entry'].mapping == {'Pt': 'b'}
+    connectors['s3_exit_to_s2_inwards'].mapping == {'a': 'sloss'}
+
+    # Complete existing connector
+    top.connect(s2, s3, {'out.W': 'entry.a'})
+    connectors['s2_out_to_s3_entry'].mapping == {'Pt': 'b', 'W': 'a'}
+
+    # Mapping requesting full connection between two sub-systems (forbidden)
+    s4 = top.add_child(TopSystem('s4'))
+    s5 = top.add_child(TopSystem('s5'))
+    with pytest.raises(ConnectorError, match="Full system connections are forbidden"):
+        top.connect(s4, s5, 'sub')
+
+    # Mapping pointing to sub-system ports
+    with pytest.raises(
+        ConnectorError,
+        match="Only ports belonging to direct children of 'top' can be connected",
+    ):
+        top.connect(s4, s5, {'sub.out': 'sub.in_'})
+
+    # Mapping suggesting a pulling
+    top = EntryExit('top')
+    sub = top.add_child(EntryExit('sub'))
+    top.connect(top, sub, ['entry', 'exit'])
+    connectors = top.connectors
+    assert set(connectors) == {
+        'top_entry_to_sub_entry',
+        'sub_exit_to_top_exit',
+    }
+    assert connectors['top_entry_to_sub_entry'].mapping == {'a': 'a', 'b': 'b'}
+    assert connectors['sub_exit_to_top_exit'].mapping == {'a': 'a', 'b': 'b'}
+
+    # Mapping suggesting partial pulling
+    top = EntryExit('top')
+    sub = top.add_child(EntryExit('sub'))
+    top.connect(top, sub, ['entry.a', 'exit.b'])
+    connectors = top.connectors
+    assert set(connectors) == {
+        'top_entry_to_sub_entry',
+        'sub_exit_to_top_exit',
+    }
+    assert connectors['top_entry_to_sub_entry'].mapping == {'a': 'a'}
+    assert connectors['sub_exit_to_top_exit'].mapping == {'b': 'b'}
 
 
 def test_System_add_property():
