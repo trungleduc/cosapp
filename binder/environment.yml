@@ -5,4 +5,4 @@ channels:
   - cosapp
 dependencies:
   - pytest
-  - plotly=4.14.3
+  - plotly>=5
