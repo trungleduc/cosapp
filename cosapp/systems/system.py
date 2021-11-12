@@ -44,9 +44,9 @@ from cosapp.utils.json import JSONEncoder, decode_cosapp_dict
 from cosapp.utils.logging import LogFormat, LogLevel, rollover_logfile
 from cosapp.utils.pull_variables import pull_variables
 from cosapp.utils.find_variables import get_attributes
+from cosapp.utils.surrogate_models import FloatKrigingSurrogate
 from cosapp.systems.systemConnector import SystemConnector
 from cosapp.systems.systemSurrogate import SystemSurrogate
-from cosapp.systems.surrogate_models.kriging import FloatKrigingSurrogate
 
 logger = logging.getLogger(__name__)
 
@@ -2787,7 +2787,7 @@ class System(Module, TimeObserver):
             Column/key names must match variable contextual names, as in 'wing.geom.length', e.g.
         - model: type
             Model class, implementing methods `train(x, y)` and `predict(x)`, where x and y are 1D arrays.
-            Default is `cosapp.systems.surrogate_models.kriging.FloatKrigingSurrogate`.
+            Default is `cosapp.utils.surrogate_models.FloatKrigingSurrogate`.
         - activate: bool, optional
             Boolean determining whether or not surrogate model should be activated once created.
             Default is `True`.

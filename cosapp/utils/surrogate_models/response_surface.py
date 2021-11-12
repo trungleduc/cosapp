@@ -4,7 +4,7 @@ Surrogate Model based on second order response surface equations.
 """
 
 import numpy
-from .surrogate_model import SurrogateModel
+from .base import SurrogateModel
 
 
 class ResponseSurface(SurrogateModel):
@@ -25,8 +25,6 @@ class ResponseSurface(SurrogateModel):
         """
         Initialize all attributes.
         """
-        super().__init__()
-
         self.m = 0  # number of training points
         self.n = 0  # number of independents
         # vector of response surface equation coefficients
@@ -43,10 +41,9 @@ class ResponseSurface(SurrogateModel):
         y : array-like
             Model responses at given inputs.
         """
-        super().train(x, y)
-
-        m = self.m = x.shape[0]
-        n = self.n = x.shape[1]
+        shape = numpy.shape(x)
+        self.m = m = shape[0]
+        self.n = n = shape[1]
 
         X = numpy.zeros((m, ((n + 1) * (n + 2)) // 2))
 
@@ -70,7 +67,7 @@ class ResponseSurface(SurrogateModel):
         # Determine response surface equation coefficients (betas) using least squares
         self.betas = numpy.linalg.lstsq(X, y, rcond=None)[0]
 
-    def predict(self, x):
+    def predict(self, x: numpy.ndarray) -> float:
         """
         Calculate predicted value of response based on the current response surface model.
 
@@ -84,10 +81,7 @@ class ResponseSurface(SurrogateModel):
         float
             Predicted response.
         """
-        super().predict(x)
-
         n = x.size
-
         X = numpy.zeros(((self.n + 1) * (self.n + 2)) // 2)
 
         # Modify X to include constant, squared terms and cross terms

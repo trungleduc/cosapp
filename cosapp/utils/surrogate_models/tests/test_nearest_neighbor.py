@@ -1,7 +1,7 @@
 import numpy as np
 import unittest
 
-from cosapp.systems.surrogate_models.nearest_neighbor import NearestNeighbor
+from cosapp.utils.surrogate_models.nearest_neighbor import NearestNeighbor
 
 
 class TestNearestNeighbor(unittest.TestCase):
@@ -10,9 +10,8 @@ class TestNearestNeighbor(unittest.TestCase):
         with self.assertRaises(ValueError) as cm:
             NearestNeighbor(interpolant_type='junk')
 
-        expected_msg = "NearestNeighbor: interpolant_type 'junk' not supported." \
-                       " interpolant_type must be one of ['linear', 'weighted'," \
-                       " 'rbf']."
+        expected_msg = "interpolant_type 'junk' not supported;" \
+                       " must be one of ['linear', 'weighted', 'rbf']."
 
         self.assertEqual(expected_msg, str(cm.exception))
 

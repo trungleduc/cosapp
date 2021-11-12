@@ -1,24 +1,13 @@
+"""Class definition for SurrogateModel, the base class for all surrogate models.
 """
-Class definition for SurrogateModel, the base class for all surrogate models.
-"""
+import abc
 
 
-class SurrogateModel(object):
-    """
-    Base class for surrogate models.
-
-    Attributes
-    ----------
-    trained : bool
-        True when surrogate has been trained.
+class SurrogateModel(abc.ABC):
+    """Abstract interface for surrogate models.
     """
 
-    def __init__(self):
-        """
-        Initialize all attributes.
-        """
-        self.trained = False
-
+    @abc.abstractmethod
     def train(self, x, y):
         """
         Train the surrogate model with the given set of inputs and outputs.
@@ -30,8 +19,9 @@ class SurrogateModel(object):
         y : array-like
             Model responses at given inputs.
         """
-        self.trained = True
+        pass
 
+    @abc.abstractmethod
     def predict(self, x):
         """
         Calculate a predicted value of the response based on the current trained model.
@@ -40,30 +30,6 @@ class SurrogateModel(object):
         ----------
         x : array-like
             Point(s) at which the surrogate is evaluated.
-        """
-        if not self.trained:
-            msg = f"{type(self).__name__} has not been trained, so no prediction can be made."
-            raise RuntimeError(msg)
-
-    def vectorized_predict(self, x):
-        """
-        Calculate predicted values of the response based on the current trained model.
-
-        Parameters
-        ----------
-        x : array-like
-            Vectorized point(s) at which the surrogate is evaluated.
-        """
-        pass
-
-    def linearize(self, x):
-        """
-        Calculate the jacobian of the interpolant at the requested point.
-
-        Parameters
-        ----------
-        x : array-like
-            Point at which the surrogate Jacobian is evaluated.
         """
         pass
 
@@ -84,9 +50,9 @@ class MultiFiSurrogateModel(SurrogateModel):
         y : array-like
             Model responses at given inputs.
         """
-        super(MultiFiSurrogateModel, self).train(x, y)
         self.train_multifi([x], [y])
 
+    @abc.abstractmethod
     def train_multifi(self, x, y):
         """
         Train the surrogate model, based on the given multi-fidelity training data.

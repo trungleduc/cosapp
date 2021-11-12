@@ -20,7 +20,7 @@ from scipy import linalg
 from scipy.optimize import minimize
 from scipy.spatial.distance import squareform
 
-from .surrogate_model import MultiFiSurrogateModel
+from .base import MultiFiSurrogateModel
 
 import logging
 _logger = logging.getLogger()
@@ -118,17 +118,14 @@ def squared_exponential_correlation(theta, d):
     theta = np.asarray(theta, dtype=float)
     d = np.asarray(d, dtype=float)
 
-    if d.ndim > 1:
-        n_features = d.shape[1]
-    else:
-        n_features = 1
+    n_features = d.shape[1] if d.ndim > 1 else 1
 
     if theta.size == 1:
         return np.exp(-theta[0] * np.sum(d ** 2, axis=1))
-    elif theta.size != n_features:
-        raise ValueError("Length of theta must be 1 or %s" % n_features)
-    else:
+    elif theta.size == n_features:
         return np.exp(-np.sum(theta.reshape(1, n_features) * d ** 2, axis=1))
+    else:
+        raise ValueError(f"Length of theta must be 1 or {n_features}")
 
 
 def l1_cross_distances(X, Y=None):
@@ -178,7 +175,7 @@ def l1_cross_distances(X, Y=None):
     return D
 
 
-class MultiFiCoKriging(object):
+class MultiFiCoKriging:
     """
     Integrate the Multi-Fidelity Co-Kriging method described in [LeGratiet2013].
 
@@ -237,7 +234,7 @@ class MultiFiCoKriging(object):
 
     Examples
     --------
-    >>> from cosapp.surrogate_models.multifi_cokriging import MultiFiCoKriging
+    >>> from cosapp.surrogates.multifi_cokriging import MultiFiCoKriging
     >>> import numpy as np
     >>> # Xe: DOE for expensive code (nested in Xc)
     >>> # Xc: DOE for cheap code
@@ -810,21 +807,22 @@ class MultiFiCoKriging(object):
         """
         # Check regression model
         if not callable(self.regr):
-            if self.regr in self._regression_types:
+            try:
                 self.regr = self._regression_types[self.regr]
-            else:
-                raise ValueError("regr should be one of %s or callable, "
-                                 "%s was given."
-                                 % (self._regression_types.keys(), self.regr))
-
+            except KeyError:
+                raise ValueError(
+                    f"regr should be one of {list(self._regression_types)} or callable, "
+                    f"{self.regr} was given."
+                )
         # Check rho regression model
         if not callable(self.rho_regr):
-            if self.rho_regr in self._regression_types:
+            try:
                 self.rho_regr = self._regression_types[self.rho_regr]
-            else:
-                raise ValueError("rho_regr should be one of %s or callable, "
-                                 "%s was given."
-                                 % (self._regression_types.keys(), self.rho_regr))
+            except KeyError:
+                raise ValueError(
+                    f"rho_regr should be one of {list(self._regression_types)} or callable, "
+                    f"{self.rho_regr} was given."
+                )
 
         for i in range(self.nlevel):
             # Check correlation parameters
@@ -845,22 +843,19 @@ class MultiFiCoKriging(object):
             if self.thetaL[i] is not None:
                 self.thetaL[i] = array2d(self.thetaL[i])
                 if self.thetaL[i].size != lth:
-                    raise ValueError("theta0 and thetaL must have the "
-                                     "same length.")
+                    raise ValueError("theta0 and thetaL must have the same length.")
             else:
                 self.thetaL[i] = array2d(self.n_features * [THETAL_DEFAULT])
 
             if self.thetaU[i] is not None:
                 self.thetaU[i] = array2d(self.thetaU[i])
                 if self.thetaU[i].size != lth:
-                    raise ValueError("theta0 and thetaU must have the "
-                                     "same length.")
+                    raise ValueError("theta0 and thetaU must have the same length.")
             else:
                 self.thetaU[i] = array2d(self.n_features * [THETAU_DEFAULT])
 
             if np.any(self.thetaL[i] <= 0) or np.any(self.thetaU[i] < self.thetaL[i]):
-                raise ValueError("The bounds must satisfy O < thetaL <= "
-                                 "thetaU.")
+                raise ValueError("The bounds must satisfy O < thetaL <= thetaU.")
 
         return
 
@@ -881,9 +876,16 @@ class MultiFiCoKrigingSurrogate(MultiFiSurrogateModel):
         Optimizer terminates when the tolerance tol is reached.
     """
 
-    def __init__(self, regr='constant', rho_regr='constant',
-                 theta=None, theta0=None, thetaL=None, thetaU=None,
-                 tolerance=TOLERANCE_DEFAULT, initial_range=INITIAL_RANGE_DEFAULT):
+    def __init__(self,
+        regr = 'constant',
+        rho_regr = 'constant',
+        theta = None,
+        theta0 = None,
+        thetaL = None,
+        thetaU = None,
+        tolerance = TOLERANCE_DEFAULT,
+        initial_range = INITIAL_RANGE_DEFAULT,
+    ):
         """
         Initialize all attributes.
 
@@ -940,12 +942,12 @@ class MultiFiCoKrigingSurrogate(MultiFiSurrogateModel):
         initial_range : float
             Initial range for the optimizer.
         """
-        super(MultiFiCoKrigingSurrogate, self).__init__()
-
         self.tolerance = tolerance
         self.initial_range = initial_range
-        self.model = MultiFiCoKriging(regr=regr, rho_regr=rho_regr, theta=theta,
-                                      theta0=theta0, thetaL=thetaL, thetaU=thetaU)
+        self.model = MultiFiCoKriging(
+            regr=regr, rho_regr=rho_regr, theta=theta,
+            theta0=theta0, thetaL=thetaL, thetaU=thetaU,
+        )
 
     def predict(self, new_x):
         """
@@ -984,8 +986,7 @@ class MultiFiCoKrigingSurrogate(MultiFiSurrogateModel):
             output to be predicted.
         """
         X, Y = self._fit_adapter(X, Y)
-        self.model.fit(X, Y, tol=self.tolerance,
-                       initial_range=self.initial_range)
+        self.model.fit(X, Y, tol=self.tolerance, initial_range=self.initial_range)
 
     def _fit_adapter(self, X, Y):
         """
@@ -1011,7 +1012,7 @@ class MultiFiCoKrigingSurrogate(MultiFiSurrogateModel):
             A list of arrays with the observations of the scalar output to be predicted,
             from lowest fidelity to highest fidelity.
         """
-        if len(np.shape(np.array(X[0]))) == 1:
+        if len(np.shape(X[0])) == 1:
             X = [X]
             Y = [Y]
 
@@ -1040,10 +1041,5 @@ class FloatMultiFiCoKrigingSurrogate(MultiFiCoKrigingSurrogate):
         float
             New predicted value.
         """
-        dist = super(FloatMultiFiCoKrigingSurrogate, self).predict(new_x)
+        dist = super().predict(new_x)
         return dist.mu
-
-
-if __name__ == "__main__":
-    import doctest
-    doctest.testmod()

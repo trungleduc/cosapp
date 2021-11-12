@@ -4,19 +4,13 @@ Surrogate model based on the N-Dimensional Interpolation library by Stephen Maro
 https://github.com/SMarone/NDInterp
 """
 
-from collections import OrderedDict
-from .surrogate_model import SurrogateModel
+import numpy
+from typing import Dict, Type
+from .base import SurrogateModel
+from .nn_interpolators.nn_base import NNBase
 from .nn_interpolators.linear_interpolator import LinearInterpolator
 from .nn_interpolators.weighted_interpolator import WeightedInterpolator
 from .nn_interpolators.rbf_interpolator import RBFInterpolator
-
-_interpolators = OrderedDict(
-    [
-        ("linear", LinearInterpolator),
-        ("weighted", WeightedInterpolator),
-        ("rbf", RBFInterpolator),
-    ]
-)
 
 
 class NearestNeighbor(SurrogateModel):
@@ -27,14 +21,13 @@ class NearestNeighbor(SurrogateModel):
     ----------
     interpolant : object
         Interpolator object
-    interpolant_init_args : dict
+    options : dict
         Input keyword arguments for the interpolator.
-    interpolant_type : str
-        Type of interpolator from ['linear', 'weighted', 'rbf']
-
+    interpolant_type : NNBase
+        Type of interpolator from NearestNeighbor.interpolators()
     """
 
-    def __init__(self, interpolant_type="rbf", **kwargs):
+    def __init__(self, interpolant_type="rbf", **options):
         """
         Initialize all attributes.
 
@@ -42,23 +35,18 @@ class NearestNeighbor(SurrogateModel):
         ----------
         interpolant_type : str
             must be one of 'linear', 'weighted', or 'rbf'.
-        **kwargs : dict
-            keyword arguments
+        **options :
+            Options as keyword arguments
         """
-        super(NearestNeighbor, self).__init__()
-
-        if interpolant_type not in _interpolators.keys():
-            msg = (
-                "NearestNeighbor: interpolant_type '{0}' not supported."
-                " interpolant_type must be one of {1}.".format(
-                    interpolant_type, list(_interpolators.keys())
-                )
+        interpolators = self.interpolators()
+        try:
+            self.interpolant_type = interpolators[interpolant_type]
+        except KeyError:
+            raise ValueError(
+                f"interpolant_type '{interpolant_type}' not supported"
+                f"; must be one of {list(interpolators)}."
             )
-            raise ValueError(msg)
-
-        self.interpolant_init_args = kwargs
-
-        self.interpolant_type = interpolant_type
+        self.options = options
         self.interpolant = None
 
     def train(self, x, y):
@@ -72,9 +60,10 @@ class NearestNeighbor(SurrogateModel):
         y : array-like
             Model responses at given inputs.
         """
-        super(NearestNeighbor, self).train(x, y)
-        self.interpolant = _interpolators[self.interpolant_type](
-            x, y, **self.interpolant_init_args
+        self.interpolant = self.interpolant_type(
+            numpy.asarray(x),
+            numpy.asarray(y),
+            **self.options,
         )
 
     def predict(self, x, **kwargs):
@@ -93,8 +82,7 @@ class NearestNeighbor(SurrogateModel):
         float
             Predicted value.
         """
-        super(NearestNeighbor, self).predict(x)
-        return self.interpolant(x, **kwargs)
+        return self.interpolant(numpy.asarray(x), **kwargs)
 
     def linearize(self, x, **kwargs):
         """
@@ -112,10 +100,18 @@ class NearestNeighbor(SurrogateModel):
         ndarray
             Jacobian of surrogate output wrt inputs.
         """
-        jac = self.interpolant.gradient(x, **kwargs)
+        jac = self.interpolant.gradient(numpy.asarray(x), **kwargs)
         if jac.shape[0] == 1 and len(jac.shape) > 2:
             return jac[0, ...]
         return jac
+
+    @staticmethod
+    def interpolators() -> Dict[str, Type[SurrogateModel]]:
+        return {
+            "linear": LinearInterpolator,
+            "weighted": WeightedInterpolator,
+            "rbf": RBFInterpolator,
+        }
 
 
 class LinearNearestNeighbor(NearestNeighbor):  # pragma: no cover
@@ -126,23 +122,23 @@ class LinearNearestNeighbor(NearestNeighbor):  # pragma: no cover
     ----------
     interpolant : object
         Interpolator object
-    interpolant_init_args : dict
+    options : dict
         Input keyword arguments for the interpolator.
-    interpolant_type : str
-        Type of interpolator; here 'linear'
+    interpolant_type : Type[NNBase]
+        Type of interpolator; here `LinearInterpolator`
 
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, **options):
         """
         Initialize all attributes.
 
         Parameters
         ----------
-        **kwargs : dict
-            keyword arguments
+        **options :
+            Options, as keyword arguments
         """
-        super().__init__(interpolant_type="linear", **kwargs)
+        super().__init__("linear", **options)
 
 
 class WeightedNearestNeighbor(NearestNeighbor):  # pragma: no cover
@@ -153,23 +149,23 @@ class WeightedNearestNeighbor(NearestNeighbor):  # pragma: no cover
     ----------
     interpolant : object
         Interpolator object
-    interpolant_init_args : dict
+    options : dict
         Input keyword arguments for the interpolator.
-    interpolant_type : str
-        Type of interpolator; here 'weighted'
+    interpolant_type : Type[NNBase]
+        Type of interpolator; here `WeightedInterpolator`
 
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, **options):
         """
         Initialize all attributes.
 
         Parameters
         ----------
-        **kwargs : dict
-            keyword arguments
+        **options :
+            Options, as keyword arguments
         """
-        super().__init__(interpolant_type="weighted", **kwargs)
+        super().__init__("weighted", **options)
 
 
 class RBFNearestNeighbor(NearestNeighbor):  # pragma: no cover
@@ -180,21 +176,20 @@ class RBFNearestNeighbor(NearestNeighbor):  # pragma: no cover
     ----------
     interpolant : object
         Interpolator object
-    interpolant_init_args : dict
+    options : dict
         Input keyword arguments for the interpolator.
-    interpolant_type : str
-        Type of interpolator; here 'rbf'
+    interpolant_type : Type[NNBase]
+        Type of interpolator; here `RBFInterpolator`
 
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, **options):
         """
         Initialize all attributes.
 
         Parameters
         ----------
-        **kwargs : dict
-            keyword arguments
+        **options :
+            Options, as keyword arguments
         """
-        super().__init__(interpolant_type="rbf", **kwargs)
-
+        super().__init__("rbf", **options)

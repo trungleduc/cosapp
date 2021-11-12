@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Set, Type, Union
 
 from cosapp.recorders import DataFrameRecorder
 from cosapp.systems import MetaSystem
-from cosapp.systems.surrogate_models.response_surface import ResponseSurface
+from cosapp.utils.surrogate_models import ResponseSurface
 from cosapp.drivers.driver import Driver
 from cosapp.drivers.lineardoe import LinearDoE
 from cosapp.drivers.nonlinearsolver import NonLinearSolver

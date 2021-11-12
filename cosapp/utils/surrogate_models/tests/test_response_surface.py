@@ -5,7 +5,7 @@ import unittest, itertools
 import numpy as np
 from numpy import array, linspace, sin, cos, pi
 
-from cosapp.systems.surrogate_models.response_surface import ResponseSurface
+from cosapp.utils.surrogate_models.response_surface import ResponseSurface
 
 
 def branin(x):
@@ -69,17 +69,6 @@ class TestResponseSurfaceSurrogate(unittest.TestCase):
         mu = surrogate.predict(array([.5, .5]))
 
         self.assertTrue(np.allclose(mu, branin([.5, .5]), rtol=1e-1))
-
-    def test_no_training_data(self):
-        surrogate = ResponseSurface()
-
-        try:
-            surrogate.predict([0., 1.])
-        except RuntimeError as err:
-            self.assertEqual(str(err),
-                             "ResponseSurface has not been trained, so no prediction can be made.")
-        else:
-            self.fail("RuntimeError Expected")
 
     def test_one_pt(self):
         surrogate = ResponseSurface()

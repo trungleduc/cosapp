@@ -7,14 +7,13 @@ from cosapp.systems.metamodels import MetaSystem
 from cosapp.systems.externalsystem import TCPSystem
 from cosapp.systems.processsystem import ProcessSystem
 
-
-from cosapp.systems.surrogate_models.kriging import FloatKrigingSurrogate
-from cosapp.systems.surrogate_models.nearest_neighbor import (
+from cosapp.utils.surrogate_models import (
+    FloatKrigingSurrogate,
     LinearNearestNeighbor,
     WeightedNearestNeighbor,
     RBFNearestNeighbor,
+    ResponseSurface,
 )
-from cosapp.systems.surrogate_models.response_surface import ResponseSurface
 
 __all__ = [
     "System",

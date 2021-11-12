@@ -6,7 +6,7 @@ import numpy as np
 import scipy.linalg as linalg
 from scipy.optimize import minimize
 
-from .surrogate_model import SurrogateModel
+from .base import SurrogateModel
 
 MACHINE_EPSILON = np.finfo(np.double).eps
 
@@ -67,8 +67,6 @@ class KrigingSurrogate(SurrogateModel):
             Flag indicating whether the Root Mean Squared Error (RMSE) should be computed.
             Set to False by default.
         """
-        super(KrigingSurrogate, self).__init__()
-
         self.n_dims = 0                 # number of independent
         self.n_samples = 0              # number of training points
         self.thetas = np.zeros(0)
@@ -101,14 +99,12 @@ class KrigingSurrogate(SurrogateModel):
         y : array-like
             Model responses at given inputs.
         """
-        super(KrigingSurrogate, self).train(x, y)
-
         x, y = np.atleast_2d(x, y)
 
         self.n_samples, self.n_dims = x.shape
 
         if self.n_samples <= 1:
-            raise ValueError('KrigingSurrogate require at least 2 training points.')
+            raise ValueError("KrigingSurrogate require at least 2 training points.")
 
         # Normalize the data
         X_mean = np.mean(x, axis=0)
@@ -119,11 +115,8 @@ class KrigingSurrogate(SurrogateModel):
         X_std[X_std == 0.] = 1.
         Y_std[Y_std == 0.] = 1.
 
-        X = (x - X_mean) / X_std
-        Y = (y - Y_mean) / Y_std
-
-        self.X = X
-        self.Y = Y
+        self.X = X = (x - X_mean) / X_std
+        self.Y = Y = (y - Y_mean) / Y_std
         self.X_mean, self.X_std = X_mean, X_std
         self.Y_mean, self.Y_std = Y_mean, Y_std
 
@@ -132,15 +125,19 @@ class KrigingSurrogate(SurrogateModel):
             loglike = self._calculate_reduced_likelihood_params(np.exp(thetas))[0]
             return -loglike
 
-        bounds = [(np.log(1e-5), np.log(1e5)) for _ in range(self.n_dims)]
+        bounds = [(np.log(1e-5), np.log(1e5))] * self.n_dims
 
-        optResult = minimize(_calcll, 1e-1 * np.ones(self.n_dims), method='slsqp',
-                             options={'eps': 1e-3},
-                             bounds=bounds)
+        optResult = minimize(
+            _calcll, np.full(self.n_dims, 1e-1),
+            method = 'slsqp',
+            options = {'eps': 1e-3},
+            bounds = bounds,
+        )
 
         if not optResult.success:
-            raise ValueError(
-                'Kriging Hyper-parameter optimization failed: {0}'.format(optResult.message))
+            raise RuntimeError(
+                f"Kriging Hyper-parameter optimization failed: {optResult.message}"
+            )
 
         self.thetas = np.exp(optResult.x)
         _, params = self._calculate_reduced_likelihood_params()
@@ -171,7 +168,6 @@ class KrigingSurrogate(SurrogateModel):
             thetas = self.thetas
 
         X, Y = self.X, self.Y
-        params = {}
 
         # Correlation Matrix
         distances = np.zeros((self.n_samples, self.n_dims, self.n_samples))
@@ -195,14 +191,15 @@ class KrigingSurrogate(SurrogateModel):
         alpha = Vh.T.dot(np.einsum('j,kj,kl->jl', inv_factors, U, Y))
         logdet = -np.sum(np.log(inv_factors))
         sigma2 = np.dot(Y.T, alpha).sum(axis=0) / self.n_samples
-        reduced_likelihood = -(np.log(np.sum(sigma2)) +
-                               logdet / self.n_samples)
+        reduced_likelihood = -(np.log(np.sum(sigma2)) + logdet / self.n_samples)
 
-        params['alpha'] = alpha
-        params['sigma2'] = sigma2 * np.square(self.Y_std)
-        params['S_inv'] = inv_factors
-        params['U'] = U
-        params['Vh'] = Vh
+        params = dict(
+            alpha = alpha,
+            sigma2 = sigma2 * np.square(self.Y_std),
+            S_inv = inv_factors,
+            U = U,
+            Vh = Vh,
+        )
 
         return reduced_likelihood, params
 
@@ -222,11 +219,7 @@ class KrigingSurrogate(SurrogateModel):
         ndarray, optional (if eval_rmse is True)
             Root mean square of the prediction error.
         """
-        super(KrigingSurrogate, self).predict(x)
-
         thetas = self.thetas
-        if isinstance(x, list):
-            x = np.array(x)
         x = np.atleast_2d(x)
         n_eval = x.shape[0]
 
@@ -244,8 +237,12 @@ class KrigingSurrogate(SurrogateModel):
         y = self.Y_mean + self.Y_std * y_t
 
         if self.eval_rmse:
-            mse = (1. - np.dot(np.dot(r, self.Vh.T),
-                               np.einsum('j,kj,lk->jl', self.S_inv, self.U, r))) * self.sigma2
+            mse = (
+                1. - np.dot(
+                    np.dot(r, self.Vh.T),
+                    np.einsum('j,kj,lk->jl', self.S_inv, self.U, r)
+                )
+            ) * self.sigma2
 
             # Forcing negative RMSE to zero if negative due to machine precision
             mse[mse < 0.] = 0.
@@ -276,10 +273,14 @@ class KrigingSurrogate(SurrogateModel):
 
         # Z = einsum('i,ij->ij', X, Y) is equivalent to, but much faster and
         # memory efficient than, diag(X).dot(Y) for vector X and 2D array Y.
-        # i.e., Z[i,j] = X[i]*Y[i,j]
+        # i.e., Z[i, j] = X[i] * Y[i, j]
         gradr = r * -2 * np.einsum('i,ij->ij', thetas, (x_n - self.X).T)
-        jac = np.einsum('i,j,ij->ij', self.Y_std, 1. /
-                        self.X_std, gradr.dot(self.alpha).T)
+        jac = np.einsum(
+            'i,j,ij->ij',
+            self.Y_std,
+            1. / self.X_std,
+            gradr.dot(self.alpha).T
+        )
         return jac
 
 
