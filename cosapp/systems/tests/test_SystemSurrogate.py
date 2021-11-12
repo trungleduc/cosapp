@@ -4,10 +4,15 @@ import pandas
 import itertools
 from unittest.mock import patch, DEFAULT
 from scipy.linalg import LinAlgWarning
+from contextlib import nullcontext as does_not_raise
 
 from cosapp.systems import System
 from cosapp.tests.library.ports import XPort
-from cosapp.systems import FloatKrigingSurrogate, LinearNearestNeighbor
+from cosapp.utils.surrogate_models import (
+    SurrogateModel,
+    FloatKrigingSurrogate,
+    LinearNearestNeighbor,
+)
 from cosapp.systems.systemSurrogate import (
     SystemSurrogate, SystemSurrogateState,
     flatten, get_dependent_connections,
@@ -40,7 +45,7 @@ meta model can be used on:
 Once the training is done, you can add any type of driver (NLS, EulerExplicit, RungeKutta)
 """
 
-class DummyModel:
+class DummyModel(SurrogateModel):
     """Dummy model for quick testing"""
     def train(self, x, y):
         pass
@@ -263,34 +268,32 @@ def test_flatten(L_to_flat, expected):
 
 
 @pytest.mark.parametrize("mtype, expected", [
-    (LinearNearestNeighbor, dict()),
-    (FloatKrigingSurrogate, dict()),
-    ('MyModel', dict(error=TypeError, match="'model' should be type")),
+    (LinearNearestNeighbor, does_not_raise()),
+    (FloatKrigingSurrogate, does_not_raise()),
+    ('MyModel', pytest.raises(TypeError, match="'model' should be type")),
+    (
+        type('Custom', (SurrogateModel,), dict(
+            train = (lambda self, x, y: None),
+            predict = (lambda self, x: x),
+        )),
+        does_not_raise(),
+    ),
     (
         type('Custom', (object,), dict(
             train = (lambda self, x, y: None),
             predict = (lambda self, x: x),
         )),
-        dict(),
-    ),
-    (
-        type('Custom', (object,), dict(
-            train = (lambda self, x, y: None),
-        )),
-        dict(error=ValueError),
+        pytest.raises(ValueError,
+            match="`model` must be a concrete implementation of `SurrogateModel`",
+        ),
     ),
 ])
 def test_SystemSurrogate_model(p1e2mg, mtype, expected):
     """Test type checking for model type"""
-    error = expected.get('error', None)
-
-    if error is None:
+    with expected:
         meta = SystemSurrogate(p1e2mg, {}, mtype)
-        assert isinstance(meta.state.model, mtype)
-    
-    else:
-        with pytest.raises(error, match=expected.get('match', None)):
-            SystemSurrogate(p1e2mg, {}, mtype)
+        assert meta.model_type is mtype
+        assert not meta.trained
 
 
 @pytest.mark.filterwarnings("ignore:The.*unknowns/transients are not part of the training set")
@@ -352,24 +355,25 @@ def test_SystemSurrogate_format_outputs(p1e2mg, data_in):
 def test_SystemSurrogate_format_outputs_arrays(vectorsys, data_vectorsys):
     meta = SystemSurrogate(vectorsys, data_vectorsys, FloatKrigingSurrogate)
     formated_outputs = meta._SystemSurrogate__format_outputs()
-    expected_formated_outputs = numpy.array([
+    expected = numpy.array([
         [0. , 0. , 0. ],[0.5, 0.5, 0.5],[1. , 1. , 1. ],
         [0. , 0. , 0. ],[1. , 1. , 1. ],[2. , 2. , 2. ],
         [0. , 0. , 0. ],[1.5, 1.5, 1.5],[3. , 3. , 3. ]
     ])
-    assert formated_outputs == pytest.approx(expected_formated_outputs, rel=1e-9)
-    assert numpy.array_equal(formated_outputs, expected_formated_outputs)
+    assert formated_outputs == pytest.approx(expected, rel=1e-9)
+    assert numpy.array_equal(formated_outputs, expected)
 
 
 def test_SystemSurrogate_train_model(p1e2mg):
     meta = SystemSurrogate(p1e2mg.Eq_2Mult, {}, FloatKrigingSurrogate)
-    modelOK = FloatKrigingSurrogate()
+    model = FloatKrigingSurrogate()
     x_in = numpy.array([[1., 2., 3., 4., 5.]]).transpose()
     x_out = numpy.array([[2., 4., 6., 8., 10.]]).transpose()
-    modelOK.train(x_in, x_out)
+    model.train(x_in, x_out)
     meta._SystemSurrogate__train_model(x_in, x_out)
-    for k in [1.5, 2.5, 3.5, 4.5]:
-        assert modelOK.predict(k) == meta.state.model.predict(k)
+    state = meta.state
+    for x in [1.5, 2.5, 3.5, 4.5]:
+        assert model.predict(x) == state.model.predict(x)
 
 
 @pytest.mark.filterwarnings("ignore:The.*unknowns/transients are not part of the training set")
@@ -504,14 +508,14 @@ def test_SystemSurrogate_init1(p1e2mg, data_in):
     assert (meta.state.doe_in.values == expected_doe_in.values).all()
     assert (meta.state.doe_in.columns == expected_doe_in.columns).all()
     assert meta.state.doe_out == expected_doe_out
-    assert isinstance(meta.state.model, FloatKrigingSurrogate)
+    assert meta.model_type is FloatKrigingSurrogate
     assert isinstance(meta.state, SystemSurrogateState)
 
     meta2 = SystemSurrogate(p1e2mg.Eq_2Mult, pandas.DataFrame.to_dict(data_in, orient="list"), FloatKrigingSurrogate)
     assert (meta2.state.doe_in.values == expected_doe_in.values).all()
     assert (meta2.state.doe_in.columns == expected_doe_in.columns).all()
     assert meta2.state.doe_out == expected_doe_out
-    assert isinstance(meta2.state.model, FloatKrigingSurrogate)
+    assert meta2.model_type is FloatKrigingSurrogate
     assert isinstance(meta2.state, SystemSurrogateState)
 
 
@@ -598,8 +602,8 @@ def test_SystemSurrogate_dump_and_load(tmp_path, sumg, training_data15):
     #doe_out TEST
     assert meta2.state.doe_out == meta.state.doe_out
     #MODEL PREDICTION TEST
-    for l in ([1.5, 0.5], [0.5, 10.], [5., 4.], [12.5, 11.5], [13., 7.]):
-        assert (meta2.state.model.predict(numpy.array(l)) == meta.state.model.predict(numpy.array(l))).all()
+    for x in ([1.5, 0.5], [0.5, 10.], [5., 4.], [12.5, 11.5], [13., 7.]):
+        assert (meta2.state.model.predict(numpy.array(x)) == meta.state.model.predict(numpy.array(x))).all()
     SUMG2.run_drivers()
     assert SUMG2.Provider.x_in.x == pytest.approx(12.5, rel=1e-3)
 
@@ -797,7 +801,7 @@ def test_get_dependent_connections_with_NLS(sumg_bare):
 def test_SystemSurrogate_check_unknowns_with_NLS(sumg_bare, training_data3):
     sumg_bare.Eq_2Mult.Eq2u1.add_driver(NonLinearSolver("nls"))
     meta = sumg_bare.Eq_2Mult.make_surrogate(training_data3, FloatKrigingSurrogate)
-    expected_keys = {
+    assert set(meta.state.doe_out.keys()) == {
         'Basic_Eq.x_in.x',
         'Eq2u1.inwards.u',
         'Mult_by_2_1.x_in.x',
@@ -807,14 +811,13 @@ def test_SystemSurrogate_check_unknowns_with_NLS(sumg_bare, training_data3):
         'u_out.x',
         'x_out.x',
     }
-    assert set(meta.state.doe_out.keys()) == expected_keys
 
 
 def test_SystemSurrogate_check_unknowns_warning_without_NLS(sumg_bare, training_data3):
     with pytest.warns(UserWarning):
         meta = sumg_bare.Eq_2Mult.make_surrogate(training_data3, FloatKrigingSurrogate)
 
-    expected_keys = {
+    assert set(meta.state.doe_out.keys()) == {
         'Basic_Eq.x_in.x',
         'Mult_by_2_1.x_in.x',
         'Mult_by_2_1.x_out.x',
@@ -823,7 +826,6 @@ def test_SystemSurrogate_check_unknowns_warning_without_NLS(sumg_bare, training_
         'u_out.x',
         'x_out.x',
     }
-    assert set(meta.state.doe_out.keys()) == expected_keys
 
 
 def test_SystemSurrogate_regtest_2(surrogated_pme_LNN):
@@ -1053,6 +1055,15 @@ def test_System_active_surrogate_RuntimeError(system, activate):
         assert not system.active_surrogate
 
 
+def test_System_make_surrogate_nodata():
+    system = Sys_Provider_1Eq_2Mult_Getter('p1e2mg')
+    system.make_surrogate({})
+    assert system.active_surrogate
+
+    with pytest.raises(RuntimeError, match="has not been trained"):
+        system.run_once()
+
+
 @pytest.mark.filterwarnings("ignore:The.*unknowns/transients are not part of the training set")
 @pytest.mark.parametrize("postsynch, expected", [
     (None, dict(keys=["x_out.x", "u_out.x"])),  # contains at least top system outputs
@@ -1067,24 +1078,21 @@ def test_System_make_surrogate_DoE_out(pme, training_data_pme, postsynch, expect
 
 
 @pytest.mark.filterwarnings("ignore:The.*unknowns/transients are not part of the training set")
-@pytest.mark.parametrize("choice, error", [
-    (True, None),
-    (False, None),
-    ("foo", TypeError),
-    (0, TypeError),
-    (1, TypeError),
-    (12., TypeError),
-    ({}, TypeError),
-    ([], TypeError),
+@pytest.mark.parametrize("choice, expected", [
+    (True, does_not_raise()),
+    (False, does_not_raise()),
+    ("foo", pytest.raises(TypeError)),
+    (0, pytest.raises(TypeError)),
+    (1, pytest.raises(TypeError)),
+    (12., pytest.raises(TypeError)),
+    ({}, pytest.raises(TypeError)),
+    ([], pytest.raises(TypeError)),
 ])
-def test_System_active_surrogate_arg(sumg, training_data3, choice, error):
+def test_System_active_surrogate_arg(sumg, training_data3, choice, expected):
     sumg.Eq_2Mult.make_surrogate(training_data3, FloatKrigingSurrogate)
-    if error is None:
+    with expected:
         sumg.Eq_2Mult.active_surrogate = choice
         assert sumg.Eq_2Mult.active_surrogate == choice
-    else:
-        with pytest.raises(error):
-            sumg.Eq_2Mult.active_surrogate = choice
 
 
 @pytest.mark.filterwarnings("ignore:The.*unknowns/transients are not part of the training set")

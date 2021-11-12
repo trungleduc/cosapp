@@ -5,7 +5,7 @@ import unittest
 import itertools
 import numpy as np
 
-from cosapp.systems.surrogate_models.kriging import KrigingSurrogate
+from cosapp.utils.surrogate_models.kriging import KrigingSurrogate
 
 
 def branin(x):
@@ -58,9 +58,11 @@ class TestKrigingSurrogate(unittest.TestCase):
 
     def test_2d(self):
 
-        x = np.array([[-2., 0.], [-0.5, 1.5], [1., 3.], [8.5, 4.5], 
-                      [-3.5, 6.], [4., 7.5], [-5., 9.], [5.5, 10.5],
-                      [10., 12.], [7., 13.5], [2.5, 15.]])
+        x = np.array([
+            [-2., 0.], [-0.5, 1.5], [1., 3.], [8.5, 4.5], 
+            [-3.5, 6.], [4., 7.5], [-5., 9.], [5.5, 10.5],
+            [10., 12.], [7., 13.5], [2.5, 15.],
+        ])
         y = np.array([[branin(case)] for case in x])
 
         surrogate = KrigingSurrogate(nugget=0., eval_rmse=True)
@@ -75,18 +77,6 @@ class TestKrigingSurrogate(unittest.TestCase):
 
         self.assertTrue(np.allclose(mu, [[16.72]], rtol=1e-1))
         self.assertTrue(np.allclose(sigma, [[15.27]], rtol=1e-2))
-
-    def test_no_training_data(self):
-        surrogate = KrigingSurrogate()
-
-        try:
-            surrogate.predict([0., 1.])
-        except RuntimeError as err:
-            self.assertEqual(str(err),
-                             "KrigingSurrogate has not been trained, "
-                             "so no prediction can be made.")
-        else:
-            self.fail("RuntimeError Expected")
 
     def test_one_pt(self):
         surrogate = KrigingSurrogate()

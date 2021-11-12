@@ -11,8 +11,7 @@ import pandas
 from cosapp.ports.port import Port
 from cosapp.ports.enum import Scope
 from cosapp.systems.system import System
-from cosapp.systems.surrogate_models.nearest_neighbor import NearestNeighbor
-from cosapp.systems.surrogate_models.surrogate_model import SurrogateModel
+from cosapp.utils.surrogate_models import SurrogateModel, NearestNeighbor
 # TODO allow keywords arguments to be passed to the surrogate constructor
 from cosapp.utils.helpers import is_numerical, is_number
 

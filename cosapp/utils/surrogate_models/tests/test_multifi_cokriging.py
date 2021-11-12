@@ -3,7 +3,7 @@ import unittest
 import numpy as np
 from numpy import array, sin, cos, pi
 
-from cosapp.systems.surrogate_models.multifi_cokriging import MultiFiCoKrigingSurrogate
+from cosapp.utils.surrogate_models.multifi_cokriging import MultiFiCoKrigingSurrogate
 
 
 class CoKrigingSurrogateTest(unittest.TestCase):

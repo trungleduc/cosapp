@@ -6,22 +6,80 @@ import logging
 import warnings
 from numbers import Number
 from collections import OrderedDict
-from typing import Any, Dict, Iterable, NamedTuple, NoReturn, Union, Optional, List
+from typing import (
+    NoReturn, Any, Dict, List,
+    Iterable, NamedTuple, Union,
+    Optional, Type,
+)
 
-from cosapp.utils.helpers import check_arg
-from cosapp.utils.logging import LogLevel
-from cosapp.utils.find_variables import find_variables, make_wishlist, natural_varname
+from cosapp.utils.surrogate_models.base import SurrogateModel
 from cosapp.ports.enum import PortType
+from cosapp.utils.logging import LogLevel
+from cosapp.utils.helpers import check_arg
+from cosapp.utils.find_variables import find_variables, make_wishlist, natural_varname
 
 
 logger = logging.getLogger(__name__)
+
+
+class SurrogateModelProxy(SurrogateModel):
+    """Surrogate model proxy used in `SystemSurrogate`.
+    Adds an internal property `trained`, and check that model
+    has been trained before each prediction.
+    """
+    def __init__(self, model):
+        if not isinstance(model, SurrogateModel):
+            raise TypeError(
+                "`SurrogateModelProxy` can only wrap `SurrogateModel` instances."
+            )
+        self.__wrappee = model
+        self.__trained = False
+
+    @property
+    def trained(self) -> bool:
+        return self.__trained
+
+    def train(self, x, y) -> None:
+        """Trains surrogate model with inputs `x` and outputs `y`.
+
+        Parameters
+        ----------
+        x : array-like
+            Training input locations
+        y : array-like
+            Model responses at given inputs.
+        """
+        model = self.__wrappee
+        logger.debug(f"Training model {model} with \n\tX = {x}\n\tY = {y}")
+        model.train(x, y)
+        self.__trained = True
+        logger.debug(f"Model {model} trained")
+
+    def predict(self, x) -> numpy.ndarray:
+        """Calculates a predicted value of the response based on the current trained model.
+
+        Parameters
+        ----------
+        x : array-like
+            Point(s) at which the surrogate is evaluated.
+        """
+        model = self.__wrappee
+        if not self.__trained:
+            raise RuntimeError(
+                f"{type(model).__name__} has not been trained, so no prediction can be made."
+            )
+        return model.predict(x)
+
+    def get_type(self) -> Type[SurrogateModel]:
+        """Returns wrapped model type"""
+        return type(self.__wrappee)
 
 
 class SystemSurrogateState(NamedTuple):
     """Named tuple containing internal state data of a SystemSurrogate object"""
     doe_in: pandas.DataFrame
     doe_out: Union[pandas.DataFrame, OrderedDict]
-    model: Any
+    model: SurrogateModelProxy
     doe_out_sizes: OrderedDict
 
 
@@ -36,7 +94,7 @@ class SystemSurrogate:
     def __init__(self,
         owner: "cosapp.systems.System",
         data_in: Union[pandas.DataFrame, Dict[str, Any]],
-        model: type,
+        model: Type[SurrogateModel],
         data_out: Optional[Union[pandas.DataFrame, Dict[str, Any]]] = None,
         postsynch: Union[str, List[str]] = '*',
         *args, **kwargs
@@ -47,38 +105,53 @@ class SystemSurrogate:
         check_arg(data_in, 'data_in', (pandas.DataFrame, dict))
         check_arg(data_out, 'data_out', (pandas.DataFrame, dict, type(None)))
         if model is not None:
-            check_arg(model, 'model', type,
-                lambda m: all(hasattr(m, attr) for attr in ('train', 'predict'))
-            )
+            try:
+                check_arg(model, 'model', type, lambda m: issubclass(m, SurrogateModel))
+            except ValueError as error:
+                error.args = (
+                    f"`model` must be a concrete implementation of `SurrogateModel`"
+                    f"; got `{model.__name__}`",
+                )
+                raise
         postsynch = make_wishlist(postsynch, 'postsynch')
-
-        if owner is not None:
-            logger.debug(f"Initialize surrogateclass for System {owner.name!r}, data_in as {data_in} and model as {model}")
-
+        
         # BUILD INTERN DATA
         self.__owner = owner
-        self.__need_doe = data_out is None
+        self.__need_doe = (data_out is None)
         
         doe_in = pandas.DataFrame.from_dict(data_in) if isinstance(data_in, dict) else data_in
         doe_out = self.__init_doe_out(data_out, postsynch)
-        model_obj = None if model is None else model(*args, **kwargs)
+        model_obj = None if model is None else SurrogateModelProxy(model(*args, **kwargs))
         self.__state = SystemSurrogateState(doe_in, doe_out, model_obj, OrderedDict())
-        
+
         # TRAINING
-        empty = any(obj is None for obj in (owner, model_obj)) or len(data_in) == 0
+        empty = owner is None or model_obj is None or len(data_in) == 0
         if not empty:
+            logger.debug(
+                f"Initialize {model.__name__} surrogate for System {owner.name!r}"
+                f", with {len(doe_in)} samples of {list(doe_in.columns)}"
+            )
             self.__check_unknowns_and_transients()
             self.__prepare_and_train()
 
-        logger.debug(f"surrogateclass initialized")
-
-    @property
-    def state(self)-> SystemSurrogateState:
-        return self.__state
+        logger.debug(f"System surrogate initialized")
 
     @property
     def owner(self)-> "cosapp.systems.System":
         return self.__owner
+
+    @property
+    def state(self)-> SystemSurrogateState:
+        """SystemSurrogateState: inner state of system surrogate"""
+        return self.__state
+
+    @property
+    def model_type(self)-> Type[SurrogateModel]:
+        return self.__state.model.get_type()
+
+    @property
+    def trained(self) -> bool:
+        return self.__state.model.trained
 
     @property
     def synched_outputs(self) -> List[str]:
@@ -142,12 +215,11 @@ class SystemSurrogate:
 
     def __format_outputs(self) -> numpy.ndarray:
         logger.debug(f"Reshaping outputs")
-        doe_length = len(self.__state.doe_in)
-        doe_out = self.__state.doe_out
+        state = self.__state
         reshaped_outputs = []
-        for k in range(doe_length):
+        for k in range(len(state.doe_in)):
             reshaped_outputs.append(
-                list(value[k] for value in doe_out.values())
+                list(value[k] for value in state.doe_out.values())
             )
         reshaped_outputs = numpy.asarray(list(list(flatten(el)) for el in reshaped_outputs))
         # logger.debug(f"Reshaped outputs are now numpy.ndarray and are: {reshaped_outputs}")
@@ -163,15 +235,15 @@ class SystemSurrogate:
     def __set_and_execute(self) -> None:
         logger.debug(f"Setting and executing in order to build data for training")
         owner = self.__owner
-        doe_out = self.__state.doe_out
-        for i, row in self.state.doe_in.iterrows():
+        state = self.__state
+        for i, row in state.doe_in.iterrows():
             logger.log(LogLevel.FULL_DEBUG, f"Setting {owner.name!r} input values (DOE row #{i})")
             for var, value in row.items():
                 owner[var] = value
             owner.run_drivers()
             # add tracked output data to doe_out
-            for var in doe_out:
-                doe_out[var].append(owner[var])
+            for var in state.doe_out:
+                state.doe_out[var].append(owner[var])
 
     def add_data(self, newdoe: pandas.DataFrame) -> NoReturn:
         # TODO: Should merge input lists when matching names (not working yet)
@@ -185,7 +257,7 @@ class SystemSurrogate:
 
     def __prepare_and_train(self) -> None:
         logger.debug(f"Preparing and training function")
-        if len(self.state.doe_out) == 0:
+        if len(self.__state.doe_out) == 0:
             raise ValueError(
                 f"Cannot train surrogate model: no output found in System {self.owner.name!r}"
             )
@@ -197,10 +269,7 @@ class SystemSurrogate:
         self.__train_model(x, y)
 
     def __train_model(self, x, y) -> None:
-        model = self.__state.model
-        logger.debug(f"Training model {model} with \n\tX = {x}\n\tY = {y}")
-        model.train(x, y)
-        logger.debug(f"Model {model} trained")
+        self.__state.model.train(x, y)
 
     def predict(self, x):
         return self.__state.model.predict(x).reshape(1, -1)[0]
@@ -249,7 +318,7 @@ class SystemSurrogate:
         return obj
 
     def __check_unknowns_and_transients(self) -> None:
-        state = self.state
+        state = self.__state
         unknowns = get_unknowns_transients(self.__owner)
         unsolvable_unknowns = set(unknowns).difference(state.doe_out)
         trained_unknowns = unsolvable_unknowns.issubset(state.doe_in)

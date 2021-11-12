@@ -5,9 +5,11 @@ import pandas as pd
 from cosapp.ports import Port
 from cosapp.systems import System
 from cosapp.systems.metamodels import MetaSystem
-from cosapp.systems.surrogate_models.kriging import FloatKrigingSurrogate
-from cosapp.systems.surrogate_models.nearest_neighbor import NearestNeighbor
-from cosapp.systems.surrogate_models.surrogate_model import SurrogateModel
+from cosapp.utils.surrogate_models import (
+    SurrogateModel,
+    NearestNeighbor,
+    FloatKrigingSurrogate,
+)
 from cosapp.tests.library.ports import XPort
 
 
