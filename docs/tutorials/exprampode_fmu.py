@@ -1,4 +1,4 @@
-from cosapp.systems import System
+from cosapp.base import System
 
 class ExpRampOde(System):
     """
