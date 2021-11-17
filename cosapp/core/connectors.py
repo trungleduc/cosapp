@@ -5,6 +5,7 @@ import abc
 import copy
 import logging
 import weakref
+from types import MappingProxyType
 from typing import Callable, Dict, Iterable, Iterator, List, Optional, Tuple, Union
 
 from cosapp.ports import units
@@ -91,10 +92,8 @@ class BaseConnector(abc.ABC):
         # Generate mapping dictionary
         if mapping is None:
             mapping = dict((v, v) for v in sink if v in source)
-        elif isinstance(mapping, str):
-            mapping = {mapping: mapping}
-        elif not isinstance(mapping, dict):
-            mapping = dict(zip(mapping, mapping))
+        else:
+            mapping = self.format_mapping(mapping)
 
         self._mapping = mapping  # type: Dict[str, str]
         self._source = self.__get_port(source, sink=False, check=False)  # type: weakref.ReferenceType[BasePort]
@@ -171,7 +170,7 @@ class BaseConnector(abc.ABC):
     @property
     def mapping(self) -> Dict[str, str]:
         """Dict[str, str] : Variable name mapping between the sink (key) and the source (value)."""
-        return self._mapping
+        return MappingProxyType(self._mapping)
 
     def sink_variables(self) -> Iterator[str]:
         return self._mapping.keys()
@@ -205,6 +204,16 @@ class BaseConnector(abc.ABC):
             and len(self) == len(sink)
             and self.preserves_names()
         )
+
+    def update_mapping(self, mapping: Dict[str, str]) -> None:
+        """Extend current mapping with additional dictionary.
+
+        Parameters
+        ----------
+        mapping : Dict[str, str]
+            Variable name mapping extending current mapping.
+        """
+        self._mapping.update(mapping)
 
     def remove_variables(self, names: Iterable[str]) -> None:
         """Remove the provided variables from this connection.
@@ -296,6 +305,8 @@ class BaseConnector(abc.ABC):
         """
         if isinstance(mapping, str):
             mapping = {mapping: mapping}
+        elif isinstance(mapping, MappingProxyType):
+            mapping = dict(mapping)
         elif not isinstance(mapping, dict):
             mapping = dict(zip(mapping, mapping))
         return mapping
@@ -330,6 +341,10 @@ class Connector(BaseConnector):
     def sink(self, port: BasePort) -> None:
         cls = self.__class__
         super(cls, cls).sink.__set__(self, port)
+        self.update_unit_conversion()
+
+    def update_mapping(self, mapping: Dict[str, str]) -> None:
+        super().update_mapping(mapping)
         self.update_unit_conversion()
 
     def remove_variables(self, names: Iterable[str]) -> None:
@@ -389,7 +404,7 @@ class Connector(BaseConnector):
             self._unit_conversions[key] = converter
 
         if name is None:
-            for name in self._unit_conversions:
+            for name in mapping:
                 update_one_connection(name)
         else:
             update_one_connection(name)
@@ -428,6 +443,6 @@ class DeepCopyConnector(BaseConnector):
     def transfer(self) -> None:
         source, sink = self.source, self.sink
 
-        for target, origin in self.mapping.items():
+        for target, origin in self._mapping.items():
             value = getattr(source, origin)
             setattr(sink, target, copy.deepcopy(value))

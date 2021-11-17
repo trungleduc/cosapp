@@ -2574,11 +2574,9 @@ def test_System_connect_partial():
 
 
 def test_System_connect_custom():
-    s1 = SubSystem("s1")
-    s2 = SubSystem("s2")
     top = System("top")
-    top.add_child(s1)
-    top.add_child(s2)
+    s1 = top.add_child(SubSystem("s1"))
+    s2 = top.add_child(SubSystem("s2"))
 
     with pytest.raises(TypeError, match="ctype"):
         top.connect(s1.out, s2.in_, ctype="Foo")
@@ -2611,6 +2609,20 @@ def test_System_connect_custom():
     assert connector.sink is top.s2.in_
     assert connector.mapping == {'Pt': 'Pt', 'W': 'W'}
 
+    # Test mapping extension
+    s3 = top.add_child(SubSystem("s3"))
+    top.connect(s2.out, s3.in_, 'Pt', ctype=PlainConnector)
+    connectors = top.connectors
+    assert set(connectors) == {
+        "s1_out_to_s2_in_",
+        "s2_out_to_s3_in_",
+    }
+    connector = connectors["s2_out_to_s3_in_"]
+    assert isinstance(connector, PlainConnector)
+    assert connector.mapping == {'Pt': 'Pt'}
+    top.connect(s2.out, s3.in_, 'W', ctype=PlainConnector)
+    assert connector.mapping == {'Pt': 'Pt', 'W': 'W'}
+
 
 def test_System_connect_systems():
     """Tests system/system connections"""
@@ -2640,13 +2652,13 @@ def test_System_connect_systems():
         "s2_out_to_s3_entry",
         "s3_exit_to_s2_inwards",
     }
-    connectors['s1_out_to_s2_in_'].mapping == {'Pt': 'Pt', 'W': 'W'}
-    connectors['s2_out_to_s3_entry'].mapping == {'Pt': 'b'}
-    connectors['s3_exit_to_s2_inwards'].mapping == {'a': 'sloss'}
+    assert connectors['s1_out_to_s2_in_'].mapping == {'Pt': 'Pt', 'W': 'W'}
+    assert connectors['s2_out_to_s3_entry'].mapping == {'b': 'Pt'}
+    assert connectors['s3_exit_to_s2_inwards'].mapping == {'sloss': 'a'}
 
     # Complete existing connector
     top.connect(s2, s3, {'out.W': 'entry.a'})
-    connectors['s2_out_to_s3_entry'].mapping == {'Pt': 'b', 'W': 'a'}
+    assert connectors['s2_out_to_s3_entry'].mapping == {'b': 'Pt', 'a': 'W'}
 
     # Mapping requesting full connection between two sub-systems (forbidden)
     s4 = top.add_child(TopSystem('s4'))
@@ -2684,6 +2696,90 @@ def test_System_connect_systems():
     }
     assert connectors['top_entry_to_sub_entry'].mapping == {'a': 'a'}
     assert connectors['sub_exit_to_top_exit'].mapping == {'b': 'b'}
+
+
+def test_System_connect_port_connectors(caplog):
+    """Tests connections with class-specific port connector
+    """
+    class AbcConnector(BaseConnector):
+        """Connector for `AbcPort` objects
+        """
+        def __init__(self, name: str, sink: BasePort, source: BasePort, *args, **kwargs):
+            super().__init__(name, sink, source, mapping=self.fixed_mapping())
+        
+        def transfer(self) -> None:
+            source, sink = self.source, self.sink
+            sink.a = source.b
+            sink.b = -source.a
+
+        @staticmethod
+        def fixed_mapping():
+            return dict(zip('ba', 'ab'))
+
+    class AbPort(Port):
+        """Port class with custom connector"""
+        def setup(self):
+            self.add_variable("a", 1.0)
+            self.add_variable("b", 2.0)
+        
+        # Port-specific connector
+        Connector = AbcConnector
+
+    class XyPort(Port):
+        def setup(self):
+            self.add_variable("x", 1.0)
+            self.add_variable("y", 2.0)
+
+    class AbcSystem(System):
+        def setup(self):
+            self.add_input(AbPort, 'p_in')
+            self.add_output(AbPort, 'p_out')
+
+        def compute(self):
+            self.p_out.a = 2 * self.p_in.a
+            self.p_out.b = 2 * self.p_in.b
+
+    class XyzSystem(System):
+        def setup(self):
+            self.add_input(XyPort, 'p_in')
+            self.add_outward('v', np.zeros(2))
+
+        def compute(self):
+            self.v = np.array([self.p_in.x, self.p_in.y])
+
+    top = System("top")
+    s1 = top.add_child(AbcSystem("s1"))
+    s2 = top.add_child(AbcSystem("s2"))
+    s3 = top.add_child(XyzSystem("s3"))
+
+    caplog.clear()
+    with caplog.at_level(logging.INFO):
+        top.connect(s1.p_out, s2.p_in)
+        top.connect(s2.p_out, s3.p_in, dict(zip('ab', 'xy')))
+
+    assert len(caplog.records) == 1
+    assert re.match(
+        "'s1.p_out' and 's2.p_in' connected by.* `AbPort\.Connector`",
+        caplog.records[0].message
+    )
+
+    connectors = top.connectors
+    assert set(connectors) == {
+        "s1_p_out_to_s2_p_in",
+        "s2_p_out_to_s3_p_in",
+    }
+    assert isinstance(connectors['s1_p_out_to_s2_p_in'], AbPort.Connector)
+    assert isinstance(connectors['s2_p_out_to_s3_p_in'], Connector)
+
+    assert connectors['s1_p_out_to_s2_p_in'].mapping == dict(zip('ba', 'ab'))
+    assert connectors['s2_p_out_to_s3_p_in'].mapping == dict(zip('xy', 'ab'))
+
+    top.s1.p_in.a = 0.1
+    top.s1.p_in.b = 0.25
+    top.run_once()
+    assert top.s2.p_in.a == pytest.approx(0.5, rel=1e-15)
+    assert top.s2.p_in.b == pytest.approx(-0.2, rel=1e-15)
+    assert top.s3.v == pytest.approx([1, -0.4], rel=1e-15)
 
 
 def test_System_add_property():
