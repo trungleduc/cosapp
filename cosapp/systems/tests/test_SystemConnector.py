@@ -68,7 +68,7 @@ def test_Connector__init__():
     assert proxy.__wrapped__ is connector
     assert proxy.source is connector.source
     assert proxy.sink is connector.sink
-    assert proxy.mapping is connector.mapping
+    assert proxy.mapping == connector.mapping
 
     with pytest.raises(TypeError):
         SystemConnector('not a connector')

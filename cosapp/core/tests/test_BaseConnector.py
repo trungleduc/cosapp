@@ -1,5 +1,6 @@
 import pytest
 from unittest import mock
+from types import MappingProxyType
 
 from cosapp.core.connectors import BaseConnector, ConnectorError
 from cosapp.ports.port import PortType, Port
@@ -278,6 +279,10 @@ def test_BaseConnector__init__(ConnectorFactory, settings, expected):
     (('x', 'y'), {'x': 'x', 'y': 'y'}),  # tuple
     ({'x', 'y'}, {'x': 'x', 'y': 'y'}),  # set
     ({'x': 'v', 'y': 'w'}, {'x': 'v', 'y': 'w'}),
+    (
+        MappingProxyType({'x': 'a', 'y': 'b', 'z': 'c'}),
+        {'x': 'a', 'y': 'b', 'z': 'c'},
+    ),
 ])
 def test_BaseConnector_format_mapping(data, expected):
     """Test static method `BaseConnector.format_mapping`"""
@@ -487,6 +492,9 @@ def test_BaseConnector_is_mirror_ExtensiblePort():
 def test_BaseConnector_mapping(ConnectorFactory, settings, expected):
     c = ConnectorFactory(**settings)
     assert c.mapping == expected['mapping']
+    # Check that connector mapping is immutable
+    with pytest.raises(TypeError, match="does not support item assignment"):
+        c.mapping['foo'] = 'bar'
 
 
 @pytest.mark.parametrize("settings, removed, expected", [
