@@ -1932,7 +1932,7 @@ class System(Module, TimeObserver):
         object1: Union[BasePort, "System"],
         object2: Union[BasePort, "System"],
         mapping: Union[str, List[str], Dict[str, str], None] = None,
-        ctype: Optional[Type[BaseConnector]] = None,
+        cls: Optional[Type[BaseConnector]] = None,
         **kwargs
     ) -> None:
         """Connect two systems or two ports. 
@@ -1966,14 +1966,14 @@ class System(Module, TimeObserver):
             Second end-point of connector.
         mapping : str or List[str] or Dict[str, str], optional
             (List of) common name(s) or mapping name dictionary; default None (i.e. no mapping).
-        ctype : Type[BaseConnector], optional
-            Connector type. When specified, `ctype` must be a specialization of `BaseConnector`.
-            If `ctype` is `None` (default), the actual connector type is either `Connector`,
+        cls : Type[BaseConnector], optional
+            Connector type. When specified, `cls` must be a specialization of `BaseConnector`.
+            If `cls` is `None` (default), the actual connector type is either `Connector`,
             or a port-specific connector, if any. Port bound connectors are automatically selected
             when both ports are of same type, and when port class contains inner class `Connector`,
             derived from `BaseConnector`.
         **kwargs :
-            Additional keyword arguments forwarded to `ctype`.
+            Additional keyword arguments forwarded to `cls`.
         
         Examples
         --------
@@ -2017,10 +2017,10 @@ class System(Module, TimeObserver):
         same_kind = lambda base: isinstance(object1, base) and isinstance(object2, base)
 
         if same_kind(BasePort):
-            self.__connect_ports(object1, object2, mapping, ctype, **kwargs)
+            self.__connect_ports(object1, object2, mapping, cls, **kwargs)
 
         elif same_kind(System):
-            self.__connect_systems(object1, object2, mapping, ctype, **kwargs)
+            self.__connect_systems(object1, object2, mapping, cls, **kwargs)
             
         else:
             raise TypeError(
@@ -2032,7 +2032,7 @@ class System(Module, TimeObserver):
         system1: "System",
         system2: "System",
         mapping: Union[str, List[str], Dict[str, str]],
-        ctype: Optional[Type[BaseConnector]] = None,
+        cls: Optional[Type[BaseConnector]] = None,
         **kwargs
     ) -> None:
         """Connect two sub-systems together. 
@@ -2065,14 +2065,14 @@ class System(Module, TimeObserver):
             Second end-point of connector.
         mapping : str or List[str] or Dict[str, str], optional
             (List of) common name(s) or mapping name dictionary; default None (i.e. no mapping).
-        ctype : Type[BaseConnector], optional
-            Connector type. When specified, `ctype` must be a specialization of `BaseConnector`.
-            If `ctype` is `None` (default), the actual connector type is either `Connector`,
+        cls : Type[BaseConnector], optional
+            Connector type. When specified, `cls` must be a specialization of `BaseConnector`.
+            If `cls` is `None` (default), the actual connector type is either `Connector`,
             or a port-specific connector, if any. Port bound connectors are automatically selected
             when both ports are of same type, and when port class contains inner class `Connector`,
             derived from `BaseConnector`.
         **kwargs :
-            Additional keyword arguments forwarded to `ctype`.
+            Additional keyword arguments forwarded to `cls`.
         """
         if mapping is None:
             raise ConnectorError(
@@ -2093,7 +2093,7 @@ class System(Module, TimeObserver):
             obj2 = getattr(system2, name2)
             same_kind = lambda base: isinstance(obj1, base) and isinstance(obj2, base)
             if same_kind(BasePort):
-                self.__connect_ports(obj1, obj2, ctype=ctype, **kwargs)
+                self.__connect_ports(obj1, obj2, cls=cls, **kwargs)
             elif same_kind(System):
                 self.__connect_systems(obj1, obj2, mapping=None)  # raises ValueError
             else:
@@ -2104,14 +2104,14 @@ class System(Module, TimeObserver):
                     obj1.mapping,
                     obj2.mapping,
                     {obj1.key: obj2.key},
-                    ctype, **kwargs,
+                    cls, **kwargs,
                 )
 
     def __connect_ports(self,
         port1: BasePort,
         port2: BasePort,
         mapping: Union[str, List[str], Dict[str, str], None] = None,
-        ctype: Optional[Type[BaseConnector]] = None,
+        cls: Optional[Type[BaseConnector]] = None,
         **kwargs
     ) -> None:
         """Connect two ports together. 
@@ -2142,14 +2142,14 @@ class System(Module, TimeObserver):
             Second end-point of connector.
         mapping : str or List[str] or Dict[str, str], optional
             (List of) common name(s) or mapping name dictionary; default None (i.e. no mapping).
-        ctype : Type[BaseConnector], optional
-            Connector type. When specified, `ctype` must be a specialization of `BaseConnector`.
-            If `ctype` is `None` (default), the actual connector type is either `Connector`,
+        cls : Type[BaseConnector], optional
+            Connector type. When specified, `cls` must be a specialization of `BaseConnector`.
+            If `cls` is `None` (default), the actual connector type is either `Connector`,
             or a port-specific connector, if any. Port bound connectors are automatically selected
             when both ports are of same type, and when port class contains inner class `Connector`,
             derived from `BaseConnector`.
         **kwargs :
-            Additional keyword arguments forwarded to `ctype`.
+            Additional keyword arguments forwarded to `cls`.
         """
         # Type validation
         def check_port(port: BasePort, argname: str):
@@ -2160,14 +2160,14 @@ class System(Module, TimeObserver):
         check_port(port2, 'port2')
         check_arg(mapping, 'mapping', (str, list, dict, MappingProxyType, type(None)))
         
-        if ctype is None:
+        if cls is None:
             ptype = type(port1)
             if ptype is type(port2):
                 # Check if there exists a port-specific connector
                 try:
-                    ctype = getattr(ptype, "Connector")
+                    cls = getattr(ptype, "Connector")
                 except AttributeError:
-                    ctype = Connector
+                    cls = Connector
                 else:
                     pname = ptype.__name__
                     logger.info(
@@ -2175,14 +2175,14 @@ class System(Module, TimeObserver):
                         f" connected by port-specific connector `{pname}.Connector`."
                     )
             else:
-                ctype = Connector
+                cls = Connector
 
-        if ctype is not Connector:
+        if cls is not Connector:
             try:
-                SystemConnector.check(ctype)
+                SystemConnector.check(cls)
             except (TypeError, ValueError) as error:
                 error.args = (
-                    f"`ctype` must be a concrete implementation of `BaseConnector`; got {ctype!r}",
+                    f"`cls` must be a concrete implementation of `BaseConnector`; got {cls!r}",
                 )
                 raise
 
@@ -2204,7 +2204,7 @@ class System(Module, TimeObserver):
 
             if isinstance(sink, Port):
                 if not (len(sink) == len(source) == len(mapping)):
-                    absent = [f"{sink.name}.{v}" for v in sink if v not in mapping]
+                    absent = [f"{sink.name}.{v}" for v in sink if v not in mapping.keys()]
                     absent.extend(f"{source.name}.{v}" for v in source if v not in mapping.values())
                     logger.debug(
                         "Partial connection between {!r} and {!r}. "
@@ -2212,10 +2212,10 @@ class System(Module, TimeObserver):
                             sink_name, source_name, ", ".join(absent)
                         )
                     )
-                    
-            name = f"{source_name}_to_{sink_name}".replace(".", "_")
+            
+            name = f"{source_name} -> {sink_name}"
             new_connector = SystemConnector(
-                ctype(name, sink, source, mapping, **kwargs)
+                cls(name, sink, source, mapping, **kwargs)
             )
             connectors = self.connectors
             # Check that variables are set only once
