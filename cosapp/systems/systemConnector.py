@@ -83,6 +83,9 @@ class SystemConnector(Proxy):
             sink[var] += perturbation
         sink.owner.set_dirty(sink.direction)
 
+    def __repr__(self):
+        return repr(self.__wrapped__)
+    
     def transfer(self) -> None:
         """Transfer values from `source` to `sink`."""
         source, sink = self.source, self.sink

@@ -108,6 +108,13 @@ class T(Port):
         self.add_variable('y')
         self.owner = fake
 
+
+class CustomPort(Port):
+    """Port with peer-to-peer connector"""
+    class Connector(BaseConnector):
+        def transfer(self) -> None:
+            pass
+
 # <codecell>
 
 @pytest.fixture(scope="function")
@@ -271,6 +278,20 @@ def test_BaseConnector__init__(ConnectorFactory, settings, expected):
         pattern = expected.get('match', None)
         with pytest.raises(error, match=pattern):
             c = ConnectorFactory(**settings)
+
+
+def test_BaseConnector__repr__():
+    p1 = Q('p1', PortType.IN, {'x': 1, 'y': 2, 'z': 3})
+    p2 = R('p2', PortType.OUT, {'v': 2, 'w': 4, 'z': 3})
+
+    c = BaseConnector('p2 -> p1', p1, p2, {'z': 'w'})
+    assert repr(c) == "BaseConnector(fake.p1 <- fake.p2, {'z': 'w'})"
+
+    c = BaseConnector('p2 -> p1', p1, p2, 'z')
+    assert repr(c) == "BaseConnector(fake.p1 <- fake.p2, ['z'])"
+
+    c = CustomPort.Connector('p2 -> p1', p1, p2, 'z')
+    assert repr(c) == "CustomPort.Connector(fake.p1 <- fake.p2, ['z'])"
 
 
 @pytest.mark.parametrize("data, expected", [

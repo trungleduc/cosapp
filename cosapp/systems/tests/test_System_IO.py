@@ -239,17 +239,21 @@ def test_System_load(test_library):
 
     # check connectors
     connectors = s.connectors
-    assert len(connectors) == 3
+    assert set(connectors) == {
+        "p1.flnum_in -> p11.flnum_in",
+        "p11.flnum_out -> p12.flnum_in",
+        "p12.flnum_out -> p1.flnum_out",
+    }
 
-    connector = connectors["p1_flnum_in_to_p11_flnum_in"]
+    connector = connectors["p1.flnum_in -> p11.flnum_in"]
     assert connector.source is s.flnum_in
     assert connector.sink is s.p11.flnum_in
 
-    connector = connectors["p11_flnum_out_to_p12_flnum_in"]
+    connector = connectors["p11.flnum_out -> p12.flnum_in"]
     assert connector.source is s.p11.flnum_out
     assert connector.sink is s.p12.flnum_in
 
-    connector = connectors["p12_flnum_out_to_p1_flnum_out"]
+    connector = connectors["p12.flnum_out -> p1.flnum_out"]
     assert connector.source is s.p12.flnum_out
     assert connector.sink is s.flnum_out
 
@@ -355,13 +359,16 @@ def test_System_load_from_dict(test_library):
 
     # check connectors
     connectors = s.connectors
-    assert len(connectors) == 2
+    assert set(connectors) == {
+        "p1.flnum_in -> p11.flnum_in",
+        "p11.flnum_out -> p1.flnum_out",
+    }
 
-    connector = connectors["p1_flnum_in_to_p11_flnum_in"]
+    connector = connectors["p1.flnum_in -> p11.flnum_in"]
     assert connector.source is s.flnum_in
     assert connector.sink is s.p11.flnum_in
 
-    connector = connectors["p11_flnum_out_to_p1_flnum_out"]
+    connector = connectors["p11.flnum_out -> p1.flnum_out"]
     assert connector.source is s.p11.flnum_out
     assert connector.sink is s.flnum_out
 
@@ -437,17 +444,21 @@ def test_System_load_from_dict(test_library):
 
     # check connectors
     connectors = s.connectors
-    assert len(connectors) == 3
+    assert set(connectors) == {
+        "p1.flnum_in -> p11.flnum_in",
+        "p11.flnum_out -> p12.flnum_in",
+        "p12.flnum_out -> p1.flnum_out",
+    }
 
-    connector = connectors["p1_flnum_in_to_p11_flnum_in"]
+    connector = connectors["p1.flnum_in -> p11.flnum_in"]
     assert connector.source is s.flnum_in
     assert connector.sink is s.p11.flnum_in
 
-    connector = connectors["p11_flnum_out_to_p12_flnum_in"]
+    connector = connectors["p11.flnum_out -> p12.flnum_in"]
     assert connector.source is s.p11.flnum_out
     assert connector.sink is s.p12.flnum_in
 
-    connector = connectors["p12_flnum_out_to_p1_flnum_out"]
+    connector = connectors["p12.flnum_out -> p1.flnum_out"]
     assert connector.source is s.p12.flnum_out
     assert connector.sink is s.flnum_out
 
