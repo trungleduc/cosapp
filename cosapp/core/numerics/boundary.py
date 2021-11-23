@@ -85,6 +85,7 @@ class Boundary:
             fullname = ".".join(fullpath),
             port = context[portname],
             mask = mask if mask is not None else auto_mask,
+            ref = context.name2variable[var_name],
         )
 
     @staticmethod
@@ -163,6 +164,11 @@ class Boundary:
         return self.__info.fullname
 
     @property
+    def ref(self) -> VariableReference:
+        """VariableReference : variable reference accessed by the boundary."""
+        return self.__info.ref
+
+    @property
     def variable(self) -> str:
         """str : name of the variable accessed by the boundary."""
         return self.__info.varname
@@ -177,7 +183,7 @@ class Boundary:
         check_arg(mask, f"mask for variable {self.name!r}", (type(None), list, tuple, numpy.ndarray))
         if mask is not None:
             mask = numpy.asarray(mask)
-            value_array = numpy.asarray(self.context[self.name])
+            value_array = numpy.asarray(self.ref.value)
             if value_array.ndim == 0:
                 if mask.size != 1:
                     raise ValueError(
@@ -198,16 +204,17 @@ class Boundary:
     @property
     def value(self) -> Union[Number, numpy.ndarray]:
         """Number or numpy.ndarray: Current value of the boundary."""
+        value = self.__info.ref.value
         if self.mask is None:
-            return self.context[self.name]
+            return value
         elif numpy.any(self.mask):
-            return self.context[self.name][self.mask]
+            return value[self.mask]
         else:
             return numpy.empty(0)
 
     @value.setter
     def value(self, new: Union[Number, numpy.ndarray]) -> None:
-        ref = self.context.name2variable[self.name]
+        ref = self.__info.ref
 
         if self.mask is None:
             if not numpy.array_equal(ref.value, new):
@@ -243,7 +250,7 @@ class Boundary:
             return
 
         default_array = numpy.asarray(value)
-        value_array = numpy.asarray(self.context[self.name])
+        value_array = numpy.asarray(self.ref.value)
         if mask is not None:
             if mask.shape != self.mask.shape:
                 raise ValueError(

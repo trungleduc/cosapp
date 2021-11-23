@@ -1365,6 +1365,79 @@ def test_System_loops_2():
     assert top.get_unsolved_problem().shape == (0, 0)
 
 
+def test_System_loops_control_unknowns():
+    """Test mathematical problem created by `open_loops`,
+    with control over loop unknowns.
+    """
+    class A(System):
+        def setup(self):
+            self.add_inward('x', 2.0)
+            self.add_outward('y', 0.0)
+
+        def compute(self):
+            self.y = self.x**2
+    
+    class B(System):
+        def setup(self):
+            self.add_inward('u', 3.0)
+            self.add_outward('v', 0.0)
+
+        def compute(self):
+            self.v = self.u
+    
+    class Assembly(System):
+        def setup(self):
+            a = self.add_child(A('a'))
+            b = self.add_child(B('b'))
+
+            # Set inter-dependency between `a` and `b`
+            # Solution is a.x = 0 or 1
+            self.connect(a, b, {'y': 'u', 'x': 'v'})
+            # Declare connected inputs as unknowns
+            a.add_unknown('x', max_rel_step=0.5)  # in case `a.x` is ever used as an unknown
+            b.add_unknown('u', max_abs_step=0.1)  # in case `b.u` is ever used as an unknown
+
+    s = Assembly('s')
+    # Check that assembled problem is empty, since
+    # `s.a.x` and `s.b.u` are both connected to outputs
+    assert s.get_unsolved_problem().shape == (0, 0)
+    assert s.a.get_unsolved_problem().n_unknowns == 1
+    assert s.b.get_unsolved_problem().n_unknowns == 1
+
+    s.exec_order = ('a', 'b')
+    s.open_loops()
+    problem = s.get_unsolved_problem()
+    assert problem.shape == (1, 1)
+    assert set(problem.unknowns) == {'a.inwards.x'}
+    unknown = problem.unknowns['a.inwards.x']
+    assert unknown.max_abs_step == np.inf
+    assert unknown.max_rel_step == 0.5
+    s.close_loops()
+    assert s.get_unsolved_problem().shape == (0, 0)
+    # Solve problem
+    s.add_driver(NonLinearSolver('solver', tol=1e-7))
+    s.a.x = 10
+    s.run_drivers()
+    assert s.a.x == pytest.approx(1, abs=1e-6)
+
+    s = Assembly('s')
+    s.exec_order = ('b', 'a')
+    s.open_loops()
+    problem = s.get_unsolved_problem()
+    assert problem.shape == (1, 1)
+    assert set(problem.unknowns) == {'b.inwards.u'}
+    unknown = problem.unknowns['b.inwards.u']
+    assert unknown.max_abs_step == 0.1
+    assert unknown.max_rel_step == np.inf
+    s.close_loops()
+    assert s.get_unsolved_problem().shape == (0, 0)
+    # Solve problem
+    s.add_driver(NonLinearSolver('solver', tol=1e-7))
+    s.b.u = 3
+    s.run_drivers()
+    assert s.a.x == pytest.approx(1, abs=1e-6)
+
+
 def test_System_is_input_var(DummyFactory):
     s = DummyFactory("dummy",
         inputs = get_args(PtWPort, 'flow_in'),
