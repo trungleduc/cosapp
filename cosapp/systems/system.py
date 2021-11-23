@@ -2363,6 +2363,7 @@ class System(Module, TimeObserver):
         connectors_to_open = list()  # type: List[Connector]
         systems_connectors = self.__sys_connectors
         self.__input_mapping = None
+        name2var = self.name2variable
         loop = self.__loop_problem
         loop.clear()
 
@@ -2396,12 +2397,16 @@ class System(Module, TimeObserver):
             # Set mathematical problem
             sink_name = sink.contextual_name
             source_name = source.contextual_name
-            owner_unknowns = sink.owner.unknowns
+            owner_unknowns = dict(
+                (unknown.ref, unknown)
+                for unknown in sink.owner.unknowns.values()
+            )
             for target, origin in connector.mapping.items():
                 unknown_name = f"{sink_name}.{target}"
+                var = name2var[unknown_name]
                 options = {}
                 try:
-                    unknown = owner_unknowns[unknown_name]
+                    unknown = owner_unknowns[var]
                 except KeyError:
                     pass
                 else:
