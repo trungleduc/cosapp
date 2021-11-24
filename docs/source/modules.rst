@@ -23,8 +23,9 @@ Modules
    cosapp.core.module
    cosapp.core.time
 
-   cosapp.patterns.observer
    cosapp.patterns.singleton
+   cosapp.patterns.observer
+   cosapp.patterns.visitor
 
    cosapp.ports.port
    cosapp.ports.enum
@@ -58,6 +59,7 @@ Modules
    cosapp.drivers.runoptim
    cosapp.drivers.runsinglecase
    cosapp.drivers.validitycheck
+   cosapp.drivers.utils
 
    cosapp.recorders.recorder
    cosapp.recorders.dataframe_recorder
@@ -129,7 +131,10 @@ Inheritance
     cosapp.ports.port
     :parts: 1
 
-.. mermaid-inheritance::  cosapp.core.connectors
+- cosapp.core.connectors
+
+.. mermaid-inheritance::
+    cosapp.core.connectors
     :parts: 1
 
 - cosapp.recorders

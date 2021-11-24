@@ -1,5 +1,96 @@
 # History
 
+## 0.11.8 (2021-11-24)
+
+### New features & API evolutions
+
+* New module `cosapp.base` (MR [#96](https://gitlab.com/cosapp/cosapp/-/merge_requests/96)) containing base classes for user-defined classes (in particular, `Port`, `System` and `Driver`). Also contains `BaseConnector`, base class for custom connectors (see "User-defined and peer-to-peer connectors" below), as well as CoSApp-specific exceptions `ScopeError`, `UnitError` and `ConnectorError`.
+**Note:** `Port`, `System` and `Driver` can still be imported from `cosapp.ports`, `cosapp.systems` and `cosapp.drivers`, respectively.
+
+* Public API `cosapp.base.SurrogateModel` to define custom surrogate models used in `System.make_surrogate` (MR [#97](https://gitlab.com/cosapp/cosapp/-/merge_requests/97)).
+Pre-defined models have been moved to module `cosapp.utils.surrogate_models`.
+
+* System-to-system connections (MR [#94](https://gitlab.com/cosapp/cosapp/-/merge_requests/94)).
+
+```python
+class LegacyPortToPort(System):
+    def setup(self):
+        a = self.add_child(ModelA('a'))
+        b = self.add_child(ModelB('b'))
+
+        # Explicit port-to-port connections
+        self.connect(a.p_in, b.p_out)
+        self.connect(a.outwards, b.inwards, {'y': 'x'})
+
+class Alternative(System):
+  """Same as `LegacyPortToPort`, with alternative connection syntax"""
+    def setup(self):
+        a = self.add_child(ModelA('a'))
+        b = self.add_child(ModelB('b'))
+
+        # Alternative syntax: connect systems, with port or variable mapping
+        self.connect(a, b, {'p_in': 'p_out', 'y': 'x'})
+```
+
+* User-defined and peer-to-peer connectors (MR [#87](https://gitlab.com/cosapp/cosapp/-/merge_requests/87) and MR [#98](https://gitlab.com/cosapp/cosapp/-/merge_requests/98)).
+
+```python
+import numpy
+from copy import deepcopy
+from cosapp.base import Port, System, BaseConnector
+
+class DeepCopyConnector(BaseConnector):
+  """User-defined deep-copy connector"""
+    def transfer(self) -> None:
+        source, sink = self.source, self.sink
+
+        for target, origin in self.mapping.items():
+            value = getattr(source, origin)
+            setattr(sink, target, deepcopy(value))
+
+class CustomPort(Port):
+    def setup(self):
+        self.add_variable('x', 0.0)
+        self.add_variable('y', 1.0)
+
+    class Connector(BaseConnector):
+      """Connector for peer-to-peer connections"""
+        def transfer(self) -> None:
+            source, sink = self.source, self.sink
+            sink.x = source.y
+            sink.y = -source.x
+
+class MyModel(System):
+    def setup(self):
+        self.add_input(CustomPort, 'p_in')
+        self.add_output(CustomPort, 'p_out')
+
+        self.add_inward('entry', numpy.identity(3))
+        self.add_outward('exit', numpy.zeros_like(self.entry))
+
+class Assembly(System):
+    def setup(self):
+        a = self.add_child(MyModel('a'))
+        b = self.add_child(MyModel('b'))
+
+        self.connect(a, b, {'exit', 'entry'}, cls=DeepCopyConnector)
+        self.connect(a.p_in, b.p_out)  # will use CustomPort.Connector
+```
+
+### Documentation
+
+* Updated tutorials (MR [#102](https://gitlab.com/cosapp/cosapp/-/merge_requests/102)).
+  * Include latest API evolutions in tutorials on ports and systems.
+  * New tutorial on user-defined connectors.
+  * New section on user-defined surrogate models.
+
+### Bug fixes and code quality
+
+* Simplify loop resolution (MR [#77](https://gitlab.com/cosapp/cosapp/-/merge_requests/77), [#101](https://gitlab.com/cosapp/cosapp/-/merge_requests/101)).
+* Improve connector transfer (MR [#99](https://gitlab.com/cosapp/cosapp/-/merge_requests/99)).
+* Update binder settings, to take advantage of prebuilt plotly extension for jupyter lab (MR [#95](https://gitlab.com/cosapp/cosapp/-/merge_requests/95)).
+* Other code quality improvements (MR [#76](https://gitlab.com/cosapp/cosapp/-/merge_requests/76), [#82](https://gitlab.com/cosapp/cosapp/-/merge_requests/82), [#90](https://gitlab.com/cosapp/cosapp/-/merge_requests/90)).
+
 ## 0.11.7 (2021-09-21)
 
 ### New features
