@@ -1,5 +1,21 @@
 # History
 
+## 0.12.0 (2022-01-17)
+
+### New features
+
+* Implementation of multimode systems and hybrid continuous/discrete time solver (MRs [#100](https://gitlab.com/cosapp/cosapp/-/merge_requests/100), [#103](https://gitlab.com/cosapp/cosapp/-/merge_requests/103), [#105](https://gitlab.com/cosapp/cosapp/-/merge_requests/105)-[#108](https://gitlab.com/cosapp/cosapp/-/merge_requests/108), [#110](https://gitlab.com/cosapp/cosapp/-/merge_requests/110)-[#121](https://gitlab.com/cosapp/cosapp/-/merge_requests/121)):
+  * Possibility to declare events and mode variables in systems.
+  * New method `System.transition` describing system transition upon the occurrence of events.
+  * Event detection in `ExplicitTimeDriver`.
+
+* Possibility to specify a stop criterion in time simulation scenarios (MR [#107](https://gitlab.com/cosapp/cosapp/-/merge_requests/107)).
+
+### Documentation
+
+* New tutorial on hybrid time simulations and multimode systems (MRs [#116](https://gitlab.com/cosapp/cosapp/-/merge_requests/116) and [#120](https://gitlab.com/cosapp/cosapp/-/merge_requests/120)).
+* Updated build config file following up a bug fix in [github.com/readthedocs](https://github.com/readthedocs/readthedocs.org) (MR [#109](https://gitlab.com/cosapp/cosapp/-/merge_requests/109)).
+
 ## 0.11.8 (2021-11-24)
 
 ### New features & API evolutions
