@@ -2,10 +2,10 @@
 import array
 import numpy
 import logging
+import copy
 from collections.abc import MutableSequence
 from numbers import Number
 from typing import Any, Dict, Iterable, Optional, Tuple, Union, NoReturn
-
 
 from cosapp.ports import units
 from cosapp.ports.enum import Scope, Validity, RangeType
@@ -412,7 +412,6 @@ class Variable:
             "{description}".format(**msg)
         )  
         
-        
     def __json__(self) -> Dict[str, Any]:
         """JSONable dictionary representing a variable.
         
@@ -429,6 +428,15 @@ class Variable:
             "out_of_limits_comment": self.out_of_limits_comment,
             "distribution": self.distribution.__json__() if self.distribution else None,
         }
+
+    def filter_value(self, value: Any) -> Any:
+        if self.dtype == (
+            MutableSequence,
+            array.ArrayType,
+            numpy.ndarray,
+        ):
+            value = numpy.asarray(value)
+        return value
 
     @property
     def name(self) -> str:
@@ -489,7 +497,6 @@ class Variable:
                 )
                 valid_range = (min_valid, max_valid)      
         
-
         else:
             valid_range = None
             limits = None
@@ -728,6 +735,24 @@ class Variable:
             return f"{range2str(self.valid_range)} - {self.invalid_comment}"
         else:  # Variable is ok
             return ""
+
+    def copy(self, port: "BasePort", name: Optional[str] = None) -> "Variable":
+        if name is None:
+            name = self.name
+        return Variable(
+            name,
+            value = copy.copy(self.value),
+            port = port,
+            unit = self._unit,
+            dtype = copy.copy(self._dtype),
+            valid_range = copy.deepcopy(self._valid_range),
+            invalid_comment = self._invalid_comment,
+            limits = copy.deepcopy(self._limits),
+            out_of_limits_comment = self._out_of_limits_comment,
+            desc = self._desc,
+            distribution = copy.deepcopy(self._distribution),
+            scope = self._scope,
+        )
 
     def to_dict(self) -> Dict:
         """Convert this variable into a dictionary.

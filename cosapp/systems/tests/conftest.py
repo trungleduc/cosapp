@@ -1,19 +1,17 @@
 import sys
-from pathlib import Path
-
 import pytest
 import numpy as np
 from collections import OrderedDict
+from pathlib import Path
+from io import StringIO
 
+import cosapp.tests as tests
 from cosapp.systems import System
 
-import cosapp.tests as test
-
-from io import StringIO
 
 @pytest.fixture
 def test_library():
-    library_path = Path(test.__file__).parent / "library" / "systems"
+    library_path = Path(tests.__file__).parent / "library" / "systems"
 
     # Add path to allow System to find the component
     sys.path.append(str(library_path))
@@ -26,20 +24,25 @@ def test_library():
 
 @pytest.fixture
 def test_data():
-    return Path(test.__file__).parent / "data"
-
+    return Path(tests.__file__).parent / "data"
 
 
 @pytest.fixture(scope="function")
 def DummyFactory():
     """Factory creating a dummy system with custom attributes"""
-    # mapping option / method
-    # for example: `inputs` <-> `add_input`
+    # mapping option / method, e.g.
+    #   `inputs`     <-> `add_input`
+    #   `properties` <-> `add_property`
     mapping = dict(
         (option, "add_" + option[:-1])
-        for option in ("inputs", "outputs", "inwards", "outwards",
-            "transients", "rates", "unknowns", "equations",
-            "targets", "design_methods")
+        for option in (
+            "inputs", "outputs",
+            "inwards", "outwards",
+            "inward_modevars", "outward_modevars",
+            "transients", "rates",
+            "unknowns", "equations", "targets",
+            "design_methods",
+        )
     )
     mapping["properties"] = "add_property"
 
@@ -81,7 +84,6 @@ def funky():
     return FunkySystem('funky')
 
 
-
 class GroovySystem(System):
     def setup(self):
         self.add_inward('bass', 0.0)
@@ -99,7 +101,6 @@ def groovy():
     return GroovySystem('groovy')
 
 
-
 class JazzySystem(GroovySystem):
     def setup(self):
         super().setup()
@@ -110,6 +111,7 @@ class JazzySystem(GroovySystem):
 @pytest.fixture(scope="function")
 def jazzy():
     return JazzySystem('jazzy')
+
 
 @pytest.fixture()
 def config():

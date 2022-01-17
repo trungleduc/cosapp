@@ -5,7 +5,7 @@ from io import StringIO
 from cosapp.utils.testing import assert_keys
 from cosapp.tests.library.systems import AllTypesSystem
 from cosapp.tests.library.ports import NumPort, V1dPort
-from cosapp.ports.port import ExtensiblePort
+from cosapp.ports.port import ExtensiblePort, ModeVarPort
 from cosapp.systems import System
 
 
@@ -27,12 +27,14 @@ def test_System_load(test_library):
     assert s.parent is None
     assert len(s.children) == 0
 
-    assert_keys(s.inputs, "inwards", "flnum_in")
+    assert_keys(s.inputs, "inwards", "modevars_in", "flnum_in")
     assert isinstance(s.inputs["inwards"], ExtensiblePort)
+    assert isinstance(s.inputs["modevars_in"], ModeVarPort)
     assert isinstance(s.inputs["flnum_in"], NumPort)
 
-    assert_keys(s.outputs, "outwards", "flnum_out")
+    assert_keys(s.outputs, "outwards", "modevars_out", "flnum_out")
     assert isinstance(s.outputs["outwards"], ExtensiblePort)
+    assert isinstance(s.outputs["modevars_out"], ModeVarPort)
     assert isinstance(s.outputs["flnum_out"], NumPort)
 
     # Load simple module with boundaries
@@ -55,15 +57,17 @@ def test_System_load(test_library):
     assert s.parent is None
     assert len(s.children) == 0
 
-    assert_keys(s.inputs, "inwards", "flnum_in")
+    assert_keys(s.inputs, "inwards", "modevars_in", "flnum_in")
     assert isinstance(s.inputs["inwards"], ExtensiblePort)
+    assert isinstance(s.inputs["modevars_in"], ModeVarPort)
     port = s.inputs["flnum_in"]
     assert isinstance(port, NumPort)
     assert port.Pt == 1e6
     assert port.W == 10
 
-    assert_keys(s.outputs, "outwards", "flnum_out")
+    assert_keys(s.outputs, "outwards", "modevars_out", "flnum_out")
     assert isinstance(s.outputs["outwards"], ExtensiblePort)
+    assert isinstance(s.outputs["modevars_out"], ModeVarPort)
     assert isinstance(s.outputs["flnum_out"], NumPort)
 
     # Load simple module with properties
@@ -88,13 +92,15 @@ def test_System_load(test_library):
     assert s.properties ==  {"dimension": 3}
     assert s.dimension == 3
 
-    assert_keys(s.inputs, "inwards", "in_")
+    assert_keys(s.inputs, "inwards", "modevars_in", "in_")
     assert isinstance(s.inputs["inwards"], ExtensiblePort)
+    assert isinstance(s.inputs["modevars_in"], ModeVarPort)
     port = s.inputs["in_"]
     assert isinstance(port, V1dPort)
 
-    assert_keys(s.outputs, "outwards", "out")
+    assert_keys(s.outputs, "outwards", "modevars_out", "out")
     assert isinstance(s.outputs["outwards"], ExtensiblePort)
+    assert isinstance(s.outputs["modevars_out"], ModeVarPort)
     assert isinstance(s.outputs["out"], V1dPort)
 
     # Load module in module - test for connector from submodule to top system
@@ -129,11 +135,11 @@ def test_System_load(test_library):
         assert child.parent is s
     assert list(s.exec_order) == ["p11"]
 
-    assert_keys(s.inputs, "inwards", "flnum_in")
+    assert_keys(s.inputs, "inwards", "modevars_in", "flnum_in")
     assert isinstance(s.inputs["inwards"], ExtensiblePort)
     assert isinstance(s.inputs["flnum_in"], NumPort)
 
-    assert_keys(s.outputs, "outwards", "flnum_out")
+    assert_keys(s.outputs, "outwards", "modevars_out", "flnum_out")
     assert isinstance(s.outputs["outwards"], ExtensiblePort)
     assert isinstance(s.outputs["flnum_out"], NumPort)
 
@@ -145,12 +151,14 @@ def test_System_load(test_library):
     assert child.parent is s
     assert len(child.children) == 0  # too young, presumably
 
-    assert_keys(child.inputs, "inwards", "flnum_in")
+    assert_keys(child.inputs, "inwards", "modevars_in", "flnum_in")
     assert isinstance(child.inputs["inwards"], ExtensiblePort)
+    assert isinstance(child.inputs["modevars_in"], ModeVarPort)
     assert isinstance(child.inputs["flnum_in"], NumPort)
 
-    assert_keys(child.outputs, "outwards", "flnum_out")
+    assert_keys(child.outputs, "outwards", "modevars_out", "flnum_out")
     assert isinstance(child.outputs["outwards"], ExtensiblePort)
+    assert isinstance(child.outputs["modevars_out"], ModeVarPort)
     assert isinstance(child.outputs["flnum_out"], NumPort)
 
     assert len(s.connectors) == 2
@@ -198,12 +206,14 @@ def test_System_load(test_library):
         assert isinstance(child, System)
         assert child.parent is s
 
-    assert_keys(s.inputs, "inwards", "flnum_in")
+    assert_keys(s.inputs, "inwards", "modevars_in", "flnum_in")
     assert isinstance(s.inputs["inwards"], ExtensiblePort)
+    assert isinstance(s.inputs["modevars_in"], ModeVarPort)
     assert isinstance(s.inputs["flnum_in"], NumPort)
 
-    assert_keys(s.outputs, "outwards", "flnum_out")
+    assert_keys(s.outputs, "outwards", "modevars_out", "flnum_out")
     assert isinstance(s.outputs["outwards"], ExtensiblePort)
+    assert isinstance(s.outputs["modevars_out"], ModeVarPort)
     assert isinstance(s.outputs["flnum_out"], NumPort)
 
     # check children
@@ -214,12 +224,14 @@ def test_System_load(test_library):
     assert child.parent is s
     assert len(child.children) == 0
 
-    assert_keys(child.inputs, "inwards", "flnum_in")
+    assert_keys(child.inputs, "inwards", "modevars_in", "flnum_in")
     assert isinstance(child.inputs["inwards"], ExtensiblePort)
+    assert isinstance(child.inputs["modevars_in"], ModeVarPort)
     assert isinstance(child.inputs["flnum_in"], NumPort)
 
-    assert_keys(child.outputs, "outwards", "flnum_out")
+    assert_keys(child.outputs, "outwards", "modevars_out", "flnum_out")
     assert isinstance(child.outputs["outwards"], ExtensiblePort)
+    assert isinstance(child.outputs["modevars_out"], ModeVarPort)
     assert isinstance(child.outputs["flnum_out"], NumPort)
 
     child = s.p12
@@ -229,12 +241,14 @@ def test_System_load(test_library):
     assert child.parent is s
     assert len(child.children) == 0
 
-    assert_keys(child.inputs, "inwards", "flnum_in")
+    assert_keys(child.inputs, "inwards", "modevars_in", "flnum_in")
     assert isinstance(child.inputs["inwards"], ExtensiblePort)
+    assert isinstance(child.inputs["modevars_in"], ModeVarPort)
     assert isinstance(child.inputs["flnum_in"], NumPort)
 
-    assert_keys(child.outputs, "outwards", "flnum_out")
+    assert_keys(child.outputs, "outwards", "modevars_out", "flnum_out")
     assert isinstance(child.outputs["outwards"], ExtensiblePort)
+    assert isinstance(child.outputs["modevars_out"], ModeVarPort)
     assert isinstance(child.outputs["flnum_out"], NumPort)
 
     # check connectors
@@ -271,11 +285,11 @@ def test_System_load_from_dict(test_library):
     assert len(s.children) == 0
     assert len(s.exec_order) == 0
 
-    assert_keys(s.inputs, "inwards", "flnum_in")
+    assert_keys(s.inputs, "inwards", "modevars_in", "flnum_in")
     assert isinstance(s.inputs["inwards"], ExtensiblePort)
     assert isinstance(s.inputs["flnum_in"], NumPort)
 
-    assert_keys(s.outputs, "outwards", "flnum_out")
+    assert_keys(s.outputs, "outwards", "modevars_out", "flnum_out")
     assert isinstance(s.outputs["outwards"], ExtensiblePort)
     assert isinstance(s.outputs["flnum_out"], NumPort)
 
@@ -296,13 +310,13 @@ def test_System_load_from_dict(test_library):
     assert len(s.children) == 0
     assert len(s.exec_order) == 0
 
-    assert_keys(s.inputs, "inwards", "flnum_in")
+    assert_keys(s.inputs, "inwards", "modevars_in", "flnum_in")
     assert isinstance(s.inputs["inwards"], ExtensiblePort)
     assert isinstance(s.inputs["flnum_in"], NumPort)
     assert s.flnum_in.Pt == 1e6
     assert s.flnum_in.W == 10
 
-    assert_keys(s.outputs, "outwards", "flnum_out")
+    assert_keys(s.outputs, "outwards", "modevars_out", "flnum_out")
     assert isinstance(s.outputs["outwards"], ExtensiblePort)
     assert isinstance(s.outputs["flnum_out"], NumPort)
 
@@ -333,11 +347,11 @@ def test_System_load_from_dict(test_library):
         assert isinstance(child, System)
         assert child.parent is s
 
-    assert_keys(s.inputs, "inwards", "flnum_in")
+    assert_keys(s.inputs, "inwards", "modevars_in", "flnum_in")
     assert isinstance(s.inputs["inwards"], ExtensiblePort)
     assert isinstance(s.inputs["flnum_in"], NumPort)
 
-    assert_keys(s.outputs, "outwards", "flnum_out")
+    assert_keys(s.outputs, "outwards", "modevars_out", "flnum_out")
     assert isinstance(s.outputs["outwards"], ExtensiblePort)
     assert isinstance(s.outputs["flnum_out"], NumPort)
 
@@ -349,11 +363,11 @@ def test_System_load_from_dict(test_library):
     assert child.parent is s
     assert len(child.children) == 0
 
-    assert_keys(child.inputs, "inwards", "flnum_in")
+    assert_keys(child.inputs, "inwards", "modevars_in", "flnum_in")
     assert isinstance(child.inputs["inwards"], ExtensiblePort)
     assert isinstance(child.inputs["flnum_in"], NumPort)
 
-    assert_keys(child.outputs, "outwards", "flnum_out")
+    assert_keys(child.outputs, "outwards", "modevars_out", "flnum_out")
     assert isinstance(child.outputs["outwards"], ExtensiblePort)
     assert isinstance(child.outputs["flnum_out"], NumPort)
 
@@ -403,11 +417,11 @@ def test_System_load_from_dict(test_library):
         assert isinstance(child, System)
         assert child.parent is s
 
-    assert_keys(s.inputs, "inwards", "flnum_in")
+    assert_keys(s.inputs, "inwards", "modevars_in", "flnum_in")
     assert isinstance(s.inputs["inwards"], ExtensiblePort)
     assert isinstance(s.inputs["flnum_in"], NumPort)
 
-    assert_keys(s.outputs, "outwards", "flnum_out")
+    assert_keys(s.outputs, "outwards", "modevars_out", "flnum_out")
     assert isinstance(s.outputs["outwards"], ExtensiblePort)
     assert isinstance(s.outputs["flnum_out"], NumPort)
 
@@ -419,11 +433,11 @@ def test_System_load_from_dict(test_library):
     assert child.parent is s
     assert len(child.children) == 0
 
-    assert_keys(child.inputs, "inwards", "flnum_in")
+    assert_keys(child.inputs, "inwards", "modevars_in", "flnum_in")
     assert isinstance(child.inputs["inwards"], ExtensiblePort)
     assert isinstance(child.inputs["flnum_in"], NumPort)
 
-    assert_keys(child.outputs, "outwards", "flnum_out")
+    assert_keys(child.outputs, "outwards", "modevars_out", "flnum_out")
     assert isinstance(child.outputs["outwards"], ExtensiblePort)
     assert isinstance(child.outputs["flnum_out"], NumPort)
 
@@ -434,11 +448,11 @@ def test_System_load_from_dict(test_library):
     assert child.parent is s
     assert len(child.children) == 0
 
-    assert_keys(child.inputs, "inwards", "flnum_in")
+    assert_keys(child.inputs, "inwards", "modevars_in", "flnum_in")
     assert isinstance(child.inputs["inwards"], ExtensiblePort)
     assert isinstance(child.inputs["flnum_in"], NumPort)
 
-    assert_keys(child.outputs, "outwards", "flnum_out")
+    assert_keys(child.outputs, "outwards", "modevars_out", "flnum_out")
     assert isinstance(child.outputs["outwards"], ExtensiblePort)
     assert isinstance(child.outputs["flnum_out"], NumPort)
 
@@ -492,17 +506,17 @@ def test_System_to_dict(test_library, config):
     assert_keys(d, "p1")
     entry = d["p1"]
     assert isinstance(entry, dict)
-    assert set(entry.keys()) == set([
-        "class", "inputs", "subsystems", "connections", "exec_order"
-    ])
+    assert set(entry.keys()) == {
+        "class", "inputs", "subsystems", "connections", "exec_order",
+    }
     assert entry["class"] == "pressurelossvarious.PressureLossSys"
     assert entry["subsystems"]["p11"]["class"] == "pressurelossvarious.PressureLoss0D"
     assert entry["subsystems"]["p12"]["class"] == "pressurelossvarious.PressureLoss0D"
-    assert set(entry["connections"]) == set([
+    assert set(entry["connections"]) == {
         ("p11.flnum_in", "flnum_in"),
         ("p12.flnum_in", "p11.flnum_out"),
         ("flnum_out", "p12.flnum_out"),
-    ])
+    }
     assert entry["exec_order"] == ["p11", "p12"]
 
     # Test partial connection
@@ -549,17 +563,20 @@ def test_System_to_dict_with_def(test_library, config):
     d  = s._System__to_dict(True)
     assert_keys(d, "p1")
     entry = d["p1"]
-    assert set(entry["inputs"].keys()) == set([
-        "flnum_in", "inwards"
-    ])
+    assert set(entry["inputs"].keys()) == {
+        "flnum_in", "inwards", "modevars_in",
+    }
     assert entry["inputs"]["inwards"] == {'K11': {'value': 100.0}}
+    assert entry["inputs"]["modevars_in"] == {'__class__': 'ModeVarPort'}
     assert entry["inputs"]["flnum_in"]["__class__"] == 'NumPort'
 
-    assert set(entry["outputs"].keys()) == set([
-        "flnum_out", "outwards"
-    ])
+    assert set(entry["outputs"].keys()) == {
+        "flnum_out", "outwards", "modevars_out",
+    }
     assert entry["outputs"]["outwards"] == {'delta_p12': {'value': 0.}}
+    assert entry["outputs"]["modevars_out"] == {'__class__': 'ModeVarPort'}
     assert entry["outputs"]["flnum_out"]["__class__"] == 'NumPort'
+
 
 def test_System_to_dict_with_port_def(test_library, config):
 
@@ -568,18 +585,18 @@ def test_System_to_dict_with_port_def(test_library, config):
     d  = s._System__to_dict(True, port_cls_data)
     assert_keys(port_cls_data, "NumPort")
     entry = port_cls_data["NumPort"]
-    assert set(entry.keys()) == set(["Pt", "W"])
+    assert set(entry.keys()) == {"Pt", "W"}
     assert entry["Pt"] == {
-            "value": 101325.0,
-            "unit" : "Pa"
-            }
+        "value": 101325.0,
+        "unit" : "Pa"
+    }
 
 
 def test_System_export_system(test_library, config):
 
     s = System.load(config) 
     d  = s.export_structure()
-    assert set(d.keys()) == set(["Ports", "Systems"])
+    assert set(d.keys()) == {"Ports", "Systems"}
 
 
 def test_System_tojson(test_library):
@@ -660,7 +677,7 @@ def test_System_AllTypesSystem_serialization():
     assert s.properties == {"dimension": 3}
     assert s.dimension == 3
 
-    assert_keys(s.inputs, "inwards", "in_")
+    assert_keys(s.inputs, "inwards", "modevars_in", "in_")
     assert isinstance(s.inputs["inwards"], ExtensiblePort)
     port = s.inputs["in_"]
     assert isinstance(port, V1dPort)
@@ -670,6 +687,6 @@ def test_System_AllTypesSystem_serialization():
     assert s.c == original.c
     assert s.e == original.e
 
-    assert_keys(s.outputs, "outwards", "out")
+    assert_keys(s.outputs, "outwards", "modevars_out", "out")
     assert isinstance(s.outputs["outwards"], ExtensiblePort)
     assert isinstance(s.outputs["out"], V1dPort)

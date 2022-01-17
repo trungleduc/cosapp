@@ -219,9 +219,9 @@ class Module(LoggerContext, VisitedComponent, metaclass=abc.ABCMeta):
         with self.log_context(" - call_setup_run"):
             logger.debug(f"Call {self.name}.setup_run")
             self._compute_calls = 0  # Reset the counter
-            self.setup_run()
             for child in self.children.values():
                 child.call_setup_run()
+            self.setup_run()
             self.setup_ran.emit()
 
     def setup_run(self):

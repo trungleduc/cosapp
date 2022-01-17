@@ -10,6 +10,8 @@ class CommonPorts(Enum):
 
     INWARDS = "inwards"
     OUTWARDS = "outwards"
+    MODEVARS_IN = "modevars_in"
+    MODEVARS_OUT = "modevars_out"
 
 
 class PortType(Enum):

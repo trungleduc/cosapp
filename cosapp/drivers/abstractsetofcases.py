@@ -73,9 +73,9 @@ class AbstractSetOfCases(Driver):
         if self._recorder is not None:
             self._recorder.record_state(case_idx, self.status, self.error_code)
 
-    def _precompute(self):
+    def setup_run(self):
         """Actions performed prior to the `Module.compute` call."""
-        super()._precompute()
+        super().setup_run()
         self._build_cases()
 
     def run_children(self) -> None:
@@ -96,23 +96,3 @@ class AbstractSetOfCases(Driver):
                 self._precase(case_idx, case)
                 self.run_children()
                 self._postcase(case_idx, case)
-
-    def run_once(self) -> None:
-        """Run the system once.
-
-        Execute the model of this `Module` and its children in the execution order.
-
-        Notes
-        -----
-
-        The driver are not executed when calling this method; only the physical model.
-        """
-        if self.is_active():
-            self._precompute()
-
-            self.compute_before()
-            self._compute_calls += 1
-            self.compute()
-
-            self._postcompute()
-            self.computed.emit()

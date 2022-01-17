@@ -1,11 +1,13 @@
 import pytest
 import numpy as np
 import logging, re
+from unittest import mock
 
 from cosapp.systems import System
 from cosapp.drivers import NonLinearSolver, NonLinearMethods, RunSingleCase
 from cosapp.core.numerics.boundary import Unknown
 from cosapp.ports import Port
+from cosapp.ports.enum import PortType
 
 
 class TestUnknown:
@@ -106,6 +108,17 @@ class TestUnknown:
         assert unknown_dict["max_abs_step"] == get_expected('max_abs_step', np.inf)
         assert unknown_dict["max_rel_step"] == get_expected('max_rel_step', np.inf)
         np.testing.assert_array_equal(unknown_dict["mask"], expected.get('mask', None))
+
+
+    @pytest.mark.parametrize("name", ['in_.m', 'x', 'v', 'v[::2]'])
+    def test_touch(self, name):
+        system = TestUnknown.ASyst('a')
+        system.call_clean_run = mock.MagicMock(name='call_clean_run')
+        unknown = Unknown(system, name)
+        system.run_once()
+        assert system.is_clean(PortType.IN)
+        unknown.touch()
+        assert not system.is_clean(PortType.IN)
 
 
 class TestUnknownIntegration:

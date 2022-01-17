@@ -1,8 +1,11 @@
 from collections.abc import MutableMapping
 from numbers import Number
-from typing import Any, Dict, Iterator, List, Optional, Tuple, TypeVar, Union
+from typing import (
+    Any, Dict, List, Optional, Callable,
+    Iterator, TypeVar, Union, Tuple,
+)
 
-import numpy
+import numpy, numpy.polynomial
 
 from cosapp.core.eval_str import EvalString
 from cosapp.core.variableref import VariableReference
@@ -10,6 +13,8 @@ from cosapp.core.numerics.boundary import AbstractTimeUnknown, TimeUnknown
 from cosapp.ports.port import ExtensiblePort
 from cosapp.systems.system import System
 from cosapp.utils.helpers import check_arg
+from cosapp.drivers import Driver
+from cosapp.drivers.time.scenario import TimeAssignString
 
 T = TypeVar('T')
 
@@ -118,6 +123,12 @@ class TimeUnknownStack(AbstractTimeUnknown):
     def reset(self) -> None:
         """Reset stack value from original system variables"""
         self.__value = numpy.array(list(map(lambda t: t.value, self.__transients))).ravel()
+        self.touch()
+
+    def touch(self) -> None:
+        """Set owner systems as 'dirty'."""
+        for unknown in self.__transients:
+            unknown.touch()
 
     @property
     def max_time_step_expr(self) -> EvalString:
@@ -470,3 +481,120 @@ class TimeStepManager:
             raise ValueError("Time step was not specified, and could not be determined from transient variables")
 
         return dt
+
+
+def TwoPointCubicPolynomial(
+    xs: Tuple[float, float],
+    ys: Tuple[float, float],
+    dy: Tuple[float, float],
+) -> numpy.polynomial.Polynomial:
+    """Function returning a cubic polynomial interpolating
+    two end points (x, y), with imposed derivatives dy/dx.
+
+    Arguments:
+    ----------
+    - xs, Tuple[float, float]: end point abscissa
+    - ys, Tuple[float, float]: end point values
+    - dy, Tuple[float, float]: end point derivatives
+
+    Returns:
+    --------
+    poly: cubic numpy.polynomial.Polynomial function
+    """
+    h = xs[1] - xs[0]
+    h2 = h * h
+    mat = numpy.array(
+        [
+            [h, h2, h * h2],
+            [1, 0, 0],
+            [1, 2 * h, 3 * h2],
+        ],
+        dtype=float,
+    )
+    coefs = numpy.zeros(4)
+    coefs[0] = ys[0]
+    coefs[1:] = numpy.linalg.solve(mat, [ys[1] - ys[0], *dy])
+    return numpy.polynomial.Polynomial(coefs, xs, [0, h])
+
+
+def TwoPointCubicInterpolator(
+    xs: Tuple[float, float],
+    ys: numpy.ndarray,
+    dy: numpy.ndarray,
+) -> Callable[[float], Union[float, numpy.ndarray]]:
+    """Function returning a cubic polynomial interpolator
+    for either scalar or vector quantities, based on the
+    format of input arrays `ys` and `dy`.
+    If `ys` and `dy` are 1D (resp. 2D) arrays, they are
+    interpreted as the values and derivatives of a scalar
+    (resp. vector) quantity at end points `xs`.
+
+    Arguments:
+    ----------
+    - xs, Tuple[float, float]: end point abscissa
+    - ys, numpy.ndarray: end point values as a 1D or 2D array
+    - dy, numpy.ndarray: end point derivatives as a 1D or 2D array
+
+    Returns:
+    --------
+    poly: cubic polynomial function returning either
+        a float or a numpy array of floats, depending on
+        the dimension of input data `ys` and `dy`.
+    """
+    if numpy.ndim(ys) == 1:
+        return TwoPointCubicPolynomial(xs, ys, dy)
+    ys = numpy.transpose(ys)
+    dy = numpy.transpose(dy)
+    # Multi-dimensional polynomial
+    fs = [
+        TwoPointCubicPolynomial(xs, val, der)
+        for (val, der) in zip(ys, dy)
+    ]
+    def ndpoly(t: float) -> numpy.ndarray:
+        return numpy.array([f(t) for f in fs])
+    return ndpoly
+
+
+class SystemInterpolator:
+    """Class providing a continuous time view on a system,
+    by replacing transient variables by time functions.
+    """
+    def __init__(self, driver: "ExplicitTimeDriver"):
+        from cosapp.drivers.time.interfaces import ExplicitTimeDriver
+        check_arg(driver, 'driver', ExplicitTimeDriver)
+        self.__owner = driver
+        self.__system = system = driver.owner
+        problem = system.get_unsolved_problem()
+        self.__transients = transients = problem.transients
+        self.__interp = dict.fromkeys(transients, None)
+
+    @property
+    def system(self) -> System:
+        """System modified by interpolator"""
+        return self.__system
+
+    @property
+    def transients(self) -> Dict[str, TimeUnknown]:
+        return self.__transients
+
+    @property
+    def interp(self) -> Dict[str, Callable]:
+        """Dict[str, Callable]: interpolant dictionary"""
+        return self.__interp
+
+    @interp.setter
+    def interp(self, interp: Dict[str, Callable]):
+        transients = self.__transients
+        check_arg(
+            interp, "interp", dict,
+            lambda d: set(d) == set(transients)
+        )
+        context = self.system
+        for key, func in interp.items():
+            self.__interp[key] = TimeAssignString(key, func, context)
+
+    def exec(self, t: float) -> None:
+        for assignment in self.__interp.values():
+            assignment.exec(t)
+        driver = self.__owner
+        driver._set_time(t)

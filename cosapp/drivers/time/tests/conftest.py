@@ -2,6 +2,7 @@ import pytest
 
 import numpy as np
 from numbers import Number
+from typing import Callable
 from cosapp.ports import Port
 from cosapp.systems import System
 from cosapp.core.time import UniversalClock
@@ -270,23 +271,28 @@ class PointMassSolution:
             else:
                 v = A + B * np.exp(-wt)
             return v
-        self.__x = x_solution
-        self.__v = v_solution
-        self.__a = lambda t: g - self.__v(t) * omega
+        self.__f = {
+            'x': x_solution,
+            'v': v_solution,
+            'a': lambda t: g - v_solution(t) * omega
+        }
         self.__omega = omega
 
     @property
     def omega(self):
         return self.__omega
 
-    def a(self, t):
-        return self.__a(t)
+    def a(self, t) -> np.ndarray:
+        return self.__f['a'](t)
 
-    def v(self, t):
-        return self.__v(t)
+    def v(self, t) -> np.ndarray:
+        return self.__f['v'](t)
 
-    def x(self, t):
-        return self.__x(t)
+    def x(self, t) -> np.ndarray:
+        return self.__f['x'](t)
+
+    def get_function(self, key) -> Callable[[float], np.ndarray]:
+        return self.__f[key]
 
 
 @pytest.fixture(scope='function')
@@ -427,32 +433,52 @@ class DampedMassSpring(System):
 class HarmonicOscillatorSolution:
     def __init__(self, system, x0, v0=0):
         K = system.K
+        c = system.c
         m = system.mass
         L = system.length
         x0 -= L
         w0 = np.sqrt(K / m)
-        self.__damping = dc = 0.5 * system.c / np.sqrt(m * K)
+        self.__damping = dc = 0.5 * c / np.sqrt(m * K)
         wd = w0 * dc
         if self.over_damped:
             ws = w0 * np.sqrt(dc**2 - 1)
             A, B = 0.5 * (v0 + (wd + ws) * x0) / ws, 0.5 * (v0 + (wd - ws) * x0) / ws
-            self.__x = lambda t: L + A * np.exp(-(wd - ws) * t) - B * np.exp(-(wd + ws) * t)
+            x = lambda t: L + A * np.exp(-(wd - ws) * t) - B * np.exp(-(wd + ws) * t)
+            v = lambda t: -A * (wd - ws) * np.exp(-(wd - ws) * t) - B * (wd + ws) * np.exp(-(wd + ws) * t)
         else:
             ws = w0 * np.sqrt(1 - dc**2)
             A, B = (v0 + wd * x0) / ws, x0
-            self.__x = lambda t: L + np.exp(-wd * t) * (A * np.sin(ws * t) + B * np.cos(ws * t))
-        
-    def x(self, t):
-        return self.__x(t)
+            x = lambda t: L + np.exp(-wd * t) * (A * np.sin(ws * t) + B * np.cos(ws * t))
+            v = lambda t: np.exp(-wd * t) * (
+                + ws * (B * np.cos(ws * t) - B * np.sin(ws * t))
+                - wd * (A * np.sin(ws * t) + B * np.cos(ws * t))
+            )
+        self.__f = {
+            'x': x,
+            'v': v,
+            'a': lambda t: (K * (L - x(t)) - c * v(t)) / m
+        }
+    
+    def a(self, t) -> float:
+        return self.__f['a'](t)
+
+    def v(self, t) -> float:
+        return self.__f['v'](t)
+
+    def x(self, t) -> float:
+        return self.__f['x'](t)
 
     @property
-    def damping(self):
+    def damping(self) -> float:
         """Damping coefficient"""
         return self.__damping
     
     @property
-    def over_damped(self):
+    def over_damped(self) -> bool:
         return self.__damping > 1
+
+    def get_function(self, key) -> Callable[[float], float]:
+        return self.__f[key]
 
 
 @pytest.fixture(scope='function')
@@ -465,3 +491,19 @@ def oscillator_solution():
     def _test_objects(system, x0, v0=0):
         return HarmonicOscillatorSolution(system, x0, v0)
     return _test_objects
+
+
+class MultimodeScalarOde(System):
+    def setup(self):
+        self.add_child(ScalarOde('ode'), pulling=['f', 'df'])
+        self.add_outward_modevar('snapped', False)
+        self.add_event('snap')  # event defining mode var `snapped`
+
+    def transition(self):
+        if self.snap.present:
+            self.snapped = True
+
+
+@pytest.fixture(scope='function')
+def multimode_scalar_ode_case():
+    return case_factory(MultimodeScalarOde, 'system')

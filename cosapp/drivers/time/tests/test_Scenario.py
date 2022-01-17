@@ -4,6 +4,7 @@ import numpy as np
 from cosapp.drivers import EulerExplicit
 from cosapp.drivers.time.scenario import Scenario, Interpolator
 from cosapp.core.eval_str import AssignString
+from cosapp.multimode.event import Event
 
 
 @pytest.fixture(scope='function')
@@ -48,8 +49,33 @@ def test_Scenario__init__(case):
     assert scenario.context is system
     assert scenario.init_values == []
     assert scenario.case_values == []
+    assert isinstance(scenario.stop, Event)
+    assert scenario.stop.final
     with pytest.raises(TypeError):
         scenario.owner = 'foo'
+
+
+def test_Scenario_stop(case):
+    system, driver = case
+    
+    scenario = Scenario('scenario', driver)
+    assert isinstance(scenario.stop, Event)
+    scenario.stop.trigger = 'tank1.height <= 0'
+    assert scenario.stop.context is system
+    assert scenario.stop.final
+    assert scenario.stop.is_primitive
+
+    scenario = Scenario('scenario', driver)
+    scenario.stop.trigger = Event.merge(
+        Event('e1', system, trigger='tank1.height == 0'),
+        Event('e2', system, trigger='tank2.height > 10'),
+    )
+    assert scenario.stop.context is system
+    assert scenario.stop.final
+    assert not scenario.stop.is_primitive
+    
+    with pytest.raises(AttributeError, match="can't set attribute"):
+        scenario.stop = 'foo'
 
 
 @pytest.mark.parametrize("init, expected", [

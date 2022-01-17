@@ -2,17 +2,19 @@
 Classes containing all `System` variables.
 """
 import array
+import numpy
 import logging
+import copy
 from collections import OrderedDict
 from collections.abc import MutableSequence
 from typing import Any, Dict, Iterator, Optional, Tuple, Union
 from types import MappingProxyType
-import numpy
 
 from cosapp.patterns import visitor
 from cosapp.ports.enum import PortType, Scope, Validity
 from cosapp.ports.exceptions import ScopeError
 from cosapp.ports.variable import RangeValue, Types, Variable
+from cosapp.ports.mode_variable import ModeVariable
 from cosapp.utils.distributions import Distribution
 from cosapp.utils.helpers import check_arg
 from cosapp.utils.naming import NameChecker
@@ -218,7 +220,7 @@ class BasePort(visitor.Component):
             )
 
         # Value must be set before creating variable as validation in Variable needs it
-        self._variables[name] = Variable(
+        self._variables[name] = variable = Variable(
             name,
             self,
             value,
@@ -232,15 +234,9 @@ class BasePort(visitor.Component):
             distribution,
             scope,
         )
+        value = variable.filter_value(value)
 
-        if self._variables[name].dtype == (
-            MutableSequence,
-            array.ArrayType,
-            numpy.ndarray,
-        ):
-            value = numpy.asarray(value)
-
-        # For efficiency reasons, variables are stored as port attributes
+        # For efficiency reasons, values are stored as port attributes
         setattr(self, name, value)
 
     # TODO should we override __setattr__ to forward setting to the source port? and/or raise an
@@ -426,6 +422,10 @@ class BasePort(visitor.Component):
         else:
             return self._variables[name]
 
+    def variables(self) -> Iterator[Variable]:
+        """Iterator over port `Variable` instances."""
+        return self._variables.values()
+
     def check(self, name: Optional[str] = None) -> Union[Dict[str, Validity], Validity]:
         """Get the variable value validity.
 
@@ -498,23 +498,34 @@ class BasePort(visitor.Component):
         Port
             The copy of the current port
         """
-        new_name = self.name if name is None else name
-        new_direction = self.direction if direction is None else direction
+        cls = type(self)
+        port = cls(
+            name or self.name,
+            direction or self.direction,
+        )
+        for name in self._variables:
+            port.copy_variable_from(self, name)
 
-        new_port = type(self)(new_name, new_direction)
-        for name, variable in self._variables.items():
-            # Validation criteria are removed to avoid warning duplication when checking
-            new_port.add_variable(
-                name,
-                getattr(self, name),
-                unit=variable.unit,
-                dtype=variable.dtype,
-                desc=variable.description,
-                distribution=variable.distribution,
-                scope=variable.scope,
-            )
+        return port
 
-        return new_port
+    def copy_variable_from(self, port: "BasePort", name: str, alias: Optional[str] = None) -> None:
+        """Copy `Variable` from another port.
+
+        Parameters
+        ----------
+        port : BasePort
+            Port from which variable is copied
+        name : str
+            Variable name from source port.
+        alias : str, optional
+            Variable name in current port (same as `name` if not specified).
+        """
+        if alias is None:
+            alias = name
+        variable = port._variables[name]
+        value = getattr(port, name)
+        self._variables[alias] = variable.copy(self, alias)
+        setattr(self, alias, copy.copy(value))
 
     def morph(self, port: "BasePort") -> None:
         """Morph the provided port into this port.
@@ -585,6 +596,69 @@ class BasePort(visitor.Component):
         
         return new_dict
 
+
+class ModeVarPort(BasePort):
+    """Class used for the local storage of mode variables."""
+
+    # TODO: Forbid the use of add_variable
+    # TODO: Redefine exports/serializations
+    # TODO: Typing of _variables is ambiguous
+
+    def add_mode_variable(
+        self,
+        name: str,
+        value: Optional[Any] = None,
+        unit: str = "",
+        dtype: Types = None,
+        desc: str = "",
+        init: Optional[Any] = None,
+        scope: Scope = Scope.PRIVATE,
+    ) -> None:
+        """Add a mode variable to the port.
+
+        Parameters
+        ----------
+        name : str
+            Name of the variable
+        value : Any, optional
+            Value of the variable; default 1
+        unit : str, optional
+            Variable unit; default empty string (i.e. dimensionless)
+        dtype : type or iterable of type, optional
+            Variable type; default None (i.e. type of initial value)
+        desc : str, optional
+            Variable description; default ''
+        scope : Scope {PRIVATE, PROTECTED, PUBLIC}, optional
+            Variable visibility; default PRIVATE
+        """
+        if name in self:
+            logger.warning(
+                f"Variable {name} already exists in multimode port {self.contextual_name}."
+                " It will be overwritten."
+            )
+        # Value must be set before creating variable as validation in Variable needs it
+        if init is not None and value is not None and self.is_input:
+            logger.warning(
+                f"Initial value {init} is discarded for input mode variable {name!r}"
+            )
+            init = None
+        
+        self._variables[name] = variable = ModeVariable(
+            name = name,
+            port = self,
+            value = value,
+            unit = unit,
+            dtype = dtype,
+            desc = desc,
+            init = init,
+            scope = scope,
+        )
+        if value is None:
+            value = variable.init_value()
+        value = variable.filter_value(value)
+
+        # For efficiency reasons, variables are stored as port attributes
+        setattr(self, name, value)
 
 
 class ExtensiblePort(BasePort):
