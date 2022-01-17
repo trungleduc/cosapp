@@ -1,4 +1,5 @@
 import pytest
+import logging
 
 import numpy as np
 from cosapp.drivers import EulerExplicit, NonLinearSolver
@@ -28,6 +29,34 @@ def test_EulerExplicit_ode_solve_1(ode_case_1):
     start, end = driver.time_interval
     assert ode.f == pytest.approx(ode(end), 1e-3)
     assert end == pytest.approx(1.0002)
+
+
+def test_EulerExplicit_stop(scalar_ode_case, caplog):
+    """Test scenario with stop criterion."""
+    ode, driver = scalar_ode_case(EulerExplicit, dt=0.1, time_interval=[0, 1])
+
+    driver.set_scenario(
+        init = {'f': 0},
+        values = {'df': 0.5},
+        stop = f"f**2 > {0.123**2}",
+    )
+    driver.add_recorder(
+        recorders.DataFrameRecorder(includes=['f']),
+        period = 0.1,
+    )
+
+    with caplog.at_level(logging.INFO):
+        ode.run_drivers()
+    data = driver.recorder.export_data()
+    assert ode.f == pytest.approx(0.123, rel=1e-14)
+    assert ode.t == pytest.approx(0.246, rel=1e-14)
+    assert np.asarray(data['time']) == pytest.approx([0, 0.1, 0.2, 0.246, 0.246], abs=1e-14)
+    assert len(caplog.records) > 1
+    assert any(
+        "Stop criterion met at t =" in record.message
+        for record in caplog.records
+    )
+
 
 
 @pytest.mark.parametrize("dt", [
@@ -78,3 +107,30 @@ def test_EulerExplicit_twoTanks(two_tank_case, two_tank_solution, dt):
     # Test that maximum error ~ dt
     assert error < 0.3 * dt
     assert error > 0.2 * dt
+
+
+def test_EulerExplicit_multimode_scalar_ode(multimode_scalar_ode_case):
+    system, driver = multimode_scalar_ode_case(
+        EulerExplicit, time_interval=(0, 1), dt=0.1,
+    )
+    driver.add_recorder(recorders.DataFrameRecorder(includes=['f', 'df']), period=0.1)
+
+    system.snap.trigger = "f > 0.347"
+
+    driver.set_scenario(
+        init = {'f': 0},
+        values = {'df': '0 if snapped else 1'},
+    )
+    system.run_drivers()
+
+    data = driver.recorder.export_data()
+    # print(data)
+    assert system.f == pytest.approx(0.347, rel=1e-12)
+    assert system.df == 0
+    assert np.asarray(data['time']) == pytest.approx(
+        [0, 0.1, 0.2, 0.3, 0.347, 0.347, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1],
+        abs=1e-14,
+    )
+    assert np.asarray(data['df']) == pytest.approx(
+        [1] * 5 + [0] * 8, abs=1e-14,
+    )

@@ -167,7 +167,7 @@ class NonLinearSolver(AbstractSolver):
 
     def setup_run(self) -> None:
         super().setup_run()
-        self.problem = MathematicalProblem(self.name, self.owner)
+        self._init_problem()
 
     def _print_solution(self) -> None:  # TODO better returning a string
         """Print the solution in the log."""
@@ -195,9 +195,18 @@ class NonLinearSolver(AbstractSolver):
                 target = 0
             logger.debug(f" # Current tolerance {tol} for target {target}")
 
-    def _precompute(self) -> None:
-        """List all iteratives variables and get the initial values."""
-        super()._precompute()
+    def _init_problem(self):
+        """Initialize mathematical problem"""
+        logger.debug(
+            "\n".join([
+                "*" * 40,
+                "*", 
+                "* Assemble mathematical problem",
+                "*",
+                "*" * 40,
+            ])
+        )
+        self.problem = MathematicalProblem(self.name, self.owner)
         handler = DesignProblemHandler(self.owner)
         handler.design.extend(self.__raw_problem, equations=False)
         handler.offdesign.extend(self.__raw_problem, unknowns=False)
@@ -235,7 +244,13 @@ class NonLinearSolver(AbstractSolver):
                 logger.warning(
                     f"Including Driver {child.name!r} without iteratives in Driver {self.name!r} is not numerically advised."
                 )
-        return self.problem
+
+        logger.debug(
+            "\n".join([
+                "Mathematical problem:",
+                f"{'<empty>' if self.problem.shape == (0, 0) else self.problem}",
+            ])
+        )
 
     def get_init(self) -> numpy.ndarray:
         """Get the System iteratives initial values for this driver.

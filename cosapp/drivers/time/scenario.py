@@ -1,9 +1,12 @@
 import numpy, scipy.interpolate
 import enum
 import logging
-from typing import Any, Dict, List
+from types import MappingProxyType
+from typing import Any, Dict, List, Optional, Callable
 
+from cosapp.systems import System
 from cosapp.drivers.driver import Driver
+from cosapp.multimode.event import Event
 from cosapp.core.numerics.boundary import Boundary
 from cosapp.core.eval_str import AssignString
 from cosapp.utils.helpers import check_arg
@@ -69,34 +72,32 @@ class Interpolator:
         return self.__evaluator(t)
 
 
-class InterpolAssignString:
+class TimeAssignString:
+    """Creates an executable assignment to handle time boundary conditions
+    of the kind `lhs = F(t, data)`, where F is a function of some dataset at time t,
+    and where `lhs` refers to a variable name in system `context`.
+    This class is very similar to `cosapp.core.eval_str.AssignString`,
+    except the right-hand side is a callable function.
     """
-    Create an executable assignment to handle time boundary conditions of the kind `variable = F(t, data)`,
-    where F is an interpolation function of some dataset at time t.
-    This class is very similar to `cosapp.core.eval_str.AssignString`, except the right-hand side is a function.
-    In order to limit the scope of the callable function, the rhs can only be of type `Interpolator`.
-    """
-    def __init__(self, variable, function, context):
-        # Strict type check (as opposed to `isinstance`), to ensure the type of
-        # `function` is `Interpolator`, and is not derived from `Interpolator`.
-        ftype = type(function)
-        if ftype is not Interpolator:
+    def __init__(self, lhs: str, rhs: Callable[[float], Any], context: System):
+        if not callable(rhs):
             raise TypeError(
-                f"Functions used in time boundary conditions may only be of type `Interpolator`; got {ftype}"
+                f"right-hand side must be a callable function; got {rhs!r}"
             )
-        Boundary.parse(context, variable)  # checks that variable is valid
-        fname = f"BC{id(function)}"
-        assignment = f"{context.name}.{variable} = float({fname}(t))"
+        Boundary.parse(context, lhs)  # checks that variable is valid
+        fname = f"BC{id(rhs)}"
+        assignment = f"{context.name}.{lhs} = {fname}(t)"
         self.__context = context
-        self.__locals = {fname: function, context.name: context, 't': 0}
+        self.__locals = {fname: rhs, context.name: context, 't': 0}
         self.__code = compile(assignment, "<string>", "exec")  # type: CodeType
-        self.__str = f"{variable} = {ftype.__name__}(t)"
+        self.__str = f"{lhs} = {type(rhs).__name__}(t)"
 
-    def exec(self) -> None:
+    def exec(self, t: Optional[float] = None) -> None:
+        """Evaluates rhs(t), and executes assignment lhs <- rhs(t).
+        If time `t` is not specified, uses context time.
         """
-        Evaluates rhs, and executes assignment lhs <- rhs.
-        """
-        exec(self.__code, {}, self.locals)
+        self.__locals['t'] = self.__context.time if t is None else t
+        exec(self.__code, {}, self.__locals)
 
     def __str__(self) -> str:
         return self.__str
@@ -104,12 +105,33 @@ class InterpolAssignString:
     @property
     def locals(self) -> Dict[str, Any]:
         """Dict[str, Any]: Context attributes required to evaluate the string expression."""
-        self.__locals['t'] = self.__context.t
-        return self.__locals
+        return MappingProxyType(self.__locals)
     
     @property
     def constant(self):
         return False
+
+
+class InterpolAssignString(TimeAssignString):
+    """Creates an executable assignment to handle time boundary conditions
+    of the kind `lhs = F(t, data)`, where F is an interpolation function of some dataset at time t,
+    and where `lhs` refers to a variable name in system `context`.
+    This class is very similar to `cosapp.core.eval_str.AssignString`, except the right-hand side is a function.
+    In order to limit the scope of the callable function, the rhs can only be of type `Interpolator`.
+    """
+    def __init__(self, lhs: str, rhs: Callable[[float], Any], context: System):
+        # Strict type check (as opposed to `isinstance`), to ensure the type of
+        # `function` is `Interpolator`, and is not derived from `Interpolator`.
+        if type(rhs) is not Interpolator:
+            raise TypeError(
+                f"Functions used in time boundary conditions may only be of type `Interpolator`"
+                f"; got {type(rhs)}"
+            )
+        super().__init__(lhs, rhs, context)
+
+    def exec(self) -> None:
+        """Evaluates rhs, and executes assignment lhs <- rhs."""
+        super().exec()
 
 
 class Scenario:
@@ -127,11 +149,12 @@ class Scenario:
         """
         self.__case_values = []   # type: List[AssignString]
         self.__init_values = []   # type: List[AssignString]
+        self.__stop: Event = None
         self.name = name
         self.owner = owner
 
     @classmethod
-    def make(cls, name: str, init: Dict[str, Any], values: Dict[str, Any], driver: Driver) -> "Scenario":
+    def make(cls, name: str, driver: Driver, init: Dict[str, Any], values: Dict[str, Any]) -> "Scenario":
         """Scenario factory"""
         scenario = cls(name, driver)
         scenario.set_init(init)
@@ -165,9 +188,18 @@ class Scenario:
     def owner(self, driver: Driver) -> None:
         check_arg(driver, "owner", Driver, lambda driver: hasattr(driver, "owner"))
         self.__owner = driver
-        self.__context = driver.owner
+        self.__context = context = driver.owner
+        if context is None:
+            self.__stop = None
+        else:
+            self.__stop = Event('stop', context, desc="Stop criterion", final=True)
         self.clear_init()
         self.clear_values()
+
+    @property
+    def stop(self) -> Event:
+        """Event: discrete event triggering the end of scenario"""
+        return self.__stop
 
     def add_init(self, modifications: Dict[str, Any]) -> None:
         """Add a set of initial conditions, from a dictionary of the kind {'variable': value, ...}
@@ -225,7 +257,7 @@ class Scenario:
             raise AttributeError(f"Driver {self.name!r} must be attached to a System to set case values.")
 
         for variable, value in modifications.items():
-            if type(value) is Interpolator:
+            if callable(value):
                 assignment = InterpolAssignString(variable, value, self.context)
             else:
                 assignment = self.__assignment(variable, value)

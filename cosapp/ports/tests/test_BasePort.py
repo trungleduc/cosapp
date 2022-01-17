@@ -616,8 +616,8 @@ def test_BasePort_copy(direction1, direction2):
     details = p_copy.get_details()
     assert set(details.keys()) == {"var1"}
 
-    assert details["var1"].valid_range == (-np.inf, np.inf)
-    assert details["var1"].limits == (-np.inf, np.inf)
+    assert details["var1"].valid_range == (0.0, 5.0)
+    assert details["var1"].limits == (-5.0, 42.0)
     assert details["var1"].description == "my stupid description"
 
     # Check that copy() copies variable details, except validation parameters
@@ -636,11 +636,11 @@ def test_BasePort_copy(direction1, direction2):
     details = p_copy.get_details()
     assert set(details.keys()) == {"var1", "var2"}
 
-    assert details["var1"].valid_range == (-np.inf, np.inf)
-    assert details["var1"].limits == (-np.inf, np.inf)
+    assert details["var1"].valid_range == (1, 2)
+    assert details["var1"].limits == (0, 4)
     assert details["var1"].description == "banana"
-    assert details["var1"].invalid_comment == ""
-    assert details["var1"].out_of_limits_comment == ""
+    assert details["var1"].invalid_comment == "invalid value"
+    assert details["var1"].out_of_limits_comment == "too far"
     assert details["var1"].scope == Scope.PROTECTED
 
     assert details["var2"].valid_range is None

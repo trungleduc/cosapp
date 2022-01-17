@@ -19,13 +19,44 @@ def pull_variables(
     selection: str or List[str] or Dict[str, str]
 
     """
-    from cosapp.ports.port import Port, ExtensiblePort
+    from cosapp.systems import System
+    from cosapp.ports.port import BasePort, Port
     from cosapp.ports.enum import CommonPorts
 
-    parent = child.parent
+    parent: System = child.parent
     if parent is None:
         raise AttributeError(
             f"Can't pull variables from orphan System {child.name!r}"
+        )
+    method_map = {
+        CommonPorts.INWARDS.value: 'add_inward',
+        CommonPorts.OUTWARDS.value: 'add_outward',
+        CommonPorts.MODEVARS_IN.value: 'add_inward_modevar',
+        CommonPorts.MODEVARS_OUT.value: 'add_outward_modevar',
+    }
+    def copy_variable(
+        child: System,
+        port_name: str,
+        child_var: str,
+        parent_var: str,
+        value: Any,
+    ) -> None:
+        """Copy variable `child_var` from `child` into `parent`, as `parent_var`."""
+        child_port: BasePort = child[port_name]
+        parent_port: BasePort = parent[port_name]
+        lock_status = parent._locked
+        parent._locked = False
+        # Call `add_inward`, `add_outward`, etc., depending on context
+        method = getattr(parent, method_map[port_name])
+        method(parent_var, value)
+        parent._locked = lock_status
+        # Copy full variable detail in parent port
+        parent_port.copy_variable_from(child_port, child_var, parent_var)
+        logger.debug(
+            "{}.{} has been duplicated from {}.{} - including "
+            "validation range and scope.".format(
+                parent.name, parent_var, child.name, child_var
+            )
         )
 
     if isinstance(pulling, str):
@@ -33,74 +64,39 @@ def pull_variables(
     if isinstance(pulling, Sequence):
         pulling = dict(zip(pulling, pulling))
 
-    for child_port, parent_port in pulling.items():
-        sink_port = child[child_port]
+    for child_attr_name, parent_attr_name in pulling.items():
+        child_port = child[child_attr_name]
 
-        if isinstance(sink_port, Port):
-            if parent_port not in parent:
-                pulled_port = sink_port.copy(parent_port)
+        if isinstance(child_port, Port):
+            if parent_attr_name not in parent:
+                pulled_port = child_port.copy(parent_attr_name)
                 parent._add_port(pulled_port)
                 logger.debug(
-                    f"Port {pulled_port.contextual_name} will be duplicated from {sink_port.contextual_name}"
-                    " - including validation range and scope."
+                    f"Port {pulled_port.contextual_name} has been duplicated from"
+                    f" {child_port.contextual_name} - including validation range and scope."
                 )
             else:
-                pulled_port = parent[parent_port]
-            parent.connect(sink_port, pulled_port)
+                pulled_port = parent[parent_attr_name]
+            
+            parent.connect(child_port, pulled_port)
 
         else:  # ExtensiblePort (inwards or outwards)
-            def copy_variable(
-                port: str,
-                child: "cosapp.core.Module",
-                child_var: str,
-                parent_var: str,
-                value: Any,
-            ) -> None:
-                details = child[port].get_details(child_var)
-                args = (parent_var, value)
-                # Validation criteria are removed to avoid warning duplication when checking
-                kwargs = dict(
-                    unit=details.unit,
-                    dtype=details.dtype,
-                    desc=details.description,
-                    scope=details.scope,
-                )
-                old_locked = parent._locked
-                parent._locked = False
-                # Call add_inward or add_outward depending of the context
-                getattr(parent, "add_" + port[:-1])(*args, **kwargs)
-                parent._locked = old_locked
-                
-                logger.debug(
-                    "{} {}.{} will be duplicated from {}.{} - including "
-                    "validation range and scope.".format(
-                        port, parent.name, parent_var, child.name, child_var
-                    )
-                )
+            if isinstance(child_port, BasePort):  # Pulling all inwards or outwards
+                port_name = child_port.name
+                parent_port = parent[port_name]
 
-            if isinstance(sink_port, ExtensiblePort):  # Pulling all inwards or outwards
-                port_name = (
-                    CommonPorts.INWARDS.value
-                    if sink_port.name == CommonPorts.INWARDS.value
-                    else CommonPorts.OUTWARDS.value
-                )
+                for varname in child_port:
+                    if varname not in parent_port:
+                        value = child_port[varname]
+                        copy_variable(child, port_name, varname, varname, value)
 
-                for variable in sink_port:
-                    if variable not in parent[port_name]:
-                        copy_variable(
-                            port_name, child, variable, variable, sink_port[variable]
-                        )
+                parent.connect(child_port, parent_port, list(child_port))
 
-                parent.connect(sink_port, parent[port_name], list(sink_port))
+            else:  # Pulling individual variable
+                var = child.name2variable[child_attr_name]
+                port_name = var.mapping.name
 
-            else:  # Pulling one inwards or one local
-                owner = (
-                    CommonPorts.INWARDS.value
-                    if child_port in child[CommonPorts.INWARDS.value]
-                    else CommonPorts.OUTWARDS.value
-                )
+                if parent_attr_name not in parent[port_name]:
+                    copy_variable(child, port_name, child_attr_name, parent_attr_name, child_port)
 
-                if parent_port not in parent[owner]:
-                    copy_variable(owner, child, child_port, parent_port, sink_port)
-
-                parent.connect(child[owner], parent[owner], {child_port: parent_port})
+                parent.connect(child[port_name], parent[port_name], {child_attr_name: parent_attr_name})

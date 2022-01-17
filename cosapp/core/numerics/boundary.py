@@ -125,7 +125,7 @@ class Boundary:
                 f"Only variables can be used in mathematical algorithms; got {name!r} in {system.name!r}"
             )
 
-        if container.direction != PortType.IN:
+        if not container.is_input:
             path =  f"{system.name}.{container.name}"
             raise ValueError(
                 f"Only variables in input ports can be used as boundaries; got {name!r} in {path!r}."
@@ -219,10 +219,14 @@ class Boundary:
         if self.mask is None:
             if not numpy.array_equal(ref.value, new):
                 ref.value = new
-                ref.mapping.owner.set_dirty(PortType.IN)
+                self.touch()
         elif numpy.any(self.mask) and not numpy.array_equal(ref.value[self.mask], new):
             ref.value[self.mask] = new
-            ref.mapping.owner.set_dirty(PortType.IN)
+            self.touch()
+
+    def touch(self) -> None:
+        """Set owner system as 'dirty'."""
+        self.__info.port.owner.set_dirty(PortType.IN)
 
     @property
     def default_value(self) -> Union[Number, numpy.ndarray, None]:
@@ -659,7 +663,7 @@ class TimeUnknown(Boundary, AbstractTimeUnknown):
     @Boundary.value.setter
     def value(self, new: Union[Number, numpy.ndarray]) -> None:
         super(self.__class__, self.__class__).value.fset(self, new)
-        self.context.name2variable[self.name].mapping.owner.set_dirty(PortType.IN)
+        self.touch()
 
     def to_dict(self) -> Dict[str, Any]:
         """Returns a JSONable representation of the transient unknown.
@@ -772,7 +776,7 @@ class TimeDerivative(Boundary):
     def __set_value(self, value: Union[Number, numpy.ndarray]):
         """Private setter for `value`"""
         super(self.__class__, self.__class__).value.fset(self, value)
-        self.context.name2variable[self.name].mapping.owner.set_dirty(PortType.IN)
+        self.touch()
 
     @Boundary.value.setter
     def value(self, new: Union[Number, numpy.ndarray]) -> None:

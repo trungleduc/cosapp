@@ -136,11 +136,11 @@ def test_Optimizer_compute_with_optimizer_and_solver_1():
     opt.runner.set_objective("fcost")
     opt.runner.add_unknown(["x1", "x2"])
 
-    run.design.add_unknown("a").add_equation("a**2 == 9")
+    run.design.add_unknown("a").add_equation("a**3 == -27")
 
     s.run_drivers()
 
-    assert s.a == pytest.approx(3, abs=1e-4)
+    assert s.a == pytest.approx(-3, abs=1e-4)
     assert s.x1 == pytest.approx(s.a, abs=1e-4)
     assert s.x2 == pytest.approx(s.a, abs=1e-4)
 
@@ -156,7 +156,7 @@ def test_Optimizer_compute_with_optimizer_and_solver_2():
     optim.runner.add_unknown("a")
 
     # Solver problem (solution is x = 2a)
-    solver.runner.design.add_unknown("x").add_equation("y == 0")
+    solver.add_unknown("x").add_equation("y == 0")
 
     head.a = -5.0
     head.x = 10.0
@@ -182,7 +182,7 @@ def test_Optimizer_compute_with_optimizer_and_solver_3(caplog):
     optim.runner.add_unknown("sub.a")  # `sub.a` is pulled
 
     # Solver problem (solution is x = 2a)
-    solver.runner.design.add_equation("sub.y == 0").add_unknown("sub.x")  # `sub.x` is pulled
+    solver.add_equation("sub.y == 0").add_unknown("sub.x")  # `sub.x` is pulled
 
     head.a = -5.0
     head.x = 10.0
@@ -191,16 +191,22 @@ def test_Optimizer_compute_with_optimizer_and_solver_3(caplog):
     with caplog.at_level(logging.INFO):
         head.run_drivers()
     
-    assert len(caplog.records) > 1
-    assert re.match(
-        "Replace unknown 'sub.inwards.a' by 'inwards.a'",
-        caplog.records[0].message
+    assert len(caplog.records) > 2
+    messages = [record.message for record in caplog.records]
+    assert any(
+        re.match(
+            "Replace unknown 'sub.inwards.a' by 'inwards.a'",
+            message
+        )
+        for message in messages[:2]
     )
-    assert re.match(
-        "Replace unknown 'sub.inwards.x' by 'inwards.x'",
-        caplog.records[1].message
+    assert any(
+        re.match(
+            "Replace unknown 'sub.inwards.x' by 'inwards.x'",
+            message
+        )
+        for message in messages[:2]
     )
-
     assert head.sub.a == pytest.approx(0.5)  # minimizes 2 + (x - 1)**2, when x = 2a
     assert head.sub.x == pytest.approx(1)
     assert head.sub.y == pytest.approx(0, abs=1e-10)

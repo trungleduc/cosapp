@@ -114,10 +114,16 @@ def test_System_send_visitor_default(system_1):
         'a.ac.acb': 1,
         'a.ac.acc': 1,
     }
-    assert visitor.data['ports'] == dict(
+    port_data = {}
+    port_data.update(
         (f"{name}.{p}wards", 0)
         for name, p in itertools.product(names, ('in', 'out'))
     )
+    port_data.update(
+        (f"{name}.modevars_{p}", 0)
+        for name, p in itertools.product(names, ('in', 'out'))
+    )
+    assert visitor.data['ports'] == port_data
 
 
 def test_visitor_send(system_1):
@@ -169,7 +175,7 @@ def test_send_DataCollector(DummySystemFactory):
         'top.b': 1,
         'top.a.b': 1,
     }
-    assert visitor.data['ports'] == {
+    port_data = {
         'top.inwards': 0,
         'top.outwards': 0,
         'b.inwards': 0,
@@ -181,6 +187,12 @@ def test_send_DataCollector(DummySystemFactory):
         'b.u': 3,
         'b.v': 3,
     }
+    names = [s.name for s in top.tree()]
+    port_data.update(
+        (f"{name}.modevars_{p}", 0)
+        for name, p in itertools.product(names, ('in', 'out'))
+    )
+    assert visitor.data['ports'] == port_data
     assert visitor.data['drivers'] == {}
 
     for system in top.tree():

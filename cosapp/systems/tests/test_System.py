@@ -200,14 +200,18 @@ def test_System_type_checking_sub_system(set_master_system):
         m.run_drivers()
 
 
-
 def test_System__init__():
     name = "test_system"
     s = System(name)
     assert s.name == name
-    assert_keys(s.inputs, System.INWARDS)
-    assert_keys(s.outputs, System.OUTWARDS)
-    assert_keys(s.name2variable, System.INWARDS, System.OUTWARDS)
+    assert set(s.inputs) == {System.INWARDS, System.MODEVARS_IN}
+    assert set(s.outputs) == {System.OUTWARDS, System.MODEVARS_OUT}
+    assert set(s.name2variable) == {
+        System.INWARDS,
+        System.OUTWARDS,
+        System.MODEVARS_IN,
+        System.MODEVARS_OUT,
+    }
     assert len(s.children) == 0
     assert len(s.residues) == 0
     assert len(s.exec_order) == 0
@@ -427,11 +431,11 @@ def test_System_add_child_pulling(caplog):
 
     records = list(filter(lambda record: record.levelno == logging.DEBUG, caplog.records))
     assert len(records) == 2
-    pattern = r"Port \w+\.\w+ will be duplicated from \w+\.\w+ - including validation range and scope."
+    pattern = r"Port \w+\.\w+ has been duplicated from \w+\.\w+ - including validation range and scope."
     for record in records:
         assert re.match(pattern, record.message)
 
-    assert_keys(s.inputs, 'inwards', 'entry')
+    assert_keys(s.inputs, 'inwards', 'modevars_in', 'entry')
     entry = s.inputs['entry']
     assert entry is s.inputs['entry']  # check that assignment did not create a copy!
     assert entry is not s2.inputs["in_"]
@@ -439,7 +443,7 @@ def test_System_add_child_pulling(caplog):
     assert entry.direction is s2.inputs["in_"].direction
     assert entry is s.connectors["test.entry -> sub.in_"].source
 
-    assert_keys(s.outputs, 'outwards', 'out')
+    assert_keys(s.outputs, 'outwards', 'modevars_out', 'out')
     s_out = s.outputs['out']
     assert s_out is s.outputs['out']  # check that assignment did not create a copy!
     assert s_out is not s2.outputs['out']
@@ -450,7 +454,7 @@ def test_System_add_child_pulling(caplog):
     # Use only str
     s = System("test")
     s2 = s.add_child(SubSystem("sub"), pulling="in_")
-    assert_keys(s.inputs, 'in_', 'inwards')
+    assert_keys(s.inputs, 'in_', 'inwards', 'modevars_in')
     s_in = s.inputs['in_']
     assert s_in is s.inputs['in_']
     assert s_in is not s2.inputs['in_']
@@ -461,7 +465,7 @@ def test_System_add_child_pulling(caplog):
     # Use list of str
     s = System("test")
     s2 = s.add_child(SubSystem("sub"), pulling=["in_", "out"])
-    assert_keys(s.inputs, 'in_', 'inwards')
+    assert_keys(s.inputs, 'in_', 'inwards', 'modevars_in')
     # Check pulled symbol 'in_'
     s_in = s.inputs['in_']
     assert s_in is s.inputs['in_']
@@ -470,7 +474,7 @@ def test_System_add_child_pulling(caplog):
     assert s_in.direction is s2.inputs['in_'].direction
     assert s_in is s.connectors["test.in_ -> sub.in_"].source
     # Check pulled symbol 'out'
-    assert_keys(s.outputs, 'outwards', 'out')
+    assert_keys(s.outputs, 'outwards', 'modevars_out', 'out')
     s_out = s.outputs['out']
     assert s_out is s.outputs['out']  # check that assignment did not create a copy!
     assert s_out is not s2.outputs['out']
@@ -486,7 +490,7 @@ def test_System_add_child_pulling(caplog):
     with pytest.raises(KeyError):
         s.add_child(SubSystem("sub_c"), pulling=["here"])
 
-    assert_keys(s.inputs, 'entry', 'inwards')
+    assert_keys(s.inputs, 'entry', 'inwards', 'modevars_in')
     s_in = s.inputs['entry']
     assert s_in is s.inputs['entry']
     assert s_in is not s2.inputs['in_']
@@ -520,19 +524,19 @@ def test_System_add_child_pulling(caplog):
     records = list(filter(lambda record: record.levelno == logging.DEBUG, caplog.records))
     assert len(records) == 1
     assert re.match(
-        r"inwards \w+\.\w+ will be duplicated from \w+\.\w+",
-        records[-1].message)
-
+        r"\w+\.\w+ has been duplicated from \w+\.\w+",
+        records[-1].message,
+    )
     assert s.inwards['sloss'] == s2a['sloss']
     source = s2a.inwards.get_details("sloss")
     pulled = s.inwards.get_details("sloss")
-    for attr in ["unit", "dtype", "description", "scope"]:
+    attribute_names = [
+        "unit", "dtype", "description", "scope",
+        "valid_range", "invalid_comment",
+        "limits", "out_of_limits_comment",
+    ]
+    for attr in attribute_names:
         assert getattr(pulled, attr) == getattr(source, attr)
-    assert pulled.valid_range == (-np.inf, np.inf)
-    assert pulled.valid_range == (-np.inf, np.inf)
-    assert pulled.invalid_comment == ""
-    assert pulled.limits == (-np.inf, np.inf)
-    assert pulled.out_of_limits_comment == ""
 
     s = System("test")
     s2a = s.add_child(SubSystem("sub_a"), pulling=["sloss", "tmp"])
@@ -556,19 +560,14 @@ def test_System_add_child_pulling(caplog):
     records = list(filter(lambda record: record.levelno == logging.DEBUG, caplog.records))
     assert len(records) == 1
     assert re.match(
-        r"outwards \w+\.\w+ will be duplicated from \w+\.\w+", 
-        records[-1].message)
-
+        r"\w+\.\w+ has been duplicated from \w+\.\w+", 
+        records[-1].message,
+    )
     assert s.outwards['tmp'] == s2a['tmp']
     source = s2a.outwards.get_details("tmp")
     pulled = s.outwards.get_details("tmp")
-    for attr in ["unit", "dtype", "description", "scope"]:
+    for attr in attribute_names:
         assert getattr(pulled, attr) == getattr(source, attr)
-    assert pulled.valid_range == (-np.inf, np.inf)
-    assert pulled.valid_range == (-np.inf, np.inf)
-    assert pulled.invalid_comment == ""
-    assert pulled.limits == (-np.inf, np.inf)
-    assert pulled.out_of_limits_comment == ""
 
     s = System("test")
     s2a = s.add_child(SubSystem("sub_a"), pulling={"tmp": "a_tmp"})
@@ -3037,3 +3036,50 @@ def test_System_log_debug_message(format, msg, kwargs, to_log, emitted):
         assert re.match(emitted["pattern"], args[1]) is not None
     else:
         handler.log.assert_not_called()
+
+
+@pytest.mark.parametrize("args_kwargs, expected", [
+    # `args_kwargs` is a (tuple, dict) tuple
+    (get_args(True), True),
+    (get_args(1.25), 1.25),
+    (get_args(1.25, unit='kg'), 1.25),
+    (get_args(0.37, init='x + y'), 0.37),
+    (get_args(init='x + y'), 1.5),  # init, but no value
+])
+def test_System_add_outward_modevar(DummyFactory, args_kwargs, expected):
+    args, kwargs = args_kwargs
+    s = DummyFactory("dummy",
+        inwards = get_args('x', 1.0),
+        outwards = get_args('y', 0.5),
+        outward_modevars = get_args('a', *args, **kwargs),
+    )
+    assert "a" in s
+    assert f"{System.MODEVARS_OUT}.a" in s
+    assert s.a == expected
+
+
+def test_System_add_outward_modevar_init(DummyFactory):
+    s = DummyFactory("dummy",
+        inwards = get_args('x', 1.0),
+        outwards = get_args('y', 0.5),
+        outward_modevars = [
+            get_args('a', 0.1),  # value, no init
+            get_args('b', init='x + y'),  # init, but no value
+            get_args('c', 0.3, init='x + y'),  # value and init
+        ],
+    )
+    assert s.a == 0.1
+    assert s.b == 1.5
+    assert s.c == 0.3
+    port = s[System.MODEVARS_OUT]
+    a = port.get_details('a')
+    b = port.get_details('b')
+    c = port.get_details('c')
+    s.x = -1.5
+    s.y = -0.2
+    assert a.value == 0.1
+    assert b.value == 1.5
+    assert c.value == 0.3
+    assert a.init_value() is None
+    assert b.init_value() == -1.7
+    assert c.init_value() == -1.7

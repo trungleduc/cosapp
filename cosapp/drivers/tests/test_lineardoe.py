@@ -76,23 +76,24 @@ def test_LinearDoE__build_cases():
     )
 
 
-def test_LinearDoE_compute():
+def test_LinearDoE_execution():
+    """Test normal execution of driver `LinearDoE`"""
     s = Multiply2("mult")
-    d = s.add_driver(LinearDoE("doe"))
-    d.add_child(RunOnce("run"))
-    d.add_recorder(DataFrameRecorder(includes=["K?", "p_out.x"], raw_output=True))
+    doe = s.add_driver(LinearDoE("doe"))
+    doe.add_child(RunOnce("run"))
+    doe.add_recorder(DataFrameRecorder(includes=["K?", "p_out.x"], raw_output=True))
 
-    d.add_input_var(
+    doe.add_input_var(
         {
-            "K1": {"lower": 0.0, "upper": 20.0, "count": 3},
-            "K2": {"lower": 0.0, "upper": 200.0, "count": 3},
+            "K1": dict(lower=0.0,  upper=20.0, count=3),
+            "K2": dict(lower=0.0,  upper=200.0, count=3),
         }
     )
-    d.run_once()
+    s.run_drivers()
 
     assert s.K1 == 20.0
     assert s.K2 == 200.0
-    df = d.recorder.export_data()
+    df = doe.recorder.export_data()
     assert len(df) == 9
     assert df.iloc[4]["K1"] == 10.0
     assert df.iloc[4]["K2"] == 100.0
@@ -100,20 +101,3 @@ def test_LinearDoE_compute():
     assert df.iloc[8]["K1"] == 20.0
     assert df.iloc[8]["K2"] == 200.0
     assert df.iloc[8]["p_out.x"] == 4000.0
-
-
-def test_LinearDoE_run_once():
-    s = Multiply2("mult")
-    d = s.add_driver(LinearDoE("doe"))
-    d.add_child(RunOnce("run"))
-    d.add_recorder(DataFrameRecorder(includes=["p_*.x", "K?"], raw_output=True))
-
-    d.add_input_var(
-        {
-            "K1": {"lower": 0.0, "upper": 20.0, "count": 3},
-            "K2": {"lower": 0.0, "upper": 200.0, "count": 3},
-        }
-    )
-    d.run_once()
-    df = d.recorder.export_data()
-    assert df.shape == (9, 4 + len(DataFrameRecorder.SPECIALS))

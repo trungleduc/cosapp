@@ -125,13 +125,15 @@ class AbstractSolver(Driver):
         logger.debug(f"Set unknowns initial values: {self.initial_values}")
         self.set_iteratives(self.initial_values)
 
-    def _precompute(self) -> None:
+    def setup_run(self) -> None:
         """Set up the mathematical problem."""
+        super().setup_run()
+        self.problem = MathematicalProblem(self.name, self.owner)
+        self.initial_values = numpy.empty(0, dtype=float)
+
+    def _precompute(self) -> None:
         # TODO we should check that all variables are of numerical types
         super()._precompute()
-
-        self.initial_values = numpy.empty(0, dtype=float)
-        self.problem = MathematicalProblem(self.name, self.owner)
 
     def _fresidues(self,
         x: Sequence[float],

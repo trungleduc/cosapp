@@ -1,11 +1,10 @@
 import pytest
 
-import re
 import numpy as np
 from cosapp.systems import System
 from cosapp.drivers import NonLinearSolver, RunSingleCase, RungeKutta
 from cosapp.drivers.time.scenario import Interpolator
-import cosapp.recorders as recorders
+from cosapp.recorders import DataFrameRecorder
 from .conftest import case_factory, PointMass, PointMassWithPorts
 
 
@@ -121,7 +120,7 @@ def test_RungeKutta_twoTanks(two_tank_case, two_tank_solution, dt):
         }
     )
     
-    driver.add_recorder(recorders.DataFrameRecorder(includes='tank?.height'), period=0.1)
+    driver.add_recorder(DataFrameRecorder(includes='tank?.height'), period=0.1)
     assert driver.recording_period == 0.1
 
     system.run_drivers()
@@ -170,7 +169,7 @@ def test_RungeKutta_scalar_ode(scalar_ode_case, case, settings, tol):
     """Integration of simple scalar ODEs of the kind df/dt = F(t)"""
     settings['time_interval'] = case.get('time_interval', [0, 5])
     ode, driver = scalar_ode_case(RungeKutta, **settings)
-    driver.add_recorder(recorders.DataFrameRecorder(includes='f'), period=0.01)
+    driver.add_recorder(DataFrameRecorder(includes='f'), period=0.01)
 
     driver.set_scenario(
         init = {'f': case['init']},
@@ -207,7 +206,7 @@ def test_RungeKutta_scalar_ode_limited_dt(settings, expected):
     settings['record_dt'] = True
     ode = ExpOde('ode')
     driver = ode.add_driver(RungeKutta(**settings))
-    driver.add_recorder(recorders.DataFrameRecorder(includes=['y', 'z']), period=None)
+    driver.add_recorder(DataFrameRecorder(includes=['y', 'z']), period=None)
 
     driver.set_scenario(
         init = {'y': 1, 'z': 1},
@@ -238,7 +237,7 @@ def test_RungeKutta_scalar_ode_limited_dt(settings, expected):
 ])
 def test_RungeKutta_vector_ode(vector_ode_case, settings, tol):
     ode, driver = vector_ode_case(RungeKutta, **settings, time_interval=(0, 5))
-    driver.add_recorder(recorders.DataFrameRecorder(includes='v'), period=0.1)
+    driver.add_recorder(DataFrameRecorder(includes='v'), period=0.1)
 
     x0 = np.array([0.2, 1.2, -3.14])
     driver.set_scenario(
@@ -267,7 +266,7 @@ def test_RungeKutta_point_mass(point_mass_case, point_mass_solution, order, dt, 
     settings = dict(order=order, time_interval=(0, 2), dt=dt)
     system, driver = point_mass_case(RungeKutta, **settings)
 
-    driver.add_recorder(recorders.DataFrameRecorder(includes=['x', 'v', 'a']), period=0.1)
+    driver.add_recorder(DataFrameRecorder(includes=['x', 'v', 'a']), period=0.1)
 
     x0 = [-1., 0., 10]
     v0 = [8, 0, 9.5]
@@ -286,6 +285,32 @@ def test_RungeKutta_point_mass(point_mass_case, point_mass_solution, order, dt, 
         error = np.maximum(error, rel_error(x, solution.x(t)))
     context = f"dt = {driver.dt}, order = {driver.order}"
     assert error.max() < tol, context
+
+
+def test_RungeKutta_point_mass_stop(point_mass_case):
+    """"Point mass case with stop criterion"""
+    settings = dict(order=2, time_interval=(0, 2), dt=0.01)
+    system, driver = point_mass_case(RungeKutta, **settings)
+
+    driver.add_recorder(DataFrameRecorder(includes=['x', 'v', 'a']), period=0.1)
+
+    x0 = [-1., 0, 0]
+    v0 = [8, 0, 9.5]
+    driver.set_scenario(
+        init = {'x': np.array(x0), 'v': np.array(v0)},
+        stop = f"x[2] == {x0[2]}",
+        values = {'mass': 1.5, 'k': 0.5},
+    )
+    system.run_drivers()
+
+    data = driver.recorder.export_data()
+    time = np.asarray(data['time'])
+    assert system.x[2] == pytest.approx(x0[2])
+    assert time[-1] == pytest.approx(1.7647, abs=1e-4)
+    assert len(driver.recorded_events) == 1
+    record = driver.recorded_events[-1]
+    assert record.events[0] is driver.scenario.stop
+    assert record.time == time[-1]
 
 
 @pytest.mark.parametrize("exec_order", [
@@ -368,7 +393,7 @@ def test_RungeKutta_pointMassWithPorts(pointMassWithPorts_case, point_mass_solut
     system, driver = pointMassWithPorts_case(RungeKutta, **settings)
 
     includes = ['pos*.x', 'kin*.v', 'a']
-    driver.add_recorder(recorders.DataFrameRecorder(includes=includes), period=0.1)
+    driver.add_recorder(DataFrameRecorder(includes=includes), period=0.1)
 
     x0 = [-1., 0., 10]
     v0 = [8, 0, 9.5]
@@ -412,7 +437,7 @@ def test_RungeKutta_pointMassWithPorts_pulling(point_mass_solution, order, dt, t
     system, driver = make_case(RungeKutta, **settings)
 
     includes = ['*.x', '*.v', '*.a']
-    driver.add_recorder(recorders.DataFrameRecorder(includes=includes), period=0.1)
+    driver.add_recorder(DataFrameRecorder(includes=includes), period=0.1)
 
     x0 = [-1., 0., 10]
     v0 = [8, 0, 9.5]
@@ -463,7 +488,7 @@ def test_RungeKutta_rate(rate_case_1, dt, tol):
 
     driver.set_scenario(values={'k': 1.9, 'U': 'exp(k * t)'})
 
-    driver.add_recorder(recorders.DataFrameRecorder(includes=['dU_dt']), period=0.1)
+    driver.add_recorder(DataFrameRecorder(includes=['dU_dt']), period=0.1)
 
     system.run_drivers()
 
@@ -500,7 +525,7 @@ def test_RungeKutta_oscillator(oscillator_case, oscillator_solution, parameters,
         values = values,
     )
 
-    driver.add_recorder(recorders.DataFrameRecorder(includes=['x', 'v', 'a']), period=0.05)
+    driver.add_recorder(DataFrameRecorder(includes=['x', 'v', 'a']), period=0.05)
     system.run_drivers()
 
     if auto_dt:  # time step deduced from system
@@ -541,8 +566,8 @@ def test_RungeKutta_gaussian(gaussian_ode, parameters, settings, expected):
     driver = ode.make_case(RungeKutta, values=parameters.copy(), init=dict(f=f0), **settings)
 
     driver.add_recorder(
-        # recorders.DSVRecorder(f'Gaussian_RK{driver.order}.csv', includes='f'),
-        recorders.DataFrameRecorder(includes='f'),
+        # DSVRecorder(f'Gaussian_RK{driver.order}.csv', includes='f'),
+        DataFrameRecorder(includes='f'),
         period=period
     )
 
@@ -559,3 +584,68 @@ def test_RungeKutta_gaussian(gaussian_ode, parameters, settings, expected):
     assert error.max() < expected['tol']
     assert driver.recorded_dt.min() == pytest.approx(expected['dt_min'], rel=0.01)
     assert driver.recorded_dt.max() == pytest.approx(expected['dt_max'], rel=1e-9)
+
+
+def test_RungeKutta_multimode_scalar_ode_1(multimode_scalar_ode_case):
+    system, driver = multimode_scalar_ode_case(
+        RungeKutta, order=2, time_interval=(0, 1), dt=0.1,
+    )
+    driver.add_recorder(DataFrameRecorder(includes=['f', 'df']), period=0.1)
+
+    system.snap.trigger = "f > 0.347"
+
+    driver.set_scenario(
+        init = {'f': 0},
+        values = {'df': '0 if snapped else 1'},
+    )
+    system.run_drivers()
+    data = driver.recorder.export_data()
+
+    assert system.f == pytest.approx(0.347, abs=1e-14)
+    assert system.df == 0
+    te = 0.347
+    exact_t = np.r_[0, 0.1, 0.2, 0.3, te, te, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]
+    exact_f = lambda t: np.where(t <= te, t, te)
+    exact_df = lambda t: np.where(t <= te, 1.0, 0.0)
+    expected = {
+        'f': exact_f(exact_t),
+        'df': exact_df(exact_t),
+        'time': exact_t,
+    }
+    expected['df'][5] = 0.0  # discontinuity @ t = te
+    assert np.asarray(data['time']) == pytest.approx(expected['time'], abs=1e-14)
+    assert np.asarray(data['f']) == pytest.approx(expected['f'], abs=1e-14)
+    assert np.asarray(data['df']) == pytest.approx(expected['df'], abs=1e-14)
+
+
+def test_RungeKutta_multimode_scalar_ode_2(multimode_scalar_ode_case):
+    system, driver = multimode_scalar_ode_case(
+        RungeKutta, order=2, time_interval=(0, 1), dt=0.1,
+    )
+    driver.add_recorder(DataFrameRecorder(includes=['f', 'df']), period=0.1)
+
+    system.snap.trigger = "f > 0.347"
+
+    driver.set_scenario(
+        init = {'f': 0},
+        values = {'df': '0 if snapped else t'},
+    )
+    system.run_drivers()
+
+    data = driver.recorder.export_data()
+    # print(data)
+    te = np.sqrt(2 * 0.347)
+    exact_t = np.r_[0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, te, te, 0.9, 1]
+    exact_f = lambda t: np.where(t <= te, 0.5 * t**2, 0.5 * te**2)
+    exact_df = lambda t: np.where(t <= te, t, 0.0)
+    expected = {
+        'f': exact_f(exact_t),
+        'df': exact_df(exact_t),
+        'time': exact_t,
+    }
+    expected['df'][-3] = 0.0  # discontinuity @ t = te
+    assert system.f == pytest.approx(expected['f'][-1], abs=1e-14)
+    assert system.df == 0
+    assert np.asarray(data['time']) == pytest.approx(expected['time'], abs=1e-14)
+    assert np.asarray(data['f']) == pytest.approx(expected['f'], abs=1e-14)
+    assert np.asarray(data['df']) == pytest.approx(expected['df'], abs=1e-14)

@@ -172,7 +172,7 @@ def test_NonLinearSolver__fresidues(set_master_system):
     assert solver.problem.n_equations == 4
 
 
-def test_NonLinearSolver__precompute(caplog, set_master_system):
+def test_NonLinearSolver_setup_run(caplog, set_master_system):
     # Simple system with no design equations
     system = Multiply2("MyMult")
     solver = NonLinearSolver("solver")
@@ -210,14 +210,14 @@ def test_NonLinearSolver__precompute(caplog, set_master_system):
     assert runner.initial_values["p_in.x"].default_value == init[1]
 
     system.K1 = 0.8
-    solver._precompute()
+    system.call_setup_run()
     assert list(solver.initial_values) == list(init)
     solver.children[solver._default_driver_name].solution["inwards.K1"] = 0.8
-    solver._precompute()
+    system.call_setup_run()
     assert list(solver.initial_values) == [0.8, init[1]]
 
     solver.force_init = True
-    solver._precompute()
+    system.call_setup_run()
     assert list(solver.initial_values) == list(init)
 
     # Multiple cases, with off-design and design problems
@@ -257,12 +257,12 @@ def test_NonLinearSolver__precompute(caplog, set_master_system):
     assert list(solver.initial_values) == expected_init
 
     system.K1 = 0.123
-    solver._precompute()
+    system.call_setup_run()
     assert list(solver.initial_values) == [0.123] + expected_init[1:]
 
     system.K1 = expected_init[0]
     solver.point1.solution["inwards.K1"] = 0.123
-    solver._precompute()
+    system.call_setup_run()
     assert list(solver.initial_values) == expected_init
 
     # Multiple cases, with design and local problems
@@ -281,7 +281,6 @@ def test_NonLinearSolver__precompute(caplog, set_master_system):
     point2.set_init({"K2": init[2], "p_in.x": init[3]})
 
     system.call_setup_run()
-    solver._precompute()
 
     assert set(solver.problem.unknowns) == {
         "inwards.K1", "point1[p_in.x]",
@@ -290,10 +289,10 @@ def test_NonLinearSolver__precompute(caplog, set_master_system):
     assert list(solver.initial_values) == list(init)
 
     system.K1 = 0.2
-    solver._precompute()
+    system.call_setup_run()
     assert list(solver.initial_values) == list(init)
     solver.point1.solution["inwards.K1"] = 0.2
-    solver._precompute()
+    system.call_setup_run()
     assert list(solver.initial_values) == [0.2, init[1], init[2], init[3]]
 
     # Children without iterative

@@ -160,7 +160,7 @@ class Driver(Module):
         for child in self.children.values():
             child._set_children_active_status(active_status)
 
-    def _precompute(self) -> None:
+    def setup_run(self) -> None:
         """Set execution order and start the recorder."""
         if self.owner is None:
             raise AttributeError(f"Driver {self.name!r} has no owner system.")
@@ -168,6 +168,8 @@ class Driver(Module):
         if self._recorder is not None:
             self._recorder.start()
 
+    def _precompute(self) -> None:
+        """Set execution order and start the recorder."""
         self.start_time = time.time()
 
         if self.owner.parent is None and self.parent is None:
