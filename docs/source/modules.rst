@@ -31,6 +31,7 @@ Modules
    cosapp.ports.enum
    cosapp.ports.exceptions
    cosapp.ports.variable
+   cosapp.ports.multimode_variable
    cosapp.ports.units
 
    cosapp.systems.system
@@ -38,6 +39,10 @@ Modules
    cosapp.systems.processsystem
    cosapp.systems.externalsystem
    cosapp.systems.metamodels
+
+   cosapp.multimode.event
+   cosapp.multimode.zeroCrossing
+   cosapp.multimode.discreteStepper
 
    cosapp.drivers.driver
    cosapp.drivers.time.euler
