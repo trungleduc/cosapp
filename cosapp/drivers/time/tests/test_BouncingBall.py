@@ -106,7 +106,7 @@ def test_BouncingBall(ball_case):
     x = np.asarray(data['x'].tolist())
     # Check that all positions are above ground level,
     # within numerical tolerance
-    assert all(x[:, 2] > -1e-13)
+    assert min(x[:, 2]) > -1e-13
     assert len(driver.recorded_events) == 3
     assert [record.time for record in driver.recorded_events] == pytest.approx(
         [1.457205, 2.536008, 3.441106]
@@ -124,7 +124,7 @@ def test_BouncingBall_final(ball_case):
     # Retrieve recorded data
     data = driver.recorder.export_data()
     x = np.asarray(data['x'].tolist())
-    assert all(x[:, 2] > -1e-15)
+    assert min(x[:, 2]) > -1e-13
     assert ball.x[2] == pytest.approx(0)
     assert len(driver.recorded_events) == 1
     assert driver.recorded_events[0].time == pytest.approx(1.457205)
@@ -156,7 +156,7 @@ def test_BouncingBall_stop(ball):
     # Retrieve recorded data
     data = driver.recorder.export_data()
     x = np.asarray(data['x'].tolist())
-    assert all(x[:, 2] > -1e-15)
+    assert min(x[:, 2]) > -1e-13
     assert len(driver.recorded_events) == 1
     record = driver.recorded_events[-1]
     assert len(record.events) == 2
