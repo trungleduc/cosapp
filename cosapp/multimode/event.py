@@ -341,11 +341,12 @@ class FilteredEvent(EventState):
         expr = EvalString(condition, event.context)
         if not isinstance(expr.eval(), (bool, numpy_bool)):
             raise TypeError(
-                "FilteredEvent condition must be a boolean expression"
+                "FilteredEvent condition must be a Boolean expression."
             )
         if expr.constant and not expr.eval():
             warnings.warn(
-                f"Event {event.contextual_name} is filtered with an unconditionally False expression",
+                f"Event {event.contextual_name} is filtered with"
+                f" unconditionally false expression {str(expr)!r}",
                 RuntimeWarning,
             )
         self._event = event

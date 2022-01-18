@@ -198,10 +198,10 @@ def test_Event_trigger():
     ('norm(u) < x', does_not_raise()),
     ('True', does_not_raise()),
     (True, does_not_raise()),
-    (False, pytest.warns(RuntimeWarning, match="filtered with an unconditionally False expression")),
-    ("0 > 1", pytest.warns(RuntimeWarning, match="filtered with an unconditionally False expression")),
-    ('x', pytest.raises(TypeError, match="must be a boolean expression")),
-    ('u', pytest.raises(TypeError, match="must be a boolean expression")),
+    (False, pytest.warns(RuntimeWarning, match="filtered with unconditionally false expression")),
+    ("0 > 1", pytest.warns(RuntimeWarning, match="filtered with unconditionally false expression")),
+    ('x', pytest.raises(TypeError, match="must be a Boolean expression")),
+    ('u', pytest.raises(TypeError, match="must be a Boolean expression")),
 ])
 def test_Event_filter(condition, expected):
     s = BeepSystem('s')
