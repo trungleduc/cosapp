@@ -1,5 +1,6 @@
 import abc
 import logging, warnings
+from numpy import bool_ as numpy_bool
 from typing import Any, Union, Optional
 
 from .zeroCrossing import ZeroCrossing
@@ -338,7 +339,7 @@ class FilteredEvent(EventState):
         """
         check_arg(event, 'event', Event)
         expr = EvalString(condition, event.context)
-        if not isinstance(expr.eval(), bool):
+        if not isinstance(expr.eval(), (bool, numpy_bool)):
             raise TypeError(
                 "FilteredEvent condition must be a boolean expression"
             )
