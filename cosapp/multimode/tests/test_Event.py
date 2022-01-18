@@ -1,5 +1,7 @@
 import pytest
+import numpy as np
 from numpy import pi, sin, NINF, array, absolute
+from contextlib import nullcontext as does_not_raise
 
 from cosapp.multimode.event import (
     Event,
@@ -43,6 +45,16 @@ class ExplosiveSystem(System):
         self.boom.step()
         self.s1.e.step()
         self.s2.e.step()
+
+
+class BeepSystem(System):
+    def setup(self):
+        self.add_inward('x', 0.0)
+        self.add_inward('u', np.ones(3))
+        self.add_outward('y', -1.0)
+
+        self.add_event('beep', trigger="y > x")
+        self.add_event('boom')
 
 
 class DumDum(System):
@@ -178,6 +190,23 @@ def test_Event_trigger():
     assert top.boom.is_primitive
     assert not top.s1.e.is_primitive
     assert not top.s2.e.is_primitive
+
+
+@pytest.mark.parametrize("condition, expected", [
+    ('x > 1', does_not_raise()),
+    ('norm(u) < 1', does_not_raise()),
+    ('norm(u) < x', does_not_raise()),
+    ('True', does_not_raise()),
+    (True, does_not_raise()),
+    (False, pytest.warns(RuntimeWarning, match="filtered with unconditionally false expression")),
+    ("0 > 1", pytest.warns(RuntimeWarning, match="filtered with unconditionally false expression")),
+    ('x', pytest.raises(TypeError, match="must be a Boolean expression")),
+    ('u', pytest.raises(TypeError, match="must be a Boolean expression")),
+])
+def test_Event_filter(condition, expected):
+    s = BeepSystem('s')
+    with expected:
+        s.boom.trigger = s.beep.filter(condition)
 
 
 def test_Event_final():
