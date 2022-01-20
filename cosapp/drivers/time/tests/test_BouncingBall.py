@@ -25,25 +25,25 @@ class PointFriction(System):
     """Point mass ~ v**2 friction model"""
     def setup(self):
         self.add_inward('v', np.zeros(3), desc="Velocity")
-        self.add_inward('c', 0.1, desc="Friction coefficient")
+        self.add_inward('cf', 0.1, desc="Friction coefficient")
 
         self.add_outward("force", np.zeros(3))
 
     def compute(self):
-        self.force = -self.c * self.v * np.linalg.norm(self.v)
+        self.force = (-self.cf * np.linalg.norm(self.v)) * self.v
 
 
 class PointMass(System):
     def setup(self):
-        self.add_child(PointFriction('friction'), pulling=['c', 'v'])
+        self.add_child(PointFriction('friction'), pulling=['cf', 'v'])
         self.add_child(PointDynamics('dynamics'), pulling={
             'mass': 'mass',
             'force': 'force',
             'acc_ext': 'g',
             'acc': 'a',
-            })
+        })
 
-        self.connect(self.friction.outwards, self.dynamics.inwards, {"force": "force_ext"})
+        self.connect(self.friction, self.dynamics, {"force": "force_ext"})
 
         self.add_transient('v', der='a')
         self.add_transient('x', der='v')
@@ -55,7 +55,7 @@ class PointMass(System):
 class BouncingBall(System):
     def setup(self):
         self.add_child(PointMass('point'), pulling=[
-            'mass', 'x', 'v', 'a', 'c', 'g',
+            'mass', 'x', 'v', 'a', 'cf', 'g',
         ])
         self.add_event('rebound', trigger="x[2] <= 0")
 
@@ -90,7 +90,7 @@ def ball_case(ball):
     # Define a simulation scenario
     driver.set_scenario(
         init = {'x': np.array(x0), 'v': np.array(v0)},
-        values = {'mass': 1.5, 'c': 0.2},
+        values = {'mass': 1.5, 'cf': 0.2},
     )
 
     return ball, driver
@@ -147,7 +147,7 @@ def test_BouncingBall_stop(ball):
     # Define a simulation scenario
     driver.set_scenario(
         init = {'x': np.array(x0), 'v': np.array(v0)},
-        values = {'mass': 1.5, 'c': 0.2},
+        values = {'mass': 1.5, 'cf': 0.2},
         stop = ball.rebound,
     )
 
