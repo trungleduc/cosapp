@@ -8,7 +8,7 @@ from typing import Any, Optional, List, Generator, MappingView, OrderedDict, Seq
 
 from cosapp.patterns.visitor import Visitor, Component as VisitedComponent
 from cosapp.core.signal import Signal
-from cosapp.utils.naming import NameChecker
+from cosapp.utils.naming import NameChecker, CommonPorts
 from cosapp.utils.helpers import check_arg
 from cosapp.utils.logging import LoggerContext, LogFormat, LogLevel
 
@@ -61,7 +61,7 @@ class Module(LoggerContext, VisitedComponent, metaclass=abc.ABCMeta):
         '_compute_calls', 'setup_ran', 'computed', 'clean_ran',
     )
 
-    _name_check = NameChecker(excluded=["inwards", "outwards"])
+    _name_check = NameChecker(excluded=CommonPorts.names())
 
     def __init__(self, name: str):
         """`Module` constructor

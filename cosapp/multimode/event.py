@@ -5,7 +5,7 @@ from typing import Any, Union, Optional
 
 from .zeroCrossing import ZeroCrossing
 from cosapp.core.eval_str import EvalString
-from cosapp.utils.naming import NameChecker
+from cosapp.utils.naming import NameChecker, CommonPorts
 from cosapp.utils.helpers import check_arg
 
 logger = logging.getLogger(__name__)
@@ -58,7 +58,7 @@ class Event:
         "_state",
         "_final",
     )
-    __name_check = NameChecker()
+    __name_check = NameChecker(excluded=CommonPorts.names())
 
     def __init__(
         self,

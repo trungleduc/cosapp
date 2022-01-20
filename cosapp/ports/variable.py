@@ -10,8 +10,8 @@ from typing import Any, Dict, Iterable, Optional, Tuple, Union, NoReturn
 from cosapp.ports import units
 from cosapp.ports.enum import Scope, Validity, RangeType
 from cosapp.utils.distributions import Distribution
+from cosapp.utils.naming import NameChecker, CommonPorts
 from cosapp.utils.helpers import check_arg, is_numerical, get_typename
-from cosapp.utils.naming import NameChecker
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +79,7 @@ class Variable:
         "_valid_range",
     ]
 
-    __name_check = NameChecker(excluded=["inwards", "outwards"])
+    __name_check = NameChecker(excluded=CommonPorts.names())
 
     @staticmethod
     def _get_limits_from_type(variable: Any) -> RangeValue:

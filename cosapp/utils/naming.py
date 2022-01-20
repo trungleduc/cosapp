@@ -1,7 +1,26 @@
 import re
-from typing import Any, List, Tuple
+from enum import Enum
+from typing import Any, List, Tuple, Set
 from cosapp.utils.helpers import check_arg
-from cosapp.ports.enum import CommonPorts
+
+
+class CommonPorts(Enum):
+    """Port names common to every system.
+    
+    INWARDS : For orphan input variables
+    OUTWARDS : For orphan output variables
+    MODEVARS_IN : For orphan input mode variables
+    MODEVARS_OUT : For orphan output mode variables
+    """
+    INWARDS = "inwards"
+    OUTWARDS = "outwards"
+    MODEVARS_IN = "modevars_in"
+    MODEVARS_OUT = "modevars_out"
+
+    @classmethod
+    def names(cls) -> Set[str]:
+        """Returns common port names as a set."""
+        return set(case.value for case in cls)
 
 
 def has_time(expression: Any) -> bool:
@@ -10,14 +29,10 @@ def has_time(expression: Any) -> bool:
 
 
 def natural_varname(name: str) -> str:
-    """Strip references to 'inwards' and 'outwards' ports from variable name
+    """Strip references to common port names from variable name
     """
-    inwards = CommonPorts.INWARDS.value
-    outwards = CommonPorts.OUTWARDS.value
-    name = name.strip()
-    name = name.replace(f"{inwards}.", "")
-    name = name.replace(f"{outwards}.", "")
-    return name
+    pattern = "|".join(CommonPorts.names())
+    return re.sub(f"({pattern})\.", "", name.strip())
 
 
 class NameChecker:
@@ -26,7 +41,7 @@ class NameChecker:
         pattern = r"^[A-Za-z][\w]*$",
         message = "Name must start with a letter, and contain only alphanumerics and '_'",
         excluded: List[str] = [],
-        ):
+    ):
         self.__error_message = lambda name: None  # type: Callable[[str], str]
         self.__message = ""  # type: str
         self.__pattern = None  # type: re.Pattern

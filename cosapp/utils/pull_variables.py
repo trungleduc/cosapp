@@ -21,7 +21,7 @@ def pull_variables(
     """
     from cosapp.systems import System
     from cosapp.ports.port import BasePort, Port
-    from cosapp.ports.enum import CommonPorts
+    from cosapp.utils.naming import CommonPorts
 
     parent: System = child.parent
     if parent is None:

@@ -1,19 +1,6 @@
 from enum import Enum, IntEnum
 
 
-class CommonPorts(Enum):
-    """Common ports in every module.
-    
-    INWARDS : All input variables not belonging to a physical port
-    OUTWARDS : All output variables not belonging to a physical port
-    """
-
-    INWARDS = "inwards"
-    OUTWARDS = "outwards"
-    MODEVARS_IN = "modevars_in"
-    MODEVARS_OUT = "modevars_out"
-
-
 class PortType(Enum):
     """Enumeration for the port type.
 

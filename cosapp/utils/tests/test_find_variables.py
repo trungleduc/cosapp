@@ -5,11 +5,10 @@ from cosapp.utils.find_variables import (
     make_wishlist,
     find_variables,
     find_system_properties,
-    get_attributes,
 )
 from cosapp.tests.library.systems import AllTypesSystem
-from cosapp.ports import Port
-from cosapp.systems import System
+from cosapp.base import System, Port
+from cosapp.utils.naming import CommonPorts
 
 
 class XyPort(Port):
@@ -58,17 +57,27 @@ class SystemWithProps(System):
     ('foo.outwards.x', 'foo.x'),
     ('inwards.a', 'a'),
     ('outwards.x', 'x'),
+    ('foo.modevars_in.a', 'foo.a'),
+    ('foo.modevars_out.x', 'foo.x'),
+    ('modevars_in.a', 'a'),
+    ('modevars_out.x', 'x'),
     # Wildcard symbols left unchanged
     ('foo.?', 'foo.?'),
     ('*.foo.b?r', '*.foo.b?r'),
-    # Borderline cases - never supposed to occur in real variable names
-    ('foo.outwards.bar.outwards.x', 'foo.bar.x'),
-    ('foo.outwards.bar.inwards.x', 'foo.bar.x'),
-    ('inwards.outwards.x', 'x'),
-    ('outwards.inwards.x', 'x'),
 ])
 def test_natural_varname(name, expected):
     assert natural_varname(name) == expected
+
+
+@pytest.mark.parametrize("case1", CommonPorts)
+@pytest.mark.parametrize("case2", CommonPorts)
+def test_natural_varname_weird(case1, case2):
+    """Borderline cases like 'inwards.outwards.x',
+    never supposed to appear in real variable names."""
+    port1 = case1.value
+    port2 = case2.value
+    assert natural_varname(f"{port1}.{port2}.x") == "x"
+    assert natural_varname(f"foo.{port1}.bar.{port2}.x") == "foo.bar.x"
 
 
 @pytest.mark.parametrize("args, expected", [

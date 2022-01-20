@@ -26,15 +26,15 @@ import numpy
 import pandas
 
 from cosapp.patterns.visitor import Visitor
+from cosapp.core.module import Module, CommonPorts
 from cosapp.core.connectors import BaseConnector, Connector, ConnectorError
 from cosapp.core.eval_str import EvalString
-from cosapp.core.module import Module
 from cosapp.core.variableref import VariableReference
 from cosapp.core.numerics.basics import MathematicalProblem
 from cosapp.core.numerics.boundary import TimeDerivative, TimeUnknown, Unknown
 from cosapp.core.numerics.residues import AbstractResidue, Residue
 from cosapp.core.time import TimeObserver
-from cosapp.ports.enum import CommonPorts, PortType, Scope, Validity
+from cosapp.ports.enum import PortType, Scope, Validity
 from cosapp.ports.port import BasePort, ExtensiblePort, ModeVarPort, Port
 from cosapp.ports.variable import RangeValue, Types, Variable
 from cosapp.utils.distributions import Distribution

@@ -9,7 +9,7 @@ from cosapp.patterns.visitor import Visitor
 from cosapp.core.module import Module
 from cosapp.recorders.recorder import BaseRecorder
 from cosapp.utils.options_dictionary import OptionsDictionary
-from cosapp.utils.naming import NameChecker
+from cosapp.utils.naming import NameChecker, CommonPorts
 from cosapp.utils.helpers import check_arg
 
 logger = logging.getLogger(__name__)
@@ -52,7 +52,7 @@ class Driver(Module):
     _name_check = NameChecker(
         pattern = r"^[A-Za-z][\w\s@-]*[\w]?$",
         message = "Driver name must start with a letter, and contain only alphanumerics + {'_', '@', ' ', '-'}",
-        excluded = ["inwards", "outwards"],
+        excluded = CommonPorts.names(),
     )
 
     def __init__(self,

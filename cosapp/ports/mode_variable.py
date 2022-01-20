@@ -9,8 +9,8 @@ from typing import Any, Dict, Iterable, Optional, Tuple, Union
 
 from cosapp.ports import units
 from cosapp.ports.enum import Scope
+from cosapp.utils.naming import NameChecker, CommonPorts
 from cosapp.utils.helpers import check_arg, is_numerical, get_typename
-from cosapp.utils.naming import NameChecker
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +55,7 @@ class ModeVariable:
         "_scope",
     ]
 
-    __name_check = NameChecker(excluded=["inwards", "outwards"])
+    __name_check = NameChecker(excluded=CommonPorts.names())
 
     def __init__(
         self,
