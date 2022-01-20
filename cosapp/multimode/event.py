@@ -64,9 +64,9 @@ class Event:
         self,
         name: str,
         context: "cosapp.systems.System",
-        desc: str = None,
+        desc: str = "",
         trigger: Optional[Union[str, ZeroCrossing, EventState, "Event"]] = None,
-        final: Optional[bool] = False,
+        final: bool = False,
     ):
         """`Event` constructor.
 
@@ -77,7 +77,7 @@ class Event:
         - context [System]:
             Multimode system in which event is defined.
         - desc [str, optional]:
-            Description of the event (default: None)
+            Description of the event (default: "")
         - trigger [Union[str, ZeroCrossing, EventState, Event], optional]:
             Trigger defining event occurrence, given as either a string, a `ZeroCrossing` object,
             another event, or an `EvenState` derived from another event.
@@ -88,7 +88,7 @@ class Event:
         """
         self._name = self.name_check(name)
 
-        from cosapp.systems.system import System
+        from cosapp.systems import System
         check_arg(context, "context", System)
         self._context: System = context
         

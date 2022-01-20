@@ -41,7 +41,7 @@ def DummyFactory():
             "inward_modevars", "outward_modevars",
             "transients", "rates",
             "unknowns", "equations", "targets",
-            "design_methods",
+            "design_methods", "events",
         )
     )
     mapping["properties"] = "add_property"

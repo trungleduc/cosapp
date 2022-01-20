@@ -37,7 +37,6 @@ from cosapp.core.time import TimeObserver
 from cosapp.ports.enum import CommonPorts, PortType, Scope, Validity
 from cosapp.ports.port import BasePort, ExtensiblePort, ModeVarPort, Port
 from cosapp.ports.variable import RangeValue, Types, Variable
-from cosapp.ports.mode_variable import ModeVariable
 from cosapp.utils.distributions import Distribution
 from cosapp.utils.context import ContextLock
 from cosapp.utils.helpers import check_arg, is_number, is_numerical
@@ -1641,6 +1640,7 @@ class System(Module, TimeObserver):
         name: str,
         desc: str = "",
         trigger: Optional[Union[str, Event, EventState, ZeroCrossing]] = None,
+        final: bool = False,
     ) -> Event:
         """Add an event to system.
 
@@ -1657,6 +1657,8 @@ class System(Module, TimeObserver):
             Event description; defaults to ''.
         - trigger [Union[str, Event, EventState, ZeroCrossing], optional]:
             String, primary or derived event defining the event trigger; defaults to `None`.
+        - final [bool, optional]:
+            Defines whether or not event is final; defaults to `False`.
 
         Returns
         -------
@@ -1698,7 +1700,7 @@ class System(Module, TimeObserver):
         self._System__check_attr(name, f"cannot add event {name!r};")
 
         # Event creation
-        self._events[name] = event = Event(name, self, desc, trigger)
+        self._events[name] = event = Event(name, self, desc, trigger, final)
 
         # Getter
         cls = self.__class__

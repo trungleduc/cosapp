@@ -6,7 +6,7 @@ from cosapp.base import System, Port
 from cosapp.multimode.event import Event
 from cosapp.core.connectors import ConnectorError, BaseConnector
 from cosapp.ports.mode_variable import ModeVariable
-from cosapp.utils.testing import assert_keys
+from cosapp.utils.testing import assert_keys, get_args
 
 
 class BasicMultimodeSystem(System):
@@ -46,11 +46,27 @@ class ParentMSystem(System):
         self.add_event("e", desc="My dummy event")
 
 
-def test_MultimodeSystem___init__():
-    s = BasicMultimodeSystem("s")
-    assert s.m_in == 3.
+def test_MultimodeSystem___init__(DummyFactory):
+    s = DummyFactory("s",
+        inwards = get_args("x", 1.0),
+        outwards = get_args("y", 0.0),
+        inward_modevars = get_args("m_in", value=3.14, unit="m"),
+        outward_modevars = [
+            get_args("m_out", False, desc="System state"),
+            get_args("count", init=0, dtype=int),
+        ],
+        events = [
+            get_args("e1", desc="My dummy event"),
+            get_args("e2", trigger="x > y", final=True),
+        ]
+    )
+    assert s.m_in == 3.14
     assert s.m_out == False
-    assert s.e_in.trigger == None
+    assert s.count == 0
+    assert s.e1.trigger is None
+    assert not s.e1.final
+    assert s.e2.is_primitive
+    assert s.e2.final
 
 
 def test_MultimodeSystem_children_from_System():
