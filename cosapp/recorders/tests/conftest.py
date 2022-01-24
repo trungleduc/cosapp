@@ -13,6 +13,7 @@ class V1dPort(Port):
 
 class _AllTypesSystem(System):
     def setup(self):
+        self.add_property('g', 9.81)
         self.add_input(V1dPort, "in_")
         self.add_inward("a", np.ones(3), unit="kg")
         self.add_inward("b", np.zeros(3), unit="N")
@@ -20,6 +21,9 @@ class _AllTypesSystem(System):
         self.add_inward("e", "sammy")
         self.add_outward("d", list())
         self.add_output(V1dPort, "out")
+        self.add_inward_modevar("m_in", 0.1)
+        self.add_outward_modevar("m_out", False)
+        self.add_event('beep')
 
     def compute(self):
         self.out.x = self.a * self.in_.x + self.b

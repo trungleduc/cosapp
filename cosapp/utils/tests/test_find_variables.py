@@ -292,6 +292,7 @@ def test_find_system_properties(include_const, expected):
             self.add_inward('y', 2.0)
             self.add_output(XyPort, 'out')
             self.add_property('magic_ratio', 0.123)
+            self.add_event('beep', trigger="y > x")
 
         def compute(self):
             self.out.x = self.x
@@ -303,3 +304,20 @@ def test_find_system_properties(include_const, expected):
 
     actual = find_system_properties(top, include_const)
     assert actual == expected
+
+
+def test_find_variables_events():
+    """Check that events are not picked up by `find_variables`."""
+    class Bar(System):
+        def setup(self):
+            self.add_inward('a', 1.0)
+            self.add_inward('b', 2.0)
+            self.add_output(XyPort, 'p')
+            self.add_outward_modevar('m_out', 2.0)
+            self.add_property('pi', 3.14)
+            self.add_event('beep')
+
+    bar = Bar("bar")
+
+    actual = find_variables(bar, includes="*", excludes=None)
+    assert set(actual) == {'a', 'b', 'p.x', 'p.y', 'm_out'}
