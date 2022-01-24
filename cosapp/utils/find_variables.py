@@ -3,7 +3,6 @@ from typing import List, Any, Callable, Set, Union
 from collections.abc import Collection
 import inspect
 
-from cosapp.ports.enum import PortType
 from cosapp.ports.port import BasePort, Port
 from cosapp.utils.naming import natural_varname
 from cosapp.utils.helpers import check_arg
@@ -76,7 +75,7 @@ def find_variables(
     .. note::
         Inward and outward variables will appear without the prefix `inwards.` or `outwards.`.
     """
-    from cosapp.systems.system import System  # Local import to avoid recursion
+    from cosapp.systems import System  # Local import to avoid recursion
     check_arg(watched_object, 'watched_object', System)
 
     if not (inputs or outputs):
@@ -89,8 +88,8 @@ def find_variables(
 
     def is_valid(port: BasePort) -> bool:
         return isinstance(port, BasePort) and (
-            (port.direction is PortType.IN and inputs) or
-            (port.direction is PortType.OUT and outputs)
+            (port.is_input and inputs) or
+            (port.is_output and outputs)
         )
 
     def find_matches(name: str, value: Any) -> Set[str]:
@@ -157,26 +156,41 @@ def find_system_properties(system, include_const=False) -> Set[str]:
     (with @property decorator), or with `System.add_property`.
     The latter are excluded if optional argument `include_const`
     is False (default).
+
+    Parameters
+    ----------
+    - system [cosapp.systems.System]:
+        System of interest
+    - include_const [bool, optional]:
+        Defines if read-only properties defined with `System.add_property` will be accepted or not.
+        Default: `False`.
+
+    Returns
+    -------
+    - Set[str]:
+        Set of property names.
     """
-    from cosapp.systems.system import System  # Local import to avoid recursion
+    from cosapp.systems import System  # Local import to avoid recursion
     check_arg(system, 'system', System)
 
     base_cls_attr = get_attributes(System)
 
-    def local_properties(system) -> set:
+    def local_properties(system: System) -> Set[str]:
         local_attr = get_attributes(system) - base_cls_attr
+        local_attr -= set(
+            event.name for event in system.events()
+        )
         if not include_const:
             local_attr -= set(system.properties)
         return local_attr
 
-    def find_properties(system, head=None):
-        properties = set()
-        if head is None:
-            head = system
-        prefix = "" if system is head else f"{head.get_path_to_child(system)}."
-        properties |= set(f"{prefix}{attr}" for attr in local_properties(system))
-        for child in system.children.values():
-            properties |= find_properties(child, head)
-        return properties
-
-    return find_properties(system)
+    tree = system.tree(downwards=True)
+    properties = local_properties(next(tree))
+    for child in tree:
+        prefix = f"{system.get_path_to_child(child)}."
+        properties |= set(
+            f"{prefix}{attr}"
+            for attr in local_properties(child)
+        )
+    
+    return properties

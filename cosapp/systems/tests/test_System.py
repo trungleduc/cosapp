@@ -272,19 +272,48 @@ def test_System___setattr__():
         s.sub.sloss1 = 1.0
 
 
-def test_System___contains__():
-    s = TopSystem("test")
-    assert "sub" in s
-    assert "in_" in s
-    assert "out" in s
-    assert "in_.Pt" in s
-    assert "const" in s
+def test_System___contains__(DummyFactory):
+    top = DummyFactory("top",
+        inwards = get_args('x', 1.0),
+        outwards = get_args('y', 0.0),
+        properties = get_args('const', 0.123),
+        events = get_args('boom', trigger="y > x"),
+    )
+    sub = DummyFactory("sub",
+        inputs = get_args(DummyPort, 'p_in'),
+        outputs = get_args(DummyPort, 'p_out'),
+        inward_modevars = get_args('m_in', True),
+        outward_modevars = get_args('m_out', init=0, dtype=int),
+    )
+    top.add_child(sub, pulling=['p_in', 'p_out', 'm_out'])
 
-    assert "parent" not in s
-    assert "inputs" not in s
-    assert "outputs" not in s
-    assert "children" not in s
-    assert "name2variable" not in s
+    assert "x" in top
+    assert "y" in top
+    assert "sub" in top
+    assert "p_in" in top
+    assert "p_out" in top
+    assert "p_in" in top.sub
+    assert "p_out" in top.sub
+    assert "p_in.a" in top
+    assert "p_in.b" in top
+    assert "sub.p_in" in top
+    assert "sub.p_out" in top
+    assert "sub.p_in.a" in top
+    assert "sub.p_out.a" in top
+    assert "p_out.a" in top
+    assert "p_out.b" in top
+    assert "const" in top
+    assert "m_out" in top
+    assert "m_in" not in top
+    assert "sub.m_in" in top
+    assert "m_in" in top.sub
+    assert "boom" in top
+
+    assert "parent" not in top
+    assert "inputs" not in top
+    assert "outputs" not in top
+    assert "children" not in top
+    assert "name2variable" not in top
 
 
 def test_System___getitem__():
@@ -2993,6 +3022,27 @@ def test_System_properties_safeview(DummyFactory):
     props['led'] = 'zep'
     assert props == {"n": 12, "Z": 3.2, "led": "zep"}
     assert dummy.properties == {"n": 12, "Z": 3.2}
+
+
+def test_System_add_event():
+    class SystemWithEvent(System):
+        def setup(self):
+            self.add_event('beep')
+
+    a = SystemWithEvent("a")
+    b = System("b")
+
+    assert hasattr(a, 'beep')
+    assert not hasattr(b, 'beep')
+
+    with pytest.raises(AttributeError, match="can't set attribute"):
+        a.beep = 3.14
+
+    with pytest.raises(AttributeError, match="has no attribute 'beep'"):
+        b.beep
+
+    with pytest.raises(AttributeError, match="`add_event` cannot be called outside `setup`"):
+        b.add_event("boom")
 
 
 @pytest.mark.parametrize("format", LogFormat)

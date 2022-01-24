@@ -155,8 +155,9 @@ class System(Module, TimeObserver):
 
     __slots__ = (
         '_context_lock', '__sys_connectors', '_is_clean', '_locked', '_math',
-        'design_methods', 'drivers', 'inputs', 'outputs', '_events', 'name2variable',
-        '__readonly', '_meta', '__runner', '__input_mapping', '__loop_problem',
+        'design_methods', 'drivers', 'inputs', 'outputs', 'name2variable',
+        '__readonly', '__events', '_meta', '__runner', '__input_mapping',
+        '__loop_problem',
     )
 
     INWARDS = CommonPorts.INWARDS.value  # type: ClassVar[str]
@@ -221,7 +222,7 @@ class System(Module, TimeObserver):
         self._context_lock = ContextLock()  # type: ContextLock
         self.inputs = collections.OrderedDict()  # type: Dict[str, BasePort]
         self.outputs = dict()  # type: Dict[str, BasePort]
-        self._events = dict()  # type: Dict[str, Event]
+        self.__events = dict()  # type: Dict[str, Event]
         # Connectors are grouped in a dictionary where the key is the sink system i.e. the receiving system
         self.__sys_connectors = dict()  # type: Dict[str, List[Connector]]
         
@@ -475,7 +476,14 @@ class System(Module, TimeObserver):
             super().__setattr__(name, value)
 
     def __contains__(self, item: str) -> bool:
-        return item in self.__readonly or item in self.name2variable
+        return any(
+            item in collection
+            for collection in (
+                self.name2variable,
+                self.__readonly,
+                self.__events,
+            )
+        )
 
     def __getitem__(self, name: str) -> Any:
         try:
@@ -1277,15 +1285,11 @@ class System(Module, TimeObserver):
         return MappingProxyType(self._math.rates)
 
     def events(self) -> Iterator["cosapp.multimode.event.Event"]:
-        """Iterator on all events local to the current `System`.
-        `AttributeError` is caught for non-multimode `Systems`."""
-        try:
-            yield from self._events.values()
-        except AttributeError:
-            pass
+        """Iterator on all events local to the current `System`."""
+        yield from self.__events.values()
 
     def all_events(self) -> Iterator["cosapp.multimode.event.Event"]:
-        """Iterator on all events in the current `System` tree."""
+        """Recursive iterator on all events in the current `System` tree."""
         for elem in self.tree():
             yield from elem.events()
 
@@ -1700,13 +1704,13 @@ class System(Module, TimeObserver):
         self._System__check_attr(name, f"cannot add event {name!r};")
 
         # Event creation
-        self._events[name] = event = Event(name, self, desc, trigger, final)
+        self.__events[name] = event = Event(name, self, desc, trigger, final)
 
         # Getter
         cls = self.__class__
         def getter(self):
             try:
-                return self._events[name]
+                return self.__events[name]
             except KeyError:
                 raise AttributeError(f"{cls.__name__} object {self.name!r} has no attribute {name!r}")
         setattr(cls, name, property(getter))

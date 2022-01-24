@@ -1,5 +1,6 @@
 import pytest
 from unittest import mock
+from contextlib import nullcontext as does_not_raise
 
 from cosapp.core.signal import Slot
 from cosapp.recorders.recorder import BaseRecorder
@@ -23,18 +24,20 @@ def PatchBaseRecorder():
     (dict(includes=[], excludes=[]), dict(includes=[], excludes=[])),
     (dict(includes=('q', 'c')), dict(includes=['q', 'c'], excludes=[])),
     (dict(includes='*c', excludes='f?'), dict(includes=['*c'], excludes=['f?'])),
-    (dict(
-        includes=['a', 'b?', '*c'],
-        excludes=['d', '*e', 'f?'],
-        section='banana',
-        precision=12,
-        hold=True,
-        raw_output=True,
+    (
+        dict(
+            includes=['a', 'b?', '*c'],
+            excludes=['d', '*e', 'f?'],
+            section='banana',
+            precision=12,
+            hold=True,
+            raw_output=True,
         ), 
-        dict()),
+        dict(),
+    ),
     (
         dict(excludes=dict(cool=True), includes=set('abracadabra')),
-        dict(includes=['a', 'b', 'c', 'd', 'r'], excludes=['cool'])
+        dict(includes={'a', 'b', 'c', 'd', 'r'}, excludes={'cool'}),
     ),
     # Erroneous cases:
     (dict(includes=('q', 2)), dict(error=TypeError, match="'includes' must be a string, or a sequence of strings")),
@@ -50,6 +53,7 @@ def PatchBaseRecorder():
 ])
 def test_BaseRecorder__init__(kwargs, expected):
     error = expected.get('error', None)
+
     if error is None:
         if len(expected) == 0:
             expected = kwargs.copy()
@@ -62,6 +66,7 @@ def test_BaseRecorder__init__(kwargs, expected):
         assert recorder.precision == expected.get('precision', 9)
         assert recorder.section == expected.get('section', '')
         assert recorder.watched_object is None
+
     else:
         pattern = expected.get('match', None)
         with pytest.raises(error, match=pattern):
@@ -171,9 +176,12 @@ def test_BaseRecorder_field_names(AllTypesSystem):
     assert recorder.field_names() == list()
 
     # Single system
-    s = AllTypesSystem('test')
+    s = AllTypesSystem('s')
     recorder.watched_object = s
-    assert set(recorder.field_names()) == {'a', 'b', 'c', 'e', 'd', 'in_.x', 'out.x'}
+    assert set(recorder.field_names()) == {
+        'a', 'b', 'c', 'e', 'd',
+        'in_.x', 'out.x', 'm_in', 'm_out',
+    }
 
     # Two levels system
     recorder = BaseRecorder()
@@ -181,9 +189,8 @@ def test_BaseRecorder_field_names(AllTypesSystem):
     t.add_child(s)
     recorder.watched_object = t
     assert set(recorder.field_names()) == {
-        'a', 'b', 'c', 'e', 'd', 'in_.x', 'out.x',
-        'test.a', 'test.b', 'test.c', 'test.d', 'test.e',
-        'test.in_.x', 'test.out.x',
+        'a', 'b', 'c', 'e', 'd', 'in_.x', 'out.x', 'm_in', 'm_out',
+        's.a', 's.b', 's.c', 's.d', 's.e', 's.in_.x', 's.out.x', 's.m_in', 's.m_out',
     }
 
 
@@ -195,46 +202,69 @@ def test_BaseRecorder_field_names(AllTypesSystem):
     ('sub.outwards.d', ['sub.d']),
     ('outwards.d', ['d']),
     ('sub.?', ['sub.a', 'sub.b', 'sub.c', 'sub.e', 'sub.d']),
-    ('sub.*', ['sub.in_.x', 'sub.a', 'sub.b', 'sub.c', 'sub.e', 'sub.d', 'sub.out.x']),
-    (['sub.*', '*d', 'a'], ['a', 'd', 'sub.in_.x', 'sub.a', 'sub.b', 'sub.c', 'sub.e', 'sub.d', 'sub.out.x']),
+    ('sub.*', ['sub.in_.x', 'sub.a', 'sub.b', 'sub.c', 'sub.e', 'sub.d', 'sub.out.x', 'sub.m_in', 'sub.m_out']),
+    (['sub.*', '*d', 'a'], [
+        'a', 'd',
+        'sub.a', 'sub.b', 'sub.c', 'sub.e', 'sub.d',
+        'sub.in_.x', 'sub.out.x', 'sub.m_in', 'sub.m_out',
+    ]),
+    (['*d', '*out*'], ['d', 'sub.d', 'm_out', 'out.x', 'sub.out.x', 'sub.m_out']),
     ('banana', []),
+    ('beep', []),  # event
 ])
 def test_BaseRecorder_field_names__includes(AllTypesSystem, includes, expected):
-    s = AllTypesSystem('sub')
-    t = AllTypesSystem('top')
-    t.add_child(s)
+    sub = AllTypesSystem('sub')
+    top = AllTypesSystem('top')
+    top.add_child(sub)
     recorder = BaseRecorder(includes=includes)
-    recorder.watched_object = t
-    assert recorder.watched_object is t
+    recorder.watched_object = top
+    assert recorder.watched_object is top
     assert set(recorder.field_names()) == set(expected)  # test lists regardless of order
 
 
 @pytest.mark.parametrize("excludes, expected", [
     ('*', []),
-    ('sub.a', ['in_.x', 'out.x', 'a', 'b', 'c', 'e', 'd',
-                'sub.b', 'sub.c', 'sub.d', 'sub.e',
-                'sub.in_.x', 'sub.out.x']),
-    ('sub.inwards.a', ['in_.x', 'out.x', 'a', 'b', 'c', 'e', 'd',
-                        'sub.b', 'sub.c', 'sub.d', 'sub.e',
-                        'sub.in_.x', 'sub.out.x']),
-    ('inwards.a', ['in_.x', 'out.x', 'sub.a', 'b', 'c', 'e', 'd',
-                   'sub.b', 'sub.c', 'sub.d', 'sub.e',
-                   'sub.in_.x', 'sub.out.x']),
-    ('sub.d', ['in_.x', 'out.x', 'a', 'b', 'c', 'e', 'd',
-                'sub.a', 'sub.b', 'sub.c', 'sub.e',
-                'sub.in_.x', 'sub.out.x']),
-    ('sub.outwards.d', ['in_.x', 'out.x', 'a', 'b', 'c', 'e', 'd',
-                         'sub.a', 'sub.b', 'sub.c', 'sub.e',
-                         'sub.in_.x', 'sub.out.x']),
-    ('outwards.d', ['in_.x', 'out.x', 'a', 'b', 'c', 'e',
-                    'sub.d', 'sub.a', 'sub.b', 'sub.c', 'sub.e',
-                    'sub.in_.x', 'sub.out.x']),
-    ('sub.?', ['a', 'b', 'c', 'e', 'd', 'in_.x', 'out.x', 'sub.in_.x', 'sub.out.x']),
-    ('sub.*', ['a', 'b', 'c', 'e', 'd', 'in_.x', 'out.x']),
-    (['sub.*', '*d', 'a'], ['b', 'c', 'e', 'in_.x', 'out.x']),
-    ('banana', ['a', 'b', 'c', 'e', 'd', 'in_.x', 'out.x',
-                'sub.in_.x', 'sub.a', 'sub.b', 'sub.c', 'sub.e',
-                'sub.d', 'sub.out.x']),
+    ('sub.a', [
+        'in_.x', 'out.x', 'a', 'b', 'c', 'e', 'd', 'm_in', 'm_out',
+        'sub.b', 'sub.c', 'sub.d', 'sub.e',
+        'sub.in_.x', 'sub.out.x', 'sub.m_in', 'sub.m_out',
+    ]),
+    ('sub.inwards.a', [
+        'in_.x', 'out.x', 'a', 'b', 'c', 'e', 'd', 'm_in', 'm_out',
+        'sub.b', 'sub.c', 'sub.d', 'sub.e',
+        'sub.in_.x', 'sub.out.x', 'sub.m_in', 'sub.m_out',
+    ]),
+    ('inwards.a', [
+        'in_.x', 'out.x', 'b', 'c', 'e', 'd', 'm_in', 'm_out',
+        'sub.a', 'sub.b', 'sub.c', 'sub.d', 'sub.e',
+        'sub.in_.x', 'sub.out.x', 'sub.m_in', 'sub.m_out',
+    ]),
+    ('sub.d', [
+        'in_.x', 'out.x', 'a', 'b', 'c', 'e', 'd', 'm_in', 'm_out',
+        'sub.a', 'sub.b', 'sub.c', 'sub.e',
+        'sub.in_.x', 'sub.out.x', 'sub.m_in', 'sub.m_out',
+    ]),
+    ('sub.outwards.d', [
+        'in_.x', 'out.x', 'a', 'b', 'c', 'e', 'd', 'm_in', 'm_out',
+        'sub.a', 'sub.b', 'sub.c', 'sub.e',
+        'sub.in_.x', 'sub.out.x', 'sub.m_in', 'sub.m_out',
+    ]),
+    ('outwards.d', [
+        'in_.x', 'out.x', 'a', 'b', 'c', 'e', 'm_in', 'm_out',
+        'sub.a', 'sub.b', 'sub.c', 'sub.d', 'sub.e',
+        'sub.in_.x', 'sub.out.x', 'sub.m_in', 'sub.m_out',
+    ]),
+    ('sub.?', [
+        'a', 'b', 'c', 'e', 'd', 'in_.x', 'out.x', 'm_in', 'm_out',
+        'sub.in_.x', 'sub.out.x', 'sub.m_in', 'sub.m_out',
+    ]),
+    ('sub.*', ['a', 'b', 'c', 'e', 'd', 'in_.x', 'out.x', 'm_in', 'm_out']),
+    (['sub.*', '*d', 'a', 'm_*'], ['b', 'c', 'e', 'in_.x', 'out.x']),
+    ('banana', [
+        'a', 'b', 'c', 'e', 'd', 'in_.x', 'out.x', 'm_in', 'm_out',
+        'sub.in_.x', 'sub.a', 'sub.b', 'sub.c', 'sub.e',
+        'sub.d', 'sub.out.x', 'sub.m_in', 'sub.m_out',
+    ]),
 ])
 def test_BaseRecorder_field_names__excludes(AllTypesSystem, excludes, expected):
     s = AllTypesSystem('sub')
@@ -259,6 +289,9 @@ def test_BaseRecorder_field_names__excludes(AllTypesSystem, excludes, expected):
         ['a', 'sub.in_.xy_ratio', 'sub.out.xy_ratio'],
     ),
     (dict(includes=['sub.a']), ['sub.a']),
+    (dict(includes=['abs(sub.a)']), ['abs(sub.a)']),
+    (dict(includes=['abs(beep)']), []),  # expression involving event 'value'
+    (dict(includes=['beep.present']), ['beep.present']),  # stupid, but OK(?)
     (dict(includes=['sub.a'], excludes='sub.?'), []),
     (dict(includes=['a[-1]'], excludes='?'), ['a[-1]']),
     (dict(includes=['a[-1]', '2 * a + sub.out.y']), ['a[-1]', '2 * a + sub.out.y']),
