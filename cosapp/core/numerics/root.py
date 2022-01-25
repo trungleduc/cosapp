@@ -169,7 +169,7 @@ class NumericSolver:
 
             for j in x_indices_to_update:
                 delta = jac_rel_perturbation
-                if abs(x_copy[j]) >= jac_rel_perturbation:
+                if abs(x_copy[j]) >= abs(jac_rel_perturbation):
                     delta = x_copy[j] * jac_rel_perturbation
                 x_copy[j] += delta
                 logger.debug(f"Perturb unknown {j}")
