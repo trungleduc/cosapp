@@ -1,14 +1,12 @@
 """
 Various small helper functions.
 """
-import enum
-import inspect
 import os
+import inspect
+import numpy
 from numbers import Number
 from typing import Any, Callable, Iterable, Type, Union, Tuple
 from collections.abc import Collection
-
-import numpy
 
 
 def is_numerical(value: Any) -> bool:

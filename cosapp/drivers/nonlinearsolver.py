@@ -320,23 +320,24 @@ class NonLinearSolver(AbstractSolver):
                 self.status = 'ERROR'
                 self.error_code = '9'
 
-                error_msg = f'The solver failed: {results.message}'
+                error_msg = f"The solver failed: {results.message}"
 
                 error_desc = getattr(results, 'jac_errors', {})
                 if error_desc:
                     if len(error_desc['unknowns']) > 0:
-                        n_unknowns = len(error_desc['unknowns'])
-                        unknown_idx = error_desc['unknowns']
-                        unknown_names = [self.problem.unknowns_names[i] for i in unknown_idx]
-                        error_msg += (f' \nThe {n_unknowns} following parameter(s) have '
-                            f'no influence: {unknown_names} \n{unknown_idx}')
-
-
+                        indices = error_desc['unknowns']
+                        unknown_names = [self.problem.unknowns_names[i] for i in indices]
+                        error_msg += (
+                            f" \nThe {len(indices)} following parameter(s)"
+                            f" have no influence: {unknown_names} \n{indices}"
+                        )
                     if len(error_desc['residues']) > 0:
-                        n_equations = len(error_desc['residues'])
-                        equation_names = [self.problem.residues_names[i] for i in error_desc['residues']]
-                        error_msg += (f' \nThe {n_equations} following residue(s) are '
-                            f'not influenced: {equation_names}')
+                        indices = error_desc['residues']
+                        equation_names = [self.problem.residues_names[i] for i in indices]
+                        error_msg += (
+                            f" \nThe {len(indices)} following residue(s)"
+                            f" are not influenced: {equation_names}"
+                        )
 
                 if self.parent is not None:
                     raise ArithmeticError(error_msg)

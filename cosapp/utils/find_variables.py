@@ -24,8 +24,8 @@ def make_wishlist(wishlist: SearchPattern, name="wishlist") -> List[str]:
         raise TypeError(
             f"{name!r} must be a string, or a sequence of strings; got {wishlist}."
         )
-    # Filter out 'inwards.' and 'outwards.' in wishlist
-    filtered = set(natural_varname(name) for name in wishlist)
+    # Filter out common port names 'inwards.', 'outwards.',.. from wishlist
+    filtered = set(map(natural_varname, wishlist))
     return list(filtered)
 
 

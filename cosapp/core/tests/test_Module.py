@@ -358,6 +358,9 @@ def test_Module_iter_tree(composite):
     assert next(elems) is a.aa
     assert next(elems) is a.aa.aaa
     assert next(elems) is a.aa.aab
+    assert next(elems) is a.ab
+    # Check remaining elements
+    assert [elem.name for elem in elems] == ['ac', 'aca', 'acb', 'acc']
 
 
 @pytest.mark.parametrize("downwards, order, expected", [
