@@ -2458,6 +2458,12 @@ class System(Module, TimeObserver):
         else:
             mapping = BaseConnector.format_mapping(mapping)
 
+        if len(mapping) == 0:
+            warnings.warn(
+                f"Skipped empty connector between {port1.full_name()} and {port2.full_name()}"
+            )
+            return
+
         systems_connectors = self.__sys_connectors
 
         def create_connector(sink: BasePort, source: BasePort, mapping: Dict[str, str]):
