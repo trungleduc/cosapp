@@ -2902,6 +2902,22 @@ def test_System_connect_port_connectors(caplog):
     assert top.s3.v == pytest.approx([1, -0.4], rel=1e-15)
 
 
+def test_System_connect_empty():
+    """Check that empty connectors are discarded"""
+    top = System("top")
+    s1 = top.add_child(SubSystem("s1"))
+    s2 = top.add_child(EntryExit("s2"))
+    s3 = top.add_child(EntryExit("s3"))
+
+    with pytest.warns(UserWarning, match="empty connector"):
+        top.connect(s1.out, s2.entry)
+    assert len(top.connectors) == 0
+
+    with pytest.warns(UserWarning, match="empty connector"):
+        top.connect(s2.exit, s3.entry, [])
+    assert len(top.connectors) == 0
+
+
 def test_System_add_property():
     class SystemWithProperty(System):
         def setup(self, foo=None):
