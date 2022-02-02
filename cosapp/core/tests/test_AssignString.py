@@ -374,10 +374,27 @@ def test_AssignString_exec_changed_masked_array(eval_context):
     ("26 * pi / 180", 26 * np.pi / 180),
     ("exp(-1.5)", np.exp(-1.5)),
     ("log(2)", np.log(2)),
-    ])
+])
 def test_AssignString_constant_evaluation(eval_context, rhs, value):
     """Test that constant expressions are evaluated before being stored"""
     s = AssignString("a", rhs, eval_context)
     assert s.constant
     assert s.rhs == rhs  # representation of rhs is unchanged
     assert str(s._AssignString__sides) == f"(a, {value})"  # actual value is stored in 'sides'
+
+
+@pytest.mark.parametrize("lhs, rhs, variables, lhs_vars", [
+    ("sub.z", "norm(x, inf)", {'x', 'sub.z'}, {'sub.z'}),
+    ("out.q", "g * cos(pi * x)", {'x', 'out.q'}, {'out.q'}),
+    ("out.q", "g * cos(pi * x) + sub.z", {'x', 'sub.z', 'out.q'}, {'out.q'}),
+    ("a", "2 * a", {'a'}, {'a'}),
+    # (
+    #     "(x, out.q)", "[0, 0, B52.in_.q], g * cos(pi * x) + sub.z",  # tuple assignment
+    #     {'x', 'sub.z', 'out.q', 'B52.in_.q'}, {'x', 'out.q'},
+    # ),
+])
+def test_AssignString_variables(eval_context, lhs, rhs, variables, lhs_vars):
+    s = AssignString(lhs, rhs, eval_context)
+    assert s.lhs_variables == lhs_vars
+    assert s.variables() == variables
+    assert s.lhs_variables.issubset(s.variables())

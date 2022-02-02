@@ -6,7 +6,7 @@ This code is inspired from the OpenMDAO module openmdao.components.exec_comp.
 import re
 import numpy
 from numbers import Number
-from typing import Any, Dict, Iterable, Optional, Tuple, Union, Callable, Set
+from typing import Any, Dict, Iterable, Optional, Tuple, Union, Callable, FrozenSet
 
 
 class ContextLocals(dict):
@@ -261,7 +261,7 @@ class EvalString:
         self.__locals = local_dict = ContextLocals(context)  # type: ContextLocals
         value = eval(code, global_dict, local_dict)
         
-        self.__vars = None  # type: Set[str]
+        self.__vars = None  # type: FrozenSet[str]
         
         constants = context.properties
         self.__constant = set(local_dict).issubset(constants)  # type: bool
@@ -345,12 +345,12 @@ class EvalString:
         """
         return self.__eval()
 
-    def variables(self) -> Set[str]:
+    def variables(self) -> FrozenSet[str]:
         """Extracts all variables required for the evaluation of the expression
         
         Returns
         -------
-        Set[str]:
+        FrozenSet[str]:
             Variable names as a set of strings
         """
         if self.__vars is None:
@@ -365,7 +365,9 @@ class EvalString:
                     )
                 else:
                     names.add(key)
-            self.__vars = names - set(self.eval_context.properties)
+            self.__vars = frozenset(
+                names - set(self.eval_context.properties)
+            )
         return self.__vars
 
 
@@ -388,7 +390,9 @@ class AssignString:
             self.__shape = None
             self.__dtype = type(value)
         self.__context = context
-        self.__locals = lhs.locals
+        self.__lhs_vars = lhs.variables()
+        self.__rhs_vars = frozenset()
+        self.__locals = lhs.locals.copy()
         self.__locals.update({"rhs_value": value, context.name: context})
         assignment = f"{context.name}.{lhs!s} = rhs_value"
         self.__code = compile(assignment, "<string>", "exec")  # assignment bytecode
@@ -403,6 +407,16 @@ class AssignString:
     def lhs(self) -> str:
         """str: Left-hand side of the assignment."""
         return self.__raw_sides[0]
+
+    @property
+    def lhs_variables(self) -> FrozenSet[str]:
+        """FrozenSet[str]: set of variable names in left-hand side."""
+        return self.__lhs_vars
+
+    @property
+    def rhs_variables(self) -> FrozenSet[str]:
+        """FrozenSet[str]: set of variable names in right-hand side."""
+        return self.__rhs_vars
 
     @property
     def contextual_lhs(self) -> str:
@@ -436,6 +450,7 @@ class AssignString:
                 sides = EvalString(f"({lhs}, array({rhs}, dtype={self.__dtype}))", context)
         self.__sides = sides
         self.__constant = erhs.constant
+        self.__rhs_vars = erhs.variables()
         self.__raw_sides[1] = raw_rhs
 
     @property
@@ -465,15 +480,15 @@ class AssignString:
         """Union[Tuple[int, int], None]: shape of assigned object (lhs) if it is an array, else None."""
         return self.__shape
 
-    def variables(self) -> Set[str]:
+    def variables(self) -> FrozenSet[str]:
         """Extracts all variables required for the assignment
         
         Returns
         -------
-        Set[str]:
+        FrozenSet[str]:
             Variable names as a set of strings
         """
-        return self.__sides.variables()
+        return self.__lhs_vars.union(self.__rhs_vars)
 
     def __str__(self) -> str:
         return " = ".join(self.__raw_sides)
