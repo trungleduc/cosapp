@@ -1,14 +1,16 @@
 import numpy, scipy.interpolate
 import enum
 import logging
+import warnings
 from types import MappingProxyType
-from typing import Any, Dict, List, Optional, Callable
+from typing import Any, Dict, List, Tuple, Optional, Callable
 
 from cosapp.systems import System
 from cosapp.drivers.driver import Driver
 from cosapp.multimode.event import Event
 from cosapp.core.numerics.boundary import Boundary
 from cosapp.core.eval_str import AssignString
+from cosapp.utils.naming import natural_varname
 from cosapp.utils.helpers import check_arg
 
 logger = logging.getLogger(__name__)
@@ -174,7 +176,7 @@ class Scenario:
             assignment.exec()
 
     @property
-    def context(self) -> "System":
+    def context(self) -> System:
         """System: evaluation context of initial and boundary conditions,
         that is the system controled by owner driver"""
         return self.__context
@@ -188,7 +190,7 @@ class Scenario:
     def owner(self, driver: Driver) -> None:
         check_arg(driver, "owner", Driver, lambda driver: hasattr(driver, "owner"))
         self.__owner = driver
-        self.__context = context = driver.owner
+        self.__context = context = driver.owner  # type: System
         if context is None:
             self.__stop = None
         else:
@@ -213,13 +215,17 @@ class Scenario:
         --------
         >>> scenario.add_init({'myvar': 42, 'port.dummy': '-2 * alpha'})
         """
-        check_arg(modifications, 'modifications', dict)
-
+        check_arg(modifications, 'modifications', dict,
+            lambda d: all(isinstance(key, str) for key in d.keys())
+        )
         if self.owner is None:
             raise AttributeError(f"Driver {self.name!r} must be attached to a System to set initial values.")
 
         for variable, value in modifications.items():
-            assignment = self.__assignment(variable, value)
+            variable, context = self._get_alias(variable)
+            if context is None:
+                continue
+            assignment = AssignString(variable, value, context)
             if assignment.constant:
                 # If assignment is constant, it is safer to insert it at the top
                 # of the list, since other initial condition assignments might use it.
@@ -251,16 +257,20 @@ class Scenario:
         --------
         >>> scenario.add_values({'myvar': 42, 'port.dummy': 'cos(omega * t)'})
         """
-        check_arg(modifications, 'modifications', dict)
-
+        check_arg(modifications, 'modifications', dict,
+            lambda d: all(isinstance(key, str) for key in d.keys())
+        )
         if self.owner is None:
             raise AttributeError(f"Driver {self.name!r} must be attached to a System to set case values.")
 
         for variable, value in modifications.items():
+            variable, context = self._get_alias(variable)
+            if context is None:
+                continue
             if callable(value):
-                assignment = InterpolAssignString(variable, value, self.context)
+                assignment = InterpolAssignString(variable, value, context)
             else:
-                assignment = self.__assignment(variable, value)
+                assignment = AssignString(variable, value, context)
             if assignment.constant:
                 # If assignment is constant, it can be regarded as an initial condition,
                 # rather than a time-dependent boundary condition.
@@ -296,17 +306,62 @@ class Scenario:
         """List[AssignString]: list of initial conditions"""
         return self.__init_values
 
-    def __assignment(self, variable, value) -> AssignString:
-        """Returns the AssignString corresponding to assignment `variable <- value`"""
+    def _get_alias(self, lhs) -> Tuple[str, System]:
+        """Resolve potential aliasing for input `lhs`, targetted
+        in an initial or a boundary condition.
+
+        Returns:
+        --------
+        (free_lhs, context) [Tuple[str, System]]:
+            Free lhs and its evaluation context, usable in `AssignString`.
+        """
         context = self.__context
-        Boundary.parse(context, variable)  # checks that variable is valid
-        return AssignString(variable, value, context)
+        info = Boundary.parse(context, lhs)  # checks that variable is valid
+        varname = natural_varname(info.fullname)
+        variable = info.ref
+        try:
+            alias = context.input_mapping[varname]
+        except KeyError:
+            warnings.warn(
+                f"Skip connected variable {varname!r} in time scenario."
+            )
+            return None, None
+
+        aliased = (variable is not alias)
+
+        if not aliased:
+            return (lhs, context)
+        
+        # Resolve aliasing
+        port = alias.mapping
+        alias_name = natural_varname(f"{port.name}.{alias.key}")
+        try:
+            path = context.get_path_to_child(port.owner)
+        except ValueError:
+            fullname = f"{port.owner.full_name()}.{alias_name}"
+            warnings.warn(
+                f"Variable {varname!r} is aliased by {fullname!r}"
+                f", defined outside the context of {context.name!r}"
+                f"; it is likely to be overwritten after the computation."
+            )
+            path = None
+            alias_name = varname
+            eval_context = context
+        else:
+            eval_context = alias.context
+            if path:
+                alias_name = f"{path}.{alias_name}"
+            logger.info(
+                f"Replace {varname!r} by {alias_name!r} in time scenario."
+            )
+        lhs = lhs.replace(varname, alias_name)  # capture mask, if any
+        return (lhs, eval_context)
 
     def __repr__(self) -> str:
         s = f"{type(self).__name__} {self.name!r}, in {self.context.name!r}"
         def conditions(assigments, title):
             return "\n  - ".join(
-                [f"\n{title.title()}:"] + [str(a) for a in assigments]
+                [f"\n{title.title()}:"] + list(map(str, assigments))
              ) if assigments else ""
         s += conditions(self.init_values, "Initial values")
         s += conditions(self.case_values, "Boundary conditions")
