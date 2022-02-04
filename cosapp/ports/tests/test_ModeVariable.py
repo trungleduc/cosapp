@@ -209,20 +209,6 @@ def test_ModeVariable___init__(owner, caplog):
         ModeVariable(name, owner, value=value, dtype=int)
 
     name = "var1"
-    value = np.r_[1]
-    caplog.clear()
-    with caplog.at_level(logging.WARNING):
-        ModeVariable(name, owner, value=value)
-    assert len(caplog.records) == 1
-    record = caplog.records[0]
-    assert record.levelno == logging.WARNING
-    expected_msg = (
-        r"Variable '\w+' instantiates a numpy array with integer dtype. "
-        r"This may lead to unpredictible consequences."
-    )
-    assert re.match(expected_msg, record.message)
-
-    name = "var1"
     value = np.r_[1.0]
     caplog.clear()
     with caplog.at_level(logging.DEBUG):
