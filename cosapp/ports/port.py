@@ -1,19 +1,16 @@
 """
 Classes containing all `System` variables.
 """
-import array
-import numpy
 import logging
 import copy
 from collections import OrderedDict
-from collections.abc import MutableSequence
 from typing import Any, Dict, Iterator, Optional, Tuple, Union
 from types import MappingProxyType
 
 from cosapp.patterns import visitor
 from cosapp.ports.enum import PortType, Scope, Validity
 from cosapp.ports.exceptions import ScopeError
-from cosapp.ports.variable import RangeValue, Types, Variable
+from cosapp.ports.variable import RangeValue, Types, BaseVariable, Variable
 from cosapp.ports.mode_variable import ModeVariable
 from cosapp.utils.distributions import Distribution
 from cosapp.utils.helpers import check_arg
@@ -50,7 +47,7 @@ class BasePort(visitor.Component):
         if not isinstance(direction, PortType):
             raise TypeError(f"Direction must be PortType; got {direction}.")
 
-        self._variables = OrderedDict()  # type: Dict[str, Variable]
+        self._variables = OrderedDict()  # type: Dict[str, BaseVariable]
         self._name = self._name_check(name)  # type: str
         self._direction = direction  # type: PortType
         self._owner = None  # type: Optional[cosapp.systems.System]
@@ -404,7 +401,7 @@ class BasePort(visitor.Component):
         """
         return self.__out_of_scope(name)
 
-    def get_details(self, name: Optional[str] = None) -> Union[Dict[str, Variable], Variable]:
+    def get_details(self, name: Optional[str] = None) -> Union[Dict[str, BaseVariable], BaseVariable]:
         """Return the variable(s).
         
         Parameters
@@ -422,8 +419,8 @@ class BasePort(visitor.Component):
         else:
             return self._variables[name]
 
-    def variables(self) -> Iterator[Variable]:
-        """Iterator over port `Variable` instances."""
+    def variables(self) -> Iterator[BaseVariable]:
+        """Iterator over port `BaseVariable` instances."""
         return self._variables.values()
 
     def check(self, name: Optional[str] = None) -> Union[Dict[str, Validity], Validity]:
@@ -509,7 +506,7 @@ class BasePort(visitor.Component):
         return port
 
     def copy_variable_from(self, port: "BasePort", name: str, alias: Optional[str] = None) -> None:
-        """Copy `Variable` from another port.
+        """Copy variable `name` from another port into variable `alias`.
 
         Parameters
         ----------

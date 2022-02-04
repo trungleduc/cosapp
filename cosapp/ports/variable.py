@@ -1,4 +1,5 @@
 """This module define the basic class encapsulating a variable attributes."""
+import abc
 import array
 import numpy
 import logging
@@ -20,40 +21,25 @@ ArrayIndices = Optional[Union[int, Iterable[int], Iterable[Iterable[int]], slice
 Types = Optional[Union[Any, Tuple[Any, ...]]]
 
 
-class Variable:
-    """Variable details container.
-
-    The `valid_range` defines the range of value for which a model is known to behave correctly.
-    The `limits` are at least as large as the validity range.
+class BaseVariable(abc.ABC):
+    """Base class for variable detail container.
 
     Parameters
     ----------
-    name : str
+    - name [str]:
         Variable name.
-    port : BasePort
-        Port to which belong the variable
-    value : Any
-        Variable value
-    unit : str, optional
+    - port [BasePort]:
+        Port to which variable belongs.
+    - value [Any]:
+        Variable value.
+    - unit [str, optional]:
         Variable unit; default empty string (i.e. dimensionless)
-    dtype : type or iterable of type, optional
-        Variable type; default None (i.e. type of initial value)
-    valid_range : Tuple[Any, Any] or Tuple[Tuple], optional
-        Validity range of the variable; default None (i.e. all values are valid).
-        Tuple[Any, Any] in case of scalar value, tuple of tuples in case of vector value.
-    invalid_comment : str, optional
-        Comment to show in case the value is not valid; default ''
-    limits : Tuple[Any, Any] or Tuple[Tuple], optional
-        Limits over which the use of the model is wrong; default valid_range.
-        Tuple[Any, Any] in case of scalar value, tuple of tuples in case of vector value.
-    out_of_limits_comment : str, optional
-        Comment to show in case the value is not valid; default ''
-    desc : str, optional
-        Variable description; default ''
-    distribution : Distribution, optional
-        Variable random distribution; default None (no distribution)
-    scope : Scope {PRIVATE, PROTECTED, PUBLIC}, optional
-        Variable visibility; default PRIVATE
+    - dtype [type or iterable of type, optional]:
+        Variable type; default None (i.e. type of initial value).
+    - desc [str, optional]:
+        Variable description; default to ''.
+    - scope [Scope]: {PRIVATE, PROTECTED, PUBLIC},
+        Variable visibility; defaults to PRIVATE.
     """
 
     # Value cannot be integrated in this object
@@ -64,22 +50,295 @@ class Variable:
     #   Disadvantage : the logic to store the details and the value is a bit messy in
     #     BasePort.add_variable
 
-    __slots__ = [
+    __slots__ = (
         "__weakref__",
-        "_desc",
-        "_distribution",
-        "_invalid_comment",
-        "_limits",
         "_name",
+        "_desc",
+        "_unit",
         "_port",
-        "_out_of_limits_comment",
         "_scope",
         "_dtype",
-        "_unit",
-        "_valid_range",
-    ]
+    )
 
     __name_check = NameChecker(excluded=CommonPorts.names())
+
+    def __init__(
+        self,
+        name: str,
+        port: "cosapp.ports.port.BasePort",
+        value: Any,
+        unit: str = "",
+        dtype: Types = None,
+        desc: str = "",
+        scope: Scope = Scope.PRIVATE,
+    ):
+        self._name = self.name_check(name)
+
+        from cosapp.ports.port import BasePort
+        check_arg(port, 'port', BasePort)
+        self._port = port
+
+        check_arg(unit, 'unit', str)
+        if dtype is not None:
+            if not isinstance(dtype, type):
+                failed = False
+                try:
+                    for dtype_ in dtype:
+                        failed |= not isinstance(dtype_, type)
+                except TypeError:
+                    failed = True
+                if failed:
+                    raise TypeError(f"Types must be defined by a type; got {dtype}.")
+
+        check_arg(desc, 'desc', str)
+        check_arg(scope, 'scope', Scope)
+        
+        if unit and not is_numerical(value):
+            unit = ""
+            logger.warning(
+                f"A physical unit is defined for non-numerical variable {name!r}; it will be ignored."
+            )
+
+        elif not units.is_valid_units(unit) and unit:
+            raise units.UnitError(f"Unknown unit {unit}.")
+
+        value, dtype = self._process_value(value, dtype)
+
+        self._unit = unit  # type: str
+        self._desc = desc  # type: str
+        self._dtype = dtype  # type: Types
+        self._scope = scope  # type: Scope
+
+    @abc.abstractmethod
+    def copy(self, port: "BasePort", name: Optional[str] = None) -> "BaseVariable":
+        pass
+
+    @abc.abstractmethod
+    def _repr_markdown_(self) -> str:
+        """Returns the representation of this variable in Markdown format.
+
+        Returns
+        -------
+        str
+            Markdown formatted representation
+        """
+        pass
+
+    def _process_value(self, value, dtype):
+        if dtype is None:
+            if value is None:
+                dtype = None  # can't figure out type if both value and dtype are None
+            else:
+                dtype = type(value)
+                if is_numerical(value):
+                    # Force generic number type only if user has not specified any type
+                    if issubclass(dtype, Number):
+                        dtype = (Number, numpy.ndarray)
+                    elif isinstance(value, (MutableSequence, array.ArrayType)):
+                        # We have a collection => transform Mutable to ndarray
+                        dtype = (MutableSequence, array.ArrayType, numpy.ndarray)
+                        value = numpy.asarray(value)
+
+        elif value is not None:
+            # Test value has the right type
+            if not isinstance(value, dtype):
+                typename = get_typename(dtype)
+                raise TypeError(
+                    "Cannot set {} of type {} with a {}.".format(
+                        self.full_name, typename, type(value).__qualname__,
+                    )
+                )
+
+        return value, dtype
+
+    @classmethod
+    def name_check(cls, name: str):
+        return cls.__name_check(name)
+
+    @property
+    def full_name(self) -> str:
+        return f"{self._port.contextual_name}.{self.name}"
+
+    @property
+    def name(self) -> str:
+        """str : Variable name"""
+        return self._name
+
+    @property
+    def value(self) -> Any:
+        return getattr(self._port, self._name)
+
+    # @value.setter
+    # def value(self, value) -> None:
+    #     setattr(self._port, self._name, value)
+
+    @property
+    def unit(self) -> str:
+        """str : Variable unit; empty string means dimensionless"""
+        return self._unit
+
+    @property
+    def dtype(self) -> Types:
+        """Type[Any] or Tuple of Type[Any] or None : Type of the variable; default None (i.e. type of default value is set)"""
+        return self._dtype
+
+    @property
+    def description(self) -> str:
+        """str : Variable description"""
+        return self._desc
+
+    @property
+    def scope(self) -> Scope:
+        """Scope : Scope of variable visibility"""
+        return self._scope
+
+    def __str__(self) -> str:
+        return self.name
+
+    def __repr__(self) -> str:
+        return self._repr_markdown_()
+    
+    def __json__(self) -> Dict[str, Any]:
+        """JSONable dictionary representing a variable.
+        
+        Returns
+        -------
+        Dict[str, Any]
+            The dictionary
+        """
+        return {
+            "value": self.value,
+        }
+
+    def filter_value(self, value: Any) -> Any:
+        if self.dtype == (
+            MutableSequence,
+            array.ArrayType,
+            numpy.ndarray,
+        ):
+            value = numpy.asarray(value)
+        return value
+
+    def _to_raw_dict(self) -> Dict[str, Any]:
+        """Convert this variable into a dictionary.
+   
+        Returns
+        -------
+        dict
+            The dictionary representing this variable.
+        """
+        return {
+            "value" : self.value,
+            "unit": self.unit or None,
+            "desc" : self.description or None,
+        }
+
+    def to_dict(self) -> Dict:
+        """Convert this variable into a dictionary.
+   
+        Returns
+        -------
+        Dict[str, Any]:
+            Dictionary representing variable. Attributes with `None` value are filtered out.
+        """
+        data = self._to_raw_dict()
+        return dict(filter(
+            lambda items: items[1] is not None,
+            data.items()
+        ))
+
+
+class Variable(BaseVariable):
+    """Variable detail container.
+
+    The `valid_range` defines the range of value for which a model is known to behave correctly.
+    The `limits` are at least as large as the validity range.
+
+    Parameters
+    ----------
+    - name [str]:
+        Variable name.
+    - port [BasePort]:
+        Port to which variable belongs.
+    - value [Any]:
+        Variable value.
+    - unit [str, optional]:
+        Variable unit; default empty string (i.e. dimensionless)
+    - dtype [type or iterable of type, optional]:
+        Variable type; default None (i.e. type of initial value).
+    - desc [str, optional]:
+        Variable description; default to ''.
+    - valid_range [Tuple[Any, Any] or Tuple[Tuple], optional]:
+        Validity range of the variable; default None (i.e. all values are valid).
+        Tuple[Any, Any] in case of scalar value, tuple of tuples in case of vector value.
+    - invalid_comment [str, optional]:
+        Comment to show in case the value is not valid; default ''
+    - limits [Tuple[Any, Any] or Tuple[Tuple], optional]:
+        Limits over which the use of the model is wrong; default valid_range.
+        Tuple[Any, Any] in case of scalar value, tuple of tuples in case of vector value.
+    - out_of_limits_comment [str, optional]:
+        Comment to show in case the value is not valid; default ''
+    - distribution [Distribution, optional]:
+        Variable random distribution; default None (no distribution)
+    - scope [Scope]: {PRIVATE, PROTECTED, PUBLIC},
+        Variable visibility; defaults to PRIVATE.
+    """
+
+    __slots__ = (
+        "_distribution",
+        "_limits",
+        "_out_of_limits_comment",
+        "_valid_range",
+        "_invalid_comment",
+    )
+
+    def __init__(
+        self,
+        name: str,
+        port: "cosapp.ports.port.BasePort",
+        value: Any,
+        unit: str = "",
+        dtype: Types = None,
+        valid_range: RangeValue = None,
+        invalid_comment: str = "",
+        limits: RangeValue = None,
+        out_of_limits_comment: str = "",
+        desc: str = "",
+        distribution: Optional[Distribution] = None,
+        scope: Scope = Scope.PRIVATE,
+    ):
+        super().__init__(name, port, value, unit, dtype, desc, scope)
+        # Additional value check
+        value, dtype = self._process_value(value, dtype)
+
+        # TODO: better handle of this possible misunderstanding for users at numpy array instantiation
+        if isinstance(value, numpy.ndarray):
+            if issubclass(value.dtype.type, numpy.integer):
+                logger.warning(
+                    f"Variable {name!r} instantiates a numpy array with integer dtype."
+                    " This may lead to unpredictible consequences."
+                )
+
+        # Check validation ranges are compatible and meaningful for this type of data
+        limits, valid_range = self._check_range(limits, valid_range, value)
+
+        if valid_range is None and len(invalid_comment) > 0:
+            logger.warning(
+                f"Invalid comment specified for variable {name!r} without validity range."
+            )
+        if limits is None and len(out_of_limits_comment) > 0:
+            logger.warning(
+                f"Out-of-limits comment specified for variable {name!r} without limits."
+            )
+
+        self._valid_range = valid_range  # type: RangeValue
+        self._invalid_comment = ""  # type: str
+        self.invalid_comment = invalid_comment
+        self._limits = limits  # type: RangeValue
+        self._out_of_limits_comment = ""  # type: str
+        self.out_of_limits_comment = out_of_limits_comment
+        self._distribution = None  # type: Optional[Distribution]
+        self.distribution = distribution
 
     @staticmethod
     def _get_limits_from_type(variable: Any) -> RangeValue:
@@ -99,10 +358,6 @@ class Variable:
             return -numpy.inf, numpy.inf
         else:
             return None
-
-    @property
-    def full_name(self) -> str:
-        return f"{self._port.contextual_name}.{self.name}"
 
     def check_range_type(self, value: Iterable) -> RangeType:
         """Get type of valid_range of limits of variable.
@@ -233,119 +488,6 @@ class Variable:
 
         return limits, valid_range
 
-    def __init__(
-        self,
-        name: str,
-        port: "cosapp.ports.port.BasePort",
-        value: Any,
-        unit: str = "",
-        dtype: Types = None,
-        valid_range: RangeValue = None,
-        invalid_comment: str = "",
-        limits: RangeValue = None,
-        out_of_limits_comment: str = "",
-        desc: str = "",
-        distribution: Optional[Distribution] = None,
-        scope: Scope = Scope.PRIVATE,
-    ):
-        self._name = self.name_check(name)
-
-        from cosapp.ports.port import BasePort
-        check_arg(port, 'port', BasePort)
-        self._port = port
-
-        check_arg(unit, 'unit', str)
-        if dtype is not None:
-            if not isinstance(dtype, type):
-                failed = False
-                try:
-                    for dtype_ in dtype:
-                        failed |= not isinstance(dtype_, type)
-                except TypeError:
-                    failed = True
-                if failed:
-                    raise TypeError(f"Types must be defined by a type; got {dtype}.")
-
-        check_arg(desc, 'desc', str)
-        check_arg(scope, 'scope', Scope)
-
-        if unit and not is_numerical(value):
-            unit = ""
-            logger.warning(
-                f"A physical unit is defined for non-numerical variable {name!r}; it will be ignored."
-            )
-
-        elif not units.is_valid_units(unit) and unit:
-            raise units.UnitError(f"Unknown unit {unit}.")
-
-        if dtype is None:
-            if value is None:
-                dtype = None  # can't figure out type if both value and dtype are None
-            else:
-                dtype = type(value)
-                if is_numerical(value):
-                    # Force generic number type only if user has not specified any type
-                    if issubclass(dtype, Number):
-                        dtype = (Number, numpy.ndarray)
-                    elif isinstance(value, (MutableSequence, array.ArrayType)):
-                        # We have a collection => transform Mutable to ndarray
-                        dtype = (MutableSequence, array.ArrayType, numpy.ndarray)
-                        value = numpy.asarray(value)
-        elif value is not None:
-            # Test value has the right type
-            if not isinstance(value, dtype):
-                typename = get_typename(dtype)
-                varname = f"{port.contextual_name}.{name}"
-                raise TypeError(
-                    "Cannot set {} of type {} with a {}.".format(
-                        varname, typename, type(value).__qualname__
-                    )
-                )
-
-        # TODO: better handle of this possible misunderstanding for users at numpy array instantiation
-        if isinstance(value, numpy.ndarray):
-            if issubclass(value.dtype.type, numpy.integer):
-                logger.warning(
-                    f"Variable {name!r} instantiates a numpy array with integer dtype."
-                    " This may lead to unpredictible consequences."
-                )
-
-        # Check validation ranges are compatible and meaningful for this type of data
-        limits, valid_range = self._check_range(limits, valid_range, value)
-
-        if valid_range is None and len(invalid_comment) > 0:
-            logger.warning(
-                f"Invalid comment specified for variable {name!r} without validity range."
-            )
-
-        if limits is None and len(out_of_limits_comment) > 0:
-            logger.warning(
-                f"Out-of-limits comment specified for variable {name!r} without limits."
-            )
-
-        self._unit = unit  # type: str
-        self._dtype = dtype  # type: Types
-        self._valid_range = valid_range  # type: RangeValue
-        self._invalid_comment = ""  # type: str
-        self.invalid_comment = invalid_comment
-        self._limits = limits  # type: RangeValue
-        self._out_of_limits_comment = ""  # type: str
-        self.out_of_limits_comment = out_of_limits_comment
-        self._desc = desc  # type: str
-        self._distribution = None  # type: Optional[Distribution]
-        self.distribution = distribution
-        self._scope = scope  # type: Scope
-
-    @classmethod
-    def name_check(cls, name: str):
-        return cls.__name_check(name)
-
-    def __str__(self) -> str:
-        return self.name
-
-    def __repr__(self) -> str:
-        return self._repr_markdown_()
-        
     def _repr_markdown_(self) -> str:
         """Returns the representation of this variable in Markdown format.
 
@@ -410,8 +552,8 @@ class Variable:
             "{name}{scope}: {value!s}{unit}"
             "{separator}{min_limit}{min_valid}{range}{max_valid}{max_limit}"
             "{description}".format(**msg)
-        )  
-        
+        )
+    
     def __json__(self) -> Dict[str, Any]:
         """JSONable dictionary representing a variable.
         
@@ -420,42 +562,15 @@ class Variable:
         Dict[str, Any]
             The dictionary
         """
-        return {
-            "value": self.value,
+        data = super().__json__()
+        data.update({
             "valid_range": self.valid_range,
             "invalid_comment": self.invalid_comment,
             "limits": self.limits,
             "out_of_limits_comment": self.out_of_limits_comment,
             "distribution": self.distribution.__json__() if self.distribution else None,
-        }
-
-    def filter_value(self, value: Any) -> Any:
-        if self.dtype == (
-            MutableSequence,
-            array.ArrayType,
-            numpy.ndarray,
-        ):
-            value = numpy.asarray(value)
-        return value
-
-    @property
-    def name(self) -> str:
-        """str : Variable name"""
-        return self._name
-
-    @property
-    def value(self) -> Any:
-        return getattr(self._port, self._name)
-
-    @property
-    def unit(self) -> str:
-        """str : Variable unit; empty string means dimensionless"""
-        return self._unit
-
-    @property
-    def dtype(self) -> Types:
-        """Type[Any] or Tuple of Type[Any] or None : Type of the variable; default None (i.e. type of default value is set)"""
-        return self._dtype
+        })
+        return data
 
     @property
     def valid_range(self) -> RangeValue:
@@ -593,16 +708,6 @@ class Variable:
         self._out_of_limits_comment = new_comment
 
     @property
-    def description(self) -> str:
-        """str : Variable description"""
-        return self._desc
-
-    @property
-    def scope(self) -> Scope:
-        """Scope : Scope of variable visibility"""
-        return self._scope
-
-    @property
     def distribution(self) -> Optional[Distribution]:
         """Optional[Distribution] : Random distribution of the variable."""
         return self._distribution
@@ -612,7 +717,9 @@ class Variable:
         ok = new_distribution is None or isinstance(new_distribution, Distribution)
         if not ok:
             typename = type(new_distribution).__qualname__
-            raise TypeError(f"Random distribution should be of type 'Distribution'; got {typename}.")
+            raise TypeError(
+                f"Random distribution should be of type 'Distribution'; got {typename}."
+            )
         self._distribution = new_distribution
 
     def is_valid(self) -> Validity:
@@ -632,8 +739,8 @@ class Variable:
         if self.valid_range is not None:
 
             range_type = self.check_range_type(self.valid_range)
-            if isinstance(value, numpy.ndarray):  
             
+            if isinstance(value, numpy.ndarray):  
                 if range_type == RangeType.VALUE:
                     min_range, max_range = self.valid_range 
                     if numpy.any(value > max_range) or numpy.any(value < min_range):
@@ -754,7 +861,7 @@ class Variable:
             scope = self._scope,
         )
 
-    def to_dict(self) -> Dict:
+    def _to_raw_dict(self) -> Dict:
         """Convert this variable into a dictionary.
    
         Returns
@@ -762,15 +869,12 @@ class Variable:
         dict
             The dictionary representing this variable.
         """
-        ret = {
-            "value" : self.value,
-            "unit": self.unit or None,
+        data = super()._to_raw_dict()
+        data.update({
             "invalid_comment": self.invalid_comment or None,
             "out_of_limits_comment": self.out_of_limits_comment or None,
-            "desc" : self.description or None,
             "distribution": self.distribution.__json__() if self.distribution else None,
-        } 
-        
+        })
         for key in ["valid_range", "limits"]:
             tmp_val = list(getattr(self, key))
             for idx, val in enumerate(tmp_val):
@@ -778,6 +882,6 @@ class Variable:
                     tmp_val[idx] = str(val) 
             if  tmp_val == ["-inf", "inf"]:
                 tmp_val = None
-            ret[key] = tmp_val 
+            data[key] = tmp_val 
         
-        return { key: value for (key, value) in ret.items() if value is not None }
+        return data
