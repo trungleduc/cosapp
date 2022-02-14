@@ -35,7 +35,7 @@ class NonLinearSolver(AbstractSolver):
     """
 
     __slots__ = (
-        '__method', '__option_aliases', '__trace', '__raw_problem',
+        '__method', '__option_aliases', '__trace',
         '__design_unknowns', 'compute_jacobian', 'jac_lup', 'jac',
     )
 
@@ -77,24 +77,10 @@ class NonLinearSolver(AbstractSolver):
 
         self.add_child(RunSingleCase(self._default_driver_name))
 
-    @property
-    def raw_problem(self) -> MathematicalProblem:
-        """MathematicalProblem: raw problem defined at solver level"""
-        return self.__raw_problem
-
-    @AbstractSolver.owner.setter
-    def owner(self, system: "Optional[cosapp.systems.System]") -> None:
-        defined = self.owner is not None
-        changed = system is not self.owner
-        cls = NonLinearSolver
-        super(cls, cls).owner.__set__(self, system)
-        if changed:
-            if defined:
-                logger.warning(
-                    f"System owner of Driver {self.name!r} has changed. Mathematical problem has been cleared."
-                )
-            self.__raw_problem = MathematicalProblem(self.name, system)
-            self.__design_unknowns = dict()
+    def reset_problem(self) -> None:
+        """Reset mathematical problem"""
+        super().reset_problem()
+        self.__design_unknowns = dict()
 
     @property
     def method(self) -> NonLinearMethods:
@@ -149,7 +135,8 @@ class NonLinearSolver(AbstractSolver):
         if self.method == NonLinearMethods.NR:
             self.options.update(self._get_solver_limits())
 
-        this_options = dict((key, options[key]) for key in self.options if key in options)
+        common_keys = set(self.options).intersection(options)
+        this_options = dict((key, options[key]) for key in common_keys)
 
         if self.method == NonLinearMethods.NR:
             this_options['compute_jacobian'] = self.compute_jacobian
@@ -208,8 +195,8 @@ class NonLinearSolver(AbstractSolver):
         )
         self.problem = MathematicalProblem(self.name, self.owner)
         handler = DesignProblemHandler(self.owner)
-        handler.design.extend(self.__raw_problem, equations=False)
-        handler.offdesign.extend(self.__raw_problem, unknowns=False)
+        handler.design.extend(self._raw_problem, equations=False)
+        handler.offdesign.extend(self._raw_problem, unknowns=False)
         handler.problems = handler.export_problems()  # resolve aliasing
         self.__design_unknowns = handler.design.unknowns
         self.problem.extend(handler.design)
@@ -268,6 +255,38 @@ class NonLinearSolver(AbstractSolver):
             full_init = numpy.append(full_init, data)
 
         return full_init
+
+    def _fresidues(self,
+        x: Sequence[float],
+    ) -> numpy.ndarray:
+        """
+        Method used by the solver to take free variables values as input and values of residues as
+        output (after running the System).
+
+        Parameters
+        ----------
+        x : Sequence[float]
+            The list of values to set to the free variables of the `System`
+        update_residues_ref : bool
+            Request residues to update their reference
+
+        Returns
+        -------
+        numpy.ndarray
+            The list of residues of the `System`
+        """
+        x = numpy.asarray(x)
+        logger.debug(f"Call fresidues with x = {x!r}")
+        self.set_iteratives(x)
+
+        # Run all points
+        for child in self.exec_order:
+            logger.debug(f"Call {child}.run_once")
+            self.children[child].run_once()
+
+        residues = self.problem.residues_vector
+        logger.debug(f"Residues: {residues!r}")
+        return residues
 
     def set_iteratives(self, x: Sequence[float]) -> None:
         x = numpy.asarray(x)
@@ -535,7 +554,7 @@ class NonLinearSolver(AbstractSolver):
         - MathematicalProblem:
             The extended problem.
         """
-        return self.__raw_problem.extend(problem, *args, **kwargs)
+        return self._raw_problem.extend(problem, *args, **kwargs)
 
     def add_unknown(self,
         name: Union[str, Iterable[Union[dict, str]]],
@@ -557,7 +576,7 @@ class NonLinearSolver(AbstractSolver):
         - MathematicalProblem:
             The updated problem.
         """
-        return self.__raw_problem.add_unknown(name, *args, **kwargs)
+        return self._raw_problem.add_unknown(name, *args, **kwargs)
 
     def add_equation(self,
         equation: Union[str, Iterable[Union[dict, str]]],
@@ -579,4 +598,4 @@ class NonLinearSolver(AbstractSolver):
         - MathematicalProblem:
             The updated problem.
         """
-        return self.__raw_problem.add_equation(equation, *args, **kwargs)
+        return self._raw_problem.add_equation(equation, *args, **kwargs)

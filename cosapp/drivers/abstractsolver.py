@@ -33,7 +33,7 @@ class AbstractSolver(Driver):
         Keyword arguments will be used to set driver options
     """
 
-    __slots__ = ('force_init', 'problem', 'initial_values', 'solution')
+    __slots__ = ('force_init', '_raw_problem', 'problem', 'initial_values', 'solution')
 
     def __init__(self,
         name: str,
@@ -56,12 +56,30 @@ class AbstractSolver(Driver):
         self.force_init = False  # type: bool
             # desc="Force the initial values to be used."
 
-        self.problem = None  # type: Optional[MathematicalProblem]
-            # desc="Mathematical problem to solve."
-        self.initial_values = numpy.empty(0, dtype=float)  # type: numpy.ndarray
-            # desc="List of initial values for all iteratives.",
-        self.solution = {}  # type: Dict[str, float]
-            # desc="Dictionary (name, value) of the latest solution reached."
+        self.problem: MathematicalProblem = None
+        self.initial_values = numpy.empty(0, dtype=float)
+        self.solution: Dict[str, float] = {}
+        self.reset_problem()
+
+    def _set_owner(self, system: "Optional[cosapp.systems.System]") -> bool:
+        defined = self.owner is not None
+        changed = super()._set_owner(system)
+        if changed:
+            self.reset_problem()
+            if defined:
+                logger.warning(
+                    f"System owner of Driver {self.name!r} has changed. Mathematical problem has been cleared."
+                )
+        return changed
+
+    @property
+    def raw_problem(self) -> MathematicalProblem:
+        """MathematicalProblem: raw problem defined at solver level"""
+        return self._raw_problem
+
+    def reset_problem(self) -> None:
+        """Reset mathematical problem"""
+        self._raw_problem = MathematicalProblem(self.name, self.owner)
 
     def _filter_options(self, kwargs, aliases: Dict[str, str] = dict()):
         """
@@ -122,6 +140,12 @@ class AbstractSolver(Driver):
     def compute_before(self):
         """Contains the customized `Module` calculation, to execute before children.
         """
+        # Set initial_values to current solution
+        # k = 0
+        # for value in self.solution.values():
+        #     n = numpy.size(value)
+        #     self.initial_values[k : k + n] = numpy.reshape(value, -1)
+        #     k += n
         logger.debug(f"Set unknowns initial values: {self.initial_values}")
         self.set_iteratives(self.initial_values)
 
@@ -131,42 +155,31 @@ class AbstractSolver(Driver):
         self.problem = MathematicalProblem(self.name, self.owner)
         self.initial_values = numpy.empty(0, dtype=float)
 
+    def run_once(self) -> None:
+        """Run solver once, assuming driver has already been initialized.
+        """
+        with self.log_context(" - run_once"):
+            if self.is_active():
+                self._precompute()
+
+                logger.debug(f"Call {self.name}.compute_before")
+                self.compute_before()
+
+                # Sub-drivers are executed at each iteration in `compute`,
+                # so the child loop before `self.compute()` is omitted.
+                logger.debug(f"Call {self.name}.compute")
+                self._compute_calls += 1
+                self.compute()
+
+                self._postcompute()
+                self.computed.emit()
+            
+            else:
+                logger.debug(f"Skip {self.name} execution - Inactive")
+
     def _precompute(self) -> None:
         # TODO we should check that all variables are of numerical types
         super()._precompute()
-
-    def _fresidues(self,
-        x: Sequence[float],
-        update_residues_ref: bool = True,
-    ) -> numpy.ndarray:
-        """
-        Method used by the solver to take free variables values as input and values of residues as
-        output (after running the System).
-
-        Parameters
-        ----------
-        x : Sequence[float]
-            The list of values to set to the free variables of the `System`
-        update_residues_ref : bool
-            Request residues to update their reference
-
-        Returns
-        -------
-        numpy.ndarray
-            The list of residues of the `System`
-        """
-        x = numpy.asarray(x)
-        logger.debug(f"Call fresidues with x = {x!r}")
-        self.set_iteratives(x)
-
-        # Run all points
-        for child in self.exec_order:
-            logger.debug(f"Call {child}.run_once")
-            self.children[child].run_once()
-
-        residues = self.problem.residues_vector
-        logger.debug(f"Residues: {residues!r}")
-        return residues
 
     @abc.abstractmethod
     def set_iteratives(self, x: Sequence[float]) -> None:
@@ -200,11 +213,13 @@ class AbstractSolver(Driver):
         """
         pass
 
-    # Don't clean initial_values and problem => could be useful for debugging
     # def _postcompute(self) -> None:
-    #     """Undo pull inputs and reset iteratives sets."""
-    #     self.initial_values = numpy.empty(0, dtype=float)
-    #     self.problem = None
+    #     # Set initial_values to current solution
+    #     k = 0
+    #     for value in self.solution.values():
+    #         n = numpy.size(value)
+    #         self.initial_values[k : k + n] = numpy.reshape(value, -1)
+    #         k += n
     #     super()._postcompute()
 
     def save_solution(self, file: Optional[str] = None) -> Dict[str, Union[Number, List[Number]]]:

@@ -26,6 +26,45 @@ from cosapp.tests.library.systems import (
 )
 
 
+@pytest.fixture
+def FixedPointArray():
+    """Factory creating a cyclic assembly of
+    two systems `a` and `b` exchanging numpy arrays.
+
+    Solution for each component of `a.x.value` is
+    0.5 * (3 +/- np.sqrt(5)), depending on initial guess.
+    """
+    class Port3D(Port):
+        def setup(self):
+            self.add_variable('value', np.r_[-0.2, 1.1, 5.2])
+
+    class SystemA(System):
+        def setup(self):
+            self.add_input(Port3D, 'x')
+            self.add_output(Port3D, 'y')
+        
+        def compute(self):
+            self.y.value = 1 - self.x.value
+
+    class SystemB(System):
+        def setup(self):
+            self.add_input(Port3D, 'u')
+            self.add_output(Port3D, 'v')
+        
+        def compute(self):
+            self.v.value = self.u.value**2
+
+    def factory(name):
+        top = System(name)
+        a = top.add_child(SystemA('a'))
+        b = top.add_child(SystemB('b'))
+        top.connect(a.x, b.v)
+        top.connect(a.y, b.u)
+        return top
+
+    return factory
+
+
 def test_NonLinearSolver__setattr__():
     # Error is raised when setting an absent attribute
     d = NonLinearSolver("driver")
@@ -64,7 +103,7 @@ def test_NonLinearSolver__fresidues(set_master_system):
     solver._precompute()
 
     init = np.random.rand(len(solver.problem.unknowns))
-    residues = solver._fresidues(init, "init")
+    residues = solver._fresidues(init)
     set_init = [var.default_value for var in solver.problem.unknowns.values()]
     assert set_init == list(init)
     mask_unknowns = [var.mask for var in solver.problem.unknowns.values()]
@@ -83,7 +122,7 @@ def test_NonLinearSolver__fresidues(set_master_system):
     solver._precompute()
 
     init = np.random.rand(len(solver.problem.unknowns))
-    residues = solver._fresidues(init, "init")
+    residues = solver._fresidues(init)
     set_init = [var.default_value for var in solver.problem.unknowns.values()]
     assert set_init == list(init)
     mask_unknowns = [var.mask for var in solver.problem.unknowns.values()]
@@ -106,7 +145,7 @@ def test_NonLinearSolver__fresidues(set_master_system):
     solver._precompute()
 
     init = np.random.rand(len(solver.problem.unknowns))
-    residues = solver._fresidues(init, "init")
+    residues = solver._fresidues(init)
     variables = [var.default_value for var in solver.problem.unknowns.values()]
     assert variables == list(init)
     mask_unknowns = [var.mask for var in solver.problem.unknowns.values()]
@@ -134,7 +173,7 @@ def test_NonLinearSolver__fresidues(set_master_system):
     solver._precompute()
 
     init = np.random.rand(len(solver.problem.unknowns))
-    residues = solver._fresidues(init, "init")
+    residues = solver._fresidues(init)
     variables = [var.default_value for var in solver.problem.unknowns.values()]
     assert variables == list(init)
     mask_unknowns = [var.mask for var in solver.problem.unknowns.values()]
@@ -161,7 +200,7 @@ def test_NonLinearSolver__fresidues(set_master_system):
     solver._precompute()
 
     init = np.random.rand(len(solver.problem.unknowns))
-    residues = solver._fresidues(init, "init")
+    residues = solver._fresidues(init)
     variables = [var.default_value for var in solver.problem.unknowns.values()]
     assert variables == list(init)
     mask_unknowns = [var.mask for var in solver.problem.unknowns.values()]
@@ -573,7 +612,7 @@ def test_NonLinearSolver_residues_singlePoint(set_master_system):
     system.call_setup_run()
     solver._precompute()
     init = np.random.rand(len(solver.problem.unknowns))
-    solver._fresidues(init, "init")
+    solver._fresidues(init)
     assert isinstance(solver.problem.residues, OrderedDict)
     assert len(solver.problem.residues) == 0
 
@@ -943,108 +982,81 @@ def test_NonLinearSolver_vector1d_system():
 def test_NonLinearSolver_init_handling_design(mock_postcompute):
     s2 = MultiplyVector2("multvector")
 
-    design = s2.add_driver(NonLinearSolver("design", method=NonLinearMethods.POWELL))
-
-    run1 = design.add_child(RunSingleCase("run 1"))
+    design = s2.add_driver(
+        NonLinearSolver("design", method=NonLinearMethods.POWELL)
+    )
+    run1 = design.add_child(RunSingleCase("run1"))
 
     s2.inwards.k1 = 11.0
     s2.inwards.k2 = 8.0
 
     run1.set_values({"p_in.x1": 4.0, "p_in.x2": 10.0})
-    run1.design.add_unknown("inwards.k1").add_equation("p_out.x == 100.")
+    run1.design.add_unknown("inwards.k1").add_equation("p_out.x == 100")
 
     # Read from current system
     s2.run_drivers()
-    assert s2.inwards.k1 == pytest.approx(5.0, abs=10e-5)
-    np.testing.assert_array_almost_equal(design.initial_values, np.asarray([11.0]))
-    np.testing.assert_allclose(
-        list(run1.solution.values()), np.asarray([5.0]), rtol=1e-4
-    )
+    assert s2.inwards.k1 == pytest.approx(5, abs=1e-5)
+    assert design.initial_values == pytest.approx([11])
+    assert list(run1.solution.values()) == pytest.approx([5])
     mock_postcompute.assert_called_once()
     mock_postcompute.reset_mock()
 
     # Use init
     run1.set_init({"k1": 10.0})
     s2.run_drivers()
-    np.testing.assert_array_almost_equal(design.initial_values, np.asarray([10.0]))
-    np.testing.assert_allclose(
-        list(run1.solution.values()), np.asarray([5.0]), rtol=1e-4
-    )
+    assert design.initial_values == pytest.approx([10])
+    assert list(run1.solution.values()) == pytest.approx([5])
 
     # Use latest solution
     s2.run_drivers()
-    np.testing.assert_array_almost_equal(design.initial_values, np.asarray([5.0]))
-    np.testing.assert_allclose(
-        list(run1.solution.values()), np.asarray([5.0]), rtol=1e-4
-    )
+    assert design.initial_values == pytest.approx([5])
+    assert list(run1.solution.values()) == pytest.approx([5])
 
     # Reuse init
     design.force_init = True
     s2.run_drivers()
-    np.testing.assert_array_almost_equal(design.initial_values, np.asarray([10.0]))
-    np.testing.assert_allclose(
-        list(run1.solution.values()), np.asarray([5.0]), rtol=1e-4
-    )
+    assert design.initial_values == pytest.approx([10])
+    assert list(run1.solution.values()) == pytest.approx([5])
     design.force_init = False
 
-    run2 = design.add_child(RunSingleCase("run 2"))
+    run2 = design.add_child(RunSingleCase("run2"))
     run2.set_values({"p_in.x1": 2, "p_in.x2": 8.0})
-    run2.design.add_unknown("inwards.k2").add_equation("p_out.x == 76.")
+    run2.design.add_unknown("inwards.k2").add_equation("p_out.x == 76")
 
     # Use latest solution for run1 but current system for run2
     mock_postcompute.reset_mock()
     s2.run_drivers()
-    np.testing.assert_array_almost_equal(design.initial_values, np.asarray([5.0, 8.0]))
-    np.testing.assert_allclose(
-        list(run1.solution.values()), np.asarray([10.0 / 3.0]), rtol=1e-4
-    )
-    np.testing.assert_allclose(
-        list(run2.solution.values()), np.asarray([26.0 / 3.0]), rtol=1e-4
-    )
+    assert design.initial_values == pytest.approx([5, 8])
+    assert list(run1.solution.values()) == pytest.approx([10 / 3])
+    assert list(run2.solution.values()) == pytest.approx([26 / 3])
     mock_postcompute.assert_called_once()
-    assert s2.inwards.k1 == pytest.approx(10.0 / 3.0, abs=10e-5)
-    assert s2.inwards.k2 == pytest.approx(26.0 / 3.0, abs=10e-5)
+    assert s2.inwards.k1 == pytest.approx(10 / 3, abs=1e-5)
+    assert s2.inwards.k2 == pytest.approx(26 / 3, abs=1e-5)
 
     # Use latest solution for run1 but init for run2
     run2.set_init({"k2": 7.0})
     s2.run_drivers()
-    np.testing.assert_array_almost_equal(
-        design.initial_values, np.asarray([10.0 / 3.0, 7.0])
-    )
-    np.testing.assert_allclose(
-        list(run1.solution.values()), np.asarray([10.0 / 3.0]), rtol=1e-4
-    )
-    np.testing.assert_allclose(
-        list(run2.solution.values()), np.asarray([26.0 / 3.0]), rtol=1e-4
-    )
+    assert design.initial_values == pytest.approx([10 / 3, 7])
+    assert list(run1.solution.values()) == pytest.approx([10 / 3])
+    assert list(run2.solution.values()) == pytest.approx([26 / 3])
 
     # Use latest solution for all points
     s2.run_drivers()
-    np.testing.assert_array_almost_equal(
-        design.initial_values, np.asarray([10.0 / 3.0, 26.0 / 3.0])
-    )
-    np.testing.assert_allclose(
-        list(run1.solution.values()), np.asarray([10.0 / 3.0]), rtol=1e-4
-    )
-    np.testing.assert_allclose(
-        list(run2.solution.values()), np.asarray([26.0 / 3.0]), rtol=1e-4
-    )
+    assert design.initial_values == pytest.approx([10 / 3, 26 / 3])
+    assert list(run1.solution.values()) == pytest.approx([10 / 3])
+    assert list(run2.solution.values()) == pytest.approx([26 / 3])
 
     # Reuse init for all points
     design.force_init = True
     s2.run_drivers()
-    np.testing.assert_array_almost_equal(design.initial_values, np.asarray([10.0, 7.0]))
-    np.testing.assert_allclose(
-        list(run1.solution.values()), np.asarray([10.0 / 3.0]), rtol=1e-4
-    )
-    np.testing.assert_allclose(
-        list(run2.solution.values()), np.asarray([26.0 / 3.0]), rtol=1e-4
-    )
+    assert design.initial_values == pytest.approx([10, 7])
+    assert list(run1.solution.values()) == pytest.approx([10 / 3])
+    assert list(run2.solution.values()) == pytest.approx([26 / 3])
     design.force_init = False
 
 
 def test_NonLinearSolver_init_handling_offdesign(test_library, test_data):
-    s = System.load(str(test_data / "system_config_pressureloss121.json"))
+    s = System.load(test_data / "system_config_pressureloss121.json")
 
     s.exec_order = "p1", "sp", "p2", "p3", "mx", "p4"
     s.run_once()
@@ -1133,41 +1145,62 @@ def test_NonLinearSolver_log_debug_message(format, msg, kwargs, trace, to_log, e
         handler.log.assert_not_called()
 
 
-def test_NonLinearSolver_fixedPointArray():
+def test_NonLinearSolver_fixedPointArray(FixedPointArray):
     """Integration test for `NonLinearSolver` driver:
     Solve cyclic dependency between two systems
     exchanging numpy arrays.
     """
-    class Port3D(Port):
-        def setup(self):
-            self.add_variable('value', np.r_[-0.2, 1.1, 5.2])
-
-    class SystemA(System):
-        def setup(self):
-            self.add_input(Port3D, 'x')
-            self.add_output(Port3D, 'y')
-        
-        def compute(self):
-            self.y.value = 1 - self.x.value
-
-    class SystemB(System):
-        def setup(self):
-            self.add_input(Port3D, 'u')
-            self.add_output(Port3D, 'v')
-        
-        def compute(self):
-            self.v.value = self.u.value**2
-
-    top = System('top')
-    a = top.add_child(SystemA('a'))
-    b = top.add_child(SystemB('b'))
-    top.connect(a.x, b.v)
-    top.connect(a.y, b.u)
+    top = FixedPointArray('top')
 
     solver = top.add_driver(NonLinearSolver('solver', tol=1e-9))
     solver.runner.set_init({'a.x.value': np.r_[-0.25, 1.04, 5.2]})
     top.run_drivers()
 
-    assert a.x.value[0] == pytest.approx(0.5 * (3 - np.sqrt(5)))
-    assert a.x.value[1] == pytest.approx(0.5 * (3 - np.sqrt(5)))
-    assert a.x.value[2] == pytest.approx(0.5 * (3 + np.sqrt(5)))
+    expected = np.r_[
+        0.5 * (3 - np.sqrt(5)),
+        0.5 * (3 - np.sqrt(5)),
+        0.5 * (3 + np.sqrt(5)),
+    ]
+    assert top.a.x.value == pytest.approx(expected)
+
+
+def test_NonLinearSolver_fixedPointArray_rerun(FixedPointArray, caplog):
+    """Integration test for `NonLinearSolver` driver:
+    Solve cyclic dependency between two systems
+    exchanging numpy arrays.
+    """
+    top = FixedPointArray('top')
+
+    solver = top.add_driver(NonLinearSolver('solver', tol=1e-9, verbose=True))
+    solver.runner.set_init({'a.x.value': np.r_[-0.25, 1.04, 5.2]})
+
+    # First driver execution
+    caplog.clear()
+    with caplog.at_level(logging.INFO):
+        top.run_drivers()
+    # Check solution
+    expected = np.r_[
+        0.5 * (3 - np.sqrt(5)),
+        0.5 * (3 - np.sqrt(5)),
+        0.5 * (3 + np.sqrt(5)),
+    ]
+    assert top.a.x.value == pytest.approx(expected)
+    # Check log record
+    assert len(caplog.records) > 0
+    assert any(
+        re.match(r".*Converged \(.*\) in \d iterations", record.message)
+        for record in caplog.records
+    )
+
+    # Second driver execution: already converged
+    solver.force_init = False
+    caplog.clear()
+    with caplog.at_level(logging.INFO):
+        top.run_drivers()
+    assert len(caplog.records) > 0
+    assert any(
+        re.match(r".*Converged \(.*\) in 0 iteration", record.message)
+        for record in caplog.records
+    )
+    # Check solution
+    assert top.a.x.value == pytest.approx(expected)

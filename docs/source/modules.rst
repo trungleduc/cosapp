@@ -61,7 +61,6 @@ Modules
    cosapp.drivers.optimizer
    cosapp.drivers.optionaldriver
    cosapp.drivers.runonce
-   cosapp.drivers.runoptim
    cosapp.drivers.runsinglecase
    cosapp.drivers.validitycheck
    cosapp.drivers.utils
@@ -122,7 +121,6 @@ Inheritance
     cosapp.drivers.optimizer
     cosapp.drivers.optionaldriver
     cosapp.drivers.runonce
-    cosapp.drivers.runoptim
     cosapp.drivers.runsinglecase
     cosapp.drivers.validitycheck
     cosapp.drivers.time.euler

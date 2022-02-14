@@ -3,7 +3,6 @@ from cosapp.core.numerics.enum import NonLinearMethods
 from cosapp.drivers.driver import Driver
 from cosapp.drivers.runonce import RunOnce
 from cosapp.drivers.runsinglecase import RunSingleCase
-from cosapp.drivers.runoptim import RunOptim
 from cosapp.drivers.nonlinearsolver import NonLinearSolver
 from cosapp.drivers.optimizer import Optimizer
 from cosapp.drivers.validitycheck import ValidityCheck
@@ -25,7 +24,6 @@ __all__ = [
     "MonteCarlo",
     "Optimizer",
     "RunOnce",
-    "RunOptim",
     "RunSingleCase",
     "ValidityCheck",
     "EulerExplicit",

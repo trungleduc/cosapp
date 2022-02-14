@@ -1,21 +1,24 @@
 """
 `Driver`s for `System` optimization calculation.
 """
-import logging
-from collections import OrderedDict
-from typing import Callable, Optional, Sequence, Tuple, Union
-
 import numpy
 import scipy.optimize
+import warnings
+import copy
+from numbers import Number
+from typing import Any, Iterable, Callable, Optional, Sequence, Dict, List, Tuple, Union
 
 from cosapp.core.eval_str import EvalString
-from cosapp.core.numerics.basics import SolverResults
+from cosapp.core.numerics.basics import MathematicalProblem, SolverResults
+from cosapp.core.numerics.boundary import Unknown
 from cosapp.drivers.abstractsolver import AbstractSolver
 from cosapp.drivers.optionaldriver import OptionalDriver
-from cosapp.drivers.runoptim import RunOptim
+from cosapp.drivers.utils import UnknownAnalyzer
 from cosapp.recorders.recorder import BaseRecorder
 from cosapp.utils.options_dictionary import OptionsDictionary
+from cosapp.utils.helpers import check_arg
 
+import logging
 logger = logging.getLogger(__name__)
 
 
@@ -77,6 +80,7 @@ class Optimizer(AbstractSolver):
     https://docs.scipy.org/doc/scipy-1.0.0/reference/generated/scipy.optimize.minimize.html
 
     """
+    __slots__ = ('constraints', '_initial_state', '_objective')
 
     def __init__(self,
         name: str,
@@ -96,6 +100,11 @@ class Optimizer(AbstractSolver):
         """
         super().__init__(name, owner, **kwargs)
 
+        # TODO we need to move this in an enhanced MathematicalProblem
+        self.constraints: List[Dict] = list()  # Optimization constraints
+        self._initial_state: Dict[str, Any] = dict()
+        self._objective: EvalString = None
+
         self.options.declare(
             'method',
             None,
@@ -114,7 +123,117 @@ class Optimizer(AbstractSolver):
 
         self._filter_options(kwargs, aliases={'tol': 'ftol', 'max_iter': 'maxiter'})
 
-        self.add_child(RunOptim(self._default_driver_name))
+    def set_objective(self, expression: str) -> None:
+        """Set the scalar objective function to be minimized.
+
+        Parameters
+        ----------
+        expression : str
+            The objective expression to be minimized.
+        """
+        self.__check_owner("objective")
+        check_arg(expression, "expression", str, lambda s: "==" not in s)
+
+        self._objective = objective = EvalString(expression, self.owner)
+        if objective.constant:
+            warnings.warn(f"Objective is constant {objective.eval()}")
+
+    @property
+    def objective(self):
+        try:
+            return self._objective.eval()
+        except:
+            return None
+
+    @property
+    def objective_expr(self) -> str:
+        return str(self._objective) if self._objective else None
+
+    def add_unknown(self,
+            name: Union[str, Iterable[Union[dict, str, Unknown]]],
+            max_abs_step: Number = numpy.inf,
+            max_rel_step: Number = numpy.inf,
+            lower_bound: Number = -numpy.inf,
+            upper_bound: Number = numpy.inf
+    ) -> "MathematicalProblem":
+        """Add unknown variables.
+
+        You can set variable one by one or provide a list of dictionary to set multiple variable at once. The
+        dictionary key are the arguments of this method.
+
+        Parameters
+        ----------
+        name : str or Iterable of dictionary or str
+            Name of the variable or list of variable to add
+        max_rel_step : float, optional
+            Maximal relative step by which the variable can be modified by the numerical solver; default numpy.inf
+        max_abs_step : float, optional
+            Maximal absolute step by which the variable can be modified by the numerical solver; default numpy.inf
+        lower_bound : float, optional
+            Lower bound on which the solver solution is saturated; default -numpy.inf
+        upper_bound : float, optional
+            Upper bound on which the solver solution is saturated; default numpy.inf
+
+        Returns
+        -------
+        MathematicalProblem
+            The modified MathematicalSystem
+        """
+        self.__check_owner("variables")
+        self._raw_problem.add_unknown(name, max_abs_step, max_rel_step, lower_bound, upper_bound)
+
+    def add_constraints(self,
+        expression: Union[str, List[Union[str, Tuple[str, bool]]]],
+        inequality: bool = True,
+    ) -> None:
+        """Add constraints to the optimization problem.
+
+        Parameters
+        ----------
+        expression : str
+            The expression defining the constraint
+        inequality : bool
+            If True, expression must be non-negative; else must be zero.
+        """
+        def add_constraint(expression: str, inequality: bool) -> None:
+            check_arg(expression, 'expression', str)
+            check_arg(inequality, 'inequality', bool)
+
+            # Test that the expression can be evaluated
+            try:
+                EvalString(expression, self.owner).eval()
+            except:
+                raise
+
+            constraint = dict(
+                type = 'ineq' if inequality else 'eq',
+                formula = EvalString(expression, self.owner),
+                # formula = expression,
+            )
+            self.constraints.append(constraint)
+
+        self.__check_owner("constraints")
+
+        if isinstance(expression, str):
+            add_constraint(expression, inequality)
+        else:
+            for args in expression:
+                if isinstance(args, str):
+                    add_constraint(args, inequality)
+                else:
+                    add_constraint(*args)
+
+    def __check_owner(self, kind: str) -> None:
+        if self.owner is None:
+            raise AttributeError(f"Owner system is required to define optimization {kind}.")
+
+    def setup_run(self):
+        """Method called once before starting any simulation."""
+        super().setup_run()
+        
+        # Resolve unknown aliasing and connected unknowns
+        analyzer = UnknownAnalyzer(self.owner)
+        self.problem = analyzer.filter_problem(self._raw_problem)
 
     def _fun_wrapper(self, expression: EvalString) -> Callable[[numpy.ndarray], float]:
         """Wrapper around objective and constraint expression to propagate the x values in the
@@ -172,7 +291,7 @@ class Optimizer(AbstractSolver):
 
         return wrapper
 
-    def _fresidues(self, x: numpy.ndarray, update_residues_ref: bool = True) -> float:
+    def _fresidues(self, x: numpy.ndarray) -> float:
         """
         Method used by the solver to take free variables values as input and values of the objective function (after
         running the System).
@@ -181,15 +300,25 @@ class Optimizer(AbstractSolver):
         ----------
         x : numpy.ndarray
             The list of values to set to the free variables of the `System`
-        update_residues_ref : bool
-            Request residues to update their reference
 
         Returns
         -------
         float
             Objective function value
         """
-        return super()._fresidues(x, update_residues_ref)[0]
+        x = numpy.asarray(x)
+        logger.debug(f"Call fresidues with x = {x!r}")
+        self.set_iteratives(x)
+
+        if len(self.children) > 0:
+            for subdriver in self.children.values():
+                subdriver.run_once()
+        else:
+            self.owner.run_children_drivers()
+
+        objective = self._objective.eval()
+        logger.debug(f"Objective: {objective!r}")
+        return objective
 
     def set_iteratives(self, x: Sequence[float]) -> None:
         x = numpy.asarray(x)
@@ -256,23 +385,43 @@ class Optimizer(AbstractSolver):
         super()._precompute()
         OptionalDriver.set_inhibited(True)
 
-        for child in self.children.values():
-            if isinstance(child, RunOptim):
-                self.problem.extend(child.get_problem(), copy=False)
-                self.initial_values = numpy.append(self.initial_values, child.get_init(self.force_init))
+        init = numpy.empty(0)
+
+        for name, unknown in self.problem.unknowns.items():
+            if not self.force_init and name in self.solution:
+                # We ran successfully at least once and are environmental friendly
+                data = self.solution[name]
+
+            else:  # User wants the init or first simulation or crash
+                try:
+                    boundary = self._initial_state[name]
+                except KeyError:
+                    data = copy.deepcopy(unknown.value)
+                else:
+                    umask = unknown.mask if unknown.mask is not None else numpy.empty(0)
+                    bmask = boundary.mask if boundary.mask is not None else numpy.empty(0)
+                    if not numpy.array_equal(umask, bmask):
+                        raise ValueError(
+                            f"Unknown and initial conditions on {unknown.name!r} are not masked equally"
+                        )
+                    data = copy.deepcopy(boundary.default_value)
+                    # self._initial_state[name] = boundary
+
+            init = numpy.append(init, data)
+
+        self.initial_values = init
 
     def compute(self) -> None:
         """Execute the optimization."""
         self.status = ''
         self.error_code = '0'
 
-        # Check that there is only one objective
-        if self.problem.residues_vector.size != 1:
+        # Check that objective is set
+        if self._objective is None:
             self.status = 'ERROR'
             self.error_code = '9'
             raise ArithmeticError(
-                "Optimizer can only target a unique cost value; got {} values.".format(
-                    self.problem.residues_vector.size)
+                "Optimization objective was not specified."
             )
 
         # Gather and simplify the bounds
@@ -301,10 +450,10 @@ class Optimizer(AbstractSolver):
         constraints = []
         # TODO The following is really ugly. Constraints should be merged from all children through the
         #  MathematicalProblem extension.
-        for c in list(self.children.values())[0].constraints:
+        for constraint in self.constraints:
             constraints.append({
-                'type': c['type'],
-                'fun': self._fun_wrapper(EvalString(c['formula'], self.owner))
+                'type': constraint['type'],
+                'fun': self._fun_wrapper(constraint['formula'])
             })
         constraints = tuple(constraints)
 
@@ -315,7 +464,7 @@ class Optimizer(AbstractSolver):
             results = self.resolution_method(
                 self._fresidues,
                 self.initial_values,
-                args = (False,),
+                args = (),
                 bounds = bounds,
                 constraints = constraints,
                 options = self.options,
@@ -327,14 +476,17 @@ class Optimizer(AbstractSolver):
                 self.solution = {}
                 logger.error(f"The solver failed: {results.message}")
             else:
-                self.solution = dict([(key, unknown.default_value) for key, unknown in self.problem.unknowns.items()])
+                self.solution = dict(
+                    (key, unknown.default_value)
+                    for key, unknown in self.problem.unknowns.items()
+                )
                 self._print_solution()
 
             # Call to record the results
             if not self.options['monitor']:
                 BaseRecorder.paused = False
-                for child in self.children.values():
-                    child.run_once()
+            #     for child in self.children.values():
+            #         child.run_once()
 
         else:
             logger.warning('No design variable has been specified for the optimization.')
@@ -347,14 +499,13 @@ class Optimizer(AbstractSolver):
     def _print_solution(self) -> None:  # TODO better returning a string
         """Print the solution in the log."""
         if self.options['verbose']:
-            logger.info(f"Objective function: {self.problem.residues_vector[0]:.5g}")
+            logger.info(f"Objective function: {self._objective.eval():.5g}")
             logger.info(f"Parameters [{len(self.solution)}]: ")
             for name, value in self.solution.items():
                 logger.info(f"   # {name}: {value}")
-            constraints = list(self.children.values())[0].constraints
+            constraints = self.constraints
             if constraints:
                 logger.info(f"Constraints [{len(constraints)}]: ")
                 for constraint in constraints:
                     expr = constraint['formula']
-                    value = EvalString(expr, self.owner).eval()
-                    logger.info(f"   # {expr}: {value}")
+                    logger.info(f"   # {expr}: {expr.eval()}")
