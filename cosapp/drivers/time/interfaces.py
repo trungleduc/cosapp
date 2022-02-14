@@ -195,6 +195,25 @@ class ExplicitTimeDriver(Driver):
         logger.debug(f"Rate variables: {self._rates!r}")
         self.__reset_time()
 
+    def run_once(self) -> None:
+        """Run time driver once, assuming driver has already been initialized.
+        """
+        with self.log_context(" - run_once"):
+            if self.is_active():
+                self._precompute()
+
+                # Sub-drivers are executed at each time step in `compute`,
+                # so the child loop before `self.compute()` is omitted.
+                logger.debug(f"Call {self.name}.compute")
+                self._compute_calls += 1
+                self.compute()
+
+                self._postcompute()
+                self.computed.emit()
+
+            else:
+                logger.debug(f"Skip {self.name} execution - Inactive")
+
     def compute(self) -> None:
         """Simulate the time-evolution of owner System over a prescribed time interval"""
         self._initialize()

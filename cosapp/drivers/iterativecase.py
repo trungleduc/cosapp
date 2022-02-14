@@ -71,4 +71,4 @@ class IterativeCase(RunOnce):
 
         super()._postcompute()
 
-    # TODO Fred do we need a get_problem here or better integration between IterativeCase -> RunOptim & RunSingleCase
+    # TODO No longer needed after the suppression of RunOptim -> integrate with RunSingleCase

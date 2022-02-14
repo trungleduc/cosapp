@@ -122,15 +122,21 @@ class Driver(Module):
 
     @owner.setter
     def owner(self, system: "Optional[cosapp.systems.System]") -> None:
+        self._set_owner(system)
+
+    def _set_owner(self, system: "Optional[cosapp.systems.System]") -> bool:
         from cosapp.systems import System
         if system is not None:
             check_arg(system, 'owner', System)
-
+        
+        changed = system is not self._owner
         self._owner = system
         if self._recorder is not None:
             self._recorder.watched_object = system
         for child in self.children.values():
             child.owner = system
+
+        return changed
 
     def check_owner_attr(self, item: str) -> None:
         if item not in self.owner:
