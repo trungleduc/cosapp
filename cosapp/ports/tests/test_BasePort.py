@@ -3,6 +3,7 @@ import pytest
 from numbers import Number
 import logging, re
 import numpy as np
+import copy
 
 from cosapp.ports.variable import Variable
 from cosapp.ports.port import (
@@ -121,6 +122,56 @@ def test_BasePort_owner_error(direction, owner):
     assert port.owner is None
     assert port.name == name
     assert port.contextual_name == name
+
+
+@pytest.mark.parametrize("direction", PortType)
+def test_BasePort_set_values(direction):
+    port = BasePort("port", direction)
+    port.add_variable("var1")
+    port.add_variable("var2")
+    port.add_variable("var3")
+    port.add_variable("var4", np.ones(5))
+    port.set_values(
+        var1 = 0,
+        var2 = -0.1,
+        var3 = 42.5,
+    )
+    assert port.var1 == 0
+    assert port.var2 == -0.1
+    assert port.var3 == 42.5
+    assert np.array_equal(port["var4"], np.ones(5))
+    port.set_values(
+        var2 = -0.2,
+        var4 = np.linspace(0, 1, 5),
+    )
+    assert port.var1 == 0
+    assert port.var2 == -0.2
+    assert port.var3 == 42.5
+    assert np.array_equal(port["var4"], [0, 0.25, 0.5, 0.75, 1])
+
+    with pytest.raises(AttributeError):
+        port.set_values(foo=99)
+
+
+@pytest.mark.parametrize("direction", PortType)
+def test_BasePort_items(direction):
+    expected = dict(
+        var1 = 0,
+        var2 = -0.1,
+        var3 = 42.5,
+        var4 = np.linspace(0, 1, 5),
+    )
+    # Construct test port and check values
+    # (use pytest.approx with abs=0 to check numbers *and* numpy arrays)
+    port = BasePort("port", direction)
+
+    for name, value in expected.items():
+        port.add_variable(name, copy.copy(value))
+        assert port[name] == pytest.approx(value, abs=0), f"variable {name!r}"
+
+    # Check port.items() iterator
+    for name, value in port.items():
+        assert value == pytest.approx(expected[name], abs=0), f"variable {name!r}"
 
 
 @pytest.mark.parametrize("direction", PortType)
@@ -676,34 +727,29 @@ def test_BasePort___json__():
     pytest.fail()
 
 
-@pytest.mark.skip(reason="TODO")
-def test_BasePort_serialize_data():
-    pytest.fail()
-
-
 @pytest.mark.parametrize("direction", PortType)
 @pytest.mark.parametrize("data, expected", [
     (
         [get_args('x', 0.1)],
-        "{'x': 0.1}"
+        {'x': 0.1}
     ),
     (
         [get_args('x', 0.1, scope=Scope.PROTECTED, unit="kg", limits=(0, 10))],
-        "{'x': 0.1}"
+        {'x': 0.1}
     ),
     (
         [
             get_args('x', 0.1),
             get_args('y', [0.1, 0.2]),
         ],
-        "{'x': 0.1, 'y': array([0.1, 0.2])}"
+        {'x': 0.1, 'y': np.array([0.1, 0.2])}
     ),
     (
         [
             get_args('y', [0.1, 0.2]),
             get_args('x', 0.1),
         ],
-        "{'y': array([0.1, 0.2]), 'x': 0.1}"
+        {'y': np.array([0.1, 0.2]), 'x': 0.1}
     ),
     (
         [
@@ -711,14 +757,17 @@ def test_BasePort_serialize_data():
             get_args('y', [0.1, 0.2]),
             get_args('z', True, dtype=bool),
         ],
-        "{'x': 0.1, 'y': array([0.1, 0.2]), 'z': True}"
+        {'x': 0.1, 'y': np.array([0.1, 0.2]), 'z': True}
     ),
 ])
-def test_BasePort___repr__(direction, data, expected):
+def test_BasePort_serialize_data(direction, data, expected):
+    """Test both `serialize_data` and `__repr__` methods."""
     port = BasePort("dummy", direction)
     for args, kwargs in data:
         port.add_variable(*args, **kwargs)
-    assert repr(port) == f"BasePort: {expected}"
+    
+    np.testing.assert_equal(port.serialize_data(), expected)
+    assert repr(port) == f"BasePort: {expected!r}"
 
 
 @pytest.mark.skip(reason="TODO")
