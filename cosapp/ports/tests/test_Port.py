@@ -1,9 +1,10 @@
 import pytest
 
 import numpy as np
+import logging, re
 import copy
 
-from cosapp.systems import System
+from cosapp.base import Port, System
 from cosapp.ports.port import PortType
 from cosapp.utils.distributions import Distribution, Uniform
 from cosapp.utils.testing import get_args, assert_keys
@@ -248,3 +249,134 @@ def test_Port_to_dict_with_def(DummyPort, direction, copy_dir):
     port_dict = p.to_dict(True)
     assert_keys(port_dict, "dummy")
     assert  port_dict["dummy"] ==  {'__class__': 'DummyPort.<locals>.Factory.<locals>.PrototypePort', 'Pt': 101325.0, 'W': 1.0}
+
+
+@pytest.mark.parametrize("source_direction", PortType)
+@pytest.mark.parametrize("target_direction", PortType)
+@pytest.mark.parametrize("variables, check, expected", [
+    # No name conflict
+    (
+        dict(x=0.1, v=[0.2, 0.1]), True,
+        dict(x=0.1, v=[0.2, 0.1]),
+    ),
+    (
+        dict(x=0.1, v=[0.2, 0.1]), False,
+        dict(x=0.1, v=[0.2, 0.1]),
+    ),
+    # Source port with name conflicts: only works with prior check
+    (
+        dict(x=0.1, y=0.2, z='foo'), True,
+        dict(x=0.1, v=[0, 0]),
+    ),
+    (
+        dict(x=0.1, y=0.2, z='foo'), False,
+        dict(error=AttributeError),
+    ),
+    # Source port has fewer variables, with no name conflict: OK with no check
+    (
+        dict(x=0.1), True,
+        dict(x=0.1, v=[0, 0]),
+    ),
+    (
+        dict(x=0.1), False,
+        dict(x=0.1, v=[0, 0]),
+    ),
+])
+def test_Port_set_from(source_direction, target_direction, variables, check, expected):
+    # Construct source port
+    class SourcePort(Port):
+        def setup(self):
+            for name, value in variables.items():
+                self.add_variable(name, copy.copy(value))
+
+    # Construct (x, v) test port `target`
+    class TargetPort(Port):
+        def setup(self):
+            self.add_variable('x')
+            self.add_variable('v', np.zeros(2))
+
+    source = SourcePort('source', source_direction)
+    target = TargetPort('target', target_direction)
+
+    expected = expected.copy()
+    error = expected.pop('error', None)
+
+    if error is None:
+        target.set_from(source, check_names=check)
+        for name, value in expected.items():
+            np.testing.assert_equal(target[name], value), name
+    
+    else:
+        with pytest.raises(error, match=expected.get('match', None)):
+            target.set_from(source, check_names=check)
+
+
+@pytest.mark.parametrize("source_direction", PortType)
+@pytest.mark.parametrize("target_direction", PortType)
+def test_Port_set_from_peer(source_direction, target_direction):
+    class SomePort(Port):
+        def setup(self):
+            self.add_variable('x')
+            self.add_variable('v', np.zeros(2))
+
+    source = SomePort('source', source_direction)
+    port1 = SomePort('port1', target_direction)
+    port2 = SomePort('port2', target_direction)
+
+    source.x = 3.14
+    source.v = np.r_[0.1, 0.2]
+    port1.set_from(source)
+    port2.set_from(source, copy.copy)
+
+    assert port1.x == source.x
+    assert port2.x == source.x
+    assert np.array_equal(port1.v, source.v)
+    assert np.array_equal(port2.v, source.v)
+    assert port1.v is source.v
+    assert port2.v is not source.v
+
+
+@pytest.mark.parametrize("source_direction", PortType)
+@pytest.mark.parametrize("target_direction", PortType)
+def test_Port_set_from_common(source_direction, target_direction, caplog):
+    class XyPort(Port):
+        def setup(self):
+            self.add_variable('x')
+            self.add_variable('y')
+
+    class XyzPort(XyPort):
+        """Derived from `XyPort`, with additional variables"""
+        def setup(self):
+            super().setup()
+            self.add_variable('z')
+
+    class AbPort(Port):
+        """Incompatible with `XyPort`"""
+        def setup(self):
+            self.add_variable('a')
+            self.add_variable('b')
+
+    source = XyzPort('source', source_direction)
+    port1 = XyPort('port1', target_direction)
+    port2 = AbPort('port2', target_direction)
+
+    source.set_values(
+        x = -1,
+        y = 3.14,
+        z = np.r_[0.1, 0.2],
+    )
+    
+    caplog.clear()
+    with caplog.at_level(logging.WARNING):
+        port1.set_from(source)
+    assert len(caplog.records) == 0
+    assert port1.x == source.x
+    assert port1.y == source.y
+
+    caplog.clear()
+    with caplog.at_level(logging.WARNING):
+        port2.set_from(source)
+    assert any(
+        re.match("'port2' and 'source' have no common variables", record.message)
+        for record in caplog.records
+    )

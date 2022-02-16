@@ -4,7 +4,7 @@ Classes containing all `System` variables.
 import logging
 import copy
 from collections import OrderedDict
-from typing import Any, Dict, Iterator, Optional, Tuple, Union
+from typing import Any, Dict, Iterator, Generator, Optional, Tuple, Union, Callable, TypeVar
 from types import MappingProxyType
 
 from cosapp.patterns import visitor
@@ -17,6 +17,8 @@ from cosapp.utils.helpers import check_arg
 from cosapp.utils.naming import NameChecker
 
 logger = logging.getLogger(__name__)
+
+T = TypeVar("T")
 
 
 class BasePort(visitor.Component):
@@ -124,8 +126,7 @@ class BasePort(visitor.Component):
         return self._direction == PortType.OUT
 
     def __repr__(self) -> str:
-        var_list = [f"'{key}': {getattr(self, key)!r}" for key in self._variables]
-        return f"{type(self).__name__}: {{{', '.join(var_list)}}}"
+        return f"{type(self).__name__}: {self.serialize_data()!r}"
 
     def _repr_markdown_(self) -> str:
         """Returns the representation of this port variables in Markdown format.
@@ -147,11 +148,10 @@ class BasePort(visitor.Component):
         Dict[str, Any]
             The dictionary
         """
-        rtn = dict()
-        for name, var in self._variables.items():
-            rtn[name] = var.__json__()
-
-        return rtn
+        return dict(
+            (name, variable.__json__())
+            for name, variable in self._variables.items()
+        )
 
     def serialize_data(self) -> Dict[str, Any]:
         """Serialize the variable values in a dictionary.
@@ -161,10 +161,7 @@ class BasePort(visitor.Component):
         Dict[str, Any]
             The dictionary (variable name, value)
         """
-        rtn = dict()
-        for name in self._variables:
-            rtn[name] = getattr(self, name)
-        return rtn
+        return dict(self.items())
 
     def add_variable(
         self,
@@ -336,9 +333,44 @@ class BasePort(visitor.Component):
     def __len__(self) -> int:
         return len(self._variables)
 
-    def items(self):
+    def items(self) -> Generator[Tuple[str, Any], None, None]:
+        """Dictionary-like item generator yielding (name, value) tuples
+        for all port variables."""
         for name in self._variables:
             yield (name, getattr(self, name))
+
+    def set_values(self, **modifications) -> None:
+        """Generic setter for port variable values, offering a
+        convenient way of modifying multiple variables at once.
+
+        Parameters:
+        -----------
+        **modifications:
+            Variable names and values given as keyword arguments.
+        
+        Examples:
+        ---------
+        >>> from cosapp.base import Port, System
+        >>>
+        >>> class DummyPort(Port):
+        >>>     def setup(self):
+        >>>         self.add_variable('a')
+        >>>         self.add_variable('b')
+        >>>
+        >>> class DummySystem(System):
+        >>>     def setup(self):
+        >>>         self.add_input(DummyPort, 'p_in')
+        >>>         self.add_output(DummyPort, 'p_out')
+        >>>
+        >>>     def compute(self):
+        >>>         p_in = self.p_in
+        >>>         self.p_out.set_values(
+        >>>             a = p_in.b,
+        >>>             b = p_in.a - p_in.b,
+        >>>         )
+        """
+        for name, value in modifications.items():
+            setattr(self, name, value)
 
     @property
     def scope_clearance(self) -> Scope:
@@ -574,22 +606,23 @@ class BasePort(visitor.Component):
         new_dict = dict()
 
         if with_def:
-            tmp =  dict()
+            data = dict()
             if self.name not in ["inwards", "outwards"]:
-                tmp["__class__"] = self.__class__.__qualname__
-                for variable in self:
-                    tmp[variable] = getattr(self, variable)
+                data["__class__"] = self.__class__.__qualname__
+                data.update(self.items())
             else:
-                for v_name, variable in self._variables.items():
-                    tmp[v_name]= variable.to_dict() 
-
-            new_dict[self.name] = tmp
+                data.update(
+                    (varname, variable.to_dict())
+                    for varname, variable in self._variables.items()
+                )
+            new_dict[self.name] = data
         
-        else:
-            if self.is_input:
-                for variable in self:
-                    fullname = f"{self.name}.{variable}"
-                    new_dict[fullname] = getattr(self, variable)
+        elif self.is_input:
+            portname = self.name
+            new_dict.update(
+                (f"{portname}.{varname}", value)
+                for varname, value in self.items()
+            )
         
         return new_dict
 
@@ -876,8 +909,9 @@ class Port(BasePort):
             scope=scope,
         )
 
-    def copy(
-        self, name: Optional[str] = None, direction: Optional[PortType] = None
+    def copy(self, 
+        name: Optional[str] = None,
+        direction: Optional[PortType] = None,
     ) -> "BasePort":
         """Duplicates the port.
 
@@ -897,8 +931,68 @@ class Port(BasePort):
         new_direction = self.direction if direction is None else direction
 
         new_port = type(self)(new_name, new_direction)
-
-        for name in self:
-            new_port[name] = self[name]
+        new_port.set_from(self, copy.copy)
 
         return new_port
+
+    def set_from(self,
+        source: BasePort,
+        transfer: Callable[[T], T] = lambda x: x,
+        check_names: bool = True,
+    ) -> None:
+        """Set values from another port.
+
+        Parameters:
+        -----------
+        - source [BasePort]:
+            Source port.
+        - transfer [Callable[[T], T], optional]:
+            Transfer function to pass values. By default, `transfer` is the identity
+            function, which corresponds to plain assignment target.var = source.var.
+            Copies can be performed by setting `transfer = copy.copy`, e.g.
+        - check_names [bool, optional]:
+            If `True` (default), figure out common variables before transfering values.
+            If current and source ports are of the same type, no check is performed.
+        
+        Examples:
+        ---------
+        >>> from cosapp.base import Port, System
+        >>> import copy
+        >>>
+        >>> class DummyPort(Port):
+        >>>     def setup(self):
+        >>>         self.add_variable('a')
+        >>>         self.add_variable('b')
+        >>>
+        >>> class DummySystem(System):
+        >>>     def setup(self):
+        >>>         self.add_inward('a')
+        >>>         self.add_inward('x')
+        >>>         self.add_input(DummyPort, 'p_in')
+        >>>         self.add_output(DummyPort, 'p_out')
+        >>>
+        >>>     def compute(self):
+        >>>         self.p_out.set_from(self.p_in)     # peer-to-peer: no check
+        >>>         self.p_out.set_from(self.inwards)  # will transfer `self.a`
+        >>>         # Peer-to-peer, with deepcopy:
+        >>>         self.p_out.set_from(self.p_in, copy.deepcopy)
+        >>>         # Transfer `inwards` into `p_out`, with no name check:
+        >>>         # raises AttributeError, as `DummyPort` has no variable `x`
+        >>>         self.p_out.set_from(
+        >>>             self.inwards,
+        >>>             check_names=False,
+        >>>         )
+        """
+        peers = type(source) is type(self)  # most likely usage
+
+        if peers or not check_names:  # faster
+            common = iter(source) 
+        else:
+            common = set(source).intersection(self)
+            if not common:
+                logger.warning(
+                    f"{self.contextual_name!r} and {source.contextual_name!r} have no common variables."
+                )
+        for name in common:
+            value = getattr(source, name)
+            setattr(self, name, transfer(value))
