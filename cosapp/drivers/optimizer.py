@@ -6,14 +6,18 @@ import scipy.optimize
 import warnings
 import copy
 from numbers import Number
-from typing import Any, Iterable, Callable, Optional, Sequence, Dict, List, Tuple, Union
+from typing import (
+    Union, Iterable, Callable, Optional,
+    Any, Sequence, Dict, List, Set, Tuple,
+)
+from collections.abc import Collection
 
 from cosapp.core.eval_str import EvalString
 from cosapp.core.numerics.basics import MathematicalProblem, SolverResults
 from cosapp.core.numerics.boundary import Unknown
 from cosapp.drivers.abstractsolver import AbstractSolver
 from cosapp.drivers.optionaldriver import OptionalDriver
-from cosapp.drivers.utils import UnknownAnalyzer
+from cosapp.drivers.utils import UnknownAnalyzer, ConstraintParser
 from cosapp.recorders.recorder import BaseRecorder
 from cosapp.utils.options_dictionary import OptionsDictionary
 from cosapp.utils.helpers import check_arg
@@ -80,7 +84,7 @@ class Optimizer(AbstractSolver):
     https://docs.scipy.org/doc/scipy-1.0.0/reference/generated/scipy.optimize.minimize.html
 
     """
-    __slots__ = ('constraints', '_initial_state', '_objective')
+    __slots__ = ('_constraints', '_raw_constraints', '_initial_state', '_objective')
 
     def __init__(self,
         name: str,
@@ -101,26 +105,42 @@ class Optimizer(AbstractSolver):
         super().__init__(name, owner, **kwargs)
 
         # TODO we need to move this in an enhanced MathematicalProblem
-        self.constraints: List[Dict] = list()  # Optimization constraints
+        self._raw_constraints: Set[str] = set()  # Human-readable constraints
+        self._constraints: List[Dict] = list()   # Non-negativity constraints
         self._initial_state: Dict[str, Any] = dict()
         self._objective: EvalString = None
 
         self.options.declare(
-            'method',
-            None,
-            values=['Nelder-Mead', 'Powell', 'CG', 'BFGS', 'Newton-CG', 'L-BFGS-B', 'TNC', 'COBYLA', 'SLSQP',
-                    'trust-constr', 'dogleg', 'trust-ncg', 'trust-exact', 'trust-krylov'],
-            allow_none=True,
-            desc="Type of solver. If not given, chosen to be one of 'BFGS', 'L-BFGS-B', 'SLSQP', depending if "
-                "the problem has constraints or bounds.")
-        self.options.declare('eps', 1.5e-08, dtype=float, lower=1.5e-8, upper=1.,
-            desc='Step size used for numerical approximation of the Jacobian.')
-        self.options.declare('ftol', 1.0e-6, dtype=float, lower=1.5e-8, upper=1.,
-            desc='The iteration stops when (f^k - f^{k+1})/max{|f^k|,|f^{k+1}|,1} <= ftol.')
-        self.options.declare('maxiter', 100, dtype=int, lower=1, desc='Maximum number of iterations.')
-        self.options.declare('monitor', False, dtype=bool, allow_none=False,
-            desc='Defines if intermediate system state should be recorded.')
-
+            name = 'method',
+            default = None,
+            values = [
+                'Nelder-Mead', 'Powell', 'CG', 'BFGS', 'Newton-CG',
+                'L-BFGS-B', 'TNC', 'COBYLA', 'SLSQP', 'dogleg',
+                'trust-constr', 'trust-ncg', 'trust-exact', 'trust-krylov',
+            ],
+            desc = (
+                "Type of solver."
+                " If not given, chosen to be one of 'BFGS', 'L-BFGS-B', 'SLSQP',"
+                " depending if the problem has constraints or bounds."
+            ),
+            allow_none = True,
+        )
+        self.options.declare(
+            'eps', 1.5e-08, dtype=float, lower=1.5e-8, upper=1.,
+            desc="Step size used for numerical approximation of the Jacobian.",
+        )
+        self.options.declare(
+            'ftol', 1.0e-6, dtype=float, lower=1.5e-8, upper=1.,
+            desc="Iterations stop when (f^k - f^{k+1}) / max(|f^k|, |f^{k+1}|, 1) <= ftol.",
+        )
+        self.options.declare(
+            'maxiter', 100, dtype=int, lower=1,
+            desc='Maximum number of iterations.',
+        )
+        self.options.declare(
+            'monitor', False, dtype=bool, allow_none=False,
+            desc="Defines if intermediate system state should be recorded.",
+        )
         self._filter_options(kwargs, aliases={'tol': 'ftol', 'max_iter': 'maxiter'})
 
     def set_objective(self, expression: str) -> None:
@@ -182,46 +202,47 @@ class Optimizer(AbstractSolver):
         self.__check_owner("variables")
         self._raw_problem.add_unknown(name, max_abs_step, max_rel_step, lower_bound, upper_bound)
 
-    def add_constraints(self,
-        expression: Union[str, List[Union[str, Tuple[str, bool]]]],
-        inequality: bool = True,
-    ) -> None:
+    def add_constraints(self, expression: Union[str, List[str]]) -> None:
         """Add constraints to the optimization problem.
 
         Parameters
         ----------
-        expression : str
-            The expression defining the constraint
-        inequality : bool
-            If True, expression must be non-negative; else must be zero.
+        - expression [str or List[str]]:
+            Human-readable equality or inequality constraints, such as
+            'x >= y**2', '0 < alpha < 1', 'a == b', or a list thereof.
+        
+        Note
+        ----
+        Expressions are parsed into non-negative constraints in the
+        optimization problem. Strict inequalities are not enforced,
+        and treated as non-strict inequalities.
+        For instance, `x < y` translates into: `y - x >= 0`.
         """
-        def add_constraint(expression: str, inequality: bool) -> None:
-            check_arg(expression, 'expression', str)
-            check_arg(inequality, 'inequality', bool)
-
-            # Test that the expression can be evaluated
-            try:
-                EvalString(expression, self.owner).eval()
-            except:
-                raise
-
-            constraint = dict(
-                type = 'ineq' if inequality else 'eq',
-                formula = EvalString(expression, self.owner),
-                # formula = expression,
-            )
-            self.constraints.append(constraint)
-
         self.__check_owner("constraints")
+        check_arg(expression, 'expression', (str, Collection))
 
         if isinstance(expression, str):
-            add_constraint(expression, inequality)
-        else:
-            for args in expression:
-                if isinstance(args, str):
-                    add_constraint(args, inequality)
-                else:
-                    add_constraint(*args)
+            expression = [expression] 
+        
+        self._raw_constraints.update(expression)
+        constraints = ConstraintParser.parse(expression)
+
+        for constraint in constraints:
+            # Test that expression can be evaluated
+            try:
+                evalstr = EvalString(constraint.expression, self.owner)
+            except:
+                raise
+            data = dict(
+                type = 'ineq' if constraint.is_inequality else 'eq',
+                formula = evalstr,
+            )
+            self._constraints.append(data)
+
+    @property
+    def constraints(self) -> Set[str]:
+        """Set[str]: representation of optimization constraints."""
+        return self._raw_constraints.copy()
 
     def __check_owner(self, kind: str) -> None:
         if self.owner is None:
@@ -450,7 +471,7 @@ class Optimizer(AbstractSolver):
         constraints = []
         # TODO The following is really ugly. Constraints should be merged from all children through the
         #  MathematicalProblem extension.
-        for constraint in self.constraints:
+        for constraint in self._constraints:
             constraints.append({
                 'type': constraint['type'],
                 'fun': self._fun_wrapper(constraint['formula'])
@@ -503,9 +524,35 @@ class Optimizer(AbstractSolver):
             logger.info(f"Parameters [{len(self.solution)}]: ")
             for name, value in self.solution.items():
                 logger.info(f"   # {name}: {value}")
-            constraints = self.constraints
+            constraints = self._constraints
             if constraints:
                 logger.info(f"Constraints [{len(constraints)}]: ")
                 for constraint in constraints:
                     expr = constraint['formula']
                     logger.info(f"   # {expr}: {expr.eval()}")
+
+    def _repr_markdown_(self) -> str:
+        """Mardown representation of optimization problem."""
+        itemize = lambda item: f"* {item}"
+
+        def section(header: str, collection: Union[str, List[str]]) -> List[str]:
+            content = []
+            if isinstance(collection, str):
+                collection = [collection]
+            if collection:
+                content.append(f"#### {header.title()}:\n")
+                content.extend(map(itemize, collection))
+                content.append("")
+            return content
+
+        lines = []
+
+        def add_section(header, collection) -> None:
+            nonlocal lines
+            lines.extend(section(header, collection))
+        
+        add_section("Objective", f"Minimize {self._objective}")
+        add_section("Unknowns", self._raw_problem.unknowns)
+        add_section("Constraints", self._raw_constraints)
+
+        return "\n".join(lines)

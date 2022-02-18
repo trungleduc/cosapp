@@ -1,4 +1,4 @@
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 from collections.abc import Collection
 
 import numpy
@@ -64,3 +64,44 @@ def get_indices(
             mask = numpy.ones_like(value, dtype=bool)
 
     return var_name, mask
+
+
+def multi_split(expression: str, separators: List[str]) -> Tuple[List[str], List[str]]:
+    """Extension of `str.split`, accounting for more than one split separators.
+    
+    Parameters:
+    -----------
+    - expression [str]:
+        Expression to be split.
+    - separators [List[str]]:
+        List of separators.
+    
+    Returns:
+    --------
+    - expressions [List[str]]:
+        List of n split expressions.
+    - separators [List[str]]:
+        Sequence of (n - 1) separators between split expressions.
+
+    Examples:
+    ---------
+    >>> multi_split('a+b-c-d+e', list('+-'))
+    ['a', 'b', 'c', 'd', 'e'], ['+', '-', '-', '+']
+    """
+    expressions = [expression]
+    sep_list = []
+
+    for separator in set(separators):
+        new_list = []
+        shift = 0
+        for i, expression in enumerate(expressions):
+            sublist = expression.split(separator)
+            n_hits = len(sublist) - 1
+            new_list.extend(sublist)
+            if n_hits > 0:
+                j = i + shift
+                shift += n_hits
+                sep_list = sep_list[:j] + [separator] * n_hits + sep_list[j:]
+        expressions = list(map(str.strip, new_list))
+
+    return expressions, sep_list

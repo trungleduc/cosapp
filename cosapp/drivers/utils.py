@@ -1,8 +1,12 @@
-from typing import Optional, Union, Dict, Tuple
+import enum
+from typing import Optional, Union, Dict, Tuple, List, Set, NamedTuple
+from collections.abc import Collection
 
 from cosapp.core.numerics.boundary import Unknown
 from cosapp.core.numerics.basics import MathematicalProblem
+from cosapp.core.eval_str import EvalString
 from cosapp.utils.helpers import check_arg
+from cosapp.utils.parsing import multi_split
 
 import logging
 logger = logging.getLogger(__name__)
@@ -243,3 +247,136 @@ class DesignProblemHandler:
         self.design.extend(design, **options)
         self.offdesign.extend(offdesign, **options)
         return self
+
+
+@enum.unique
+class ConstraintType(enum.Enum):
+    """Enum covering constraint types"""
+    GE = {
+        'operator': ">=",
+        'sort': (lambda lhs, rhs: (lhs, rhs)),
+    }
+    LE = {
+        'operator': "<=",
+        'sort': (lambda lhs, rhs: (rhs, lhs)),
+    }
+    EQ = {
+        'operator': "==",
+        'sort': (lambda lhs, rhs: (lhs, rhs)),
+    }
+
+    def expression(self, lhs: str, rhs: str) -> str:
+        return "{} - ({})".format(*self.sort(lhs, rhs))
+
+    def sort(self, lhs: str, rhs: str) -> Tuple[str, str]:
+        return self.value['sort'](lhs, rhs)
+
+    def __str__(self) -> str:
+        return self.description
+
+    @property
+    def operator(self) -> str:
+        return self.value['operator']
+
+    @property
+    def description(self) -> str:
+        return f"Constraint of the kind `lhs {self.operator} rhs`"
+
+    @property
+    def is_inequality(self) -> bool:
+        return self.operator != "=="
+
+
+class Constraint(NamedTuple):
+    """Named tuple representing a non-negative constraint
+    of the kind `lhs <op> rhs`, where `<op>` is either
+    `==` (equality) or `>=` (inequality constraint),
+    depending on Boolean attribute `is_inequality`.
+
+    Attributes:
+    -----------
+    - lhs [str]: left-hand side.
+    - rhs [str]: right-hand side.
+    - is_inequality [bool].
+
+    Properties:
+    -----------
+    - expression [str]: non-negative constraint `lhs - rhs`.
+    """
+    lhs: str
+    rhs: str
+    is_inequality: bool = True
+
+    @property
+    def expression(self) -> str:
+        return f"{self.lhs} - ({self.rhs})"
+
+    def __str__(self) -> str:
+        op = ">=" if self.is_inequality else "=="
+        return f"{self.expression} {op} 0"
+
+
+class ConstraintParser:
+
+    @classmethod
+    def parse(cls, expression: Union[str, List[str]]) -> Set[Constraint]:
+        """Parse a string expression or a list thereof as a
+        set of non-negative constraints to be used in solvers.
+
+        Parameters:
+        -----------
+        - expression [str or List[str]]:
+            Human-readable equality or inequality constraints,
+            such as 'x >= y', '0 < alpha < 1', or a list thereof.
+        
+        Returns:
+        --------
+        - constraints [Set[Constraint]]:
+            Set of `Constraint` named tuple objects.
+        """
+        check_arg(expression, 'expression', (str, Collection))
+        ctypes = cls.types()
+        not_in_sides = list(ctypes) + ["="]
+        
+        def side_ok(side: str) -> bool:
+            return not any(nogo in side for nogo in not_in_sides) and side.strip()
+
+        def parse_single(expression: str) -> Set[Constraint]:
+            check_arg(expression, 'expression', str)
+            constraints = set()
+
+            for operator in "<>":
+                expression = expression.replace(f"{operator}=", operator)
+
+            expressions, operators = multi_split(expression, ctypes.keys())
+
+            for lhs, rhs, operator in zip(expressions, expressions[1:], operators):
+                ok = side_ok(lhs) and side_ok(rhs)
+                ctype = ctypes[operator]
+                constraint = Constraint(
+                    *ctype.sort(lhs, rhs),
+                    ctype.is_inequality,
+                )
+                if not ok:
+                    raise ValueError(f"Invalid constraint {constraint.expression}")
+                constraints.add(constraint)
+
+            return constraints
+        
+        expressions = [expression] if isinstance(expression, str) else expression
+
+        constraints = set()
+        for expression in expressions:
+            constraints |= parse_single(expression)
+
+        return constraints
+
+    @classmethod
+    def types(cls) -> Dict[str, ConstraintType]:
+        return {
+            ">" : ConstraintType.GE,
+            "<" : ConstraintType.LE,
+            "<=": ConstraintType.LE,
+            "==": ConstraintType.EQ,
+            ">=": ConstraintType.GE,
+        }
