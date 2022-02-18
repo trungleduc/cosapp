@@ -155,8 +155,10 @@ def test_Optimizer_constrained():
     assert s.x2 == pytest.approx(1, rel=1e-6)
 
     # Constrained
-    optim.add_constraints("x1**3 - x2", inequality=False)  # Equality
-    optim.add_constraints("x1 - 1")  # Inequality
+    optim.add_constraints([
+        "x1**3 == x2",
+        "x1 >= 1",
+    ])
     s.run_drivers()
 
     assert s.x1 == pytest.approx(1, rel=1e-6)
