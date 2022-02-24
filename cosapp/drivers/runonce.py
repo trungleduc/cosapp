@@ -143,6 +143,8 @@ class RunOnce(Driver):
 
     def setup_run(self):
         """Method called once before starting any simulation."""
+        super().setup_run()
+        
         if not self.owner.is_standalone() and self.owner.parent is None:
             self.owner.open_loops()  # Force loops opening to test if the owner needs a solver
 

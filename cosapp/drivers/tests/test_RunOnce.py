@@ -9,8 +9,8 @@ from cosapp.systems import System
 from cosapp.drivers import RunOnce
 from cosapp.drivers import runonce
 from cosapp.core.numerics.boundary import Boundary
-from cosapp.tests.library.ports import XPort
-from cosapp.tests.library.systems import Fan, Mixer21, Strait1dLine
+from cosapp.recorders import DataFrameRecorder
+from cosapp.tests.library.systems import Fan, Mixer21
 from cosapp.utils.testing import assert_keys, assert_all_type
 
 # <codecell>
@@ -229,3 +229,35 @@ def test_RunOnce__postcompute(DummyFactory):
     assert len(d.solution) == 0
     d._postcompute()
     assert_keys(d.solution, 'p_in.x')
+
+
+def test_RunOnce_recorder():
+    """Exposes bug reported in https://gitlab.com/cosapp/cosapp/-/issues/84"""
+    class Bogus(System):
+        def setup(self):
+            self.add_inward("a")
+
+    s = Bogus("s")
+    run = s.add_driver(RunOnce('run'))
+    rec = run.add_recorder(DataFrameRecorder(hold=True))
+
+    s.a = 1.
+    s.run_drivers()
+    data = rec.export_data()
+    assert len(data) == 1
+    assert data['a'][0] == 1.
+
+    s.a = 10.
+    s.run_drivers()
+    data = rec.export_data()
+    assert len(data) == 2
+    assert data['a'][0] == 1.
+    assert data['a'][1] == 10.
+
+    rec = run.add_recorder(DataFrameRecorder(hold=False))
+
+    s.a = 20.
+    s.run_drivers()
+    data = rec.export_data()
+    assert len(data) == 1
+    assert data['a'][0] == 20.
