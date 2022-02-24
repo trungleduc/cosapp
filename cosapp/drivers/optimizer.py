@@ -113,11 +113,7 @@ class Optimizer(AbstractSolver):
         self.options.declare(
             name = 'method',
             default = None,
-            values = [
-                'Nelder-Mead', 'Powell', 'CG', 'BFGS', 'Newton-CG',
-                'L-BFGS-B', 'TNC', 'COBYLA', 'SLSQP', 'dogleg',
-                'trust-constr', 'trust-ncg', 'trust-exact', 'trust-krylov',
-            ],
+            values = self.available_methods(),
             desc = (
                 "Type of solver."
                 " If not given, chosen to be one of 'BFGS', 'L-BFGS-B', 'SLSQP',"
@@ -130,7 +126,7 @@ class Optimizer(AbstractSolver):
             desc="Step size used for numerical approximation of the Jacobian.",
         )
         self.options.declare(
-            'ftol', 1.0e-6, dtype=float, lower=1.5e-8, upper=1.,
+            'ftol', 1.5e-8, dtype=float, lower=1e-15, upper=1.,
             desc="Iterations stop when (f^k - f^{k+1}) / max(|f^k|, |f^{k+1}|, 1) <= ftol.",
         )
         self.options.declare(
@@ -157,6 +153,18 @@ class Optimizer(AbstractSolver):
         self._objective = objective = EvalString(expression, self.owner)
         if objective.constant:
             warnings.warn(f"Objective is constant {objective.eval()}")
+
+    @staticmethod
+    def available_methods() -> List[str]:
+        """Returns all possible values of option `method`.
+        For more information, please refer to the online documentation
+        of `scipy.optimize.minimize`.
+        """
+        return [
+            'Nelder-Mead', 'Powell', 'CG', 'BFGS', 'Newton-CG',
+            'L-BFGS-B', 'TNC', 'COBYLA', 'SLSQP', 'dogleg',
+            'trust-constr', 'trust-ncg', 'trust-exact', 'trust-krylov',
+        ]
 
     @property
     def objective(self):
@@ -235,7 +243,7 @@ class Optimizer(AbstractSolver):
                 raise
             data = dict(
                 type = 'ineq' if constraint.is_inequality else 'eq',
-                formula = evalstr,
+                expr = evalstr,
             )
             self._constraints.append(data)
 
@@ -383,22 +391,30 @@ class Optimizer(AbstractSolver):
             Solution container
         """
         sub_options = {
+            # Specify both `ftol` and `gtol`, as name varies among scipy solvers
             'ftol': options['ftol'],
-            # TODO ftol is not understood by unconstrained solver. So set `gtol` but warning about `ftol` is emitted
-            'gtol': options['ftol'],
+            'gtol': options['ftol'],  # `ftol` is not understood by unconstrained solvers
             'eps': options['eps'],
             'maxiter': options['maxiter'],
-            'disp': bool(options['verbose'])
+            'disp': bool(options['verbose']),
         }
 
-        output = scipy.optimize.minimize(
-            fresidues, x0,
-            args=args,
-            method=options['method'],
-            bounds=bounds,
-            constraints=constraints,
-            options=sub_options,
-        )
+        def callback(*args, **kwargs) -> bool:
+            self._record_data()
+            return False
+
+        with warnings.catch_warnings():
+            # Ignore warnings about `gtol` or `ftol` potentially emitted by scipy solver
+            warnings.filterwarnings("ignore", message="Unknown solver options: [fg]tol")
+            output = scipy.optimize.minimize(
+                fresidues, x0,
+                args=args,
+                method=options['method'],
+                bounds=bounds,
+                constraints=constraints,
+                options=sub_options,
+                callback=callback,
+            )
         return output
 
     def _precompute(self):
@@ -467,20 +483,22 @@ class Optimizer(AbstractSolver):
                 for lower, upper in zip(limits['lower_bound'], limits['upper_bound'])
             ]
 
-        # Create constraint
-        constraints = []
-        # TODO The following is really ugly. Constraints should be merged from all children through the
-        #  MathematicalProblem extension.
-        for constraint in self._constraints:
-            constraints.append({
+        # Create nonlinear constraints
+        # TODO The following is really ugly. Constraints should be merged
+        # from children through MathematicalProblem extension.
+        def format_constraint(constraint):
+            return {
                 'type': constraint['type'],
-                'fun': self._fun_wrapper(constraint['formula'])
-            })
-        constraints = tuple(constraints)
+                'fun': self._fun_wrapper(constraint['expr'])
+            }
+        constraints = tuple(map(format_constraint, self._constraints))
 
         if len(self.initial_values) > 0:
-            if not self.options['monitor']:
-                BaseRecorder.paused = True
+            monitored = self.options['monitor']
+            BaseRecorder.paused = not monitored
+            if monitored:
+                self._fresidues(self.initial_values)
+                self._record_data()
 
             results = self.resolution_method(
                 self._fresidues,
@@ -503,14 +521,17 @@ class Optimizer(AbstractSolver):
                 )
                 self._print_solution()
 
-            # Call to record the results
-            if not self.options['monitor']:
+            if not monitored:
                 BaseRecorder.paused = False
-            #     for child in self.children.values():
-            #         child.run_once()
+                self._record_data()
 
         else:
             logger.warning('No design variable has been specified for the optimization.')
+
+    def _record_data(self) -> None:
+        """Record data into recorder, if any."""
+        if self._recorder is not None:
+            self._recorder.record_state(self.name)
 
     def _postcompute(self) -> None:
         """Undo pull inputs and reset iteratives sets."""
@@ -528,7 +549,7 @@ class Optimizer(AbstractSolver):
             if constraints:
                 logger.info(f"Constraints [{len(constraints)}]: ")
                 for constraint in constraints:
-                    expr = constraint['formula']
+                    expr = constraint['expr']
                     logger.info(f"   # {expr}: {expr.eval()}")
 
     def _repr_markdown_(self) -> str:
