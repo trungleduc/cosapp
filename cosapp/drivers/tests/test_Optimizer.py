@@ -41,7 +41,7 @@ class CostFunction(System):
         self.add_outward("cost", 1.0)
 
     def compute(self):
-        self.cost = (self.x1 - self.a) ** 2 + (self.x2 - self.a) ** 2
+        self.cost = (self.x1 - self.a)**2 + (self.x2 - self.a)**2
 
 
 class CubicFunction(System):
@@ -57,6 +57,15 @@ class CubicFunction(System):
 @pytest.fixture
 def optim():
     return Optimizer("optim", verbose=True)
+
+
+def test_Optimizer_available_methods():
+    methods = Optimizer.available_methods()
+    assert set(methods) == {
+        'Nelder-Mead', 'Powell', 'CG', 'BFGS', 'Newton-CG',
+        'L-BFGS-B', 'TNC', 'COBYLA', 'SLSQP', 'dogleg',
+        'trust-constr', 'trust-ncg', 'trust-exact', 'trust-krylov',
+    }
 
 
 def test_Optimizer__init__(optim):
@@ -99,13 +108,6 @@ def test_Optimizer_add_unknown(optim):
         s.run_drivers()
 
 
-# Note: scipy.optimize.minimize raises `OptimizeWarning`, as
-# the underlying solver does not know either 'gtol' or 'ftol'.
-# Since the choice of resolution method may not be known a priori
-# (depending if the optimization problem has constraints or none),
-# we cannot know in advance which option name will be correct.
-# We simply ignore this warning, using the pytest.mark decorator below
-@pytest.mark.filterwarnings("ignore:Unknown solver options. .tol")
 def test_Optimizer_Rosenbrock():
     # Simple optimization
     s = Rosenbrock("s")
@@ -121,12 +123,11 @@ def test_Optimizer_Rosenbrock():
     assert s.x == pytest.approx(np.ones(5), abs=1e-4)
 
 
-@pytest.mark.filterwarnings("ignore:Unknown solver options. .tol")
 def test_Optimizer_compute():
     # Simple optimizer
     s = CostFunction("system")
 
-    optim = s.add_driver(Optimizer("optimization", verbose=1))
+    optim = s.add_driver(Optimizer("optim", verbose=1))
     optim.set_objective("cost")
     optim.add_unknown(["x1", "x2"])
 
@@ -139,7 +140,6 @@ def test_Optimizer_compute():
     assert s.x2 == pytest.approx(s.a, rel=1e-6)
 
 
-@pytest.mark.filterwarnings("ignore:Unknown solver options. .tol")
 def test_Optimizer_constrained():
     """Constrained optimization"""
     s = Constraint("s")
@@ -165,10 +165,28 @@ def test_Optimizer_constrained():
     assert s.x2 == pytest.approx(1, rel=1e-6)
 
 
-@pytest.mark.filterwarnings("ignore:Unknown solver options. .tol")
+def test_Optimizer_compute_with_equality():
+    s = CostFunction("system")
+    optim = s.add_driver(Optimizer("optim", tol=1e-12))
+
+    optim.set_objective("cost")
+    optim.add_unknown(["x1", "x2", "a"])
+    optim.add_constraints("a**3 == -27")
+
+    s.a = 15.0
+    s.x1 = 10.0
+    s.x2 = 100.0
+
+    s.run_drivers()
+
+    assert s.a == pytest.approx(-3, rel=1e-8)
+    assert s.x1 == pytest.approx(s.a, rel=1e-7)
+    assert s.x2 == pytest.approx(s.a, rel=1e-7)
+
+
 def test_Optimizer_compute_with_solver_1():
     s = CostFunction("system")
-    optim = s.add_driver(Optimizer("optimization", verbose=1))
+    optim = s.add_driver(Optimizer("optim", verbose=1))
     solver = NonLinearSolver("solver", verbose=1, tol=1e-10)
     optim.add_driver(solver)
 
@@ -189,7 +207,6 @@ def test_Optimizer_compute_with_solver_1():
     assert s.x2 == pytest.approx(s.a)
 
 
-@pytest.mark.filterwarnings("ignore:Unknown solver options. .tol")
 def test_Optimizer_compute_with_solver_2():
     head = CubicFunction("head")
     optim = head.add_driver(Optimizer("optim", verbose=1))
@@ -212,7 +229,6 @@ def test_Optimizer_compute_with_solver_2():
     assert head.y == pytest.approx(0, abs=1e-10)
 
 
-@pytest.mark.filterwarnings("ignore:Unknown solver options. .tol")
 def test_Optimizer_compute_with_solver_3(caplog):
     """Same as test #2, where both optimizer and solver unknowns are pulled up"""
     head = System("head")

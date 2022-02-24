@@ -53,7 +53,6 @@ def test_system_solve(system, solver):
     assert system.load_ == pytest.approx(11.72947, abs=1e-5)
 
 
-@pytest.mark.filterwarnings("ignore:Unknown solver options. .tol")
 def test_Optimizer_integration(system, solver):
     system.add_driver(solver)
     system.run_drivers()
