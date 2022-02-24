@@ -1,7 +1,6 @@
 {% set name = "cosapp" %}
 # This needs to be updated manually => otherwise the source file won't be found
-{% set version = "0.12.0" %}
-{% set pypi_version = "0.12.0-1" %}
+{% set version = "0.12.1" %}
 
 package:
   name: {{ name }}
@@ -10,10 +9,9 @@ package:
 source:
   # You need to generate the source archive with `python setup.py sdist`
   # before running this recipe
-  url: ../dist/{{ name }}-{{ pypi_version }}.tar.gz
+  url: ../dist/{{ name }}-{{ version }}.tar.gz
   
 build:
-  number: 1
   noarch: python
   script: python -m pip install . --no-deps --ignore-installed --no-cache-dir -vvv
 
