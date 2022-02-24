@@ -1,5 +1,92 @@
 # History
 
+## 0.12.1 (2022-02-25)
+
+### New features & API changes
+
+* Simplification of driver `Optimizer`:
+  * Suppression of sub-driver `runner` (MR [#136](https://gitlab.com/cosapp/cosapp/-/merge_requests/136)). This change introduces new methods `set_objective`, `add_unknowns` and `add_constraints` in driver `Optimizer`.
+  * Optimization constraints are now declared with human-readable expressions in `Optimizer.add_constraints` (MR [#138](https://gitlab.com/cosapp/cosapp/-/merge_requests/138)).
+
+Before:
+  
+```python
+from cosapp.drivers import Optimizer
+
+s = SomeSystem('s')
+optim = s.add_driver(Optimizer('optim'))
+
+optim.runner.set_objective('cost')
+optim.runner.add_unknown(['a', 'b', 'p_in.x'])
+# Enter constraints as non-negative expressions:
+optim.runner.add_constraints([
+    "b - a",  # b >= a
+    "a",      # a >= 0
+    "1 - a",  # a <= 1
+])
+optim.runner.add_constraints(
+    "p_out.y",
+    inequality = False,  # p_out.y == 0
+)
+
+s.run_drivers()
+```
+
+After:
+  
+```python
+optim.set_objective('cost')
+optim.add_unknown(['a', 'b', 'p_in.x'])
+optim.add_constraints(
+    "b >= a",
+    "0 <= a <= 1",
+    "p_out.y == 0",
+)
+```
+
+  * New, convenient iterators and setters for ports (MR [#137](https://gitlab.com/cosapp/cosapp/-/merge_requests/137)):
+  
+```python
+from cosapp.base import Port, System
+
+class XyzPort(Port):
+    def setup(self):
+        self.add_variable('x')
+        self.add_variable('y')
+        self.add_variable('z')
+
+class SomeSystem(System):
+    def setup(self):
+        self.add_input(XyzPort, 'p_in')
+        self.add_output(XyzPort, 'p_out')
+    
+    def compute(self):
+        self.p_out.set_from(self.p_in)  # assign values from `p_in`
+        self.p_out.z = 0.0
+
+s = SomeSystem('s')
+# Multi-variable setter `set_values`
+s.p_in.set_values(x=1, y=-0.5, z=0.1)
+
+s.run_once()
+# Dict-like (key, value) iterator `items`:
+for varname, value in s.p_out.items():
+    print(f"p_out.{varname} = {value})
+```
+
+### Documentation
+
+* Updated tutorials on ports (MR [#139](https://gitlab.com/cosapp/cosapp/-/merge_requests/139)) and on optimization (MR [#140](https://gitlab.com/cosapp/cosapp/-/merge_requests/140)).
+
+### Bug fixes and code quality
+
+* Fix bug in Jacobian computation for negative perturbations (MR [#129](https://gitlab.com/cosapp/cosapp/-/merge_requests/129)).
+* Fix bug in `RunOnce` and `RunSingleCase` recorders with `hold=False` (MR [#130](https://gitlab.com/cosapp/cosapp/-/merge_requests/130)).
+* Resolve input aliasing in time driver scenarios (MR [#135](https://gitlab.com/cosapp/cosapp/-/merge_requests/135)).
+* Fix bugs with events (MRs [#123](https://gitlab.com/cosapp/cosapp/-/merge_requests/123), [#126](https://gitlab.com/cosapp/cosapp/-/merge_requests/126), [#128](https://gitlab.com/cosapp/cosapp/-/merge_requests/128)).
+* Discard empty connectors, and send a warning (MR [#132](https://gitlab.com/cosapp/cosapp/-/merge_requests/132)).
+* Other code quality improvements (MRs [#127](https://gitlab.com/cosapp/cosapp/-/merge_requests/127), [#131](https://gitlab.com/cosapp/cosapp/-/merge_requests/131), [#133](https://gitlab.com/cosapp/cosapp/-/merge_requests/133), [#134](https://gitlab.com/cosapp/cosapp/-/merge_requests/134)).
+
 ## 0.12.0 (2022-01-17)
 
 ### New features
