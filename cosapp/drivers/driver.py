@@ -171,9 +171,6 @@ class Driver(Module):
         if self.owner is None:
             raise AttributeError(f"Driver {self.name!r} has no owner system.")
 
-        if self._recorder is not None:
-            self._recorder.start()
-
     def _precompute(self) -> None:
         """Set execution order and start the recorder."""
         self.start_time = time.time()
@@ -181,6 +178,9 @@ class Driver(Module):
         if self.owner.parent is None and self.parent is None:
             logger.info(" " + "-" * 60)
             logger.info(f" # Starting driver {self.name!r} on {self.owner.name!r}")
+
+        if self._recorder is not None:
+            self._recorder.start()
 
     def _postcompute(self) -> None:
         """Actions performed after the `Module.compute` call."""
