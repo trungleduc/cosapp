@@ -327,7 +327,7 @@ def test_RungeKutta_point_mass_stop(point_mass_case):
         dict(v0=pytest.approx([7.1882, 0, 18.908], rel=1e-4))
     ),
 ])
-def test_RungeKutta_point_mass_target(point_mass_solution, exec_order, case_settings, expected):
+def test_RungeKutta_point_mass_target(exec_order, case_settings, expected):
     """Balistic test: combination of a nonlinear solver and a time driver,
     in order to find the initial velocity condition leading to the trajectory reaching
     a target point after a given amount of time."""
@@ -344,7 +344,7 @@ def test_RungeKutta_point_mass_target(point_mass_solution, exec_order, case_sett
         def setup(self):
             self.add_inward('v0', np.zeros(3), desc='Initial velocity')
             self.add_child(PointMass('point'), pulling=['x', 'v'])
-            self.add_child(Bogus('bogus'), pulling=['x'])
+            self.add_child(Bogus('bogus'), pulling='x')
 
             self.exec_order = exec_order
 
@@ -382,6 +382,67 @@ def test_RungeKutta_point_mass_target(point_mass_solution, exec_order, case_sett
     assert traj.bogus.x == pytest.approx(traj.x, abs=0)
     # Check initial velocity solution
     assert traj.v0 == expected['v0']
+
+
+@pytest.mark.parametrize("hold", [True, False])
+def test_RungeKutta_point_mass_target_recorder(hold):
+    """Same as `test_RungeKutta_point_mass_target`, but
+    checking that the inner recorder has the right size
+    at the end of the simulation.
+    """
+    class PointMassTarget(System):
+        def setup(self):
+            self.add_inward('v0', np.zeros(3), desc='Initial velocity')
+            self.add_child(PointMass('point'), pulling=['x', 'v'])
+
+    # Set test case
+    x0 = [0, 0, 10]  # initial point position
+    target_point = [10, 0, 10]
+
+    traj = PointMassTarget('traj')
+    solver = traj.add_driver(NonLinearSolver('solver', tol=1e-5))
+    target = solver.add_child(RunSingleCase('target'))
+    driver = target.add_child(
+        RungeKutta(order=3, time_interval=(0, 2), dt=0.1)
+    )
+
+    target.set_init({'v0': [1, 1, 1]})
+    target.add_unknown('v0').add_equation(f"x == {target_point}")
+    target.add_recorder(DataFrameRecorder(includes=['v0'], hold=True))
+
+    # Define a simulation scenario
+    driver.set_scenario(
+        init = {'x': x0, 'v': 'v0'},
+        values = {'point.mass': 1.5, 'point.k': 0.9}
+    )
+    driver.add_recorder(
+        DataFrameRecorder(includes=['x', 'v', 'a'], hold=hold),
+        period=0.1,
+    )
+
+    traj.run_drivers()
+
+    assert target.recorder.hold
+    assert driver.recorder.hold == hold
+
+    case_data = target.recorder.export_data()
+    time_data = driver.recorder.export_data()
+
+    n_iter = len(case_data)
+    assert n_iter > 0
+    assert n_iter < 10
+
+    if driver.recorder.hold:
+        # Time series recorded at each iteration
+        assert len(time_data) == 21 * n_iter
+    else:
+        # Time series recorded at last iteration
+        assert len(time_data) == 21
+
+    # Check that current position is target point
+    assert traj.x == pytest.approx(target_point, abs=1e-5)
+    # Check initial velocity solution
+    assert traj.v0 == pytest.approx([8.5860, 0, 11.726], rel=1e-4)
 
 
 @pytest.mark.parametrize("order, dt, tol", [
