@@ -6,7 +6,6 @@ import warnings
 
 from cosapp.core.eval_str import EvalString
 from cosapp.systems import System
-from cosapp.utils.testing import assert_keys
 
 
 def test_EvalString__init__(eval_context):
@@ -18,7 +17,8 @@ def test_EvalString__init__(eval_context):
     e = EvalString('22 + a', eval_context)
     assert e.eval_context is eval_context
     assert not e.constant
-    assert_keys(e.locals, 'a')
+    assert set(e.locals) == {'a'}
+    assert e.locals['a'] == eval_context.a
 
 
 @pytest.mark.parametrize("f", [
@@ -66,11 +66,11 @@ def test_EvalString_residue_as_context(self):
     (0.2, 0.2),
     ("--1", 1),
     ("0.2", 0.2),
-    ("0.2 / 0.5", 0.4),
-    ("cos(pi)", -1),
-    ("sin(pi / 2)", 1),
-    ("log(exp(2))", 2),
-    ("log(e)", 1),
+    ("0.2 / 0.5", pytest.approx(0.4, rel=1e-14)),
+    ("cos(pi)", pytest.approx(-1, rel=1e-14)),
+    ("sin(pi / 2)", pytest.approx(1, rel=1e-14)),
+    ("log(exp(2))", pytest.approx(2, rel=1e-14)),
+    ("log(e)", pytest.approx(1, rel=1e-14)),
     (None, None),
     ("None", None),
     (dict(), dict()),
@@ -83,38 +83,38 @@ def test_EvalString_residue_as_context(self):
     ("0.3 <= 0.3", True),
     ("0.3 < 0.7 < 0.6", False),
     ("0.3 + 0.7 == 1", True),
-    ("[0., 0., 0.]", [0., 0., 0.]),
-    ("[0.] * 3", [0., 0., 0.]),
-    ("array([0, 0, 0], dtype=float)", [0., 0., 0.]),
-    ("ones(4, dtype=int)", [1, 1, 1, 1]),
-    ("ones(2, dtype=bool)", [True, True]),
-    (repr(np.zeros(3)), [0., 0., 0.]),
-    ("zeros(3)", [0., 0., 0.]),
-    ("ones(3)", [1., 1., 1.]),
-    (np.zeros(3), [0., 0., 0.]),
-    (np.zeros((2, 5, 3)), np.zeros((2, 5, 3))),
-    (np.ones(3), [1., 1., 1.]),
-    ("-e", -math.e),
+    ("[0., 0., 0.]", pytest.approx([0., 0., 0.], abs=0)),
+    ("[0.] * 3", pytest.approx([0., 0., 0.], abs=0)),
+    ("array([0, 0, 0], dtype=float)", pytest.approx([0., 0., 0.], abs=0)),
+    ("ones(4, dtype=int)", pytest.approx([1, 1, 1, 1], abs=0)),
+    ("ones(2, dtype=bool)", pytest.approx([True, True], abs=0)),
+    (repr(np.zeros(3)), pytest.approx([0., 0., 0.], abs=0)),
+    ("zeros(3)", pytest.approx([0., 0., 0.], abs=0)),
+    ("ones(3)", pytest.approx([1., 1., 1.], abs=0)),
+    (np.zeros(3), pytest.approx([0., 0., 0.], abs=0)),
+    (np.zeros((2, 5, 3)), pytest.approx(np.zeros((2, 5, 3)), abs=0)),
+    (np.ones(3), pytest.approx([1., 1., 1.], abs=0)),
+    ("-e", pytest.approx(-math.e, rel=1e-14)),
     ("9 + 3 + 6", 18),
-    ("9 + 3 / 11", 9 + 3 / 11),
-    ("(9 + 3) / 11", 12 / 11),
+    ("9 + 3 / 11", pytest.approx(9 + 3 / 11, rel=1e-14)),
+    ("(9 + 3) / 11", pytest.approx(12 / 11, rel=1e-14)),
     ("(9 + 3)", 12),
     ("9 - 12 - 6", -9),
     ("9 - (12 - 6)", 9 - (12 - 6)),
-    ("2 * 3.14159",  2 * 3.14159),
-    ("3.1415926535 * 3.1415926535 / 10", 3.1415926535 * 3.1415926535 / 10),
-    ("pi * pi / 10", math.pi * math.pi / 10),
-    ("pi**2 / 10", math.pi**2 / 10),
-    ("pi**2", math.pi ** 2),
-    ("round(pi**2)", round(math.pi ** 2)),
-    ("6.02E23 * 8.048", 6.02e23 * 8.048),
-    ("e / 3", math.e / 3),
-    ("round(e)", round(math.e)),
-    ("round(-e)", round(-math.e)),
-    ("e**pi", math.e ** math.pi),
-    ("2**3**2", 2 ** 3 ** 2),
-    ("2**3+2", 2 ** 3 + 2),
-    ("2**9", 2 ** 9),
+    ("2 * 3.14159",  pytest.approx(2 * 3.14159, rel=1e-14)),
+    ("3.1415926535 * 3.1415926535 / 10", pytest.approx(3.1415926535 * 3.1415926535 / 10, rel=1e-14)),
+    ("pi * pi / 10", pytest.approx(math.pi * math.pi / 10, rel=1e-14)),
+    ("pi**2 / 10", pytest.approx(math.pi**2 / 10, rel=1e-14)),
+    ("pi**2", pytest.approx(math.pi ** 2, rel=1e-14)),
+    ("round(pi**2)", pytest.approx(round(math.pi ** 2), rel=1e-14)),
+    ("6.02E23 * 8.048", pytest.approx(6.02e23 * 8.048, rel=1e-14)),
+    ("e / 3", pytest.approx(math.e / 3, rel=1e-14)),
+    ("round(e)", pytest.approx(round(math.e), rel=1e-14)),
+    ("round(-e)", pytest.approx(round(-math.e), rel=1e-14)),
+    ("e**pi", pytest.approx(math.e ** math.pi, rel=1e-14)),
+    ("2**3**2", pytest.approx(2 ** 3 ** 2, rel=1e-14)),
+    ("2**3+2", pytest.approx(2 ** 3 + 2, rel=1e-14)),
+    ("2**9", pytest.approx(2 ** 9, rel=1e-14)),
     ("{1, 2, 3, 3, 2, }", {1, 2, 3}),
 ])
 def test_EvalString_constant_expr(eval_context, expression, expected):
@@ -122,10 +122,7 @@ def test_EvalString_constant_expr(eval_context, expression, expected):
     s = EvalString(expression, eval_context)
     assert s.eval_context is eval_context
     assert s.constant
-    if expected is None:
-        assert s.eval() is None
-    else:
-        assert s.eval() == pytest.approx(expected, rel=1e-14)
+    assert s.eval() == expected
 
 
 @pytest.mark.parametrize("expression, expected", [
@@ -144,15 +141,15 @@ def test_EvalString_with_constants(eval_context, expression, expected):
 
 @pytest.mark.parametrize("expression, expected", [
     ("norm(x, inf)", 3.14),
-    ("0.2 * a / 0.5", 0.8),
-    ("log10(x[0])", -1),
-    ("a + b - x[1]", 2.7),
+    ("0.2 * a / 0.5", pytest.approx(0.8, rel=1e-14)),
+    ("log10(x[0])", pytest.approx(-1, rel=1e-14)),
+    ("a + b - x[1]", pytest.approx(2.7, rel=1e-14)),
     ("a - a + 1", 1),
-    ("9 + sub.in_.q / 10", 9.5),
-    ("9 + sin(sub.in_.q / 11)", 9 + math.sin(5 / 11)),
-    ("out.q - sub.in_.q", -4.5),
-    ("out. q - sub.in_ .  q", -4.5),
-    ("concatenate((x, [-a, sub.in_.q]))", [0.1, -0.2, -3.14, -2, 5]),
+    ("9 + sub.in_.q / 10", pytest.approx(9.5, rel=1e-14)),
+    ("9 + sin(sub.in_.q / 11)", pytest.approx(9 + math.sin(5 / 11), rel=1e-14)),
+    ("out.q - sub.in_.q", pytest.approx(-4.5, rel=1e-14)),
+    ("out. q - sub.in_ .  q", pytest.approx(-4.5, rel=1e-14)),
+    ("concatenate((x, [-a, sub.in_.q]))", pytest.approx([0.1, -0.2, -3.14, -2, 5], rel=1e-14)),
     ("len(out)", 1),
 ])
 def test_EvalString_nonconstant_expr(eval_context, expression, expected):
@@ -160,7 +157,7 @@ def test_EvalString_nonconstant_expr(eval_context, expression, expected):
     s = EvalString(expression, eval_context)
     assert s.eval_context is eval_context
     assert not s.constant
-    assert s.eval() == pytest.approx(expected, rel=1e-12)
+    assert s.eval() == expected
 
 
 @pytest.mark.parametrize("expression, exception", [
