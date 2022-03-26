@@ -10,10 +10,12 @@ from cosapp.core.eval_str import EvalString
 from cosapp.utils.helpers import is_numerical, check_arg
 from cosapp.utils.find_variables import SearchPattern, make_wishlist, find_variables
 
-SpecialColumns = NamedTuple(
-    "SpecialColumns",
-    [("section", str), ("status", str), ("code", str), ("reference", str)],
-)
+
+class SpecialColumns(NamedTuple):
+    section: str
+    status: str
+    code: str
+    reference: str
 
 
 class BaseRecorder(abc.ABC):
@@ -250,10 +252,12 @@ class BaseRecorder(abc.ABC):
                     includes.append(expression)
                 else:
                     evaluables.append(expression)
+        
         if self._numerical_only:
             filter = lambda x: is_numerical(x)
         else:
             filter = lambda x: True
+        
         variables = find_variables(
             context,
             includes,
@@ -264,7 +268,7 @@ class BaseRecorder(abc.ABC):
         self.__variables = variables = sorted(variables)
         self.__expressions = EvalString(", ".join(variables).join("[]"), context)
 
-    def _get_units(self, vars: Optional[List[str]] = None) -> List[str]:
+    def _get_units(self, varnames: Optional[List[str]] = None) -> List[str]:
         """Generate the list of units associated with the requested variables.
 
         Parameters
@@ -277,14 +281,15 @@ class BaseRecorder(abc.ABC):
         List[str]
             Variable units for the variables matching the includes/excludes patterns of the user.
         """
-        if not vars:
-            vars = self.field_names()
+        if varnames is None:
+            varnames = self.field_names()
 
         units = list()
         if self.watched_object is not None:
-            for name in vars:
+            name2variable = self.watched_object.name2variable
+            for name in varnames:
                 try:
-                    ref = self.watched_object.name2variable[name]
+                    ref = name2variable[name]
                     details = ref.mapping.get_details(ref.key)
                     unit = details.unit
                 except:

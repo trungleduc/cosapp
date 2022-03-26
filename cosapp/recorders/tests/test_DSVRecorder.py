@@ -54,8 +54,8 @@ def test_DSVRecorder___init__default(tmp_path):
             TypeError,
             "'excludes' must be a string, or a sequence of strings",
         ),
-        (("file.csv",), dict(buffer="foo"), TypeError, "'buffer' should be bool"),
-        (("file.csv",), dict(buffer=0), TypeError, "'buffer' should be bool"),
+        (("file.csv",), dict(use_buffer="foo"), TypeError, "'use_buffer' should be bool"),
+        (("file.csv",), dict(use_buffer=0), TypeError, "'use_buffer' should be bool"),
     ],
 )
 def test_DSVRecorder___init__error(args, kwargs, exception, match):
@@ -281,7 +281,7 @@ def test_DSVRecorder_exit(tmp_path):
     assert len(data) == (16 + len(BaseRecorder.SPECIALS))
 
     # Test buffer
-    rec = DSVRecorder(name, raw_output=True, buffer=True)
+    rec = DSVRecorder(name, raw_output=True, use_buffer=True)
     rec.watched_object = s
 
     rec.start()
