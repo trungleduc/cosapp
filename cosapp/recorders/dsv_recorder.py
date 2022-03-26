@@ -1,12 +1,11 @@
 """Recorder to Delimited Separated Value format file."""
 import os
-from typing import Any, List, Optional, Union
-from collections.abc import Collection
-
 import numpy
 import pandas
+from typing import Any, List, Optional
+from collections.abc import Collection
 
-from cosapp.recorders.recorder import BaseRecorder
+from cosapp.recorders.recorder import BaseRecorder, SearchPattern
 from cosapp.utils.helpers import is_numerical, check_arg
 
 
@@ -33,7 +32,7 @@ class DSVRecorder(BaseRecorder):
         Filepath to save data into.
     delimiter : `','`, `';'` or `'\t'`, optional
         Delimiter of data in the file; default `','`.
-    buffer : bool, optional
+    use_buffer : bool, optional
         Should the data written after the simulation (`False`) or every time they are available (`True`);
         default `False`.
     includes : str or list of str, optional
@@ -55,23 +54,22 @@ class DSVRecorder(BaseRecorder):
         Do not mention `inwards` or `outwards` in `includes` or `excludes` list. Otherwise you may not record the wanted
         variables.
     """
-
     def __init__(
         self,
         filepath: str,
-        delimiter = ",",
-        buffer = False,
-        includes: Union[str, List[str]] = "*",
-        excludes: Optional[Union[str, List[str]]] = None,
+        includes: SearchPattern = "*",
+        excludes: Optional[SearchPattern] = None,
         numerical_only = False,
         section = "",
         precision = 9,
         hold = False,
+        delimiter = ",",
         raw_output = False,
+        use_buffer = False,
     ):
         check_arg(filepath, "filepath", str)
         check_arg(delimiter, "delimiter", str)
-        check_arg(buffer, "buffer", bool)
+        check_arg(use_buffer, "use_buffer", bool)
 
         supported_delimiters = (",", ";", "\t")
         if delimiter not in supported_delimiters:
@@ -82,10 +80,9 @@ class DSVRecorder(BaseRecorder):
         super().__init__(
             includes, excludes, numerical_only, section, precision, hold, raw_output
         )
-
         self.__filepath = filepath  # type: str
         self.__delimiter = delimiter  # type: str
-        self.__buffer = list() if buffer else None  # type: List[List[Any]]
+        self.__buffer = [] if use_buffer else None  # type: List[List[Any]]
 
     @property
     def filepath(self) -> str:
@@ -102,8 +99,7 @@ class DSVRecorder(BaseRecorder):
         if not os.path.exists(self.__filepath):
             return pandas.DataFrame()
         elif self.__buffer is not None:
-            with open(self.__filepath, "r") as f:
-                headers = f.readline().split(self.__delimiter)
+            headers = self.get_headers()
             return pandas.DataFrame(self.__buffer, columns=headers)
         else:
             return pandas.read_csv(self.__filepath, delimiter=self.__delimiter, header=0)
@@ -123,51 +119,53 @@ class DSVRecorder(BaseRecorder):
         if self.__buffer is not None:
             return self.__buffer
 
-        with open(self.__filepath, "r") as f:
+        with open(self.__filepath, "r") as fd:
             # The header line is skipped
-            content = map(lambda line: line.split(self.__delimiter), f.readlines()[1:])
+            content = map(lambda line: line.split(self.__delimiter), fd.readlines()[1:])
         return content
 
     def start(self):
         """Initialize recording support."""
         super().start()
         if not self.hold:
-            # TODO Fred we could use clean/dirty here
-            self.watched_object.run_once()  # Run the System to be sure the list are developed.
+            # Run system to ensure data are up-to-date
+            # TODO could we use clean/dirty here?
+            self.watched_object.run_once()
             if self.__buffer is not None:
                 self.__buffer.clear()
+            # Write header
+            headers = self.get_headers()
+            with open(self.__filepath, "w") as fd:
+                fd.write(self.__delimiter.join(headers) + "\n")
 
-            headers = [
-                self.SPECIALS.section,
-                self.SPECIALS.status,
-                self.SPECIALS.code,
-                self.SPECIALS.reference,
-            ]
+    def get_headers(self) -> List[str]:
+        """Returns the list of headers of DSV file."""
+        headers = list(self.SPECIALS)
 
-            def add_header(base, unit):
-                if unit and not self._raw_output:
-                    headers.append(f"{base} [{unit}]")
-                else:
-                    headers.append(base)
+        def add_header(base, unit):
+            if unit and not self._raw_output:
+                headers.append(f"{base} [{unit}]")
+            else:
+                headers.append(base)
 
-            varlist = self.field_names()
-            for name, unit in zip(varlist, self._get_units(varlist)):
-                value = self.watched_object[name]
-                unit = "" if self._raw_output else unit
-                if isinstance(value, numpy.ndarray) and value.ndim > 0:
-                    for i in range(value.size):
-                        entry = f"{name}[{i}]"
-                        add_header(entry, unit)
-                elif isinstance(value, Collection) and not isinstance(value, str):
-                    for i in range(len(value)):
-                        entry = f"{name}[{i}]"
-                        add_header(entry, unit)
-                else:
-                    add_header(name, unit)
+        names = self.field_names()
+        units = [None] * len(names) if self._raw_output else self._get_units(names)
+        system = self.watched_object
 
-            with open(self.__filepath, "w") as f:
-                # Write header
-                f.write(self.__delimiter.join(headers) + "\n")
+        for name, unit in zip(names, units):
+            value = system[name]
+            if isinstance(value, numpy.ndarray) and value.ndim > 0:
+                for i in range(value.size):
+                    entry = f"{name}[{i}]"
+                    add_header(entry, unit)
+            elif isinstance(value, Collection) and not isinstance(value, str):
+                for i in range(len(value)):
+                    entry = f"{name}[{i}]"
+                    add_header(entry, unit)
+            else:
+                add_header(name, unit)
+        
+        return headers
 
     def formatted_data(self) -> List[Any]:
         """Format collected data from watched object into a list."""
@@ -194,8 +192,8 @@ class DSVRecorder(BaseRecorder):
 
     def _record(self, line: List[Any]) -> None:
         if self.__buffer is None:
-            with open(self.__filepath, "a") as f:
-                f.write(self.__delimiter.join(line) + "\n")
+            with open(self.__filepath, "a") as fd:
+                fd.write(self.__delimiter.join(line) + "\n")
         else:
             self.__buffer.append(line)
 
@@ -208,6 +206,7 @@ class DSVRecorder(BaseRecorder):
     def exit(self):
         """Close recording session."""
         if self.__buffer is not None:
-            with open(self.__filepath, "a") as f:
+            delimiter = self.__delimiter
+            with open(self.__filepath, "a") as fd:
                 for line in self.__buffer:
-                    f.write(self.__delimiter.join(line) + "\n")
+                    fd.write(delimiter.join(line) + "\n")

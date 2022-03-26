@@ -1,10 +1,9 @@
 """Recorder in `pandas.DataFrame`."""
 import copy
-import numpy
 import pandas
-from typing import Any, List, Optional, Union
+from typing import Any, List, Optional
 
-from cosapp.recorders.recorder import BaseRecorder
+from cosapp.recorders.recorder import BaseRecorder, SearchPattern
 
 
 class DataFrameRecorder(BaseRecorder):
@@ -45,12 +44,11 @@ class DataFrameRecorder(BaseRecorder):
         Do not mention `inwards` or `outwards` in `includes` or `excludes` list. Otherwise you may not record the wanted
         variables.
     """
-
     def __init__(
         self,
-        includes: Union[str, List[str]] = "*",
-        excludes: Optional[Union[str, List[str]]] = None,
-        # metadata: Optional[Union[str, List[str]]] = None,
+        includes: SearchPattern = "*",
+        excludes: Optional[SearchPattern] = None,
+        # metadata: Optional[SearchPattern] = None,
         numerical_only = False,
         section = "",
         precision = 9,
