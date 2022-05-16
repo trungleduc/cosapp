@@ -60,3 +60,9 @@ from .elec import (
     Source,
     Ground,
 )
+from .dynamics import (
+    PointDynamics,
+    PointFriction,
+    PointMass,
+    BouncingBall,
+)
