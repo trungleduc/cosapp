@@ -2,6 +2,7 @@
 Basic classes handling model resolution, system connections and conversion between level of
 modelings.
 """
+from __future__ import annotations
 import collections
 import importlib
 import json
@@ -17,7 +18,7 @@ from pathlib import Path
 from typing import (
     Any, Callable, ClassVar, Dict, FrozenSet,
     Iterable, Iterator, List, Type,
-    Optional, Tuple, Union,
+    Optional, Tuple, Union, TypeVar,
 )
 from types import MappingProxyType
 
@@ -50,6 +51,10 @@ from cosapp.systems.systemSurrogate import SystemSurrogate
 from cosapp.multimode.event import Event, EventState, ZeroCrossing
 
 logger = logging.getLogger(__name__)
+
+AnyPort = TypeVar("AnyPort", bound=Port)
+AnySystem = TypeVar("AnySystem", bound="System")
+AnyDriver = TypeVar("AnyDriver", bound="Driver")
 
 
 class ExecutionOrdering(Enum):
@@ -212,10 +217,11 @@ class System(Module, TimeObserver):
         """Initialize a System"""
         Module.__init__(self, name)
         TimeObserver.__init__(self, sign_in=False)
+        from cosapp.drivers import Driver
 
         self._math = MathematicalProblem(name, self)  # type: MathematicalProblem
         self.__loop_problem = MathematicalProblem('loop', self)  # type: MathematicalProblem
-        self.drivers = collections.OrderedDict()  # type: Dict[str, cosapp.Driver]
+        self.drivers = collections.OrderedDict()  # type: Dict[str, Driver]
         self.design_methods = dict()  # type: Dict[str, Tuple[Tuple[Unknown], Tuple[AbstractResidue]]]
         self.__readonly = dict()  # type: Dict[str, Any]
 
@@ -587,10 +593,10 @@ class System(Module, TimeObserver):
         return MappingProxyType(self.__readonly)
 
     def add_input(self,
-        port_class: "Type[Port]",
+        port_class: Type[AnyPort],
         name: str,
         variables: Optional[Dict[str, Any]] = None,
-    ) -> Port:
+    ) -> AnyPort:
         """Add an input `Port` to the `System`.
 
         This function cannot be called outside `System.setup`.
@@ -614,8 +620,8 @@ class System(Module, TimeObserver):
 
         >>> class MyModule(System):
         >>>     def setup(self):
-        >>>         self.add_input(MyPort, 'input_x')
-        >>>         self.add_input(MyPort, 'input_i', {'x': 15.}, all_frozen=True)
+        >>>         self.add_input(MyPort, 'p_in1')
+        >>>         self.add_input(MyPort, 'p_in2', {'x': 1.5})
         """
         self.__lock_check("add_input")
 
@@ -625,19 +631,16 @@ class System(Module, TimeObserver):
             raise TypeError(
                 f"port_class should be a subclass of Port; got {type(port_class).__name__}."
             )
-        check_arg(name, 'name', str)
-        check_arg(variables, 'variables', (type(None), dict))
-
         new_port = port_class(name, PortType.IN, variables=variables)
         self._add_port(new_port)
         self.__reset_input_mapping()
         return new_port
 
     def add_output(self,
-        port_class: "Type[Port]",
+        port_class: Type[AnyPort],
         name: str,
         variables: Optional[Dict[str, Any]] = None
-    ) -> Port:
+    ) -> AnyPort:
         """Add an output `Port` to the `System`.
 
         This function cannot be called outside `System.setup`.
@@ -661,8 +664,8 @@ class System(Module, TimeObserver):
 
         >>> class MyModule(System):
         >>>     def setup(self):
-        >>>         self.add_output(MyPort, 'output_y')
-        >>>         self.add_output(MyPort, 'output_z', {'y': 15.})
+        >>>         self.add_output(MyPort, 'p_out1')
+        >>>         self.add_output(MyPort, 'p_out2', {'y': 1.5})
         """
         self.__lock_check("add_output")
 
@@ -672,9 +675,6 @@ class System(Module, TimeObserver):
             raise TypeError(
                 f"port_class should be a subclass of Port; got {type(port_class).__name__}."
             )
-        check_arg(name, 'name', str)
-        check_arg(variables, 'variables', (type(None), dict))
-
         new_port = port_class(name, PortType.OUT, variables=variables)
         self._add_port(new_port)
         return new_port
@@ -1406,10 +1406,10 @@ class System(Module, TimeObserver):
         return problem.extend(self.__loop_problem)
 
     def add_child(self,
-        child: "System",
+        child: AnySystem,
         execution_index: Optional[int] = None,
         pulling: Optional[Union[str, List[str], Dict[str, str]]] = None,
-    ) -> "System":
+    ) -> AnySystem:
         """Add a child `System` to the current `System`.
 
         When adding a child `System`, it is possible to specified its position in the execution
@@ -1464,7 +1464,7 @@ class System(Module, TimeObserver):
 
         return child
 
-    def pop_child(self, name: str) -> Optional["System"]:
+    def pop_child(self, name: str) -> Optional[System]:
         """Remove the `System` called `name` from the current top `System`.
 
         Parameters
@@ -1498,7 +1498,7 @@ class System(Module, TimeObserver):
 
         return child
 
-    def add_driver(self, driver: "cosapp.drivers.Driver") -> "cosapp.drivers.Driver":
+    def add_driver(self, driver: AnyDriver) -> AnyDriver:
         """Add a driver to this system.
 
         Parameters
@@ -1528,7 +1528,7 @@ class System(Module, TimeObserver):
         driver.parent = None  # Clear driver parent in case of driver reused
         self.drivers[name] = driver
 
-        return self.drivers[name]
+        return driver
 
     def add_unknown(self,
         name: Union[str, Iterable[Union[dict, str]]],
@@ -2195,8 +2195,8 @@ class System(Module, TimeObserver):
         return False
 
     def connect(self,
-        object1: Union[BasePort, "System"],
-        object2: Union[BasePort, "System"],
+        object1: Union[BasePort, System],
+        object2: Union[BasePort, System],
         mapping: Union[str, List[str], Dict[str, str], None] = None,
         cls: Optional[Type[BaseConnector]] = None,
         **kwargs
@@ -2295,8 +2295,8 @@ class System(Module, TimeObserver):
             )
 
     def __connect_systems(self,
-        system1: "System",
-        system2: "System",
+        system1: System,
+        system2: System,
         mapping: Union[str, List[str], Dict[str, str]],
         cls: Optional[Type[BaseConnector]] = None,
         **kwargs
@@ -2536,7 +2536,7 @@ class System(Module, TimeObserver):
         if port1.direction != port2.direction:  # one port is IN and the other is OUT
             if port1.owner is port2.owner.parent or port2.owner is port1.owner.parent:
                 raise ConnectorError(
-                    f"{err_msg}, as they are of different types, and link a child to its parent."
+                    f"{err_msg}; parent/child connections are only allowed between same-direction ports."
                 )
             elif not (port1.owner.parent is port2.owner.parent is self):
                 raise ConnectorError(
@@ -2549,7 +2549,7 @@ class System(Module, TimeObserver):
         ):
             raise ConnectorError(
                 f"{err_msg}. Same-direction ports can only be connected between a child and its parent, "
-                "or between same-group systems."
+                "or between sibling sub-systems."
             )
 
         reciprocal = lambda d: dict((v, k) for k, v in d.items())

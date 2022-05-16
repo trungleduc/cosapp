@@ -1,10 +1,15 @@
 """
 Basic class handling model tree structure.
 """
+from __future__ import annotations
 import abc
 import collections
 import logging
-from typing import Any, Optional, List, Generator, MappingView, OrderedDict, Sequence
+from typing import (
+    Optional, Any, List, Dict, OrderedDict,
+    Generator, MappingView, Sequence,
+    TypeVar,
+)
 
 from cosapp.patterns.visitor import Visitor, Component as VisitedComponent
 from cosapp.core.signal import Signal
@@ -13,6 +18,8 @@ from cosapp.utils.helpers import check_arg
 from cosapp.utils.logging import LoggerContext, LogFormat, LogLevel
 
 logger = logging.getLogger(__name__)
+
+Child = TypeVar("Child", bound="Module")
 
 
 class Module(LoggerContext, VisitedComponent, metaclass=abc.ABCMeta):
@@ -71,18 +78,18 @@ class Module(LoggerContext, VisitedComponent, metaclass=abc.ABCMeta):
         name: str, optional
             Name of the `Module`
         """
-        self._name = self._name_check(name)  # type: str
-        self.children = collections.OrderedDict()
-        self.parent = None  # type: Optional[Module]
-        self._active = True  # type: bool
-        self._compute_calls = 0  # type: int
+        self._name = self._name_check(name)
+        self.children: Dict[str, Module] = collections.OrderedDict()
+        self.parent: Optional[Module] = None
+        self._active: bool = True
+        self._compute_calls: int = 0
 
         # Signals
         self.setup_ran = Signal(name="cosapp.core.module.Module.setup_ran")
-        self.computed = Signal(name="cosapp.core.module.Module.computed")
         self.clean_ran = Signal(name="cosapp.core.module.Module.clean_ran")
+        self.computed = Signal(name="cosapp.core.module.Module.computed")
 
-    def tree(self, downwards=False) -> Generator["Module", None, None]:
+    def tree(self, downwards=False) -> Generator[Module, None, None]:
         """Generator recursively yielding all elements in module tree.
         
         Parameters:
@@ -161,7 +168,7 @@ class Module(LoggerContext, VisitedComponent, metaclass=abc.ABCMeta):
         """int: Total number of elements in tree."""
         return sum(1 for _ in self.tree())
 
-    def path_to_root(self) -> Generator["Module", None, None]:
+    def path_to_root(self) -> Generator[Module, None, None]:
         """Generator recursively yielding all elements up to root module.
         """
         current = self
@@ -170,12 +177,12 @@ class Module(LoggerContext, VisitedComponent, metaclass=abc.ABCMeta):
             current = current.parent
             yield current
 
-    def root(self) -> "Module":
+    def root(self) -> Module:
         for root in self.path_to_root():
             continue
         return root
 
-    def path(self) -> List["Module"]:
+    def path(self) -> List[Module]:
         """Returns full path from root Module as a list.
         
         Returns
@@ -241,7 +248,7 @@ class Module(LoggerContext, VisitedComponent, metaclass=abc.ABCMeta):
         """Method called once after any simulation."""
         pass  # pragma: no cover
 
-    def get_path_to_child(self, other: "Module") -> str:
+    def get_path_to_child(self, other: Module) -> str:
         """
         Returns the relative path to target Module `other`.
         Raises `ValueError` if `other` is not related to current Module.
@@ -262,14 +269,11 @@ class Module(LoggerContext, VisitedComponent, metaclass=abc.ABCMeta):
                 )
         return ".".join(reversed(path))
 
-    def add_child(self,
-        child: "Module",
-        execution_index: Optional[int] = None
-    ) -> "Module":
+    def add_child(self, child: Child, execution_index: Optional[int] = None) -> Child:
         """Add a child `Module` to the current `Module`.
 
-        When adding a child `Module`, it is possible to specified its position in the execution
-        order.
+        When adding a child `Module`, it is possible to specified its position
+        in the execution order.
 
         Parameters
         ----------
@@ -295,26 +299,29 @@ class Module(LoggerContext, VisitedComponent, metaclass=abc.ABCMeta):
             )
 
         child.parent = self
-        children = self.children
-        children[child.name] = child
+        self.children[child.name] = child
 
         if specific_order:
             self.exec_order = specific_order
 
         return child
 
-    def pop_child(self, name: str) -> Optional["Module"]:
+    def pop_child(self, name: str) -> Module:
         """Remove the `Module` called `name` from the current top `Module`.
 
         Parameters
         ----------
         name: str
-            Name of the `Module` to remove
+            Name of the `Module` to remove.
 
         Returns
         -------
         `Module` or None
-            The removed `Module` or None if no match found
+            The removed `Module`.
+
+        Raises
+        ------
+        `AttributeError` if no match is found.
         """
         children = self.children
 
@@ -358,19 +365,20 @@ class Module(LoggerContext, VisitedComponent, metaclass=abc.ABCMeta):
             if self.is_active():
                 self._precompute()
 
-                logger.debug(f"Call {self.name}.compute_before")
+                logger.debug(f"Call {self.name}.compute_before()")
                 self.compute_before()
 
-                for child in self.exec_order:
-                    logger.debug(f"Call {self.name}.{child}.run_once")
-                    self.children[child].run_once()
+                for name, child in self.children.items():
+                    logger.debug(f"Call {self.name}.{name}.run_once()")
+                    child.run_once()
 
-                logger.debug(f"Call {self.name}.compute")
+                logger.debug(f"Call {self.name}.compute()")
                 self._compute_calls += 1
                 self.compute()
 
                 self._postcompute()
                 self.computed.emit()
+            
             else:
                 logger.debug(f"Skip {self.name} execution - Inactive")
 

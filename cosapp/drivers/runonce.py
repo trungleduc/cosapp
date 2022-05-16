@@ -18,28 +18,29 @@ class RunOnce(Driver):
     name : str
         Name of the driver
     owner : System, optional
-        :py:class:`~cosapp.systems.system.System` to which this driver belong; default None
+        :py:class:`~cosapp.systems.system.System` to which driver belongs; defaults to `None`
     **kwargs : Any
         Keyword arguments will be used to set driver options
     """
 
     __slots__ = ('initial_values', 'solution')
 
-    def __init__(self,
+    def __init__(
+        self,
         name: str,
-        owner: "Optional[cosapp.systems.System]" = None,
+        owner: Optional["cosapp.systems.System"] = None,
         **kwargs
     ) -> None:
-        """Initialize a driver
+        """Initialize driver
 
         Parameters
         ----------
         name: str, optional
-            Name of the `Module`
-        owner : System, optional
-            :py:class:`~cosapp.systems.system.System` to which this driver belong; default None
-        **kwargs : Dict[str, Any]
-            Optional keywords arguments
+            Name of the `Driver`.
+        owner: System, optional
+            :py:class:`~cosapp.systems.system.System` to which driver belongs; defaults to `None`.
+        **kwargs:
+            Additional keywords arguments forwarded to base class.
         """
         super().__init__(name, owner, **kwargs)
         
@@ -144,9 +145,10 @@ class RunOnce(Driver):
     def setup_run(self):
         """Method called once before starting any simulation."""
         super().setup_run()
-        
-        if not self.owner.is_standalone() and self.owner.parent is None:
-            self.owner.open_loops()  # Force loops opening to test if the owner needs a solver
+        owner = self.owner
+
+        if not owner.is_standalone() and owner.parent is None:
+            owner.open_loops()  # Force loops opening to test if the owner needs a solver
 
             if self.get_problem().shape != (0, 0):
                 logger.warning(
@@ -155,7 +157,7 @@ class RunOnce(Driver):
                     )
                 )
 
-            self.owner.close_loops()
+            owner.close_loops()
 
     def _precompute(self):
         """Set execution order and start the recorder."""

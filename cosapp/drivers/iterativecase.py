@@ -15,7 +15,7 @@ class IterativeCase(RunOnce):
     name: str, optional
         Name of the `Module`
     owner : System, optional
-        :py:class:`~cosapp.systems.system.System` to which this driver belong; default None
+        :py:class:`~cosapp.systems.system.System` to which driver belongs; defaults to `None`
     **kwargs : Dict[str, Any]
         Optional keywords arguments
     """
@@ -24,7 +24,7 @@ class IterativeCase(RunOnce):
 
     def __init__(self,
         name: str,
-        owner: "Optional[cosapp.systems.System]" = None,
+        owner: Optional["cosapp.systems.System"] = None,
         **kwargs
     ) -> None:
         """Initialize a driver
@@ -32,28 +32,24 @@ class IterativeCase(RunOnce):
         Parameters
         ----------
         name: str, optional
-            Name of the `Module`
-        owner : System, optional
-            :py:class:`~cosapp.systems.system.System` to which this driver belong; default None
-        **kwargs : Dict[str, Any]
-            Optional keywords arguments
+            Name of the `Driver`.
+        owner: System, optional
+            :py:class:`~cosapp.systems.system.System` to which this driver belong; defaults to `None`.
+        **kwargs:
+            Additional keywords arguments forwarded to base class.
         """
         super().__init__(name, owner, **kwargs)
         self.reset_problem()
 
-    @RunOnce.owner.setter
-    def owner(self, system: "Optional[cosapp.systems.System]") -> None:
-        # Trick to call super setter (see: https://bugs.python.org/issue14965)
+    def _set_owner(self, system: Optional["cosapp.systems.System"]) -> bool:
         defined = self.owner is not None
-        changed = self.owner is not system
-        cls = IterativeCase
-        super(cls, cls).owner.__set__(self, system)
+        changed = super()._set_owner(system)
         if changed:
+            self.reset_problem()
             if defined:
                 logger.warning(
                     f"System owner of Driver {self.name!r} has changed. Mathematical problem has been cleared."
                 )
-            self.reset_problem()
 
     @abc.abstractmethod
     def reset_problem(self) -> None:

@@ -48,12 +48,13 @@ class BasePort(visitor.Component):
         """
         if not isinstance(direction, PortType):
             raise TypeError(f"Direction must be PortType; got {direction}.")
+        from cosapp.systems import System
 
-        self._variables = OrderedDict()  # type: Dict[str, BaseVariable]
-        self._name = self._name_check(name)  # type: str
-        self._direction = direction  # type: PortType
-        self._owner = None  # type: Optional[cosapp.systems.System]
-        self.__clearance = None
+        self._variables: Dict[str, BaseVariable] = OrderedDict()
+        self._name: str = self._name_check(name)
+        self._direction: PortType = direction
+        self._owner: Optional[System] = None
+        self.__clearance: Scope = None
         self.scope_clearance = Scope.PRIVATE
 
     def accept(self, visitor: visitor.Visitor) -> None:
@@ -61,7 +62,7 @@ class BasePort(visitor.Component):
         visitor.visit_port(self)
 
     @property
-    def owner(self) -> "Optional[cosapp.systems.System]":
+    def owner(self) -> Optional["cosapp.systems.System"]:
         """System : `System` owning the port."""
         return self._owner
 
@@ -391,7 +392,8 @@ class BasePort(visitor.Component):
             criterion = lambda name: False
         else:
             read_only = [
-                n for n, details in self._variables.items() if details.scope > self.__clearance
+                name for (name, details) in self._variables.items()
+                if details.scope > self.__clearance
             ]
             criterion = lambda name: not self._owner.is_running() and name in read_only
         self.__out_of_scope = criterion
