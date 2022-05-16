@@ -31,28 +31,29 @@ class RunSingleCase(IterativeCase):
     name : str
         Name of the driver
     owner : System, optional
-        :py:class:`~cosapp.systems.system.System` to which this driver belong; default None
+        :py:class:`~cosapp.systems.system.System` to which driver belongs; defaults to `None`
     **kwargs : Any
         Keyword arguments will be used to set driver options
     """
 
     __slots__ = ('__case_values', '__raw_problem', '__processed', 'problem')
 
-    def __init__(self,
+    def __init__(
+        self,
         name: str,
         owner: Optional[System] = None,
         **kwargs
         ) -> None:
-        """Initialize a driver
+        """Initialize driver
 
         Parameters
         ----------
         name: str, optional
             Name of the `Module`
-        owner : System, optional
-            :py:class:`~cosapp.systems.system.System` to which this driver belong; default None
+        owner: System, optional
+            :py:class:`~cosapp.systems.system.System` to which driver belongs; defaults to `None`
         **kwargs : Dict[str, Any]
-            Optional keywords arguments
+            Optional keywords arguments formwarded to base class.
         """
         super().__init__(name, owner, **kwargs)
         self.__case_values = []  # type: List[AssignString]

@@ -9,7 +9,7 @@ from typing import Tuple, NamedTuple, List, Dict, Union, Optional, Any
 
 from cosapp.core.time import UniversalClock
 from cosapp.ports.enum import PortType
-from cosapp.drivers.driver import Driver
+from cosapp.drivers.driver import Driver, Recorder
 from cosapp.drivers.time.utils import (
     TimeVarManager,
     TimeStepManager,
@@ -49,7 +49,7 @@ class ExplicitTimeDriver(Driver):
 
     def __init__(self,
         name = "Explicit time driver",
-        owner: "Optional[cosapp.systems.System]" = None,
+        owner: Optional["cosapp.systems.System"] = None,
         time_interval: Tuple[float, float] = None,
         dt: float = None,
         record_dt: bool = False,
@@ -169,8 +169,16 @@ class ExplicitTimeDriver(Driver):
         """Scenario: the simulation scenario, defining initial and boundary conditions"""
         return self.__scenario
 
-    def add_recorder(self, recorder: BaseRecorder, period: Number = None) -> BaseRecorder:
-        """Add an internal data recorder storing the time evolution of values of interest"""
+    def add_recorder(self, recorder: Recorder, period: Optional[Number] = None) -> Recorder:
+        """Add an internal recorder storing the time evolution of values of interest.
+
+        Parameters
+        ----------
+        - recorder [BaseRecorder]:
+            The recorder to be added.
+        - period [Number, optional]:
+            Recording period. If `None` (default), data are recorded at all time steps.
+        """
         if 'time' not in recorder:
             cls = type(recorder)
             recorder = cls.extend(recorder, includes='time')

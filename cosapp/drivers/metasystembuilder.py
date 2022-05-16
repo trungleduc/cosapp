@@ -1,5 +1,5 @@
 from collections import OrderedDict
-from typing import Any, Dict, List, Set, Type, Union
+from typing import Any, Dict, List, Set, Type, Union, Optional
 
 from cosapp.recorders import DataFrameRecorder
 from cosapp.systems import MetaSystem
@@ -17,18 +17,21 @@ class MetaSystemBuilder(Driver):
     __slots__ = ('responses', 'model_type', '_metasystem')
 
     def __init__(
-        self, name: str, owner: "Optional[cosapp.systems.System]" = None, **kwargs
+        self,
+        name: str,
+        owner: Optional["cosapp.systems.System"] = None,
+        **kwargs
     ) -> None:
         """Initialize a driver
 
         Parameters
         ----------
         name: str, optional
-            Name of the `Module`
-        owner : System, optional
-            :py:class:`~cosapp.systems.system.System` to which this driver belong; default None
-        **kwargs : Dict[str, Any]
-            Optional keywords arguments
+            Name of the `Driver`.
+        owner: System, optional
+            :py:class:`~cosapp.systems.system.System` to which this driver belong; defaults to `None`.
+        **kwargs:
+            Additional keywords arguments forwarded to base class.
         """
         super().__init__(name, owner, **kwargs)
 

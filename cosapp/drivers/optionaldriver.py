@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional
+from typing import Optional
 
 from cosapp.drivers.driver import Driver
 
@@ -25,22 +25,22 @@ class OptionalDriver(Driver):
 
     def __init__(self, 
         name: str, 
-        owner: "Optional[cosapp.systems.System]" = None, 
+        owner: Optional["cosapp.systems.System"] = None, 
         force: Optional[bool] = None, 
         **kwargs
     ) -> None:
-        """Initialize a driver
+        """Initialize driver
 
         Parameters
         ----------
         name: str, optional
-            Name of the `Module`
-        owner : System, optional
-            :py:class:`~cosapp.systems.system.System` to which this driver belong; default None
-        force : bool, optional
+            Name of the `Driver`.
+        owner: System, optional
+            :py:class:`~cosapp.systems.system.System` to which this driver belong; defaults to `None`.
+        force: bool, optional
             If True, `run_once` method is not inhibited whatever the class variable status is.
-        **kwargs : Dict[str, Any]
-            Optional keywords arguments
+        **kwargs:
+            Additional keywords arguments forwarded to base class.
         """
         super().__init__(name, owner, **kwargs)
         self._active = force

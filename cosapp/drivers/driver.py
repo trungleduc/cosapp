@@ -1,9 +1,10 @@
 """
 Classes driving simulation on CoSApp :py:class:`~cosapp.systems.system.System`.
 """
+from __future__ import annotations
 import logging
 import time
-from typing import Optional
+from typing import Optional, TypeVar
 
 from cosapp.patterns.visitor import Visitor
 from cosapp.core.module import Module
@@ -13,6 +14,9 @@ from cosapp.utils.naming import NameChecker, CommonPorts
 from cosapp.utils.helpers import check_arg
 
 logger = logging.getLogger(__name__)
+
+AnyDriver = TypeVar("AnyDriver", bound="Driver")
+Recorder = TypeVar("Recorder", bound=BaseRecorder)
 
 
 class Driver(Module):
@@ -55,25 +59,28 @@ class Driver(Module):
         excluded = CommonPorts.names(),
     )
 
-    def __init__(self,
+    def __init__(
+        self,
         name: str,
-        owner: "Optional[cosapp.systems.System]" = None,
+        owner: Optional["cosapp.systems.System"] = None,
         **kwargs
     ) -> None:
-        """Initialize a driver
+        """Initialize driver
 
         Parameters
         ----------
-        name: str, optional
-            Name of the `Module`
-        owner : System, optional
-            :py:class:`~cosapp.systems.system.System` to which this driver belong; default None
-        **kwargs : Dict[str, Any]
-            Optional keywords arguments
+        name: str
+            Name of the `Driver`.
+        owner: System, optional
+            :py:class:`~cosapp.systems.system.System` to which driver belongs; defaults to `None`.
+        **kwargs: Dict[str, Any]
+            Optional keywords arguments.
         """
+        from cosapp.systems import System
+
         super().__init__(name)
-        self._owner = None  # type: Optional[System]
-        self._recorder = None  # type: Optional[BaseRecorder]
+        self._owner: Optional[System] = None
+        self._recorder: Optional[BaseRecorder] = None
         self.owner = owner
 
         self.options = OptionsDictionary()  # type: OptionsDictionary
@@ -116,21 +123,29 @@ class Driver(Module):
         return f"{self.name} ({context}) - {self.__class__.__name__}"
 
     @property
-    def owner(self) -> "Optional[cosapp.systems.System]":
-        """System : System owning the driver and its children."""
+    def owner(self):
+        """System: System owning the driver and its children."""
         return self._owner
 
     @owner.setter
-    def owner(self, system: "Optional[cosapp.systems.System]") -> None:
+    def owner(self, system: Optional["cosapp.systems.System"]) -> None:
         self._set_owner(system)
 
-    def _set_owner(self, system: "Optional[cosapp.systems.System]") -> bool:
+    def _set_owner(self, system: Optional["cosapp.systems.System"]) -> bool:
+        """Owner setter as a protected method, to be used by derived classes.
+        This prevents from calling base class `owner.setter`, which can be tricky.
+
+        Returns
+        -------
+        changed [bool]:
+            `True` if owner has changed, `False` otherwise.
+        """
         from cosapp.systems import System
         if system is not None:
             check_arg(system, 'owner', System)
         
         changed = system is not self._owner
-        self._owner = system
+        self._owner: Optional[System] = system
         if self._recorder is not None:
             self._recorder.watched_object = system
         for child in self.children.values():
@@ -194,11 +209,7 @@ class Driver(Module):
                 )
             )
 
-    def add_child(
-        self,
-        child: "Driver",
-        execution_index: Optional[int] = None,
-    ) -> "Driver":
+    def add_child(self, child: AnyDriver, execution_index: Optional[int] = None) -> AnyDriver:
         """Add a child `Driver` to the current `Driver`.
 
         When adding a child `Driver`, it is possible to specified its position in the execution
@@ -212,9 +223,13 @@ class Driver(Module):
             Index of the execution order list at which the `Module` should be inserted;
             default latest.
 
+        Returns
+        -------
+        `child`
+
         Notes
         -----
-        The added child will have its owner set to match the one of the current driver.
+        The added child will have its owner set to that of current driver.
         """
         check_arg(child, 'child', Driver)
         
@@ -223,15 +238,11 @@ class Driver(Module):
 
         return driver
 
-    def add_driver(
-        self,
-        child: "Driver",
-        execution_index: Optional[int] = None,
-    ) -> "Driver":
+    def add_driver(self, child: AnyDriver, execution_index: Optional[int] = None) -> AnyDriver:
         """Alias for :py:meth:`~cosapp.drivers.driver.Driver.add_child`."""
         return self.add_child(child, execution_index)
 
-    def add_recorder(self, recorder: BaseRecorder) -> BaseRecorder:
+    def add_recorder(self, recorder: Recorder) -> Recorder:
         check_arg(recorder, 'recorder', BaseRecorder)
 
         self._recorder = recorder

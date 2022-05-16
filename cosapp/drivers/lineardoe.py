@@ -1,8 +1,7 @@
+import numpy
 import itertools
 from collections import OrderedDict
-from typing import Any, Dict, List, Union
-
-import numpy
+from typing import Any, Dict, Optional, Union
 
 from cosapp.drivers.abstractsetofcases import AbstractSetOfCases
 from cosapp.utils.helpers import check_arg
@@ -19,35 +18,37 @@ class LinearDoE(AbstractSetOfCases):
     name : str
         Name of the driver
     owner : System, optional
-        :py:class:`~cosapp.systems.system.System` to which this driver belong; default None
+        :py:class:`~cosapp.systems.system.System` to which driver belongs; defaults to `None`
     **kwargs : Any
         Keyword arguments will be used to set driver options
     """
 
-    __slots__ = ('input_vars')
+    __slots__ = ('input_vars',)
 
     def __init__(
-        self, name: str, owner: "Optional[cosapp.systems.System]" = None, **kwargs
+        self,
+        name: str,
+        owner: Optional["cosapp.systems.System"] = None,
+        **kwargs
     ) -> None:
-        """Initialize a driver
+        """Initialize driver
 
         Parameters
         ----------
         name: str, optional
-            Name of the `Module`
-        owner : System, optional
-            :py:class:`~cosapp.systems.system.System` to which this driver belong; default None
-        **kwargs : Dict[str, Any]
-            Optional keywords arguments
+            Name of the `Driver`.
+        owner: System, optional
+            :py:class:`~cosapp.systems.system.System` to which this driver belong; defaults to `None`.
+        **kwargs:
+            Additional keywords arguments forwarded to base class.
         """
         super().__init__(name, owner, **kwargs)
-        self.input_vars = OrderedDict()  # type: collections.OrderedDict
-            # desc="Variable names varying between cases"
+        self.input_vars = OrderedDict()
 
     def add_input_var(self,
         definition: Union[str, Dict[str, Any]],
-        lower: float = None,
-        upper: float = None,
+        lower: Optional[float] = None,
+        upper: Optional[float] = None,
         count: int = 2,
     ):
         check_arg(definition, 'definition', (str, dict))

@@ -1,15 +1,15 @@
 import abc
 import json
+import numpy
 import logging
 import re
 from copy import copy
 from numbers import Number
 from typing import (
-    AnyStr, Callable, Dict, List, Optional,
+    AnyStr, Dict, List,
+    Callable, Optional,
     Sequence, Tuple, Union,
 )
-
-import numpy
 
 from cosapp.core.numerics.basics import MathematicalProblem, SolverResults
 from cosapp.drivers.driver import Driver
@@ -28,28 +28,29 @@ class AbstractSolver(Driver):
     name : str
         Name of the driver
     owner : System, optional
-        :py:class:`~cosapp.systems.system.System` to which this driver belong; default None
+        :py:class:`~cosapp.systems.system.System` to which driver belongs; defaults to `None`
     **kwargs : Any
         Keyword arguments will be used to set driver options
     """
 
     __slots__ = ('force_init', '_raw_problem', 'problem', 'initial_values', 'solution')
 
-    def __init__(self,
+    def __init__(
+        self,
         name: str,
-        owner: "Optional[cosapp.systems.System]" = None,
+        owner: Optional["cosapp.systems.System"] = None,
         **kwargs
     ) -> None:
-        """Initialize a driver
+        """Initialize driver
 
         Parameters
         ----------
         name: str, optional
-            Name of the `Module`
-        owner : System, optional
-            :py:class:`~cosapp.systems.system.System` to which this driver belong; default None
-        **kwargs : Dict[str, Any]
-            Optional keywords arguments
+            Name of the `Driver`.
+        owner: System, optional
+            :py:class:`~cosapp.systems.system.System` to which this driver belong; defaults to `None`.
+        **kwargs:
+            Additional keywords arguments forwarded to base class.
         """
         super().__init__(name, owner, **kwargs)
 
@@ -61,7 +62,7 @@ class AbstractSolver(Driver):
         self.solution: Dict[str, float] = {}
         self.reset_problem()
 
-    def _set_owner(self, system: "Optional[cosapp.systems.System]") -> bool:
+    def _set_owner(self, system: Optional["cosapp.systems.System"]) -> bool:
         defined = self.owner is not None
         changed = super()._set_owner(system)
         if changed:
@@ -162,12 +163,12 @@ class AbstractSolver(Driver):
             if self.is_active():
                 self._precompute()
 
-                logger.debug(f"Call {self.name}.compute_before")
+                logger.debug(f"Call {self.name}.compute_before()")
                 self.compute_before()
 
                 # Sub-drivers are executed at each iteration in `compute`,
                 # so the child loop before `self.compute()` is omitted.
-                logger.debug(f"Call {self.name}.compute")
+                logger.debug(f"Call {self.name}.compute()")
                 self._compute_calls += 1
                 self.compute()
 

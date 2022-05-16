@@ -5,11 +5,13 @@ from io import StringIO
 from typing import (
     Any, Callable, Dict, List, Optional,
     Sequence, Tuple, Union, Iterable,
+    TypeVar,
 )
 
 from cosapp.core.numerics.basics import MathematicalProblem, SolverResults
 from cosapp.core.numerics.enum import NonLinearMethods
 from cosapp.core.numerics.root import root
+from cosapp.drivers.driver import Driver
 from cosapp.drivers.abstractsolver import AbstractSolver
 from cosapp.drivers.driver import Driver
 from cosapp.drivers.runsinglecase import RunSingleCase
@@ -19,6 +21,8 @@ from cosapp.utils.logging import LogFormat, LogLevel
 
 import logging
 logger = logging.getLogger(__name__)
+
+AnyDriver = TypeVar("AnyDriver", bound=Driver)
 
 
 class NonLinearSolver(AbstractSolver):
@@ -41,27 +45,29 @@ class NonLinearSolver(AbstractSolver):
 
     def __init__(self, 
         name: str, 
-        owner: "Optional[cosapp.systems.System]" = None, 
+        owner: Optional["cosapp.systems.System"] = None, 
         method: Union[NonLinearMethods, str] = NonLinearMethods.NR, 
         **kwargs
     ) -> None:
-        """Initialize a driver
+        """Initialize driver
 
         Parameters
         ----------
         name: str, optional
-            Name of the `Module`
-        owner : System, optional
-            :py:class:`~cosapp.systems.system.System` to which this driver belong; default None
+            Name of the `Driver`.
+        owner: System, optional
+            :py:class:`~cosapp.systems.system.System` to which this driver belong; defaults to `None`.
         method : Union[NonLinearMethods, str]
             Resolution method to use
-        **kwargs : Dict[str, Any]
-            Optional keywords arguments
+        **kwargs:
+            Additional keywords arguments forwarded to base class.
         """
         super().__init__(name, owner, **kwargs)
 
         if isinstance(method, str):
-            method = NonLinearMethods(method)
+            method = NonLinearMethods[method]
+        else:
+            check_arg(method, 'method', NonLinearMethods)
         self.__method = method
         self.__option_aliases = dict()
         self.__set_method(method, **kwargs)
@@ -87,7 +93,7 @@ class NonLinearSolver(AbstractSolver):
         """NonLinearMethods : Selected solver algorithm."""
         return self.__method
 
-    def add_child(self, child: 'Driver', execution_index: Optional[int] = None) -> 'Driver':
+    def add_child(self, child: AnyDriver, execution_index: Optional[int] = None) -> AnyDriver:
         """Add a child `Driver` to the current `Driver`.
 
         When adding a child `Driver`, it is possible to specified its position in the execution order.
@@ -256,9 +262,7 @@ class NonLinearSolver(AbstractSolver):
 
         return full_init
 
-    def _fresidues(self,
-        x: Sequence[float],
-    ) -> numpy.ndarray:
+    def _fresidues(self, x: Sequence[float]) -> numpy.ndarray:
         """
         Method used by the solver to take free variables values as input and values of residues as
         output (after running the System).
@@ -280,9 +284,9 @@ class NonLinearSolver(AbstractSolver):
         self.set_iteratives(x)
 
         # Run all points
-        for child in self.exec_order:
-            logger.debug(f"Call {child}.run_once")
-            self.children[child].run_once()
+        for child in self.children.values():
+            logger.debug(f"Call {child.name}.run_once()")
+            child.run_once()
 
         residues = self.problem.residues_vector
         logger.debug(f"Residues: {residues!r}")
@@ -335,6 +339,7 @@ class NonLinearSolver(AbstractSolver):
                 self.status = ''
                 self.error_code = '0'
                 logger.info(f"solver : {self.name}{results.message}")
+            
             else:
                 self.status = 'ERROR'
                 self.error_code = '9'

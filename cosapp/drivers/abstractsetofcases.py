@@ -15,7 +15,7 @@ class AbstractSetOfCases(Driver):
     name : str
         Name of the driver
     owner : System, optional
-        :py:class:`~cosapp.systems.system.System` to which this driver belong; default None
+        :py:class:`~cosapp.systems.system.System` to which driver belongs; defaults to `None`
     **kwargs : Any
         Keyword arguments will be used to set driver options
     """
@@ -23,18 +23,21 @@ class AbstractSetOfCases(Driver):
     __slots__ = ('cases')
 
     def __init__(
-        self, name: str, owner: "Optional[cosapp.systems.System]" = None, **kwargs
+        self,
+        name: str,
+        owner: Optional["cosapp.systems.System"] = None,
+        **kwargs
     ) -> None:
-        """Initialize a driver
+        """Initialize driver
 
         Parameters
         ----------
         name: str, optional
             Name of the `Module`
-        owner : System, optional
-            :py:class:`~cosapp.systems.system.System` to which this driver belong; default None
-        **kwargs : Dict[str, Any]
-            Optional keywords arguments
+        owner: System, optional
+            :py:class:`~cosapp.systems.system.System` to which driver belongs; defaults to `None`
+        **kwargs:
+            Additional keywords arguments forwarded to base class.
         """
         super().__init__(name, owner, **kwargs)
         # TODO Fred - is this not too much oriented for MonteCarlo or DoE? What about a mission for which input

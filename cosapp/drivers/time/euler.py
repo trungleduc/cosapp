@@ -1,16 +1,24 @@
 from numbers import Number
+from typing import Optional
 
 from cosapp.drivers.time.interfaces import ExplicitTimeDriver
 
 
 class EulerExplicit(ExplicitTimeDriver):
-    def __init__(self, name="Euler", owner: "Optional[cosapp.systems.System]" = None, **options):
-        """Initialization of the driver
+    def __init__(
+        self,
+        name="Euler",
+        owner: Optional["cosapp.systems.System"] = None,
+        **options
+    ):
+        """Initialize driver
 
         Parameters
         ----------
-        owner : System, optional
-            :py:class:`~cosapp.systems.system.System` to which this driver belongs; default None
+        owner: System, optional
+            :py:class:`~cosapp.systems.system.System` to which driver belongs; defaults to `None`
+        name: str, optional
+            Name of the `Driver`.
         **options : Dict[str, Any]
             Optional keywords arguments; may contain time step and interval, with keys `dt` and `time_interval`
         """

@@ -1,5 +1,6 @@
 import numpy
 from numbers import Number
+from typing import Optional
 
 from cosapp.drivers.time.interfaces import ExplicitTimeDriver
 from cosapp.utils.helpers import check_arg
@@ -13,17 +14,25 @@ class RungeKutta(ExplicitTimeDriver):
 
     __slots__ = ('__fracs', '__coefs', '__buffer')
 
-    def __init__(self, name="RK", owner: "Optional[cosapp.systems.System]" = None, order=2, **options):
+    def __init__(
+        self,
+        name="RK",
+        owner: Optional["cosapp.systems.System"] = None,
+        order=2,
+        **options
+    ):
         """Initialization of the driver
 
         Parameters
         ----------
         owner: System, optional
-            :py:class:`~cosapp.systems.system.System` to which this driver belongs; default None
+            :py:class:`~cosapp.systems.system.System` to which driver belongs;
+            defaults to `None`
         order: int, optional
-            Order of the numerical scheme
+            Order of the numerical scheme (2 by default).
         **options: Dict[str, Any]
-            Optional keywords arguments; may contain time step and interval, with keys `dt` and `time_interval`
+            Optional keywords arguments; may contain time step and interval,
+            with keys `dt` and `time_interval`, respectively.
         """
         check_arg(name, "name", str)
         name = self._name_check(name)
