@@ -35,13 +35,22 @@ class DiscreteStepper():
         self._interval = None
         self.set_events()
 
-    def set_events(self):
+    def set_events(self) -> None:
+        """Update event list from system of interest,
+        and from stop criterion of owner time driver.
+        """
         self._state: Dict[Event, bool] = dict.fromkeys(self._system.all_events(), False)
         stop = self._owner.scenario.stop
         if stop is not None:
             self._state[stop] = False
         self._primitives: List[Event] = list(filter(lambda e: e.is_primitive, self.events()))
         self._nonprimitives: List[Event] = list(filter(lambda e: not e.is_primitive, self.events()))
+
+    def reset(self) -> None:
+        """Update event list, and reset all events"""
+        self.set_events()
+        for event in self.events():
+            event.reset()
 
     def events(self) -> Iterator[Event]:
         """Iterator on handled events"""

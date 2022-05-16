@@ -280,6 +280,9 @@ class ZeroCrossingEvent(EventState):
         self._expr = expr
         self._direction = zeroxing.direction
         self._event = event
+        self.reset()
+
+    def reset(self) -> None:
         self._prec = self._curr = None
         self._locked = False
 
