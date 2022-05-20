@@ -191,7 +191,7 @@ def test_RungeKutta_scalar_ode(scalar_ode_case, case, settings, tol):
     (dict(order=4, dt=0.2), dict(tol=1e-4, dt_min=pytest.approx(0.028292196))),
     (dict(order=2, dt=0.1), dict(tol=1e-3, dt_min=pytest.approx(0.1))),
 ])
-def test_RungeKutta_scalar_ode_limited_dt(settings, expected):
+def test_RungeKutta_scalar_ode_limited_dt(settings: dict, expected: dict):
     class ExpOde(System):
         """System representing exponential function from ODE dy/dt = a * y"""
         def setup(self):
@@ -327,7 +327,7 @@ def test_RungeKutta_point_mass_stop(point_mass_case):
         dict(v0=pytest.approx([7.1882, 0, 18.908], rel=1e-4))
     ),
 ])
-def test_RungeKutta_point_mass_target(exec_order, case_settings, expected):
+def test_RungeKutta_point_mass_target(exec_order, case_settings: dict, expected: dict):
     """Balistic test: combination of a nonlinear solver and a time driver,
     in order to find the initial velocity condition leading to the trajectory reaching
     a target point after a given amount of time."""
@@ -400,7 +400,7 @@ def test_RungeKutta_point_mass_target_recorder(hold):
     target_point = [10, 0, 10]
 
     traj = PointMassTarget('traj')
-    solver = traj.add_driver(NonLinearSolver('solver', tol=1e-5))
+    solver = traj.add_driver(NonLinearSolver('solver', tol=1e-9))
     target = solver.add_child(RunSingleCase('target'))
     driver = target.add_child(
         RungeKutta(order=3, time_interval=(0, 2), dt=0.1)

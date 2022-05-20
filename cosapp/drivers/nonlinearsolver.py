@@ -471,11 +471,12 @@ class NonLinearSolver(AbstractSolver):
         self.__option_aliases = dict()
 
         if self.__method == NonLinearMethods.NR:
-            self.options.declare('tol', 1.0e-5, dtype=float, allow_none=True,
+            self.options.declare('tol', 'auto', dtype=(float, str), allow_none=True,
                 desc='Absolute tolerance (in max-norm) for the residual.')
             self.options.declare('max_iter', 500, dtype=int,
                 desc='The maximum number of iterations.')
-            self.options.declare('eps', 1.0e-4, dtype=float, allow_none=True,
+            # Note: use a power of 2 for `eps`, to guaranty machine-precision accurate gradients in linear problems
+            self.options.declare('eps', 2**(-16), dtype=float, allow_none=True,
                 desc='A suitable step length for the forward-difference approximation of the Jacobian (for fprime=None).'
                     ' If eps is smaller than machine precision u, it is assumed that the relative errors in the'
                     ' functions are of the order of u.')

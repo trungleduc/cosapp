@@ -17,8 +17,8 @@ class Sys_Sum3_1Eq_2Mult(System):
     def setup(self):
         self.add_input(XPort, 'x_in')
         self.add_input(XPort, 'u_in')
-        self.add_child(Sys_Mult_XPort_by_2("Mult_by_2_1"))
-        self.add_child(Sys_Mult_XPort_by_2("Mult_by_2_2"), pulling = {"x_out":"x_out"})
+        self.add_child(XportMultiplier("Mult_by_2_1", factor=2))
+        self.add_child(XportMultiplier("Mult_by_2_2", factor=2), pulling = {"x_out":"x_out"})
         self.add_child(Eq_2u_1("Eq2u1"))
         self.add_output(XPort, 'u_out')
 
@@ -36,6 +36,7 @@ class XPort_2D_Provider(System):
     def compute(self):
         self.x_out.x = 2.5
         self.u_out.x = 1.5
+
 
 class Sys_Provider_1Eq_2Mult_Getter(System):
     def setup(self):
@@ -58,45 +59,44 @@ class XPort_2D_Getter(System):
         self.add_input(XPort, 'u_in')
         self.add_output(XPort, 'x_out')
         self.add_output(XPort, 'u_out')
+
     def compute(self):
         self.x_out.x = self.x_in.x
         self.u_out.x = self.u_in.x
 
 
-class Sys_Mult_XPort_by_2(System):
-    def setup(self):
+class XportMultiplier(System):
+    def setup(self, factor=2):
+        self.add_property('factor', factor)
         self.add_input(XPort, 'x_in')
         self.add_output(XPort, 'x_out')
 
     def compute(self):
-        self.x_out.x = 2 * self.x_in.x
+        self.x_out.x = self.factor * self.x_in.x
 
 
 class Sys_Mult_XPort_Inward(System):
-    def setup(self):
 
-        #INPUTS/OUTPUTS
-        self.add_input(XPort,'m', {'x': 1})
+    def setup(self):
+        self.add_input(XPort, 'm', {'x': 1})
         self.add_input(XPort, 'x_in')
         self.add_output(XPort, 'x_out')
     
-        #EQUATION
         self.add_unknown('m.x')
+    
     def compute(self):
         self.x_out.x = self.m.x * self.x_in.x
 
 
 class XPort_2D_Getter_E(System):
+
     def setup(self):
-        
-        #INPUTS/OUTPUTS
         self.add_input(XPort, 'x_in')
         self.add_input(XPort, 'u_in')
         self.add_output(XPort, 'x_out')
         self.add_output(XPort, 'u_out')
 
-        #EQUATION
-        self.add_equation('x_out.x == 110.')
+        self.add_equation('x_out.x == 110')
 
     def compute(self):
         self.x_out.x = self.x_in.x
@@ -135,10 +135,9 @@ class Sys_P_MI_1E2M_1U_G(System):
 
         self.exec_order = ['SMXI', 'S1E2M', 'Get2D']
 
+
 class Sys_PME2MUG_G_1E(System):
     def setup(self):
-
-        #CHILDREN
         self.add_child(Sys_P_MI_1E2M_1U_G('PMEMUG'))
         self.add_child(XPort_2D_Getter_E('G2DEq'))
 
@@ -154,37 +153,38 @@ class Sys_Unknown(System):
         self.add_unknown('x_in.x')
         self.add_output(XPort, 'u_out')
         self.add_output(XPort, 'x_out')
+    
     def compute(self):
         self.u_out.x = self.u_in.x
         self.x_out.x = self.x_in.x
 
+
 class Sys_Basic_Eq(System):
     def setup(self):
         self.add_input(XPort, 'x_in')
-        self.add_equation('x_in.x == 25.')
+        self.add_equation('x_in.x == 25')
+
 
 class Sys_Sum3_2Eq_2Mult(System):
+
     def setup(self):
-        #INPUTS
         self.add_input(XPort, 'x_in')
         self.add_input(XPort, 'u_in')
 
-        #OUTPUTS
         self.add_output(XPort, 'u_out')
 
-        #CHILDREN
-        self.add_child(Sys_Mult_XPort_by_2("Mult_by_2_1"))
-        self.add_child(Sys_Mult_XPort_by_2("Mult_by_2_2"), pulling = {"x_out":"x_out"})
+        self.add_child(XportMultiplier("Mult_by_2_1", factor=2), pulling="x_in")
+        self.add_child(XportMultiplier("Mult_by_2_2", factor=2), pulling="x_out")
         self.add_child(Eq_2u_1("Eq2u1"))
         self.add_child(Sys_Basic_Eq('Basic_Eq'))
 
-        #CO
-        self.connect(self.Mult_by_2_1.x_in, self.x_in)
         self.connect(self.Mult_by_2_2.x_in, self.Mult_by_2_1.x_out)
         self.connect(self.Basic_Eq.x_in, self.Mult_by_2_1.x_out)
+    
     def compute(self):
         self.x_out.x += 3
         self.u_out.x = self.x_out.x + self.u_in.x
+
 
 class Sys_Unknown_1Eq_2Mult_Getter(System):
     def setup(self):
@@ -200,70 +200,60 @@ class Sys_Unknown_1Eq_2Mult_Getter(System):
         self.connect(self.Get2D.x_in, self.Eq_2Mult.x_out)
         self.connect(self.Get2D.u_in, self.Eq_2Mult.u_out)
 
+
 class Sys_Double_Integrate(System):
     
     def setup(self):
-        #INPUTS
         self.add_input(FloatPort, 'a_in')
-        self.add_inward('v0',0.1)
-        self.add_inward('h0',0.1)
+        self.add_inward('v0', 0.1)
+        self.add_inward('h0', 0.1)
         
-        
-        #OUTPUTS
         self.add_output(FloatPort, 'h_out')
 
-        #TRANSIENTS
-        self.add_transient('v', der = 'a_in.x')
-        self.add_transient('h', der = 'v')
+        self.add_transient('v', der='a_in.x')
+        self.add_transient('h', der='v')
 
     def compute(self):
         self.h_out.x = self.h
 
-class Sys_Div_by_2(System):
+
+class FloatPortDivider(System):
     
-    def setup(self):
-        #INPUTS
+    def setup(self, factor):
+        self.add_property('factor', factor)
         self.add_input(FloatPort, 'h_in')
-        #OUTPUTS
         self.add_output(FloatPort, 'h_out')
     
     def compute(self):
-        self.h_out.x = self.h_in.x/10.
+        self.h_out.x = self.h_in.x / self.factor
 
-class Sys_Div_By_Ln(System):
+
+class Sys_DivBy2(System):
 
     def setup(self):
-        #INPUTS
         self.add_input(FloatPort, 'h_in')
-        #OUTPUTS
         self.add_output(FloatPort, 'a_out')
     
     def compute(self):
-        self.a_out.x = self.h_in.x/2.
+        self.a_out.x = self.h_in.x / 2.
 
-class Sys_DivLn_DoubleInt(System):
+
+class Sys_DivBy2_DoubleInt(System):
+
     def setup(self):
-        #INPUTS
-        self.add_input(FloatPort, 'h_in')
-        #CHILDREN
-        self.add_child(Sys_Div_By_Ln('ln_div'))
-        self.add_child(Sys_Double_Integrate('DI'), pulling = {'h_out':'h_out'})
-        #CO-IN
-        self.connect(self.ln_div.h_in, self.h_in)
+        self.add_child(Sys_DivBy2('ln_div'), pulling='h_in')
+        self.add_child(Sys_Double_Integrate('DI'), pulling='h_out')
+
         self.connect(self.DI.a_in, self.ln_div.a_out)
-        
-    def compute(self):
-        pass
 
-class Sys_Lopped_Div_Int_Div(System):
+
+class Sys_Looped_Div_Int_Div(System):
+
     def setup(self):
-        #CHILDREN
-        self.add_child(Sys_Mult_XPort_by_2("Mult"))
-        self.add_child(Sys_DivLn_DoubleInt("DLDI"))
-        self.add_child(Sys_Div_by_2("Divider"))
+        self.add_child(XportMultiplier("Mult", factor=2))
+        self.add_child(Sys_DivBy2_DoubleInt("DLDI"))
+        self.add_child(FloatPortDivider("Divider", factor=10))
         
-        #CONNEXIONS
         self.connect(self.DLDI.h_in, self.Mult.x_out)
         self.connect(self.Divider.h_in, self.DLDI.h_out)
         self.connect(self.Mult.x_in, self.Divider.h_out)
-

@@ -210,7 +210,7 @@ def test_Optimizer_compute_with_solver_1():
 def test_Optimizer_compute_with_solver_2():
     head = CubicFunction("head")
     optim = head.add_driver(Optimizer("optim", verbose=1))
-    solver = optim.add_driver(NonLinearSolver("solver", tol=1e-10))
+    solver = optim.add_driver(NonLinearSolver("solver", tol='auto'))
 
     # Optimization problem
     optim.set_objective("2 + (x - 1)**2")
@@ -235,7 +235,7 @@ def test_Optimizer_compute_with_solver_3(caplog):
     head.add_child(CubicFunction("sub"), pulling=['a', 'x'])
 
     optim = head.add_driver(Optimizer("optim", verbose=1))
-    solver = optim.add_driver(NonLinearSolver("solver", tol=1e-10))
+    solver = optim.add_driver(NonLinearSolver("solver", tol='auto'))
 
     # Optimization problem
     optim.set_objective("2 + (x - 1)**2")

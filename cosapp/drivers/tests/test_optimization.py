@@ -40,7 +40,7 @@ def system():
 @pytest.fixture
 def solver():
     """Solver used in integration tests"""
-    return NonLinearSolver("solver", method=NonLinearMethods.NR, factor=0.1)
+    return NonLinearSolver("solver", method=NonLinearMethods.NR, factor=0.8)
 
 
 def test_system_solve(system, solver):
@@ -48,9 +48,10 @@ def test_system_solve(system, solver):
     system.add_driver(solver)
     system.run_drivers()
 
-    assert system.p_out.x == pytest.approx(1.0, abs=1e-5)
-    assert system.secondary_load.p_in.x / system.main_load.p_in.x == 0.1
-    assert system.load_ == pytest.approx(11.72947, abs=1e-5)
+    assert system.p_out.x == pytest.approx(1)
+    assert system.merger.p2_in.x == pytest.approx(1 / 9)
+    assert system.secondary_load.p_in.x / system.main_load.p_in.x == pytest.approx(0.1, rel=1e-14)
+    assert system.load_ == pytest.approx(11.729536980212018)
 
 
 def test_Optimizer_integration(system, solver):
@@ -67,7 +68,7 @@ def test_Optimizer_integration(system, solver):
     system.run_drivers()
 
     assert system.p_in.x == pytest.approx(4.338487, abs=1e-5)
-    assert system.secondary_load.p_in.x / system.main_load.p_in.x == 0.1
+    assert system.secondary_load.p_in.x / system.main_load.p_in.x == pytest.approx(0.1, rel=1e-14)
     assert system.load_ == pytest.approx(5.78134, abs=1e-5)
 
 
@@ -86,7 +87,7 @@ def test_Optimizer_integration_upper_bound(system, solver):
     system.run_drivers()
 
     assert system.p_in.x == pytest.approx(4.2, abs=1e-5)
-    assert system.secondary_load.p_in.x / system.main_load.p_in.x == 0.1
+    assert system.secondary_load.p_in.x / system.main_load.p_in.x == pytest.approx(0.1, rel=1e-14)
     assert system.load_ == pytest.approx(5.78355, abs=1e-5)
 
 
@@ -105,5 +106,5 @@ def test_Optimizer_integration_lower_bound(system, solver):
     system.run_drivers()
 
     assert system.p_in.x == pytest.approx(4.5, abs=1e-5)
-    assert system.secondary_load.p_in.x / system.main_load.p_in.x == 0.1
+    assert system.secondary_load.p_in.x / system.main_load.p_in.x == pytest.approx(0.1, rel=1e-14)
     assert system.load_ == pytest.approx(5.78406, abs=1e-5)

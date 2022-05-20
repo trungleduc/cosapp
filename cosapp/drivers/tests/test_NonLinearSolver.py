@@ -4,6 +4,7 @@ import numpy as np
 
 from collections import OrderedDict
 from unittest.mock import MagicMock, patch
+from contextlib import nullcontext as does_not_raise
 
 from cosapp.core.numerics.residues import Residue
 from cosapp.core.numerics.basics import MathematicalProblem
@@ -1145,14 +1146,20 @@ def test_NonLinearSolver_log_debug_message(format, msg, kwargs, trace, to_log, e
         handler.log.assert_not_called()
 
 
-def test_NonLinearSolver_fixedPointArray(FixedPointArray):
+@pytest.mark.parametrize("settings, rtol", [
+    (dict(), 1e-15),  # default settings
+    (dict(method=NonLinearMethods.NR, tol='auto'), 1e-15),
+    (dict(method=NonLinearMethods.NR, tol=1e-9), 1e-9),
+    (dict(method=NonLinearMethods.POWELL, tol=1e-9), 1e-9),
+])
+def test_NonLinearSolver_fixedPointArray(FixedPointArray, settings, rtol):
     """Integration test for `NonLinearSolver` driver:
     Solve cyclic dependency between two systems
     exchanging numpy arrays.
     """
     top = FixedPointArray('top')
 
-    solver = top.add_driver(NonLinearSolver('solver', tol=1e-9))
+    solver = top.add_driver(NonLinearSolver('solver', **settings))
     solver.runner.set_init({'a.x.value': np.r_[-0.25, 1.04, 5.2]})
     top.run_drivers()
 
@@ -1161,7 +1168,7 @@ def test_NonLinearSolver_fixedPointArray(FixedPointArray):
         0.5 * (3 - np.sqrt(5)),
         0.5 * (3 + np.sqrt(5)),
     ]
-    assert top.a.x.value == pytest.approx(expected)
+    assert top.a.x.value == pytest.approx(expected, rel=rtol)
 
 
 def test_NonLinearSolver_fixedPointArray_rerun(FixedPointArray, caplog):
@@ -1204,3 +1211,29 @@ def test_NonLinearSolver_fixedPointArray_rerun(FixedPointArray, caplog):
     )
     # Check solution
     assert top.a.x.value == pytest.approx(expected)
+
+
+@pytest.mark.parametrize("tol, expected", [
+    ('auto', does_not_raise()),
+    (1e-6, does_not_raise()),
+    (0.0, does_not_raise()),
+    (None, does_not_raise()),
+    (1, pytest.raises(TypeError)),
+    (True, pytest.raises(TypeError)),
+    (-1e-6, pytest.raises(ValueError)),
+    ('foo', pytest.raises(ValueError)),
+])
+def test_NonLinearSolver_tol(FixedPointArray, tol, expected):
+    """Check expected behaviour for various values of `tol`.
+    Note:
+    -----
+    At present, errors may be raised at driver construction
+    or at driver execution. This should be fixed in a future revision,
+    as illegal types or values should be captured at construction.
+    """
+    system = FixedPointArray('system')
+
+    with expected:
+        solver = system.add_driver(NonLinearSolver('solver', tol=tol))
+        solver.runner.set_init({'a.x.value': np.r_[-0.25, 1.04, 5.2]})
+        system.run_drivers()
