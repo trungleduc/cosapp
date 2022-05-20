@@ -25,17 +25,22 @@ def caplog_messages(caplog):
     return extractor
 
 
-def test_singlept1(set_master_system):
+@pytest.mark.parametrize("settings, rtol", [
+    (dict(), 1e-15),  # default settings
+    (dict(method=NonLinearMethods.NR, tol='auto'), 1e-15),
+    (dict(method=NonLinearMethods.NR, tol=1e-6), 1e-8),
+])
+def test_singlept1(set_master_system, settings, rtol):
     s = Multiply2("MyMult")
-    d = s.add_driver(NonLinearSolver("solver", method=NonLinearMethods.NR))
+    d = s.add_driver(NonLinearSolver("solver", **settings))
 
     s.p_in.x = 1.0
     s.K1 = s.K2 = 1.0
 
-    d.add_unknown("inwards.K1").add_equation("p_out.x == 100")
+    d.add_unknown("K1").add_equation("p_out.x == 100")
     s.call_setup_run()
     d.run_once()
-    assert s.K1 == pytest.approx(100, rel=1e-5)
+    assert s.K1 == pytest.approx(100, rel=rtol)
 
 
 def test_singlept2(set_master_system):
@@ -51,8 +56,8 @@ def test_singlept2(set_master_system):
     s.call_setup_run()
     d.run_once()
 
-    assert s.K1 == pytest.approx(10, rel=1e-5)
-    assert s.K2 == pytest.approx(10, rel=1e-5)
+    assert s.K1 == pytest.approx(10, rel=1e-15)
+    assert s.K2 == pytest.approx(10, rel=1e-15)
 
 
 def test_multipts1():
@@ -194,18 +199,19 @@ def test_reusejacobian(caplog, caplog_messages, set_master_system):
     d.add_unknown("inwards.K1").add_equation("p_out.x == 100")
     s.call_setup_run()
     d.run_once()
+    assert s.K1 == pytest.approx(100)
 
     s.K1 = 1.0
     caplog.clear()
     with caplog.at_level(logging.DEBUG):
         d.run_once()
-    assert s.K1 == pytest.approx(100, rel=1e-5)
+    assert s.K1 == pytest.approx(100)
 
     info_messages = caplog_messages(logging.INFO)
     assert len(info_messages) >= 2
     matches = map(
         lambda message: re.search(
-            r"Converged \((\d)+(?:\.\d*)(?:[eE][-]\d+)\) in \d+ iterations, 0 complete, 0 partial Jacobian and 0 Broyden",
+            r"Converged \((\d)+(?:\.\d*)(?:[eE][+-]\d+)\) in \d+ iterations, 0 complete, 0 partial Jacobian and 0 Broyden",
             message,
         ),
         info_messages,
@@ -251,7 +257,7 @@ def test_partialjacobian(caplog, caplog_messages, set_master_system):
     assert "Jacobian matrix: full update" in info_messages
     matches = map(
         lambda r: re.search(
-            r"Converged \((\d)+(?:\.\d*)(?:[eE][-]\d+)\) in \d+ iterations, 1 complete, 0 partial Jacobian and 0 Broyden",
+            r"Converged \((\d)+(?:\.\d*)(?:[eE][+-]\d+)\) in \d+ iterations, 1 complete, 0 partial Jacobian and 0 Broyden",
             r,
         ),
         info_messages,
@@ -294,7 +300,7 @@ def test_partialjacobian_coupledmatrix(caplog, caplog_messages, set_master_syste
     assert len(info_messages) >= 2
     matches = map(
         lambda r: re.search(
-            r"Converged \((\d)+(?:\.\d*)(?:[eE][-]\d+)\) in \d+ iterations, 0 complete, 1 partial Jacobian and \d+ Broyden",
+            r"Converged \((\d)+(?:\.\d*)(?:[eE][+-]\d+)\) in \d+ iterations, 0 complete, 1 partial Jacobian and \d+ Broyden",
             r,
         ),
         info_messages,
@@ -309,10 +315,10 @@ def test_partialjacobian_coupledmatrix(caplog, caplog_messages, set_master_syste
 
 
 def test_partialjacobian_independentmatrix(caplog, caplog_messages, set_master_system):
-    """Trivial linear problem with imposed incorrect Jacobian matrix"""
+    """Trivial linear problem with imposed, incorrect Jacobian matrix"""
     s = Multiply2("MyMult")
     d = s.add_driver(
-        NonLinearSolver("solver", method=NonLinearMethods.NR, factor=0.1)
+        NonLinearSolver("solver", method=NonLinearMethods.NR, factor=1.0, tol='auto')
     )
 
     s.p_in.x = 1.0
@@ -320,8 +326,8 @@ def test_partialjacobian_independentmatrix(caplog, caplog_messages, set_master_s
     s.K2 = 1.0
 
     d.add_unknown(["K1", "K2"])
-    d.add_equation("K1 == 100", reference="norm")
-    d.add_equation("K2 == 50", reference="norm")
+    d.add_equation("K1 == 100", reference=1.0)
+    d.add_equation("K2 == 50", reference=1.0)
     s.call_setup_run()
     # Set tolerance level for Jacobian update criterion
     d.options['jac_update_tol'] = 0.1
@@ -330,7 +336,8 @@ def test_partialjacobian_independentmatrix(caplog, caplog_messages, set_master_s
     assert s.K2 == pytest.approx(50, rel=1e-5)
 
     s.K1 = s.K2 = 1.0
-    d.jac = np.array([[0.039, 0], [0, -3]])
+    # Impose Jacobian matrix; exact matrix is identity
+    d.jac = np.array([[1, 0], [0, -3.2]])
     d.jac_lup = lu_factor(d.jac)
     d.runner.solution.clear()
 
@@ -342,11 +349,12 @@ def test_partialjacobian_independentmatrix(caplog, caplog_messages, set_master_s
     assert len(info_messages) >= 2
     matches = map(
         lambda r: re.search(
-            r"Converged \((\d)+(?:\.\d*)(?:[eE][-]\d+)\) in \d+ iterations, 0 complete, 1 partial Jacobian and \d+ Broyden",
+            r"Converged \((\d)+(?:\.\d*)(?:[eE][+-]\d+)\) in \d+ iterations, 0 complete, 1 partial Jacobian and \d+ Broyden",
             r,
         ),
         info_messages,
     )
+    # print("\n".join(info_messages))
     assert any(matches)
 
     debug_messages = caplog_messages(logging.DEBUG)
@@ -415,7 +423,7 @@ def test_NumericalSolver_linear_nonlinear(caplog, caplog_messages, set_master_sy
     
     matches = map(
         lambda record: re.search(
-            r"Converged \((\d)+(?:\.\d*)(?:[eE][-]\d+)\) in \d+ iterations, \d+ complete, 0 partial Jacobian and \d+ Broyden",
+            r"Converged \((\d)+(?:\.\d*)(?:[eE][+-]\d+)\) in \d+ iterations, \d+ complete, 0 partial Jacobian and \d+ Broyden",
             record.msg,
         ),
         caplog.records,

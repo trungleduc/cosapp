@@ -1,8 +1,16 @@
 """
 Module provides dispatch to different non-linear algorithms.
 """
+from __future__ import annotations
+import abc
 import logging
-from typing import Callable, Sequence, Union, Tuple, Optional, Dict, Any, Iterable
+import inspect
+from numbers import Number
+from typing import (
+    Callable, Optional, Union,
+    Sequence, Tuple, Dict, Any,
+    TypeVar, Type,
+)
 
 import numpy
 from scipy.linalg import lu_factor, lu_solve, LinAlgWarning
@@ -15,95 +23,173 @@ from cosapp.utils.logging import LogLevel
 logger = logging.getLogger(__name__)
 
 
-class NumericSolver:
-    """Class defining root routine."""
+ConcreteSolver = TypeVar("ConcreteSolver", bound="BaseNumericSolver")
+RootFunction = Callable[[Sequence[float], Any], numpy.ndarray]
+
+
+class BaseNumericalSolver(abc.ABC):
+
+    def __init__(self, options={}) -> None:
+        self.__options = dict(options)
+
+    @property
+    def options(self) -> Dict[str, Any]:
+        return self.__options
 
     @classmethod
-    def root(cls,
-             fun: Callable[[Sequence[float], Union[float, str], bool], numpy.ndarray],
-             x0: Sequence[float],
-             args: Tuple[Union[float, str]] = (),
-             method: NonLinearMethods = NonLinearMethods.POWELL,
-             jac=None,
-             tol=None,
-             callback=None,
-             options: Optional[Dict[str, Any]] = None) -> Union[SolverResults, optimize.OptimizeResult]:
-        """Try to cancel residues produced by `fun` starting with x0 as initial solution.
+    def from_options(cls: Type[ConcreteSolver], options: Dict[str, Any]) -> ConcreteSolver:
+        solver = cls()
+        solver.transfer_options(options)
+        return solver
+
+    def transfer_options(self, options: Dict[str, Any]) -> None:
+        settings = self.options
+        for key in settings.keys():
+            try:
+                settings[key] = options.pop(key)
+            except KeyError:
+                continue
+
+    @abc.abstractmethod
+    def solve(
+        self,
+        fun: RootFunction,
+        x0: Sequence[float],
+        args: Tuple[Any] = tuple(),
+        *other_args, **kwargs,
+    ) -> Union[SolverResults, optimize.OptimizeResult]:
+        pass
+
+
+class NumpySolver(BaseNumericalSolver):
+    """Encapsulation of `scipy.optimize.root`
+    """
+    def __init__(self, method: str, options={}) -> None:
+        """
+        Parameters
+        ----------
+        method: str
+            Method forwarded to `scipy.optimize.root`
+        options: Dict[str, Any], optional
+            A dictionary of solver options. E.g. `tol` or `max_iter`
+        """
+        self._method = method
+        super().__init__(options)
+        try:
+            self.options.pop('verbose')
+        except KeyError:
+            pass
+
+    def solve(self,
+        fun: RootFunction,
+        x0: Sequence[float],
+        args: Tuple[Union[float, str]] = (),
+        jac=None,
+        callback=None,
+    ) -> optimize.OptimizeResult:
+        """Cancel residues produced by `fun` starting with `x0` as initial guess.
 
         Parameters
         ----------
-        fun : Callable[[Sequence[float], Union[float, str]], numpy.ndarray[float]]
+        fun : Callable[[Sequence[float], Any], numpy.ndarray[float]]
             Callable residues function
         x0 : Sequence[float]
             Initial solution guess
-        args : Tuple[Union[float, str], ...]
-            Additional arguments for `fun` - first one being the time reference
-        method : NonLinearMethods
-            Algorithm to use
-        jac : Callable[[Sequence[float], Union[float, str]], numpy.ndarray[float]], optional
-            Callable providing the jacobian matrix; None if not provided (default: None)
-        tol : float, optional
+        args : Tuple[Any, ...]
+            Additional arguments passed to `fun`
+        jac : bool or callable, optional
+            If `jac` is a Boolean and is `True`, `fun` is assumed to return
+            the value of Jacobian along with the objective function.
+            If `False`, the Jacobian will be estimated numerically.
+            `jac` can also be a callable returning the Jacobian of `fun`.
+            In this case, it must accept the same arguments as `fun`.
+            (default: `None`)
         callback : Callable, optional
-        options : dict, optional
-            A dictionary of solver options. E.g. tol or max_iter
+            Optional callback function. It is called on every iteration as `callback(x, r)`,
+            where x is the current solution and r the corresponding residual.
 
         Returns
         -------
-        SolverResults or scipy.optimize.OptimizeResult
+        scipy.optimize.OptimizeResult
             The solution represented as a OptimizeResult object. Important attributes are: x the solution array,
             success a Boolean flag indicating if the algorithm exited successfully and message which describes the
             cause of the termination. See :py:class:`cosapp.core.numerics.basics.SolverResults` for a description
             of other attributes.
         """
+        x0 = numpy.atleast_1d(x0)
 
-        if not isinstance(x0, Iterable):
-            x0 = numpy.asarray([x0])
+        results = optimize.root(
+            fun, x0, args=args,
+            method=self._method,
+            jac=jac,
+            tol=self.options.get('tol', None),
+            callback=callback,
+            options=self.options,
+        )
+        results.jac_lup = (None, None)
+        if 'jac' in results:
+            try:
+                results.jac_lup = lu_factor(results.jac, check_finite=False)
+            except (ValueError, LinAlgWarning) as err:  # Silent LU decomposition failure
+                logger.debug(f"Silent error: {err}")
 
-        if method == NonLinearMethods.NR:
-            return cls._cosapp_root(fun, x0, args=args, options=options)
-        else:
-            if 'verbose' in options:
-                options.pop('verbose')
-            results = optimize.root(fun, x0, args=args, method=method.value, jac=jac, tol=tol, callback=callback,
-                                    options=options)
-            results.jac_lup = (None, None)
-            if 'jac' in results:
-                try:
-                    results.jac_lup = lu_factor(results.jac, check_finite=False)
-                except (ValueError, LinAlgWarning) as err:  # Silent LU decomposition failure
-                    logger.debug(f"Silent error: {err}")
+        return results
 
-            return results
 
-    @classmethod
-    def _cosapp_root(cls,
-                     fresidues: Callable[[Sequence[float], Union[float, str], bool], numpy.ndarray],
-                     x0: Sequence[float],
-                     args: Tuple[Union[float, str]] = (),
-                     options: Optional[Dict[str, Any]] = None) -> SolverResults:
+def get_kwargs():
+    """Returns kwargs as a dictionary, using `inspect.currentframe`
+    """
+    frame = inspect.currentframe().f_back
+    keys, _, _, values = inspect.getargvalues(frame)
+    kwargs = {}
+    for key in keys:
+        if key != 'self':
+            kwargs[key] = values[key]
+    return kwargs
+
+
+class CustomSolver(BaseNumericalSolver):
+    """Custom Newton-Raphson solver.
+    """
+    def __init__(
+        self,
+        tol='auto',
+        factor=1.0,
+        max_iter=100,
+        verbose=False,
+        eps=2**(-23),
+        jac_update_tol=0.01,
+        history=False,
+        partial_jac=True,
+        partial_jac_tries=5,
+    ):
+        options = get_kwargs()
+        super().__init__(options)
+
+    def solve(
+        self,
+        fresidues: RootFunction,
+        x0: Sequence[float],
+        args: Tuple[Union[float, str]] = (),
+        jac=None,
+        recorder=None,
+        **options,
+    ) -> SolverResults:
         """Customized Newton-Raphson algorithm to solve `fresidues` starting with `x0`.
 
         Parameters
         ----------
-        fresidues : Callable[[Sequence[float], Union[float, str]], numpy.ndarray[float]]
+        fresidues : Callable[[Sequence[float], Any], numpy.ndarray[float]]
             Callable residues function
         x0 : Sequence[float]
             Initial solution guess
-        args : Tuple[Union[float, str], ...]
-            Additional arguments for `fun` - first one being the time reference
+        args : Tuple[Any, ...]
+            Additional arguments for `fun`
         options : dict, optional
-            A dictionary of solver options. E.g. tol or max_iter
+            A dictionary of problem-dependent solver options.
 
         Options
         -------
-        eps : float
-            Relative perturbation to compute derivative by finite differences.
-        tol : float
-            Convergence tolerance criteria
-        factor : float, optional
-            Relaxation factor
-        max_iter : int
-            Maximum number of iterations
         jac_lup : (ndarray[float], ndarray[int]), optional
             LU decomposition of Jacobian given as tuple (LU, perm) to reuse as initial direction
         jac : ndarray, optional
@@ -118,52 +204,45 @@ class NumericSolver:
             Max absolute step for parameters iterated by solver.
         rel_step : numpy.ndarray
             Max relative step for parameters iterated by solver.
-        history : bool, optional
-            Store the history trace of the resolution; default False.
-        jac_update_tol : float, optional
-            Tolerance level for Jacobian matrix update, based on nonlinearity estimation; default 0.01
 
         Returns
         -------
-        SolverResults or scipy.optimize.OptimizeResult
-            The solution represented as a OptimizeResult object. Important attributes are: x the solution array,
-            success a Boolean flag indicating if the algorithm exited successfully and message which describes the
-            cause of the termination. See :py:class:`cosapp.core.numerics.basics.SolverResults` for a description
-            of other attributes.
+        SolverResults
+            The solution represented as a `SolverResults` object.
+            See :py:class:`cosapp.core.numerics.basics.SolverResults` for details.
         """
-        verbose = options.get('verbose', False)
+        solver_options = self.options
+        verbose = solver_options.get('verbose', False)
         log_level = LogLevel.INFO if verbose else LogLevel.DEBUG
-        it_solver = 0
+        jac_update_tol = solver_options.get('jac_update_tol', 0.01)
+        jac_rel_perturbation = solver_options['eps']
+        factor_ref = factor = solver_options['factor']
+        history = solver_options.get('history', False)
 
-        jac_rel_perturbation = options['eps']
-        factor_ref = factor = options['factor']
-        jac = options.get('jac', None)
         if jac is not None:
             jac = numpy.asarray(jac)
         jac_lu, piv = options.get('jac_lup', (None, None))
         calc_jac = options.get('compute_jacobian', True) or jac is None or jac.shape[1] != x0.shape[0]
-        jac_update_tol = options.get('jac_update_tol', 0.01)
-        recorder = options['recorder']
-        history = options.get('history', False)
-        trace = list()
 
-        def calc_jacobian(x: numpy.ndarray,
-                          residues: numpy.ndarray,
-                          it_jac: int,
-                          it_p_jac: int,
-                          jac: numpy.ndarray=None,
-                          r_indices_to_update=set()) -> Tuple[numpy.ndarray, int, int]:
-
+        def calc_jacobian(
+            x: numpy.ndarray,
+            residues: numpy.ndarray,
+            it_jac: int,
+            it_p_jac: int,
+            jac: numpy.ndarray=None,
+            r_indices_to_update=set(),
+        ) -> Tuple[numpy.ndarray, int, int]:
+            """Estimate function gradient with respect to x"""
             n = x.size
             if jac is None or jac.shape != (n, n):
                 new_jac = numpy.zeros((n, n), dtype=float)
-                x_indices_to_update = set(range(n))
+                x_indices_to_update = list(range(n))
             else:
                 new_jac = jac.copy()
                 ncol = new_jac.shape[1]
                 x_indices_to_update = set()
                 for i in r_indices_to_update:
-                    x_indices_to_update.update([j for j in range(ncol) if new_jac[i, j] != 0])
+                    x_indices_to_update.update(j for j in range(ncol) if new_jac[i, j] != 0)
 
             x_copy = x.copy()
 
@@ -189,7 +268,7 @@ class NumericSolver:
             return new_jac, it_jac, it_p_jac
 
         logger.debug("NR - Reference call")
-        x = numpy.array(x0, dtype=float)
+        x = numpy.array(x0, dtype=numpy.float64).flatten()
         r = fresidues(x, *args)
         r_norm = numpy.linalg.norm(r, numpy.inf)
         logger.log(log_level, f"Initial residue: {r_norm}")
@@ -205,24 +284,66 @@ class NumericSolver:
         check_numerical_features('abs_step', numpy.inf)
         check_numerical_features('rel_step', numpy.inf)
 
-        if history:
-            trace.append({"x": x.copy(), "residues": r.copy()})
+        it_solver = 0
         if recorder is not None:
-            recorder.record_state(str(it_solver), 'ok', )
+            record_state = lambda iter: recorder.record_state(str(iter), 'ok',)
+        else:
+            record_state = lambda iter: None
 
         if not calc_jac:
             logger.debug('Reuse of previous Jacobian matrix')
 
-        tol, max_iter = options['tol'], options['max_iter']
-        p_jac, p_jac_tries = options['partial_jac'], options['partial_jac_tries']
+        tol = solver_options['tol']
+        if tol is None:
+            tol = 'auto'
+        elif isinstance(tol, str):
+            if tol != 'auto':
+                raise ValueError(f"Tolerance must be a float, None, or 'auto'.")
+        elif not isinstance(tol, Number):
+            raise TypeError(f"Tolerance must be a number, None, or 'auto'; got {tol!r}")
+        
+        auto_tol = (tol == 'auto')
+        if auto_tol:
+            tol = 0.0
+            must_update_tol = lambda it: it % 4 == 0
+        elif tol < 0:
+            raise ValueError(f"Tolerance must be non-negative (got {tol})")
+        else:
+            must_update_tol = lambda it: False
+
+        results.trace = trace = list()
+        if history:
+            record = {
+                "x": x.copy(),
+                "residues": r.copy(),
+                "tol": tol,
+            }
+            trace.append(record)
+
+        max_iter = solver_options['max_iter']
+        p_jac = solver_options['partial_jac']
+        p_jac_tries = solver_options['partial_jac_tries']
         it_jac, it_p_jac = 0, 0  # number of full and partial evalutions of the Jacobian
         n_broyden_update = 0
         dr = numpy.zeros_like(r)
         dx = numpy.full_like(r, numpy.nan)
 
+        rtol_x = 1e-14
+        epsilon = numpy.finfo(numpy.float64).eps
+        logger.log(
+            LogLevel.FULL_DEBUG,
+            "\t".join([
+                f"iter #{it_solver}",
+                f"tol = {tol:.2e}",
+                f"|R| = {r_norm}",
+                f"x = {x}",
+            ])
+        )
+
         try:
-            res_index_to_update = {}
+            res_index_to_update = set()
             consecutive_p_jac = 0
+            prev_tol = -1.0
 
             while r_norm > tol and it_solver < max_iter:
                 logger.log(log_level, f'Iteration {it_solver}')
@@ -234,10 +355,11 @@ class NumericSolver:
                     else:
                         consecutive_p_jac += 1
 
-                    jac, it_jac, it_p_jac = calc_jacobian(x, r, it_jac, it_p_jac,
-                                                          jac, res_index_to_update)
-
-                    jac_lu, piv = cls.__lu_factor(jac)  # may raise an exception
+                    jac, it_jac, it_p_jac = calc_jacobian(
+                        x, r, it_jac, it_p_jac,
+                        jac, res_index_to_update,
+                    )
+                    jac_lu, piv = self.lu_factor(jac)  # may raise an exception
 
                 elif it_solver > 0:
                     # Good Broyden update - source: https://nickcdryan.com/2017/09/16/broydens-method-in-python/
@@ -245,11 +367,25 @@ class NumericSolver:
                     n_broyden_update += 1
                     corr = numpy.outer((dr - jac.dot(dx)), dx) / dx.dot(dx)
                     jac += corr
-                    jac_lu, piv = cls.__lu_factor(jac)
+                    jac_lu, piv = self.lu_factor(jac)
 
-                it_solver += 1
+                if must_update_tol(it_solver):
+                    norm_J = numpy.linalg.norm(jac, numpy.inf)
+                    norm_x = numpy.linalg.norm(x, numpy.inf)
+                    noise = epsilon * norm_J * norm_x
+                    tol = 16 * noise
+                    logger.log(
+                        LogLevel.FULL_DEBUG,
+                        f"iter #{it_solver}; noise level = {noise}; tol = {tol}; |J| = {norm_J}; |x| = {norm_x}"
+                    )
+                    if tol == prev_tol:
+                        logger.log(log_level, f"Numerical saturation detected at iteration {it_solver}; x = {x}")
+                        break
+                    prev_tol = tol
 
                 dx = -lu_solve((jac_lu, piv), r)
+                it_solver += 1
+
                 # Compute relaxation factors from max absolute and relative steps
                 with numpy.errstate(invalid='ignore', divide='ignore'):
                     abs_x = numpy.abs(x)
@@ -280,9 +416,18 @@ class NumericSolver:
 
                 new_r = fresidues(x, *args)
                 r_norm = numpy.linalg.norm(new_r, numpy.inf)
-                logger.log(log_level, f'Residue: {r_norm:.5g}')
+                # logger.log(log_level, f'Residue: {r_norm:.5g}')
+                logger.log(
+                    LogLevel.DEBUG,
+                    "\t".join([
+                        f"iter #{it_solver}",
+                        f"tol = {tol:.2e}",
+                        f"|R| = {r_norm}",
+                        f"x = {x}",
+                    ])
+                )
 
-                if numpy.allclose(x, x_prev, rtol=1e-14):
+                if numpy.allclose(x, x_prev, rtol=rtol_x, atol=0):
                     logger.log(log_level, f"Fixed point detected: x = {x}, dx = {x - x_prev}")
                     break
 
@@ -298,11 +443,16 @@ class NumericSolver:
                 r, dr = new_r, new_r - r
 
                 if history:
-                    trace.append({"x": x.copy(), "residues": r.copy()})
+                    record = {
+                        "x": x.copy(),
+                        "residues": r.copy(),
+                        "tol": tol,
+                    }
                     if calc_jac:
-                        trace[-1]["jac"] = jac.copy()
-                if recorder is not None:
-                    recorder.record_state(str(it_solver), 'ok', )
+                        record["jac"] = jac.copy()
+                    trace.append(record)
+                
+                record_state(it_solver)
 
                 if res_index_to_update:
                     factor = factor_ref
@@ -313,35 +463,37 @@ class NumericSolver:
                     calc_jac = False
                     logger.log(LogLevel.FULL_DEBUG, f"New relaxation factor {factor}.")
 
-        except (ValueError, LinAlgWarning) as err:
+        except (ValueError, LinAlgWarning):
             is_nil = (jac == 0)
             zero_rows = numpy.argwhere(is_nil.all(axis=1)).flatten()
             zero_cols = numpy.argwhere(is_nil.all(axis=0)).flatten()
             results.success = False
             results.message = 'Singular {}x{} Jacobian matrix'.format(*jac.shape)
             results.jac_errors = {'unknowns': zero_cols, 'residues': zero_rows}
+        
+        else:
+            results.x = x
+            results.jac_lup = (jac_lu, piv)
+            results.jac_calls = it_jac + it_p_jac
+            results.fres_calls = it_solver
+            results.success = (r_norm <= tol)
+            
+            status = f'Converged' if results.success else 'Not converged'
+            message = (
+                f"{status} ({r_norm:.4e}) in {it_solver} iterations,"
+                f" {it_jac} complete, {it_p_jac} partial Jacobian and"
+                f" {n_broyden_update} Broyden evaluation(s)"
+                f" (tol = {tol:.1e})"
+            )
+            results.message = f"   -> {message}"
+
+        finally:
             results.jac = jac
+            results.tol = tol
             return results
 
-        results.x = x
-        results.jac = jac
-        results.jac_lup = (jac_lu, piv)
-        results.jac_calls = it_jac + it_p_jac
-        results.fres_calls = it_solver
-        results.success = (r_norm <= tol)
-        
-        convergence = f'Converged' if results.success else 'Not converged'
-        results.message = (
-            f'   -> {convergence} ({r_norm:.4e}) in {it_solver} iterations,'
-            f' {it_jac} complete, {it_p_jac} partial Jacobian and {n_broyden_update}'
-            f' Broyden evaluation(s)')
-        results.trace = trace
-
-        return results
-
-
     @staticmethod
-    def __lu_factor(matrix: numpy.ndarray):
+    def lu_factor(matrix: numpy.ndarray):
         lu, piv = lu_factor(matrix, check_finite=True)
         min_diag = numpy.abs(lu.diagonal()).min()
         if min_diag < 1e-14:
@@ -351,4 +503,18 @@ class NumericSolver:
         return lu, piv
 
 
-root = NumericSolver.root
+def root(
+    fun: RootFunction,
+    x0: Sequence[float],
+    args: Tuple[Any] = tuple(),
+    method: NonLinearMethods = NonLinearMethods.POWELL,
+    options: Dict[str, Any] = {},
+) -> Union[SolverResults, optimize.OptimizeResult]:
+
+    if method == NonLinearMethods.NR:
+        solver = CustomSolver.from_options(options)
+        return solver.solve(fun, x0, args, **options)
+    
+    else:
+        solver = NumpySolver(method.value, options)
+        return solver.solve(fun, x0, args)

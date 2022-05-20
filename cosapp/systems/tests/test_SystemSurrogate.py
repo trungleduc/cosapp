@@ -23,7 +23,7 @@ from cosapp.tests.library.systems.basicalgebra import (
     Sys_PME2MUG_G_1E,
     Sys_Sum3_2Eq_2Mult,
     Sys_Unknown_1Eq_2Mult_Getter,
-    Sys_Lopped_Div_Int_Div,
+    Sys_Looped_Div_Int_Div,
 )
 from cosapp.tests.library.systems.vectors import Strait1dLine, Splitter1d
 from cosapp.utils.testing import get_args, no_exception
@@ -874,7 +874,7 @@ def test_System_make_surrogate_execution_0(p1e2mg, data_in):
 
 @pytest.mark.filterwarnings("ignore:The.*unknowns/transients are not part of the training set")
 def test_System_make_surrogate_regtest_transient(tmp_path, cubic_DoE):
-    MySys = Sys_Lopped_Div_Int_Div('LoopSys')
+    MySys = Sys_Looped_Div_Int_Div('LoopSys')
     data = {
         'h_in.x': numpy.linspace(-3, 10., 10),
         'DI.v': numpy.linspace(-1., 4., 5),
@@ -884,20 +884,18 @@ def test_System_make_surrogate_regtest_transient(tmp_path, cubic_DoE):
     MySys.DLDI.make_surrogate(training_data_, FloatKrigingSurrogate)
     MySys.DLDI.dump_surrogate(tmp_path / "myfile.obj")
 
-    MySys2 = Sys_Lopped_Div_Int_Div('LoopSys2')
+    MySys2 = Sys_Looped_Div_Int_Div('LoopSys2')
     MySys2.DLDI.load_surrogate(tmp_path / "myfile.obj")
-    ee = MySys2.add_driver(EulerExplicit(dt=1, time_interval=[0, 10], order=2))
-    nls = ee.add_child(NonLinearSolver('nls', factor=1.))
-    rsc = nls.add_driver(RunSingleCase('rsc', verbose=False))
+    ee = MySys2.add_driver(EulerExplicit(dt=1, time_interval=[0, 10]))
+    ee.add_child(NonLinearSolver('nls', max_iter=20, tol=1e-12))
     ee.set_scenario(
         init = {'DLDI.DI.h': 'DLDI.DI.h0', 'DLDI.DI.v': 'DLDI.DI.v0'}
     )
     MySys2.run_drivers()
 
-    MySys3 = Sys_Lopped_Div_Int_Div('LoopSys2')
-    ee3 = MySys3.add_driver(EulerExplicit(dt=1, time_interval=[0, 10], order=2))
-    nls3 = ee3.add_child(NonLinearSolver('nls', factor=1.))
-    rsc3 = nls3.add_driver(RunSingleCase('rsc', verbose=False))
+    MySys3 = Sys_Looped_Div_Int_Div('LoopSys3')
+    ee3 = MySys3.add_driver(EulerExplicit(dt=1, time_interval=[0, 10]))
+    ee3.add_child(NonLinearSolver('nls', max_iter=20))
     ee3.set_scenario(
         init = {'DLDI.DI.h': 'DLDI.DI.h0', 'DLDI.DI.v': 'DLDI.DI.v0'}
     )

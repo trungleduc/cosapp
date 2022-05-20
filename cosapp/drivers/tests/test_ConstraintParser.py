@@ -58,7 +58,6 @@ def test_ConstraintParser_types():
 ])
 def test_ConstraintParser_parse(expression, expected):
     constraints = ConstraintParser.parse(expression)
-    print(expected)
     assert constraints == expected
 
 
