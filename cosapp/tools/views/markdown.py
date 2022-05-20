@@ -26,7 +26,7 @@ class PortMarkdownFormatter:
         port = self.port
         name = port.full_name() if contextual else port.name
         doc = []
-        doc.extend([f"`{name}`: {type(port).__name__}", ""])
+        doc.extend([f"`{name}`: {type(port).__name__}"])
         doc.extend(self.var_repr())
         return doc
 
@@ -64,7 +64,7 @@ class PortMarkdownFormatter:
     def wrap(cls, content: Union[str, List[str]]) -> List[str]:
         if isinstance(content, str):
             content = [content]
-        header = ["<!-- -->|<!-- -->", "---|---"]
+        header = ["|  |  |", "---|---"]
         doc = [cls.div_header(), ""]
         doc.extend(header)
         doc.extend(content)
@@ -80,6 +80,7 @@ class PortMarkdownFormatter:
             r".cosapp-port-table >table >thead{display: none}",  # suppress empty table header
             r".cosapp-port-table tbody tr{background: rgba(255, 255, 255, 0)!important}",  # override even/odd coloring
             r".cosapp-port-table tbody tr:hover{background: #e1f5fe!important}",  # set hover color
+            r".cosapp-port-table >table {margin-left: unset; margin-right: unset}",
             r"</style>",
         ])
 
