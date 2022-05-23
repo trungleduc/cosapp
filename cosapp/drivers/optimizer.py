@@ -122,7 +122,7 @@ class Optimizer(AbstractSolver):
             allow_none = True,
         )
         self.options.declare(
-            'eps', 1.5e-08, dtype=float, lower=1.5e-8, upper=1.,
+            'eps', 2**(-26), dtype=float, lower=2**(-26), upper=1.,
             desc="Step size used for numerical approximation of the Jacobian.",
         )
         self.options.declare(
@@ -139,7 +139,7 @@ class Optimizer(AbstractSolver):
         )
         self._filter_options(kwargs, aliases={'tol': 'ftol', 'max_iter': 'maxiter'})
 
-    def set_objective(self, expression: str) -> None:
+    def set_minimum(self, expression: str) -> None:
         """Set the scalar objective function to be minimized.
 
         Parameters
@@ -153,6 +153,35 @@ class Optimizer(AbstractSolver):
         self._objective = objective = EvalString(expression, self.owner)
         if objective.constant:
             warnings.warn(f"Objective is constant {objective.eval()}")
+
+    def set_maximum(self, expression: str) -> None:
+        """Set the scalar objective function to be maximized.
+
+        Parameters
+        ----------
+        expression : str
+            The objective expression to be maximized.
+        """
+        self.set_minimum(f"-({expression})")
+
+    def set_objective(self, expression: str) -> None:
+        """Set the scalar quantity to be minimized.
+        Same as `set_minimum`.
+
+        Note:
+        -----
+        This method is deprecated, and should be replaced by either
+        `set_minimum` or `set_maximum`, depending on the objective.
+
+        Parameters
+        ----------
+        expression : str
+            The objective expression to be minimized.
+        """
+        warnings.warn(
+            "method `set_objective` is deprecated; use `set_minimum` or `set_maximum` instead."
+        )
+        self.set_minimum(expression)
 
     @staticmethod
     def available_methods() -> List[str]:
@@ -409,12 +438,18 @@ class Optimizer(AbstractSolver):
             output = scipy.optimize.minimize(
                 fresidues, x0,
                 args=args,
+                tol=options['ftol'],
                 method=options['method'],
                 bounds=bounds,
                 constraints=constraints,
                 options=sub_options,
                 callback=callback,
             )
+        if output.fun < self.objective:
+            # Solver solution does not correspond to
+            # last system execution; rerun to synch.
+            self._fresidues(output.x)
+            self._record_data()
         return output
 
     def _precompute(self):
