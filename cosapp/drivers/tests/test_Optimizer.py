@@ -68,30 +68,40 @@ def test_Optimizer_available_methods():
     }
 
 
-def test_Optimizer__init__(optim):
+def test_Optimizer__init__(optim: Optimizer):
     assert optim.owner is None
     assert optim.problem is None
     assert optim.raw_problem.shape == (0, 0)
     assert optim.objective is None
 
 
-def test_Optimizer_set_objective(optim):
+def test_Optimizer_set_objective(optim: Optimizer):
     with pytest.raises(AttributeError, match="Owner system is required"):
-        optim.set_objective("foo")
+        optim.set_minimum("foo")
     
     s = CostFunction('s')
+    s.a = 0.0
+    s.x1 = s.x2 = 1.0
     s.run_once()
     s.add_driver(optim)
     assert optim.owner is s
+    assert s.cost > 0
     
-    optim.set_objective('cost')
+    with pytest.warns(UserWarning, match="deprecated"):
+        optim.set_objective('cost')
+        assert optim.objective == s.cost
+
+    optim.set_minimum('cost')
     assert optim.objective == s.cost
 
-    optim.set_objective('cost + 1')
+    optim.set_minimum('cost + 1')
     assert optim.objective == s.cost + 1
 
+    optim.set_maximum('cost')
+    assert optim.objective == -s.cost
 
-def test_Optimizer_add_unknown(optim):
+
+def test_Optimizer_add_unknown(optim: Optimizer):
     with pytest.raises(AttributeError, match="Owner system is required"):
         optim.add_unknown("foo")
     
@@ -114,7 +124,7 @@ def test_Optimizer_Rosenbrock():
     optim = Optimizer("optim", verbose=True)
     s.add_driver(optim)
 
-    optim.set_objective("rosenbrock.sum()")
+    optim.set_minimum("rosenbrock.sum()")
     optim.add_unknown("x")
 
     s.x = np.array([1.3, 0.7, 0.8, 1.9, 1.2])
@@ -128,7 +138,7 @@ def test_Optimizer_compute():
     s = CostFunction("system")
 
     optim = s.add_driver(Optimizer("optim", verbose=1))
-    optim.set_objective("cost")
+    optim.set_minimum("cost")
     optim.add_unknown(["x1", "x2"])
 
     s.a = 7.0
@@ -145,7 +155,7 @@ def test_Optimizer_constrained():
     s = Constraint("s")
 
     optim = s.add_driver(Optimizer("optim", verbose=1))
-    optim.set_objective("-objective")
+    optim.set_maximum("objective")
     optim.add_unknown(["x1", "x2"])
 
     # Not constrained
@@ -169,7 +179,7 @@ def test_Optimizer_compute_with_equality():
     s = CostFunction("system")
     optim = s.add_driver(Optimizer("optim", tol=1e-12))
 
-    optim.set_objective("cost")
+    optim.set_minimum("cost")
     optim.add_unknown(["x1", "x2", "a"])
     optim.add_constraints("a**3 == -27")
 
@@ -195,7 +205,7 @@ def test_Optimizer_compute_with_solver_1():
     s.x2 = 100.0
     optim.options["ftol"] = 1.0e-5
 
-    optim.set_objective("cost")
+    optim.set_minimum("cost")
     optim.add_unknown(["x1", "x2"])
 
     solver.add_unknown("a").add_equation("a**3 == -27")
@@ -213,7 +223,7 @@ def test_Optimizer_compute_with_solver_2():
     solver = optim.add_driver(NonLinearSolver("solver", tol='auto'))
 
     # Optimization problem
-    optim.set_objective("2 + (x - 1)**2")
+    optim.set_minimum("2 + (x - 1)**2")
     optim.add_unknown("a")
 
     # Solver problem (solution is x = 2a)
@@ -238,7 +248,7 @@ def test_Optimizer_compute_with_solver_3(caplog):
     solver = optim.add_driver(NonLinearSolver("solver", tol='auto'))
 
     # Optimization problem
-    optim.set_objective("2 + (x - 1)**2")
+    optim.set_minimum("2 + (x - 1)**2")
     optim.add_unknown("sub.a")  # `sub.a` is pulled
 
     # Solver problem (solution is x = 2a)

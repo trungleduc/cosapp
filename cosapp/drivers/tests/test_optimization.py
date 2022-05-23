@@ -61,7 +61,7 @@ def test_Optimizer_integration(system, solver):
 
     optim = system.add_driver(Optimizer("optim"))
 
-    optim.set_objective("load_")
+    optim.set_minimum("load_")
     optim.add_unknown("p_in.x")
     optim.add_child(solver)
 
@@ -80,7 +80,7 @@ def test_Optimizer_integration_upper_bound(system, solver):
 
     optim = system.add_driver(Optimizer("optim"))
 
-    optim.set_objective("load_")
+    optim.set_minimum("load_")
     optim.add_unknown("p_in.x", upper_bound=4.2)
     optim.add_child(solver)
 
@@ -99,7 +99,7 @@ def test_Optimizer_integration_lower_bound(system, solver):
 
     optim = system.add_driver(Optimizer("optim"))
 
-    optim.set_objective("load_")
+    optim.set_minimum("load_")
     optim.add_unknown("p_in.x", lower_bound=4.5)
     optim.add_child(solver)
 
