@@ -2710,7 +2710,7 @@ class System(Module, TimeObserver):
                 loop.add_unknown(unknown_name, **options)
                 loop.add_equation(
                     f"{unknown_name} == {source_name}.{origin}",
-                    reference = 'norm',
+                    reference=1.0,
                 )
 
     def close_loops(self):
