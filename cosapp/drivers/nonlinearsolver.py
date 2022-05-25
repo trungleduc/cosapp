@@ -39,7 +39,7 @@ class NonLinearSolver(AbstractSolver):
     """
 
     __slots__ = (
-        '__method', '__option_aliases', '__trace',
+        '__method', '__option_aliases', '__trace', '__results',
         '__design_unknowns', 'compute_jacobian', 'jac_lup', 'jac',
     )
 
@@ -72,6 +72,7 @@ class NonLinearSolver(AbstractSolver):
         self.__option_aliases = dict()
         self.__set_method(method, **kwargs)
         self.__trace: List[Dict[str, Any]] = list()
+        self.__results: SolverResults = None
 
         self.compute_jacobian = True  # type: bool
             # desc='Should the Jacobian matrix be computed?'
@@ -92,6 +93,13 @@ class NonLinearSolver(AbstractSolver):
     def method(self) -> NonLinearMethods:
         """NonLinearMethods : Selected solver algorithm."""
         return self.__method
+
+    @property
+    def results(self) -> SolverResults:
+        """SolverResults: structure containing solver results,
+        together with additional detail.
+        """
+        return self.__results
 
     def add_child(self, child: AnyDriver, execution_index: Optional[int] = None) -> AnyDriver:
         """Add a child `Driver` to the current `Driver`.
@@ -333,6 +341,7 @@ class NonLinearSolver(AbstractSolver):
                 options=self.options,
             )
 
+            self.__results = results
             self.__trace = getattr(results, "trace", list())
 
             if results.success:

@@ -7,6 +7,7 @@ from io import StringIO
 from collections import OrderedDict
 
 import numpy as np
+import math
 
 from cosapp.utils.testing import assert_keys, get_args, no_exception
 from cosapp.utils.logging import LogFormat, LogLevel
@@ -1464,6 +1465,89 @@ def test_System_loops_control_unknowns():
     s.b.u = 3
     s.run_drivers()
     assert s.a.x == pytest.approx(1, abs=1e-6)
+
+
+def test_System_loop_residue_reference():
+    """Test normalization factor of residues created by `open_loops`.
+
+    Detail on test case:
+    -------------------
+    At equilibrium, the two ends of the connector involved in the loop
+    are nil (with solver accuracy `tol`). We test that if the connector is
+    re-opened after convergence, the associated residue is not renormalized
+    (otherwise, the normalization factor would be of the order of 1/tol).
+    """
+    class A(System):
+        def setup(self):
+            self.add_inward('x', 2.0)
+            self.add_outward('y', 0.0)
+
+        def compute(self):
+            self.y = math.exp(self.x)
+    
+    class B(System):
+        def setup(self):
+            self.add_inward('x', 3.0)
+            self.add_outward('y', 0.0)
+
+        def compute(self):
+            self.y = 1 - self.x
+    
+    class Assembly(System):
+        def setup(self):
+            a = self.add_child(A('a'))
+            b = self.add_child(B('b'))
+
+            # Set inter-dependency between `a` and `b`
+            # Solution is a.x = 0 (or b.x = 1)
+            self.connect(a, b, {'y': 'x', 'x': 'y'})
+
+    s = Assembly('s')
+    # Check that assembled problem is empty, since
+    # `s.a.x` and `s.b.x` are both connected to outputs
+    assert s.get_unsolved_problem().shape == (0, 0)
+
+    s.exec_order = ('a', 'b')
+
+    # Open loops *before* problem equilibration
+    s.open_loops()
+    problem = s.get_unsolved_problem()
+    assert problem.shape == (1, 1)
+    assert set(problem.unknowns) == {'a.inwards.x'}
+    assert set(problem.residues) == {'a.inwards.x == b.outwards.y'}
+    key = 'a.inwards.x == b.outwards.y'
+    residue = problem.residues[key]
+    assert residue.reference == 1.0, "Loop residue should not be normalized"
+    s.close_loops()
+
+    # Solve problem
+    solver = s.add_driver(
+        NonLinearSolver('solver', tol=1e-15, history=True)
+    )
+    s.a.x = 5.0
+    s.run_drivers()
+    # Check that both ends of loop connector are nil
+    assert s.a.x == pytest.approx(0, abs=1e-15)
+    assert s.b.y == pytest.approx(0, abs=1e-15)
+    assert set(solver.problem.residues) == {f"runner[{key}]"}
+    residue = solver.problem.residues[f"runner[{key}]"]
+    assert residue.reference == 1.0, "Loop residue should not be normalized"
+    assert len(solver.results.trace) > 1
+
+    # Open loops *after* problem equilibration
+    s.open_loops()
+    problem = s.get_unsolved_problem()
+    assert problem.shape == (1, 1)
+    assert set(problem.unknowns) == {'a.inwards.x'}
+    assert set(problem.residues) == {key}
+    residue = problem.residues[key]
+    assert residue.reference == 1.0, "Loop residue should not be normalized"
+    s.close_loops()
+
+    # Re-run solver
+    s.run_drivers()
+    # Check that solver did not iterate
+    assert len(solver.results.trace) == 1
 
 
 def test_System_is_input_var(DummyFactory):
