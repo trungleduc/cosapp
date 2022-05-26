@@ -19,3 +19,4 @@
 * [Benoît Caillaud](https://gitlab.com/benoitcaillaud) (benoit.caillaud@inria.fr)
 * [Haris Musaefendic](https://gitlab.com/musaefendic)
 * [Román Lapuente](https://gitlab.com/roman.lapuente)
+* [Peter Cairns](https://gitlab.com/petercairns_akka)
