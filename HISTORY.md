@@ -1,5 +1,25 @@
 # History
 
+## 0.12.2 (2022-05-26)
+
+### New features & API changes
+
+* Automatic tolerance in `NonLinearSolver` (MRs [#148](https://gitlab.com/cosapp/cosapp/-/merge_requests/148) and [#152](https://gitlab.com/cosapp/cosapp/-/merge_requests/152)).
+* `Optimizer.set_objective` is deprecated, in favour of `set_minimum` and `set_maximum` (MR [#150](https://gitlab.com/cosapp/cosapp/-/merge_requests/150)).
+* Loop residues are no longer normalized (MR [#151](https://gitlab.com/cosapp/cosapp/-/merge_requests/151)).
+* Improved type hints for ports, systems and drivers, in functions whose return type depends on arguments, such as `System.add_child`, `add_driver`, *etc.* (MR [#145](https://gitlab.com/cosapp/cosapp/-/merge_requests/145)).
+
+### Documentation
+
+* Updated tutorials (MRs [#144](https://gitlab.com/cosapp/cosapp/-/merge_requests/144), [#147](https://gitlab.com/cosapp/cosapp/-/merge_requests/147) and [#154](https://gitlab.com/cosapp/cosapp/-/merge_requests/154)).
+
+### Bug fixes and code quality
+
+* Fix inconsistent behaviour of recorders (MR [#143](https://gitlab.com/cosapp/cosapp/-/merge_requests/143)).
+* Fix bug on event initialization (MR [#146](https://gitlab.com/cosapp/cosapp/-/merge_requests/146)).
+* Fix bad markdown formatting of ports occurring in `jupyterlab` 3.4 (MR [#149](https://gitlab.com/cosapp/cosapp/-/merge_requests/149)).
+* Fix failed test caused by a regression in `pytest` 7.1 (MR [#142](https://gitlab.com/cosapp/cosapp/-/merge_requests/142)).
+
 ## 0.12.1 (2022-02-25)
 
 ### New features & API changes
