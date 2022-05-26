@@ -2,6 +2,7 @@ import copy
 import numpy
 import pandas
 from io import StringIO
+from numbers import Number
 from typing import (
     Any, Callable, Dict, List, Optional,
     Sequence, Tuple, Union, Iterable,
@@ -485,12 +486,10 @@ class NonLinearSolver(AbstractSolver):
             self.options.declare('max_iter', 500, dtype=int,
                 desc='The maximum number of iterations.')
             # Note: use a power of 2 for `eps`, to guaranty machine-precision accurate gradients in linear problems
-            self.options.declare('eps', 2**(-16), dtype=float, allow_none=True,
-                desc='A suitable step length for the forward-difference approximation of the Jacobian (for fprime=None).'
-                    ' If eps is smaller than machine precision u, it is assumed that the relative errors in the'
-                    ' functions are of the order of u.')
-            self.options.declare('factor', 1.0, dtype=float, allow_none=True, lower=1e-3, upper=1.0,
-                desc='A parameter determining the initial step bound factor * norm(diag * x). Should be in the interval [0.1, 1].')
+            self.options.declare('eps', 2**(-16), dtype=float, allow_none=True, lower=2**(-30),
+                desc='Relative step length for the forward-difference approximation of the Jacobian.')
+            self.options.declare('factor', 1.0, dtype=Number, allow_none=True, lower=1e-3, upper=1.0,
+                desc='A parameter determining the initial step bound factor * norm(diag * x). Should be in interval [0.001, 1].')
             self.options.declare('partial_jac', True, dtype=bool, allow_none=False,
                 desc='Defines if partial Jacobian updates can be computed before a complete Jacobian matrix update.')
             self.options.declare('partial_jac_tries', 10, dtype=int, allow_none=False, lower=1, upper=10,
@@ -509,13 +508,16 @@ class NonLinearSolver(AbstractSolver):
                 desc='Max relative step for parameters iterated by solver.')
             self.options.declare('history', False, dtype=bool, allow_none=False,
                 desc='Request saving the resolution trace.')
+            self.options.declare('tol_update_period', 4, dtype=int, lower=1, allow_none=False,
+                desc="Tolerance update period, in iteration number, when tol='auto'.")
+            self.options.declare('tol_to_noise_ratio', 16, dtype=Number, lower=1.0, allow_none=False,
+                desc="Tolerance-to-noise ratio, when tol='auto'.")
 
         elif self.__method == NonLinearMethods.POWELL:
             self.__option_aliases = {
                 'tol': 'xtol',
                 'max_eval': 'maxfev',
             }
-
             self.options.declare('xtol', 1.0e-7, dtype=float,
                 desc="The calculation will terminate if the relative error between two consecutive iterations is at most tol.")
             self.options.declare('maxfev', 0, dtype=int,
@@ -536,7 +538,6 @@ class NonLinearSolver(AbstractSolver):
                 'min_rel_step': 'xtol',
                 'min_abs_step': 'xatol',
             }
-
             self.options.declare('nit', 100, dtype=int,
                 desc='Number of iterations to perform. If omitted (default), iterate unit tolerance is met.')
             self.options.declare('maxiter', 200, dtype=int,

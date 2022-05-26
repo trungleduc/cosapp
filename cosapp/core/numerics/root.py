@@ -162,6 +162,8 @@ class CustomSolver(BaseNumericalSolver):
         history=False,
         partial_jac=True,
         partial_jac_tries=5,
+        tol_update_period=4,
+        tol_to_noise_ratio=16,
     ):
         options = get_kwargs()
         super().__init__(options)
@@ -305,10 +307,13 @@ class CustomSolver(BaseNumericalSolver):
         auto_tol = (tol == 'auto')
         if auto_tol:
             tol = 0.0
-            must_update_tol = lambda it: it % 4 == 0
+            iter_period = solver_options['tol_update_period']
+            tol_to_noise = solver_options['tol_to_noise_ratio']
+            must_update_tol = lambda it: it % iter_period == 0
         elif tol < 0:
             raise ValueError(f"Tolerance must be non-negative (got {tol})")
         else:
+            tol_to_noise = None
             must_update_tol = lambda it: False
 
         results.trace = trace = list()
@@ -373,7 +378,7 @@ class CustomSolver(BaseNumericalSolver):
                     norm_J = numpy.linalg.norm(jac, numpy.inf)
                     norm_x = numpy.linalg.norm(x, numpy.inf)
                     noise = epsilon * norm_J * norm_x
-                    tol = 16 * noise
+                    tol = tol_to_noise * noise
                     logger.log(
                         LogLevel.FULL_DEBUG,
                         f"iter #{it_solver}; noise level = {noise}; tol = {tol}; |J| = {norm_J}; |x| = {norm_x}"

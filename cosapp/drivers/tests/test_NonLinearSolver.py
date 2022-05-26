@@ -1237,3 +1237,25 @@ def test_NonLinearSolver_tol(FixedPointArray, tol, expected):
         solver = system.add_driver(NonLinearSolver('solver', tol=tol))
         solver.runner.set_init({'a.x.value': np.r_[-0.25, 1.04, 5.2]})
         system.run_drivers()
+
+
+@pytest.mark.parametrize("options, expected", [
+    (dict(tol_to_noise_ratio=1), does_not_raise()),
+    (dict(tol_to_noise_ratio=8), does_not_raise()),
+    (dict(tol_to_noise_ratio=8.0), does_not_raise()),
+    (dict(tol_to_noise_ratio=0.5), pytest.raises(ValueError)),
+    (dict(tol_to_noise_ratio=None), pytest.raises(TypeError)),
+    (dict(tol_update_period=1), does_not_raise()),
+    (dict(tol_update_period=10), does_not_raise()),
+    (dict(tol_update_period=0), pytest.raises(ValueError)),
+    (dict(tol_update_period=-1), pytest.raises(ValueError)),
+    (dict(tol_update_period=8.0), pytest.raises(TypeError)),
+    (dict(tol_update_period=None), pytest.raises(TypeError)),
+    (dict(tol_update_period='auto'), pytest.raises(TypeError)),
+])
+def test_NonLinearSolver_options(options, expected):
+    """Check expert options such as `tol_to_noise_ratio`
+    and `tol_update_period`.
+    """
+    with expected:
+        NonLinearSolver('solver', **options)
