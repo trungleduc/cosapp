@@ -39,14 +39,9 @@ variables:
 
 # default linux environment parameters
 .linux_common_env:
-  image: "continuumio/miniconda3:latest"
+  image: "condaforge/mambaforge:latest"
   before_script:
-    - conda config --add channels conda-forge
-    - conda init bash
-    - source $HOME/.bashrc
     - mkdir -p $HOME/.cosapp.d
-    - conda activate
-    - conda install -y mamba -c conda-forge
 
 # default linux job parameters
 .linux_env:
