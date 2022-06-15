@@ -1116,8 +1116,8 @@ def test_System_active_surrogate_arg(sumg, training_data3, choice, expected):
     (
         "Provider",
         dict(
-            meta_u = pytest.approx(15.0, rel=1e-5),
-            meta_x = pytest.approx(12.5, rel=1e-5),
+            meta_u = pytest.approx(15.0, rel=1e-4),
+            meta_x = pytest.approx(12.5, rel=1e-4),
             u = pytest.approx(15.0, rel=0),
             x = pytest.approx(12.5),
         ),
