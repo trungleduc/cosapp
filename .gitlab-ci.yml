@@ -12,7 +12,7 @@ variables:
 .test_script:
   script:  
     - mamba create -y -n cosapp python=$PYTHON_VERSION
-    - conda activate cosapp
+    - source activate cosapp
     - mamba install -y $COSAPP_DEP
     - pip install . --trusted-host=files.pythonhosted.org
     - python -m pytest 
@@ -39,14 +39,9 @@ variables:
 
 # default linux environment parameters
 .linux_common_env:
-  image: "continuumio/miniconda3:latest"
+  image: "condaforge/mambaforge:latest"
   before_script:
-    - conda config --add channels conda-forge
-    - conda init bash
-    - source $HOME/.bashrc
     - mkdir -p $HOME/.cosapp.d
-    - conda activate
-    - conda install -y mamba -c conda-forge
 
 # default linux job parameters
 .linux_env:
@@ -83,7 +78,7 @@ linux_py39:
     PYTHON_VERSION: "3.9" 
   script:
     - mamba create -y -n cosapp python=$PYTHON_VERSION
-    - conda activate cosapp
+    - source activate cosapp
     - mamba install -y $COSAPP_DEP coverage
     - pip install .
     - coverage erase
@@ -132,7 +127,7 @@ build_doc:
     PYTHON_VERSION : "3.9"
   script:
     - mamba env create --name cosapp --file docs/environment.yml
-    - conda activate cosapp
+    - source activate cosapp
     - pip install .
     # Build the documentation
     - cd docs/
@@ -155,7 +150,7 @@ build_pkg:
     PYTHON_VERSION : "3.9"
   script:
     - mamba create -y -n cosapp python=$PYTHON_VERSION
-    - conda activate cosapp
+    - source activate cosapp
     - mamba install -y $JOB_DEP
     - python setup.py sdist bdist_wheel
     - conda build -c conda-forge --no-test --output-folder ./dist conda.recipe
