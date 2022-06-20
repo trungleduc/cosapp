@@ -64,9 +64,9 @@ class UnknownAnalyzer(SystemAnalyzer):
 
     def filter_problem(self, problem: MathematicalProblem, name=None) -> MathematicalProblem:
         self.check_system()
-        context = self.system
-        if problem.context is not context:
-            raise ValueError(f"problem is not defined on system {context.name!r}")
+        system = self.system
+        if problem.context is not system:
+            raise ValueError(f"problem is not defined on system {system.name!r}")
         if not name:
             name = f"{problem.name}[filtered]"
         filtered = MathematicalProblem(name, problem.context)
@@ -84,19 +84,25 @@ class UnknownAnalyzer(SystemAnalyzer):
             except KeyError:
                 logger.warning(f"Skip connected unknown {key!r}")
                 return None
-            if alias.mapping is not unknown.port:
-                if alias.context is not context:
+            aliased = (alias.mapping is not unknown.port)
+            if aliased:
+                try:
+                    path = system.get_path_to_child(alias.context)
+                except ValueError:
+                    # `alias.context` is not a child of `system`
                     alias_name = f"{alias.mapping.contextual_name}.{alias.key}"
-                    contextual_name = f"{unknown.context.name}.{key}"
+                    unknown_name = f"{unknown.context.name}.{key}"
                     logger.warning(
-                        f"Unknown {contextual_name!r} is aliased by {alias_name!r}"
-                        f", defined outside the context of {context.name!r}"
+                        f"Unknown {unknown_name!r} is aliased by {alias_name!r}"
+                        f", defined outside the context of {system.name!r}"
                         f"; it is likely to be overwritten after the computation."
                     )
                 else:
                     alias_name = f"{alias.mapping.name}.{alias.key}"
-                    logger.info(f"Replace unknown {key!r} by {alias_name!r}")
                     unknown = unknown.transfer(alias.context, alias_name)
+                    alias_contextual_name = f"{path}.{alias_name}" if path else alias_name
+                    logger.info(f"Replace unknown {key!r} by {alias_contextual_name!r}")
+
             return unknown
         
         for key, unknown in problem.unknowns.items():
@@ -380,3 +386,20 @@ class ConstraintParser:
             "==": ConstraintType.EQ,
             ">=": ConstraintType.GE,
         }
+
+
+class ExecutionAnalyzer(SystemAnalyzer):
+    """Class performing a system tree analysis to
+    determine the minimal execution sequence, based
+    on the clean/dirty status of each sub-system.
+    """
+    def __init__(self, system: "cosapp.systems.System"):
+        super().__init__(system)
+        self.update()
+
+    @property
+    def exec_list(self) -> List["cosapp.systems.System"]:
+        return self.__exec_list
+
+    def update(self) -> None:
+        self.__exec_list = []
