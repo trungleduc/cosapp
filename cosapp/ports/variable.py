@@ -876,12 +876,16 @@ class Variable(BaseVariable):
             "distribution": self.distribution.__json__() if self.distribution else None,
         })
         for key in ["valid_range", "limits"]:
-            tmp_val = list(getattr(self, key))
-            for idx, val in enumerate(tmp_val):
-                if numpy.isinf(val):
-                    tmp_val[idx] = str(val) 
-            if  tmp_val == ["-inf", "inf"]:
+            try:
+                tmp_val = list(getattr(self, key))
+                for idx, val in enumerate(tmp_val):
+                    if numpy.isinf(val):
+                        tmp_val[idx] = str(val) 
+                if  tmp_val == ["-inf", "inf"]:
+                    tmp_val = None                
+            except TypeError:
                 tmp_val = None
+
             data[key] = tmp_val 
         
         return data
