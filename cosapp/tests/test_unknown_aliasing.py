@@ -24,7 +24,7 @@ class NestedQuad(System):
         foo = self.add_child(Quadratic('foo'), pulling={'k': 'c'})
         bar = self.add_child(Quadratic('bar'))
 
-        self.connect(foo.outwards, bar.inwards, {'y': 'k'})
+        self.connect(foo, bar, {'y': 'k'})
 
 
 def test_design_unknown_aliasing_1(caplog):
@@ -116,6 +116,32 @@ def test_design_unknown_aliasing_3(caplog):
     assert len(caplog.records) > 0
     assert re.match(
         "Skip connected unknown 'sub2.bar.inwards.k'",
+        caplog.records[0].message
+    )
+
+
+def test_design_unknown_aliasing_4(caplog):
+    """Same as `test_design_unknown_aliasing_1`, with
+    one additional hierarchical level.
+    """
+    top = System('top')
+    sub = top.add_child(NestedQuad('sub'))
+    solver = top.add_driver(NonLinearSolver('solver', tol=1e-9))
+    solver.add_equation('sub.foo.y == 7').add_unknown('sub.foo.k')
+
+    sub.foo.x = 2.0
+    sub.bar.x = 0.1
+    caplog.clear()
+    with caplog.at_level(logging.INFO):
+        top.run_drivers()
+    
+    assert sub.foo.k == pytest.approx(1.5)
+    assert sub.foo.y == pytest.approx(7)
+    assert sub.bar.k == sub.foo.y
+    assert sub.foo.k == sub.c
+    assert len(caplog.records) > 0
+    assert re.match(
+        "Replace unknown 'sub.foo.inwards.k' by 'sub.inwards.c'",
         caplog.records[0].message
     )
 
