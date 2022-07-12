@@ -86,13 +86,16 @@ class RunSingleCase(IterativeCase):
         self.problem = None
 
     def merge_problems(self) -> None:
-        self.problem = self.merged_problem()
+        # Activate targets in processed problems
+        for problem in self.__processed.problems:
+            problem.activate_targets()
+        self.problem = self.merged_problem(copy=False)
 
-    def merged_problem(self) -> MathematicalProblem:
+    def merged_problem(self, copy=True) -> MathematicalProblem:
         handler = self.__processed
         name = self.name
         try:
-            return handler.merged_problem(name=name, offdesign_prefix=name)
+            return handler.merged_problem(name=name, offdesign_prefix=None, copy=copy)
         except ValueError as error:
             error.args = (f"{error.args[0]} in {name!r}",)
             raise
@@ -102,18 +105,15 @@ class RunSingleCase(IterativeCase):
         super().setup_run()
         
         raw = self.__raw_problem
-        # Force graph analysis by creating new problem handler
-        self.__processed = DesignProblemHandler(self.owner)
-        processed = self.__processed
         # Transfer problem copies from `raw` to `processed`
-        processed.problems = raw.export_problems(prune=False)
+        processed = raw.copy(prune=False)
 
         # Add owner off-design problem to `processed.offdesign`
         owner_problem = self.owner.get_unsolved_problem()
         processed.offdesign.extend(owner_problem)
 
         # Resolve unknown aliasing in `processed`
-        processed.problems = processed.export_problems()
+        self.__processed = processed.copy(prune=True)
         self.merge_problems()
 
     def add_offdesign_problem(self, offdesign: MathematicalProblem) -> MathematicalProblem:

@@ -1,16 +1,16 @@
 import pytest
 
-from collections import OrderedDict
-from numbers import Number
 import numpy as np
 import logging, re
+from collections import OrderedDict
+from numbers import Number
+from typing import Tuple, Dict, Any
 
-from cosapp.systems import System
-from cosapp.ports import Port
+from cosapp.base import System, Port
 from cosapp.core.numerics.basics import MathematicalProblem
 from cosapp.core.numerics.boundary import Unknown, TimeUnknown
 from cosapp.core.numerics.residues import DeferredResidue, Residue
-from cosapp.utils.testing import get_args, no_exception
+from cosapp.utils.testing import get_args, no_exception, ArgsKwargs
 
 
 class BogusPort(Port):
@@ -25,7 +25,7 @@ class SystemA(System):
         self.add_output(BogusPort, 'out')
         self.add_inward('a', 1.)
         self.add_inward('b', [1., 2.])
-        self.add_inward('c', np.asarray([1., 2.]))
+        self.add_inward('c', np.arange(4, dtype=float))
         self.add_inward('d', -2.7)
 
         self.add_outward('g', 3.5)
@@ -49,7 +49,7 @@ class DynamicSystemC(System):
 
 
 @pytest.fixture(scope='function')
-def test_objects():
+def test_objects() -> Tuple[System, MathematicalProblem]:
     system = SystemA('system_a')
     return system, MathematicalProblem('math_pb', system)
 
@@ -65,7 +65,7 @@ def test_MathematicalProblem__init__():
     assert len(m.deferred_residues) == 0
 
 
-def test_MathematicalProblem_name(test_objects):
+def test_MathematicalProblem_name(test_objects: Tuple[System, MathematicalProblem]):
     s, m = test_objects
     with pytest.raises(AttributeError):
         setattr(m, 'name', 'banana')
@@ -92,7 +92,7 @@ def test_MathematicalProblem_context():
     assert m.context is sa
 
 
-def test_MathematicalProblem_noSetters(test_objects):
+def test_MathematicalProblem_noSetters(test_objects: Tuple[System, MathematicalProblem]):
     s, m = test_objects
 
     with pytest.raises(AttributeError):
@@ -106,7 +106,7 @@ def test_MathematicalProblem_noSetters(test_objects):
         m.transients = [TimeUnknown(ds, "A", "2.5 * q"), ]
 
 
-def test_MathematicalProblem_residues_vector(test_objects):
+def test_MathematicalProblem_residues_vector(test_objects: Tuple[System, MathematicalProblem]):
     s, m = test_objects
     m.add_equation([
         dict(equation="g == 0"),
@@ -125,18 +125,21 @@ def test_MathematicalProblem_residues_vector(test_objects):
 @pytest.mark.parametrize("case, expected", [
     (
         dict(unknowns='c', equations='g == 0'),
-        dict(n_unknowns=2, n_equations=1),
+        dict(n_unknowns=4, n_equations=1),
     ),
     (
         dict(unknowns='a', equations='h == zeros(2)'),
         dict(n_unknowns=1, n_equations=2),
     ),
     (
-        dict(unknowns=['a', 'c']), dict(n_unknowns=3),
+        dict(unknowns=['a', 'c']), dict(n_unknowns=5),
+    ),
+    (
+        dict(unknowns=['a', 'c[::2]']), dict(n_unknowns=3),
     ),
     (
         dict(unknowns=['a', 'c'], equations=['g == 0', 'h == zeros(2)']),
-        dict(n_unknowns=3, n_equations=3),
+        dict(n_unknowns=5, n_equations=3),
     ),
     (
         dict(equations='g == 0', targets='out.m'),
@@ -151,7 +154,7 @@ def test_MathematicalProblem_residues_vector(test_objects):
         dict(n_equations=3),
     ),
 ])
-def test_MathematicalProblem_shape(test_objects, case, expected):
+def test_MathematicalProblem_shape(test_objects: Tuple[System, MathematicalProblem], case, expected: Dict[str, Any]):
     system, problem = test_objects
     problem.add_equation(case.get('equations', []))
     problem.add_unknown(case.get('unknowns', []))
@@ -172,11 +175,11 @@ def test_MathematicalProblem_add_methods():
     m.add_equation("g == 0")
     m.add_unknown("a")
     assert m.context is s
-    assert list(m.unknowns) == ['inwards.a']
+    assert list(m.unknowns) == ['a']
     assert list(m.residues) == ['g == 0']
     assert m.shape == (1, 1)
 
-    unknown = m.unknowns['inwards.a']
+    unknown = m.unknowns['a']
     assert isinstance(unknown, Unknown)
     assert unknown.context is s
 
@@ -197,12 +200,11 @@ def test_MathematicalProblem_add_methods():
     ])
 
     assert m.context is s
-    assert list(m.unknowns) == ['inwards.a', 'inwards.c']
+    assert list(m.unknowns) == ['a', 'c']
     assert list(m.residues) == ['g == 0', 'h equation']
     assert list(m.transients) == []
 
-    assert 'inwards.c' in m.unknowns
-    unknown = m.unknowns['inwards.c']
+    unknown = m.unknowns['c']
     assert isinstance(unknown, Unknown)
     assert unknown.context is s
     assert unknown.max_abs_step == 1e-2
@@ -256,7 +258,11 @@ def test_MathematicalProblem_add_methods():
         }
     ),
 ])
-def test_MathematicalProblem_add_equation(test_objects, args_kwargs, expected):
+def test_MathematicalProblem_add_equation(
+    test_objects: Tuple[System, MathematicalProblem],
+    args_kwargs: ArgsKwargs,
+    expected: Dict[str, dict],
+):
     s, m = test_objects
     args, kwargs = args_kwargs
     m.add_equation(*args, **kwargs)
@@ -300,10 +306,14 @@ def test_MathematicalProblem_add_equation(test_objects, args_kwargs, expected):
     ),
     (
         get_args('a * g'),
-        dict(error=NotImplementedError, equations=['a * g == 3.5']),
+        dict(error=NotImplementedError, match="Targets are only supported for single variables", equations=['a * g == 3.5']),
     ),
 ])
-def test_MathematicalProblem_add_target(test_objects, args_kwargs, expected):
+def test_MathematicalProblem_add_target(
+    test_objects: Tuple[System, MathematicalProblem],
+    args_kwargs: ArgsKwargs,
+    expected: Dict[str, Any],
+):
     context, problem = test_objects
     assert len(problem.deferred_residues) == 0
     args, kwargs = args_kwargs
@@ -334,86 +344,106 @@ def test_MathematicalProblem_add_target(test_objects, args_kwargs, expected):
     (
         get_args('a'),
         {
-            'inwards.a': dict(),
+            'a': dict(),
+        }
+    ),
+    (
+        get_args('inwards.a'),
+        {
+            'a': dict(),
         }
     ),
     (
         get_args(['a', 'd']),
         {
-            'inwards.a': dict(),
-            'inwards.d': dict(),
+            'a': dict(),
+            'd': dict(),
         }
     ),
     (
         get_args(["in_.m", dict(name="d", max_rel_step=0.1)]),
         {
             'in_.m': dict(),
-            'inwards.d': dict(max_rel_step=0.1),
+            'd': dict(max_rel_step=0.1),
         }
     ),
     # Vector unknowns:
     (
         get_args('c'),
         {
-            'unknown_names': ('inwards.c[0]', 'inwards.c[1]'),
-            'inwards.c': dict(mask=[True, True]),
+            'unknown_names': tuple(f"c[{i}]" for i in range(4)),
+            'c': dict(mask=[True, True, True, True]),
         }
     ),
     (
         get_args('c[:]'),
         {
-            'unknown_names': ('inwards.c[0]', 'inwards.c[1]'),
-            'inwards.c': dict(mask=[True, True]),
+            'unknown_names': tuple(f"c[{i}]" for i in range(4)),
+            'c[:]': dict(mask=[True, True, True, True]),
+        }
+    ),
+    (
+        get_args('c[:-1]'),
+        {
+            'unknown_names': tuple(f"c[{i}]" for i in range(3)),
+            'c[:-1]': dict(mask=[True, True, True, False]),
+        }
+    ),
+    (
+        get_args('c[::2]'),
+        {
+            'unknown_names': ('c[0]', 'c[2]',),
+            'c[::2]': dict(mask=[True, False, True, False]),
         }
     ),
     (
         get_args('c[1]'),
         {
-            'unknown_names': ('inwards.c',),
-            'inwards.c': dict(mask=[False, True]),
+            'unknown_names': ('c[1]',),
+            'c[1]': dict(mask=[False, True, False, False]),
         }
     ),
     (
-        get_args('c', mask=[False, True]),
+        get_args('c', mask=[True, False, True, True]),
         {
-            'unknown_names': ('inwards.c',),
-            'inwards.c': dict(mask=[False, True]),
+            'unknown_names': ('c[0]', 'c[2]', 'c[3]',),
+            'c': dict(mask=[True, False, True, True]),
         }
     ),
     (
         get_args([
-            dict(name="c", mask=[True, False]),
+            dict(name="c", mask=[True, False, True, True]),
             dict(name='in_.m', max_abs_step=0.5, lower_bound=-2),
             'a',
         ]),
         {
-            'unknown_names': ('inwards.c', 'in_.m', 'inwards.a'),
-            'inwards.c': dict(mask=[True, False]),
-            'inwards.a': dict(),
+            'unknown_names': ('c[0]', 'c[2]', 'c[3]', 'in_.m', 'a'),
+            'c': dict(mask=[True, False, True, True]),
+            'a': dict(),
             'in_.m': dict(max_abs_step=0.5, lower_bound=-2),
         }
     ),
 ])
-def test_MathematicalProblem_add_unknown(test_objects, args_kwargs, expected):
-    s, m = test_objects
+def test_MathematicalProblem_add_unknown(
+    test_objects: Tuple[System, MathematicalProblem],
+    args_kwargs: ArgsKwargs,
+    expected: Dict[str, Any],
+):
+    context, problem = test_objects
     args, kwargs = args_kwargs
-    m.add_unknown(*args, **kwargs)
+    problem.add_unknown(*args, **kwargs)
 
-    try:
-        expected_names = expected.pop('unknown_names')
-    except KeyError:
-        pass
-    else:
-        assert m.unknowns_names == expected_names
+    if 'unknown_names' in expected:
+        assert problem.unknowns_names == expected.pop('unknown_names')
 
-    unknowns = m.unknowns
+    unknowns = problem.unknowns
     assert set(unknowns.keys()) == set(expected.keys())
 
     for name, properties in expected.items():
         unknown = unknowns[name]
         message = f"unknown {name!r}"
         assert isinstance(unknown, Unknown), message
-        assert unknown.context is s, message
+        assert unknown.context is context, message
         assert unknown.name == name, message
         assert unknown.max_abs_step == properties.get('max_abs_step', np.inf), message
         assert unknown.max_rel_step == properties.get('max_rel_step', np.inf), message
@@ -426,12 +456,12 @@ def test_MathematicalProblem_add_unknown(test_objects, args_kwargs, expected):
             assert tuple(unknown.mask) == tuple(mask), message
 
 
-def test_MathematicalProblem_add_unknown_repeated(test_objects, caplog):
+def test_MathematicalProblem_add_unknown_repeated(test_objects: Tuple[System, MathematicalProblem], caplog):
     """Check that defining the same unknown several times does not raise any exception"""
     m = test_objects[1]
     m.add_unknown('a', max_abs_step=1)
-    assert m.unknowns['inwards.a'].max_rel_step == np.inf
-    assert m.unknowns['inwards.a'].max_abs_step == 1
+    assert m.unknowns['a'].max_rel_step == np.inf
+    assert m.unknowns['a'].max_abs_step == 1
 
     caplog.clear()
     with caplog.at_level(logging.INFO):
@@ -443,8 +473,8 @@ def test_MathematicalProblem_add_unknown_repeated(test_objects, caplog):
     assert re.match(pattern.format('a'), caplog.records[0].message)
     assert re.match(pattern.format('inwards.a'), caplog.records[1].message)
     # Check that unknown properties have not changed
-    assert m.unknowns['inwards.a'].max_rel_step == np.inf
-    assert m.unknowns['inwards.a'].max_abs_step == 1
+    assert m.unknowns['a'].max_rel_step == np.inf
+    assert m.unknowns['a'].max_abs_step == 1
 
 
 def test_MathematicalProblem_add_transient():
@@ -455,7 +485,7 @@ def test_MathematicalProblem_add_transient():
     A = m.transients['A']
     assert isinstance(A.value, Number)
     assert A.context is s
-    assert A.name == 'inwards.A'
+    assert A.name == 'A'
     assert A.d_dt == 1
 
     m.add_transient('x', der='v / q**2')
@@ -465,7 +495,7 @@ def test_MathematicalProblem_add_transient():
     s.v = np.r_[1, 2, 3]
     s.q = 2.0
     assert x.context is s
-    assert x.name == 'inwards.x'
+    assert x.name == 'x'
     assert x.d_dt == pytest.approx(np.r_[0.25, 0.5, 0.75], rel=1e-15)
 
 
@@ -492,7 +522,7 @@ def test_MathematicalProblem_extend():
 
     # Test default extension (should copy unknowns and residues)
     r, s, mr, ms = local_test_objects()
-    assert list(mr.unknowns) == ['inwards.a', 'inwards.c']
+    assert list(mr.unknowns) == ['a', 'c']
     assert list(mr.residues) == ['g == 0', 'h equation']
     assert [deferred.target for deferred in mr.deferred_residues.values()] == ['i']
 
@@ -510,7 +540,7 @@ def test_MathematicalProblem_extend():
     with no_exception():
         extended = mr.extend(mr, overwrite=True)
     assert extended is mr
-    assert list(mr.unknowns) == ['inwards.a', 'inwards.c']
+    assert list(mr.unknowns) == ['a', 'c']
     assert list(mr.residues) == ['g == 0', 'h equation']
     assert [deferred.target for deferred in mr.deferred_residues.values()] == ['i']
 
@@ -521,8 +551,8 @@ def test_MathematicalProblem_extend():
     extended = mr.extend(ms)
     assert extended is mr
     assert mr.context is r
-    assert list(mr.unknowns) == ['inwards.a', 'inwards.c', 's.inwards.y']
-    assert list(mr.residues) == ['g == 0', 'h equation', 's.(v == 0)']
+    assert list(mr.unknowns) == ['a', 'c', 's.y']
+    assert list(mr.residues) == ['g == 0', 'h equation', 's: v == 0']
     assert len(mr.transients) == 0
     assert len(mr.rates) == 0
     assert len(mr.deferred_residues) == 2
@@ -532,8 +562,8 @@ def test_MathematicalProblem_extend():
     )
     assert [deferred.target for deferred in mr.deferred_residues.values()] == ['i', 's.u']
 
-    assert mr.unknowns['s.inwards.y'] is not ms.unknowns['inwards.y']
-    assert mr.residues['s.(v == 0)'] is not ms.residues['v == 0']
+    assert mr.unknowns['s.y'] is not ms.unknowns['y']
+    assert mr.residues['s: v == 0'] is not ms.residues['v == 0']
 
     # Test with pulled output
     r, s, mr, ms = local_test_objects()
@@ -542,8 +572,8 @@ def test_MathematicalProblem_extend():
     extended = mr.extend(ms)
     assert extended is mr
     assert mr.context is r
-    assert list(mr.unknowns) == ['inwards.a', 'inwards.c', 's.inwards.y']
-    assert list(mr.residues) == ['g == 0', 'h equation', 's.(v == 0)']
+    assert list(mr.unknowns) == ['a', 'c', 's.y']
+    assert list(mr.residues) == ['g == 0', 'h equation', 's: v == 0']
     assert len(mr.transients) == 0
     assert len(mr.rates) == 0
     assert len(mr.deferred_residues) == 2
@@ -553,8 +583,8 @@ def test_MathematicalProblem_extend():
     )
     assert [deferred.target for deferred in mr.deferred_residues.values()] == ['i', 'u']
 
-    assert mr.unknowns['s.inwards.y'] is not ms.unknowns['inwards.y']
-    assert mr.residues['s.(v == 0)'] is not ms.residues['v == 0']
+    assert mr.unknowns['s.y'] is not ms.unknowns['y']
+    assert mr.residues['s: v == 0'] is not ms.residues['v == 0']
 
     # Test extension with option copy = False
     r, s, mr, ms = local_test_objects()
@@ -563,8 +593,8 @@ def test_MathematicalProblem_extend():
     mr.extend(ms, copy=False)
 
     assert mr.context is r
-    assert list(mr.unknowns) == ['inwards.a', 'inwards.c', 's.inwards.y']
-    assert list(mr.residues) == ['g == 0', 'h equation', 's.(v == 0)']
+    assert list(mr.unknowns) == ['a', 'c', 's.y']
+    assert list(mr.residues) == ['g == 0', 'h equation', 's: v == 0']
     assert len(mr.transients) == 0
     assert len(mr.rates) == 0
     assert len(mr.deferred_residues) == 2
@@ -574,8 +604,8 @@ def test_MathematicalProblem_extend():
     )
     assert [deferred.target for deferred in mr.deferred_residues.values()] == ['i', 's.u']
 
-    assert mr.unknowns['s.inwards.y'] is ms.unknowns['inwards.y']
-    assert mr.residues['s.(v == 0)'] is ms.residues['v == 0']
+    assert mr.unknowns['s.y'] is ms.unknowns['y']
+    assert mr.residues['s: v == 0'] is ms.residues['v == 0']
 
 
 def test_MathematicalProblem_extend_partial():
@@ -607,7 +637,7 @@ def test_MathematicalProblem_extend_partial():
     extended = mr.extend(ms, equations=False)
     assert extended is mr
     assert mr.context is r
-    assert list(mr.unknowns) == ['inwards.a', 'inwards.c', 's.inwards.y']
+    assert list(mr.unknowns) == ['a', 'c', 's.y']
     assert list(mr.residues) == ['g == 0', 'h equation']
     assert len(mr.transients) == 0
     assert len(mr.rates) == 0
@@ -617,7 +647,7 @@ def test_MathematicalProblem_extend_partial():
         for obj in mr.deferred_residues.values()
     )
     assert [deferred.target for deferred in mr.deferred_residues.values()] == ['i']
-    assert mr.unknowns['s.inwards.y'] is not ms.unknowns['inwards.y']
+    assert mr.unknowns['s.y'] is not ms.unknowns['y']
 
     # Discard equations + no copy
     r, s, mr, ms = local_test_objects()
@@ -626,7 +656,7 @@ def test_MathematicalProblem_extend_partial():
     extended = mr.extend(ms, equations=False, copy=False)
     assert extended is mr
     assert mr.context is r
-    assert list(mr.unknowns) == ['inwards.a', 'inwards.c', 's.inwards.y']
+    assert list(mr.unknowns) == ['a', 'c', 's.y']
     assert list(mr.residues) == ['g == 0', 'h equation']
     assert len(mr.transients) == 0
     assert len(mr.rates) == 0
@@ -636,7 +666,7 @@ def test_MathematicalProblem_extend_partial():
         for obj in mr.deferred_residues.values()
     )
     assert [deferred.target for deferred in mr.deferred_residues.values()] == ['i']
-    assert mr.unknowns['s.inwards.y'] is ms.unknowns['inwards.y']
+    assert mr.unknowns['s.y'] is ms.unknowns['y']
 
     # Discard unknowns + default mode (copy)
     r, s, mr, ms = local_test_objects()
@@ -645,8 +675,8 @@ def test_MathematicalProblem_extend_partial():
     extended = mr.extend(ms, unknowns=False)
     assert extended is mr
     assert mr.context is r
-    assert list(mr.unknowns) == ['inwards.a', 'inwards.c']
-    assert list(mr.residues) == ['g == 0', 'h equation', 's.(v == 0)']
+    assert list(mr.unknowns) == ['a', 'c']
+    assert list(mr.residues) == ['g == 0', 'h equation', 's: v == 0']
     assert len(mr.transients) == 0
     assert len(mr.rates) == 0
     assert len(mr.deferred_residues) == 2
@@ -655,7 +685,7 @@ def test_MathematicalProblem_extend_partial():
         for obj in mr.deferred_residues.values()
     )
     assert [deferred.target for deferred in mr.deferred_residues.values()] == ['i', 's.u']
-    assert mr.residues['s.(v == 0)'] is not ms.residues['v == 0']
+    assert mr.residues['s: v == 0'] is not ms.residues['v == 0']
 
     # Discard unknowns + no copy
     r, s, mr, ms = local_test_objects()
@@ -664,8 +694,8 @@ def test_MathematicalProblem_extend_partial():
     extended = mr.extend(ms, unknowns=False, copy=False)
     assert extended is mr
     assert mr.context is r
-    assert list(mr.unknowns) == ['inwards.a', 'inwards.c']
-    assert list(mr.residues) == ['g == 0', 'h equation', 's.(v == 0)']
+    assert list(mr.unknowns) == ['a', 'c']
+    assert list(mr.residues) == ['g == 0', 'h equation', 's: v == 0']
     assert len(mr.transients) == 0
     assert len(mr.rates) == 0
     assert len(mr.deferred_residues) == 2
@@ -674,7 +704,7 @@ def test_MathematicalProblem_extend_partial():
         for obj in mr.deferred_residues.values()
     )
     assert [deferred.target for deferred in mr.deferred_residues.values()] == ['i', 's.u']
-    assert mr.residues['s.(v == 0)'] is ms.residues['v == 0']
+    assert mr.residues['s: v == 0'] is ms.residues['v == 0']
 
 
 def test_MathematicalProblem_extend_pulled_target(caplog):
@@ -795,7 +825,7 @@ def test_MathematicalProblem_extend_pulled_target(caplog):
     ]
 
 
-def test_MathematicalProblem_clear(test_objects):
+def test_MathematicalProblem_clear(test_objects: Tuple[System, MathematicalProblem]):
     s, m = test_objects
     m.add_equation([
         dict(equation="g == 0"),
@@ -807,7 +837,7 @@ def test_MathematicalProblem_clear(test_objects):
     ])
 
     assert m.context is s
-    assert list(m.unknowns) == ['inwards.a', 'inwards.c']
+    assert list(m.unknowns) == ['a', 'c']
     assert list(m.residues) == ['g == 0', 'h equation']
     assert len(m.transients) == 0
     assert len(m.rates) == 0
@@ -815,8 +845,8 @@ def test_MathematicalProblem_clear(test_objects):
 
     for unknown in m.unknowns.values():
         assert unknown.context is s
-    assert m.unknowns['inwards.a'].max_rel_step == 1e-5
-    assert m.unknowns['inwards.c'].max_abs_step == 1e-2
+    assert m.unknowns['a'].max_rel_step == 1e-5
+    assert m.unknowns['c'].max_abs_step == 1e-2
 
     name = 'h equation'
     assert name in m.residues
@@ -847,8 +877,8 @@ def test_MathematicalProblem_clear(test_objects):
     assert len(m.deferred_residues) == 0
 
 
-def test_MathematicalProblem_copy(test_objects):
-    s, original = test_objects
+def test_MathematicalProblem_copy(test_objects: Tuple[System, MathematicalProblem]):
+    context, original = test_objects
     original.add_equation([
         dict(equation="g == 0"),
         dict(equation="h == array([22., 4.2])", name="h equation", reference=24.)
@@ -857,43 +887,43 @@ def test_MathematicalProblem_copy(test_objects):
         dict(name="a", max_rel_step=1e-5),
         dict(name="c", max_abs_step=1e-2)
     ])
+    original.add_target('i')
 
     copy = original.copy()
     assert copy is not original
 
-    assert original.context is s
     assert copy.context is original.context
+    assert copy.context is context
 
-    assert list(original.unknowns) == ['inwards.a', 'inwards.c']
-    assert list(original.residues) == ['g == 0', 'h equation']
     assert list(copy.unknowns) == list(original.unknowns)
     assert list(copy.residues) == list(original.residues)
+    assert list(copy.unknowns) == ['a', 'c']
+    assert list(copy.residues) == ['g == 0', 'h equation']
     assert all(
-        copy.unknowns[key] is not unknown
-        for key, unknown in original.unknowns.items()
+        unknown is not original.unknowns[key]
+        for key, unknown in copy.unknowns.items()
     )
     assert all(
-        copy.residues[key] is not residue
-        for key, residue in original.residues.items()
+        residue is not original.residues[key]
+        for key, residue in copy.residues.items()
     )
+    assert list(copy.deferred_residues) == list(original.deferred_residues)
+    assert list(copy.deferred_residues) == ['i (target)']
     
-    name = 'inwards.c'
-    assert name in copy.unknowns
-    unknown = copy.unknowns[name]
+    unknown = copy.unknowns['c']
     assert isinstance(unknown, Unknown)
-    assert unknown.context is s
+    assert unknown.context is context
     assert unknown.max_abs_step == 1e-2
     
     name = 'h equation'
-    assert name in copy.residues
     residue = copy.residues[name]
     assert isinstance(residue, Residue)
-    assert residue.context is s
+    assert residue.context is context
     assert residue.name == name
 
 
-def test_MathematicalProblem_to_dict(test_objects):
-    _, problem = test_objects
+def test_MathematicalProblem_to_dict(test_objects: Tuple[System, MathematicalProblem]):
+    problem = test_objects[1]
     problem.add_equation([
         dict(equation="g == 0"),
         dict(equation="h == array([22., 4.2])", name="h equation", reference=24.)
@@ -907,7 +937,7 @@ def test_MathematicalProblem_to_dict(test_objects):
 
     assert "unknowns" in problem_dict
     assert len(problem_dict["unknowns"]) == 2
-    assert problem_dict["unknowns"]["inwards.a"] == problem.unknowns["inwards.a"].to_dict()
+    assert problem_dict["unknowns"]["a"] == problem.unknowns["a"].to_dict()
     assert "equations" in problem_dict
     assert len(problem_dict["equations"]) == 2
     assert problem_dict["equations"]["g == 0"] == problem.residues["g == 0"].to_dict()
@@ -916,13 +946,17 @@ def test_MathematicalProblem_to_dict(test_objects):
     assert len(problem_dict) == 4
 
 
-def test_MathematicalProblem_validate(test_objects):
-    s, m = test_objects
-    m.add_equation("g == 0").add_unknown("c")
+def test_MathematicalProblem_validate(test_objects: Tuple[System, MathematicalProblem]):
+    s, problem = test_objects
+    problem.add_equation("g == 0").add_unknown("c[:2]")
 
+    assert problem.n_unknowns == 2
+    assert problem.n_equations == 1
     with pytest.raises(ArithmeticError, match= r"Nonlinear problem .* error: Mismatch between numbers of params .* and residues .*"):
-        m.validate()
+        problem.validate()
 
-    m.add_unknown("a")
-    m.add_equation("h == array([22., 4.2])", name="h equation", reference=24.)
-    assert m.validate() is None
+    problem.add_unknown("a")
+    problem.add_equation("h == array([22., 4.2])", name="h equation", reference=24.)
+    assert problem.n_unknowns == 3
+    assert problem.n_equations == 3
+    assert problem.validate() is None

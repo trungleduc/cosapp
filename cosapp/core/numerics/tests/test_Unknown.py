@@ -25,15 +25,16 @@ class TestUnknown:
 
 
     @pytest.mark.parametrize("name, options, expected", [
-        ('in_.m', dict(), dict(port='in_')),
-        ('x', dict(), dict(port='inwards', name='inwards.x')),
-        ('in_.m', dict(upper_bound=2., max_rel_step=0.001), dict(port='in_')),
-        ('x', dict(upper_bound=10, max_rel_step=0.05), dict(port='inwards', name='inwards.x')),
-        ('y', dict(lower_bound=-30, max_abs_step=1.2), dict(port='inwards', name='inwards.y')),
-        ('v', dict(), dict(port='inwards', name='inwards.v', mask=[True, True, True])),
-        ('v', dict(lower_bound=0), dict(port='inwards', name='inwards.v', mask=[True, True, True], lower_bound=0)),
-        ('v[::2]', dict(), dict(port='inwards', name='inwards.v', mask=[True, False, True])),
-        ('v[:-1]', dict(), dict(port='inwards', name='inwards.v', mask=[True, True, False])),
+        ('in_.m', dict(), dict(port='in_', variable='m')),
+        ('in_.m', dict(upper_bound=2., max_rel_step=0.001), dict(port='in_', variable='m')),
+        ('x', dict(), dict(port='inwards', name='x')),
+        ('x', dict(upper_bound=10, max_rel_step=0.05), dict(port='inwards', name='x')),
+        ('y', dict(lower_bound=-30, max_abs_step=1.2), dict(port='inwards', name='y')),
+        ('v', dict(), dict(port='inwards', name='v', basename='v', mask=[True, True, True])),
+        ('v', dict(lower_bound=0), dict(port='inwards', name='v', mask=[True, True, True], lower_bound=0)),
+        ('v[::2]', dict(), dict(port='inwards', name='v[::2]', variable='v', basename='v', mask=[True, False, True])),
+        ('v[:-1]', dict(), dict(port='inwards', name='v[:-1]', variable='v', basename='v', mask=[True, True, False])),
+        ('inwards.v[:-1]', dict(), dict(port='inwards', name='v[:-1]', variable='v', basename='v', mask=[True, True, False])),
         ('v', dict(lower_bound=[0, 1, -np.inf]), dict(error=TypeError, match="'lower_bound' should be Number")),
         ('v', dict(upper_bound=[0, 1, 3]), dict(error=TypeError, match="'upper_bound' should be Number")),
         # ('x', dict(lower_bound=np.inf), dict(error=ValueError)),   # Bug?
@@ -51,18 +52,25 @@ class TestUnknown:
             """Set expected[key] to options[key] if `key` is not specified in `expected`.
             Use `default` if all else fails. Returns expected[key]."""
             return expected.setdefault(key, options.get(key, default))
+
         system = TestUnknown.ASyst('a')
         error = expected.get('error', None)
+
         if error is None:
             unknown = Unknown(system, name, **options)
+            expected_name = expected.get('name', name)
             assert unknown.context is system
-            assert unknown.name == expected.get('name', name)
+            assert unknown.name == expected_name
+            assert unknown.variable == expected.get('variable', name)
+            assert unknown.basename == expected.get('basename', expected_name)
+            assert unknown.port.name == expected['port']
             assert unknown.port is system[expected['port']]
             assert unknown.lower_bound == get_expected('lower_bound', -np.inf)
             assert unknown.upper_bound == get_expected('upper_bound', np.inf)
             assert unknown.max_abs_step == get_expected('max_abs_step', np.inf)
             assert unknown.max_rel_step == get_expected('max_rel_step', np.inf)
             np.testing.assert_array_equal(unknown.mask, expected.get('mask', None))
+        
         else:
             pattern = expected.get('match', None)
             with pytest.raises(error, match=pattern):
@@ -81,15 +89,15 @@ class TestUnknown:
 
 
     @pytest.mark.parametrize("name, options, expected", [
-        ('in_.m', dict(), dict(port='in_')),
-        ('x', dict(), dict(port='inwards', name='inwards.x')),
-        ('in_.m', dict(upper_bound=2., max_rel_step=0.001), dict(port='in_')),
-        ('x', dict(upper_bound=10, max_rel_step=0.05), dict(port='inwards', name='inwards.x')),
-        ('y', dict(lower_bound=-30, max_abs_step=1.2), dict(port='inwards', name='inwards.y')),
-        ('v', dict(), dict(port='inwards', name='inwards.v', mask=[True, True, True])),
-        ('v', dict(lower_bound=0), dict(port='inwards', name='inwards.v', mask=[True, True, True], lower_bound=0)),
-        ('v[::2]', dict(), dict(port='inwards', name='inwards.v', mask=[True, False, True])),
-        ('v[:-1]', dict(), dict(port='inwards', name='inwards.v', mask=[True, True, False])),
+        ('in_.m', dict(), dict(port='in_', varname='m')),
+        ('x', dict(), dict(port='inwards', name='x')),
+        ('in_.m', dict(upper_bound=2., max_rel_step=0.001), dict(port='in_', varname='m')),
+        ('x', dict(upper_bound=10, max_rel_step=0.05), dict(port='inwards', name='x')),
+        ('y', dict(lower_bound=-30, max_abs_step=1.2), dict(port='inwards', name='y')),
+        ('v', dict(), dict(port='inwards', name='v', mask=[True, True, True])),
+        ('v', dict(lower_bound=0), dict(port='inwards', name='v', mask=[True, True, True], lower_bound=0)),
+        ('v[::2]', dict(), dict(port='inwards', name='v[::2]', varname='v', mask=[True, False, True])),
+        ('v[:-1]', dict(), dict(port='inwards', name='v[:-1]', varname='v', mask=[True, True, False])),
     ])
     def test_to_dict(self, name, options, expected):
         def get_expected(key, default=None):
@@ -103,6 +111,7 @@ class TestUnknown:
         unknown_dict = unknown.to_dict()
         assert unknown_dict["context"] == system.contextual_name
         assert unknown_dict["name"] == expected.get('name', name)
+        assert unknown_dict["varname"] == expected.get('varname', name)
         assert unknown_dict["lower_bound"] == get_expected('lower_bound', -np.inf)
         assert unknown_dict["upper_bound"] == get_expected('upper_bound', np.inf)
         assert unknown_dict["max_abs_step"] == get_expected('max_abs_step', np.inf)

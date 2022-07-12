@@ -40,11 +40,11 @@ def test_RunOnce_get_init(DummyFactory):
     s.add_child(Dummy('mult'))
     d = RunOnce('compute')
     s.add_driver(d)
-    assert np.array_equal(d.get_init(), [s.mult.inwards.K1])
+    assert np.array_equal(d.get_init(), [s.mult.K1])
 
     s.mult.K1 = 10
     d.set_init({'mult.K1': 33})
-    assert_keys(d.initial_values, 'mult.inwards.K1')
+    assert_keys(d.initial_values, 'mult.K1')
     assert_all_type(d.initial_values, Boundary)
     assert s.mult.K1 == 33
 
@@ -52,11 +52,11 @@ def test_RunOnce_get_init(DummyFactory):
     assert np.array_equal(init_array, [33])
 
     s.mult.K1 = 10
-    assert_keys(d.initial_values, 'mult.inwards.K1')
+    assert_keys(d.initial_values, 'mult.K1')
     assert_all_type(d.initial_values, Boundary)
     init_array = d.get_init()
     assert np.array_equal(init_array, [33])
-    d.solution['mult.inwards.K1'] = 11.
+    d.solution['mult.K1'] = 11.
     init_array = d.get_init()
     assert np.array_equal(init_array, [11.])
 
@@ -65,7 +65,7 @@ def test_RunOnce_get_init(DummyFactory):
     assert np.array_equal(init_array, [33])
 
     d.set_init({'mult.K1': 32, 'mult.K2': 34})
-    assert_keys(d.initial_values, 'mult.inwards.K1', 'mult.inwards.K2')
+    assert_keys(d.initial_values, 'mult.K1', 'mult.K2')
     assert_all_type(d.initial_values, Boundary)
     init_array = d.get_init()
     assert np.array_equal(init_array, [32])
@@ -81,12 +81,12 @@ def test_RunOnce_get_init(DummyFactory):
     
     d.setup_run()
     init_array = d.get_init()
-    assert_keys(d.initial_values, 'mult.inwards.K1', 'mult.inwards.K2')
+    assert_keys(d.initial_values, 'mult.K1', 'mult.K2')
     assert_all_type(d.initial_values, Boundary)
     assert np.array_equal(init_array, [32, 34])
 
-    d.solution['mult.inwards.K1'] = 22.
-    d.solution['mult.inwards.K2'] = 42.
+    d.solution['mult.K1'] = 22.
+    d.solution['mult.K2'] = 42.
     init_array = d.get_init()
     assert np.array_equal(init_array, [22., 42.])
 
@@ -97,24 +97,24 @@ def test_RunOnce_set_init(DummyFactory, hat_case):
     s.add_driver(d)
 
     d.set_init({'K1': 11.5})
-    assert_keys(d.initial_values, 'inwards.K1')
+    assert_keys(d.initial_values, 'K1')
     assert_all_type(d.initial_values, Boundary)
-    value = d.initial_values['inwards.K1']
+    value = d.initial_values['K1']
     assert value.default_value == 11.5
     assert value.mask is None
 
     s.run_drivers()
-    assert s.inwards.K1 == 11.5
+    assert s.K1 == 11.5
 
     with pytest.raises(TypeError):
         d.set_init({'inwards': 10.})
 
     d.set_init({'K1': 9.5})
     s.run_drivers()
-    assert s.inwards.K1 == 9.5
+    assert s.K1 == 9.5
 
     with pytest.raises(TypeError):
-        d.set_init((s.inwards.K1, 10))
+        d.set_init((s.K1, 10))
 
     with pytest.raises(AttributeError):
         d.set_init({'ImNotThere': 10.})
@@ -162,12 +162,12 @@ def test_RunOnce_get_problem(DummyFactory):
     d = s.add_driver(RunOnce('runner'))
 
     assert d.get_problem().shape == (1, 0)
-    assert_keys(d.get_problem().unknowns, 'inwards.K1')
+    assert_keys(d.get_problem().unknowns, 'K1')
 
     f = Fan('fan')
     d = f.add_driver(RunOnce('runner'))
     assert d.get_problem().shape == (1, 2)
-    assert_keys(d.get_problem().unknowns, 'inwards.gh')
+    assert_keys(d.get_problem().unknowns, 'gh')
     assert_keys(d.get_problem().residues, 'Wfan', 'PWfan')
 
 

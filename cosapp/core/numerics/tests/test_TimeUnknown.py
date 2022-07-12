@@ -28,7 +28,11 @@ class DynamicSystem(System):
 @pytest.mark.parametrize("ctor_data, state, expected", [
     (
         dict(name='h', der=-1), dict(),
-        dict(name='inwards.h', dtype=float, d_dt=-1),
+        dict(name='h', dtype=float, d_dt=-1),
+    ),
+    (
+        dict(name='inwards.h', der=-1), dict(),
+        dict(name='h', dtype=float, d_dt=-1),
     ),
     (
         dict(name='in_.var', der='h / 2'), dict(h=3),
@@ -38,7 +42,7 @@ class DynamicSystem(System):
         dict(name='vel', der='-acc', max_time_step='0.1 * norm(acc, inf)'),
         dict(acc=np.r_[1, 2, -3]),
         dict(
-            name = 'inwards.vel',
+            name = 'vel',
             d_dt = pytest.approx([-1, -2, 3], rel=1e-15),
             dtype = np.ndarray,
             max_time_step = pytest.approx(0.3, rel=1e-15),
@@ -48,7 +52,7 @@ class DynamicSystem(System):
         dict(name='h', der='-acc[0]', max_time_step='0.1 * norm(acc, inf)'),
         dict(acc=np.r_[1, 2, -3]),
         dict(
-            name = 'inwards.h',
+            name = 'h',
             d_dt = pytest.approx(-1, rel=1e-15),
             max_time_step = pytest.approx(0.3, rel=1e-15),
         ),
@@ -57,7 +61,7 @@ class DynamicSystem(System):
         dict(name='h', der='-acc[0]', max_time_step='0.1 * norm(acc, inf)', max_abs_step='1e-3'),
         dict(acc=np.r_[1, 2, -3]),
         dict(
-            name = 'inwards.h',
+            name = 'h',
             d_dt = pytest.approx(-1, rel=1e-15),
             max_time_step = pytest.approx(1e-3, rel=1e-15),  # limited by `max_abs_step`
             max_abs_step = 1e-3,
@@ -277,9 +281,9 @@ def test_TimeUnknown_copy():
 
 
 @pytest.mark.parametrize("name, options, expected", [
-    ('h', dict(der=-1), dict(name='inwards.h')),
-    ('vel', dict(der='-acc', max_time_step='0.1 * norm(acc, inf)'), dict(name='inwards.vel', max_time_step='0.1 * norm(acc, inf)')),
-    ('h', dict(der='acc[-1]'), dict(name='inwards.h')),
+    ('h', dict(der=-1), dict(name='h')),
+    ('vel', dict(der='-acc', max_time_step='0.1 * norm(acc, inf)'), dict(name='vel', max_time_step='0.1 * norm(acc, inf)')),
+    ('h', dict(der='acc[-1]'), dict(name='h')),
     ('in_.var', dict(der=0.5), dict()),
 ])
 def test_TimeUnknown_to_dict(name, options, expected):

@@ -1,3 +1,4 @@
+from __future__ import annotations
 import logging
 from collections import OrderedDict
 from numbers import Number
@@ -10,7 +11,7 @@ from typing import (
 import numpy
 
 from cosapp.core.variableref import VariableReference
-from cosapp.core.numerics.boundary import Unknown, TimeUnknown, TimeDerivative
+from cosapp.core.numerics.boundary import Boundary, Unknown, TimeUnknown, TimeDerivative
 from cosapp.core.numerics.residues import Residue, DeferredResidue
 from cosapp.utils.naming import natural_varname
 
@@ -68,6 +69,11 @@ class WeakDeferredResidue(NamedTuple):
         return self.deferred.target
 
     @property
+    def context(self):
+        """System: evaluation context of residue"""
+        return self.deferred.context
+
+    @property
     def variables(self) -> Set[str]:
         """Set[str]: names of variables involved in residue"""
         return self.deferred.variables
@@ -95,7 +101,6 @@ class MathematicalProblem:
     context : cosapp.systems.System
         Context in which the mathematical problem will be evaluated.
     """
-
     def __init__(self, name: str, context: 'Optional[cosapp.systems.System]') -> None:
         # TODO add point label to associate set of equations with Single Case
         self._name = name  # type: str
@@ -107,28 +112,39 @@ class MathematicalProblem:
         self._targets = OrderedDict()  # type: Dict[str, WeakDeferredResidue]
 
     def __str__(self) -> str:
-        msg = ""
-        if len(self.unknowns) > 0:
-            msg += "Unknowns\n"
-            for name in self.unknowns:
-                msg += f"  {name}\n"
-        if len(self.residues) > 0:
-            msg += "Equations\n"
-            for residue in self.residues.values():
-                msg += f"  {residue!s}\n"
-        return msg
+        return self.__to_string(apply_repr=False)
 
     def __repr__(self) -> str:
-        msg = ""
-        if len(self.unknowns) > 0:
-            msg += "Unknowns\n"
-            for unknown in self.unknowns.values():
-                msg += f"  {unknown!r}\n"
-        if len(self.residues) > 0:
-            msg += "Equations\n"
-            for residue in self.residues.values():
-                msg += f"  {residue!s}\n"
-        return msg
+        return self.__to_string(apply_repr=True)
+
+    def __to_string(self, apply_repr=False) -> str:
+        from cosapp.systems import System
+        context: System = self.context
+        def residue_name(residue: Residue) -> str:
+            if residue.context is context:
+                return str(residue)
+            else:
+                path = context.get_path_to_child(residue.context)
+                return f"{path}: {residue!s}"
+        indent = "  "
+        lines = []
+        if self.unknowns:
+            lines.append("Unknowns")
+            lines.extend(
+                f"{indent}{key} := {unknown.value}"
+                for key, unknown in self.unknowns.items()
+            )
+        if self.residues or self.deferred_residues:
+            lines.append("Equations")
+            lines.extend(
+                f"{indent}{residue_name(residue)}"
+                for residue in self.residues.values()
+            )
+            lines.extend(
+                f"{indent}{residue_name(deferred.make_residue())} (target)"
+                for deferred in self.deferred_residues.values()
+            )
+        return "\n".join(lines)
 
     @property
     def name(self) -> str:
@@ -207,12 +223,15 @@ class MathematicalProblem:
     def unknowns_names(self) -> Tuple[str]:
         """Tuple[str] : Names of unknowns flatten to have the same size as `residues_vector`."""
         names = []
-        for name, unknown in self.unknowns.items():
-            n_values = numpy.size(unknown.value)
-            if n_values > 1:
-                names.extend([f"{name}[{i}]" for i in numpy.arange(n_values)[unknown.mask]])
+        for unknown in self.unknowns.values():
+            if unknown.mask is None:
+                names.append(unknown.name)
             else:
-                names.append(name)
+                basename = unknown.basename
+                ref_size = numpy.size(unknown.ref.value)
+                names.extend(
+                    f"{basename}[{i}]" for i in numpy.arange(ref_size)[unknown.mask.flatten()]
+                )
         return tuple(names)
 
     def add_unknown(self,
@@ -222,7 +241,7 @@ class MathematicalProblem:
         lower_bound: Number = -numpy.inf,
         upper_bound: Number = numpy.inf,
         mask: Optional[numpy.ndarray] = None,
-    ) -> "MathematicalProblem":
+    ) -> MathematicalProblem:
         """Add unknown variables.
 
         You can set variable one by one or provide a list of dictionary to set multiple variable at once. The
@@ -315,7 +334,7 @@ class MathematicalProblem:
         equation: Union[str, Iterable[Union[dict, str, Tuple[str, str]]]],
         name: Optional[str] = None,
         reference: Union[Number, numpy.ndarray, str] = 1,
-    ) -> "MathematicalProblem":
+    ) -> MathematicalProblem:
         """Add residue equation.
 
         You can add residue equation one by one or provide a list of dictionary to add multiple equation at once. The
@@ -361,7 +380,7 @@ class MathematicalProblem:
         expression: Union[str, Iterable[str]],
         reference: Union[Number, numpy.ndarray, str] = 1,
         weak = False,
-    ) -> "MathematicalProblem":
+    ) -> MathematicalProblem:
         """Add deferred equation.
 
         Parameters
@@ -408,10 +427,23 @@ class MathematicalProblem:
             for key, deferred in self._targets.items()
         )
 
+    def activate_targets(self) -> None:
+        """Activate deferred residues (targets) and incorporate them
+        in the mathematical problem residue list.
+        Warning: This operation is irreversible, as targets are purged.
+        """
+        targets = self._targets
+        residues = self._residues
+        for key in list(targets):
+            deferred = targets.pop(key)
+            residue = deferred.make_residue()
+            new_key = self.target_key(residue.name)
+            residues[new_key] = residue
+
     @staticmethod
     def target_key(target: str) -> str:
         """Returns dict key to be used for targetted quantity `target`"""
-        return f"Target[{target}]"
+        return f"{target} (target)"
 
     @property
     def deferred_residues(self) -> Dict[str, WeakDeferredResidue]:
@@ -429,7 +461,7 @@ class MathematicalProblem:
         max_time_step: Union[Number, str] = numpy.inf,
         max_abs_step: Union[Number, str] = numpy.inf,
         pulled_from: Optional[VariableReference] = None,
-    ) -> "MathematicalProblem":
+    ) -> MathematicalProblem:
         """Add a time-dependent unknown.
 
         Parameters
@@ -455,7 +487,14 @@ class MathematicalProblem:
         if name in self._transients:
             raise ArithmeticError(f"Variable {name!r} is already defined as a time-dependent unknown of {self.name!r}.")
 
-        self._transients[name] = TimeUnknown(self.context, name, der, max_time_step, max_abs_step, pulled_from=pulled_from)
+        self._transients[name] = TimeUnknown(
+            self.context,
+            name,
+            der,
+            max_time_step,
+            max_abs_step,
+            pulled_from=pulled_from,
+        )
         return self
 
     @property
@@ -463,7 +502,7 @@ class MathematicalProblem:
         """Dict[str, TimeDerivative] : Time derivatives computed during system evolution."""
         return self._rates
 
-    def add_rate(self, name: str, source: Any, initial_value: Any = None) -> "MathematicalProblem":
+    def add_rate(self, name: str, source: Any, initial_value: Any = None) -> MathematicalProblem:
         """Add a time derivative.
 
         Parameters
@@ -490,32 +529,15 @@ class MathematicalProblem:
         if self.context is None:
             raise AttributeError(f"Owner System is required to define {name}.")
 
-    @staticmethod
-    def naming_functions(system1, system2) -> Tuple[Callable[[str], str], Callable[[str], str]]:
-        """Returns name mapping functions for variables and residues,
-        based on contexts `system1` and `system2`.
-        Each function maps a str to a str.
-
-        Returns
-        -------
-        var_name, res_name: tuple of Callable[[str], str]
-            Variable and residue name functions.
-        """
-        if system1 is not system2:
-            path = system1.get_path_to_child(system2)
-            var_name = lambda name: f"{path}.{name}"
-            res_name = lambda name: var_name(name if name.endswith(')') else f"({name})")
-        else:
-            var_name = res_name = lambda name: name
-        return var_name, res_name
-
     def extend(self,
-        other: "MathematicalProblem",
+        other: MathematicalProblem,
         copy = True,
         unknowns = True,
         equations = True,
         overwrite = False,
-    ) -> "MathematicalProblem":
+        unknown_wrapper: Optional[Callable[[str], str]] = None,
+        residue_wrapper: Optional[Callable[[str], str]] = None,
+    ) -> MathematicalProblem:
         """Extend the current mathematical system with the other one.
 
         Parameters
@@ -537,52 +559,103 @@ class MathematicalProblem:
         MathematicalProblem
             The resulting mathematical system
         """
-        if other is self and not copy:
+        no_wrapping = (unknown_wrapper is residue_wrapper is None)
+        if other is self and not copy and no_wrapping:
             return self  # quick return
 
-        var_name, residue_name = self.naming_functions(self.context, other.context)
+        if unknown_wrapper is None:
+            unknown_wrapper = lambda key: key
+        if residue_wrapper is None:
+            residue_wrapper = lambda key: key
+
+        from cosapp.systems import System
+        context: System = self.context
+
+        sys_paths: Dict[System, str] = dict()
+
+        def get_path(system: System) -> str:
+            nonlocal sys_paths
+            try:
+                path = sys_paths[system]
+            except KeyError:
+                sys_paths[system] = path = context.get_path_to_child(system)
+            return path
+
+        def var_key_format(path: str, varname: str):
+            return f"{path}.{varname}" if path else varname
+
+        def res_key_format(path: str, eqname: str):
+            return f"{path}: {eqname}" if path else eqname
+
+        def make_key(obj: Union[Boundary, Residue], key_format, wrapper) -> str:
+            """Generic key formatter for unknowns and residues."""
+            path = get_path(obj.context)
+            key = key_format(path, obj.name)
+            return wrapper(key)
+
+        def variable_key(variable: Boundary) -> str:
+            """Generate dict key from `variable` context."""
+            return make_key(variable, var_key_format, unknown_wrapper)
+
+        def residue_key(residue: Residue) -> str:
+            """Generate dict key from `residue` context."""
+            return make_key(residue, res_key_format, residue_wrapper)
 
         get = (lambda obj: obj.copy()) if copy else (lambda obj: obj)
 
-        def transfer(self_dict, other_dict, get_fullname):
-            for name, elem in other_dict.items():
-                fullname = get_fullname(name)
-                if not overwrite and fullname in self_dict:
-                    raise ValueError(f"{fullname!r} already exists in {self.name!r}.")
-                self_dict[fullname] = get(elem)
+        def transfer_unknowns(kind: str):
+            """Transfer unknowns from other mathematical problem"""
+            source = getattr(other, kind)
+            destination = getattr(self, kind)
+            for unknown in source.values():
+                key = variable_key(unknown)
+                if not overwrite and key in destination:
+                    raise ValueError(f"{key!r} already exists in {self.name!r}.")
+                destination[key] = get(unknown)
 
         if unknowns:
-            transfer(self._unknowns, other.unknowns, var_name)
-            transfer(self._transients, other.transients, var_name)
-            transfer(self._rates, other.rates, var_name)
+            transfer_unknowns('unknowns')
+            transfer_unknowns('transients')
+            transfer_unknowns('rates')
 
         if equations:
-            transfer(self._residues, other.residues, residue_name)
+            residues = self._residues
+            for name, residue in other.residues.items():
+                key = residue_key(residue)
+                if not overwrite and key in residues:
+                    raise ValueError(f"{key!r} already exists in {self.name!r}.")
+                residues[key] = get(residue)
 
             connectors = list(self.context.incoming_connectors())
             name2variable = other.context.name2variable
+            path = get_path(other.context)
 
             for deferred in other._targets.values():
                 targetted = list(deferred.variables)[0]
-                name = deferred.target.replace(targetted, var_name(targetted))  # default
+                name = deferred.target.replace(targetted, var_key_format(path, targetted))  # default
                 ref = name2variable[targetted]
-                port = ref.mapping
-                for connector in connectors:
-                    # Check if targetted var is a pulled output
-                    if port is connector.source and port.is_output and ref.key in connector.source_variables():
-                        alias = natural_varname(
-                            f"{connector.sink.name}.{connector.sink_variable(ref.key)}"
+                port, varname = ref.mapping, ref.key
+                # Check if targetted variable is a pulled output
+                if port.is_output:
+                    for connector in connectors:
+                        pulled = (
+                            connector.source is port
+                            and varname in connector.source_variables()
                         )
-                        original = name
-                        if deferred.target == targetted:
-                            name = alias
-                        else:
-                            # target is an expression involving `targetted`
-                            name = name.replace(var_name(targetted), alias)
-                        logger.info(
-                            f"Target on {original!r} will be based on {name!r} in the context of {self.context.full_name()!r}"
-                        )
-                        break
+                        if pulled:
+                            alias_name = natural_varname(
+                                f"{connector.sink.name}.{connector.sink_variable(varname)}"
+                            )
+                            original = name
+                            if deferred.target == targetted:
+                                name = alias_name
+                            else:
+                                # target is an expression involving `targetted`
+                                name = name.replace(var_key_format(path, targetted), alias_name)
+                            logger.info(
+                                f"Target on {original!r} will be based on {name!r} in the context of {self.context.full_name()!r}"
+                            )
+                            break
                 self.add_target(name, weak=deferred.weak)
 
         return self
@@ -595,7 +668,7 @@ class MathematicalProblem:
         self._rates.clear()
         self._targets.clear()
 
-    def copy(self) -> 'MathematicalProblem':
+    def copy(self, activate_targets=False) -> MathematicalProblem:
         """Copy the `MathematicalSystem` object.
 
         Returns
@@ -604,7 +677,10 @@ class MathematicalProblem:
             The duplicated mathematical problem.
         """
         new = MathematicalProblem(self.name, self.context)
-        return new.extend(self, copy=True)
+        new.extend(self, copy=True)
+        if activate_targets:
+            new.activate_targets()
+        return new
 
     def to_dict(self) -> Dict[str, Any]:
         """Returns a JSONable representation of the mathematical problem.

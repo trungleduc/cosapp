@@ -274,13 +274,13 @@ def test_System___setattr__():
 
 
 def test_System___contains__(DummyFactory):
-    top = DummyFactory("top",
+    top: System = DummyFactory("top",
         inwards = get_args('x', 1.0),
         outwards = get_args('y', 0.0),
         properties = get_args('const', 0.123),
         events = get_args('boom', trigger="y > x"),
     )
-    sub = DummyFactory("sub",
+    sub: System = DummyFactory("sub",
         inputs = get_args(DummyPort, 'p_in'),
         outputs = get_args(DummyPort, 'p_out'),
         inward_modevars = get_args('m_in', True),
@@ -724,7 +724,7 @@ def test_System_add_output():
 
 def test_System_add_data(DummyFactory):
     # Add one inwards
-    s = DummyFactory("test", inwards=get_args("K", 2.0))
+    s: System = DummyFactory("test", inwards=get_args("K", 2.0))
     assert "K" in s
     assert f"{System.INWARDS}.K" in s
     assert s.K == 2.0
@@ -733,7 +733,7 @@ def test_System_add_data(DummyFactory):
         s.add_inward("K", 2.0)
 
     # Add multiple inwards
-    s = DummyFactory("test", inwards=get_args(
+    s: System = DummyFactory("test", inwards=get_args(
         {
             "K": 2.0,
             "switch": True,
@@ -752,7 +752,7 @@ def test_System_add_data(DummyFactory):
     assert s.q == {"a": 1, "b": 2}
 
     # Test variables attributes
-    s = DummyFactory("test", inwards=get_args(
+    s: System = DummyFactory("test", inwards=get_args(
         "K", 2.0,
         unit="m",
         dtype=float,
@@ -896,13 +896,13 @@ def test_System_inward_outward_error(DummyFactory, data_kind, case_data, expecte
 
 def test_System_add_locals(DummyFactory):
     # Add unique
-    s = DummyFactory("dummy", outwards=get_args("r", 42.0))
+    s: System = DummyFactory("dummy", outwards=get_args("r", 42.0))
     assert "r" in s
     assert f"{System.OUTWARDS}.r" in s
     assert s.r == 42
 
     # Add multiple outwards
-    s = DummyFactory("dummy", outwards=get_args(
+    s: System = DummyFactory("dummy", outwards=get_args(
         {
             "r": 42.0,
             "q": 12,
@@ -921,7 +921,7 @@ def test_System_add_locals(DummyFactory):
     assert s.x == {"a": 1, "b": 2}
 
     # Add multiple outwards with attributes
-    s = DummyFactory("dummy", outwards=get_args(
+    s: System = DummyFactory("dummy", outwards=get_args(
         {"r": {"value": 42.0, "desc": "my value"}, "q": 12})
     )
     assert "r" in s
@@ -934,7 +934,7 @@ def test_System_add_locals(DummyFactory):
         s.add_outward("a", 10.0)
 
     # Test outward attributes
-    s = DummyFactory("dummy", outwards=get_args(
+    s: System = DummyFactory("dummy", outwards=get_args(
         "K", 2.0,
         unit="m",
         dtype=(int, float),
@@ -1237,10 +1237,10 @@ def test_System_loops_1():
     problem = s.get_unsolved_problem()
     assert problem.shape == (1, 1)
     assert set(problem.unknowns) == {
-        'a.inwards.a_in',
+        'a.a_in',
     }
     assert set(problem.residues) == {
-        'a.inwards.a_in == b.outwards.a_out',
+        'a.a_in == b.a_out',
     }
     connectors = s.connectors
     assert set(connectors) == {
@@ -1265,12 +1265,12 @@ def test_System_loops_1():
     assert set(problem.unknowns) == {
         'a.entry.x',
         'a.entry.v',
-        'a.inwards.a_in',
+        'a.a_in',
     }
     assert set(problem.residues) == {
         'a.entry.x == b.exit.x',
         'a.entry.v == b.exit.v',
-        'a.inwards.a_in == b.outwards.a_out',
+        'a.a_in == b.a_out',
     }
     connectors = s.connectors
     assert set(connectors) == {
@@ -1316,12 +1316,12 @@ def test_System_loops_2():
     problem = top.get_unsolved_problem()
     assert problem.shape == (2, 2)
     assert set(problem.unknowns) == {
-        's1.inwards.x',
-        's1.inwards.y',
+        's1.x',
+        's1.y',
     }
     assert set(problem.residues) == {
-        's1.inwards.x == s2.outwards.z',
-        's1.inwards.y == s3.outwards.z',
+        's1.x == s2.z',
+        's1.y == s3.z',
     }
     connectors = top.connectors
     assert set(connectors) == {
@@ -1344,12 +1344,12 @@ def test_System_loops_2():
     problem = top.get_unsolved_problem()
     assert problem.shape == (2, 2)
     assert set(problem.unknowns) == {
-        's1.inwards.x',
-        's2.inwards.y',
+        's1.x',
+        's2.y',
     }
     assert set(problem.residues) == {
-        's1.inwards.x == s2.outwards.z',
-        's2.inwards.y == s3.outwards.z',
+        's1.x == s2.z',
+        's2.y == s3.z',
     }
     connectors = top.connectors
     assert set(connectors) == {
@@ -1372,12 +1372,12 @@ def test_System_loops_2():
     problem = top.get_unsolved_problem()
     assert problem.shape == (2, 2)
     assert set(problem.unknowns) == {
-        's1.inwards.x',
-        's2.inwards.y',
+        's1.x',
+        's2.y',
     }
     assert set(problem.residues) == {
-        's1.inwards.x == s2.outwards.z',
-        's2.inwards.y == s3.outwards.z',
+        's1.x == s2.z',
+        's2.y == s3.z',
     }
     connectors = top.connectors
     assert set(connectors) == {
@@ -1437,8 +1437,8 @@ def test_System_loops_control_unknowns():
     s.open_loops()
     problem = s.get_unsolved_problem()
     assert problem.shape == (1, 1)
-    assert set(problem.unknowns) == {'a.inwards.x'}
-    unknown = problem.unknowns['a.inwards.x']
+    assert set(problem.unknowns) == {'a.x'}
+    unknown = problem.unknowns['a.x']
     assert unknown.max_abs_step == np.inf
     assert unknown.max_rel_step == 0.5
     s.close_loops()
@@ -1454,8 +1454,8 @@ def test_System_loops_control_unknowns():
     s.open_loops()
     problem = s.get_unsolved_problem()
     assert problem.shape == (1, 1)
-    assert set(problem.unknowns) == {'b.inwards.u'}
-    unknown = problem.unknowns['b.inwards.u']
+    assert set(problem.unknowns) == {'b.u'}
+    unknown = problem.unknowns['b.u']
     assert unknown.max_abs_step == 0.1
     assert unknown.max_rel_step == np.inf
     s.close_loops()
@@ -1513,9 +1513,9 @@ def test_System_loop_residue_reference():
     s.open_loops()
     problem = s.get_unsolved_problem()
     assert problem.shape == (1, 1)
-    assert set(problem.unknowns) == {'a.inwards.x'}
-    assert set(problem.residues) == {'a.inwards.x == b.outwards.y'}
-    key = 'a.inwards.x == b.outwards.y'
+    assert set(problem.unknowns) == {'a.x'}
+    assert set(problem.residues) == {'a.x == b.y'}
+    key = 'a.x == b.y'
     residue = problem.residues[key]
     assert residue.reference == 1.0, "Loop residue should not be normalized"
     s.close_loops()
@@ -1529,8 +1529,8 @@ def test_System_loop_residue_reference():
     # Check that both ends of loop connector are nil
     assert s.a.x == pytest.approx(0, abs=1e-15)
     assert s.b.y == pytest.approx(0, abs=1e-15)
-    assert set(solver.problem.residues) == {f"runner[{key}]"}
-    residue = solver.problem.residues[f"runner[{key}]"]
+    assert set(solver.problem.residues) == {key}
+    residue = solver.problem.residues[key]
     assert residue.reference == 1.0, "Loop residue should not be normalized"
     assert len(solver.results.trace) > 1
 
@@ -1538,7 +1538,7 @@ def test_System_loop_residue_reference():
     s.open_loops()
     problem = s.get_unsolved_problem()
     assert problem.shape == (1, 1)
-    assert set(problem.unknowns) == {'a.inwards.x'}
+    assert set(problem.unknowns) == {'a.x'}
     assert set(problem.residues) == {key}
     residue = problem.residues[key]
     assert residue.reference == 1.0, "Loop residue should not be normalized"
@@ -1551,7 +1551,7 @@ def test_System_loop_residue_reference():
 
 
 def test_System_is_input_var(DummyFactory):
-    s = DummyFactory("dummy",
+    s: System = DummyFactory("dummy",
         inputs = get_args(PtWPort, 'flow_in'),
         outputs = get_args(PtWPort, 'flow_out'),
         inwards = [get_args('x', 1.0), get_args('y', np.zeros(4))],
@@ -1608,10 +1608,10 @@ def test_System_clean_partial_inwards():
     problem = top.get_unsolved_problem()
     assert problem.shape == (1, 1)
     assert set(problem.unknowns) == {
-        'sink.inwards.loop',
+        'sink.loop',
     }
     assert set(problem.residues) == {
-        'sink.inwards.loop == source.outwards.loop',
+        'sink.loop == source.loop',
     }
     connectors = top.connectors
     assert set(connectors) == {
@@ -1670,13 +1670,12 @@ def test_System_check():
 
 
 def test_System_add_unknowns(DummyFactory):
-    m = DummyFactory("dummy", base=Multiply1,
+    m: System = DummyFactory("dummy", base=Multiply1,
         unknowns=get_args("K1", max_rel_step=0.01, lower_bound=-10.0),
     )
-
-    unknown = m.get_unsolved_problem().unknowns["inwards.K1"]
+    unknown = m.get_unsolved_problem().unknowns["K1"]
     assert isinstance(unknown, Unknown)
-    assert unknown.name == "inwards.K1"
+    assert unknown.name == "K1"
     assert unknown.port is m.inwards
     assert unknown.max_rel_step == 0.01
     assert unknown.max_abs_step == np.inf
@@ -1684,7 +1683,7 @@ def test_System_add_unknowns(DummyFactory):
     assert unknown.upper_bound == np.inf
     assert unknown.mask is None
 
-    m = DummyFactory("dummy", base=Multiply1,
+    m: System = DummyFactory("dummy", base=Multiply1,
         unknowns=get_args(
             "p_in.x",
             max_rel_step=0.1,
@@ -1693,7 +1692,6 @@ def test_System_add_unknowns(DummyFactory):
             upper_bound=1e8,
         ),
     )
-
     unknown = m.get_unsolved_problem().unknowns["p_in.x"]
     assert isinstance(unknown, Unknown)
     assert unknown.name == "p_in.x"
@@ -1711,14 +1709,16 @@ def test_System_add_unknowns(DummyFactory):
         DummyFactory("dummy", base=Multiply1, unknowns=get_args("foo"))
 
     # Test mask
-    v = DummyFactory("v", base=Strait1dLine, unknowns=get_args("a"))
+    v: System = DummyFactory("v", base=Strait1dLine, unknowns=get_args("a"))
     
-    unknown = v.get_unsolved_problem().unknowns["inwards.a"]
+    unknown = v.get_unsolved_problem().unknowns["a"]
     assert np.array_equal(unknown.mask, [True, True, True])
 
-    v = DummyFactory("v", base=Strait1dLine, unknowns=get_args("a[::2]"))
+    v: System = DummyFactory("v", base=Strait1dLine, unknowns=get_args("a[::2]"))
     
-    unknown = v.get_unsolved_problem().unknowns["inwards.a"]
+    problem = v.get_unsolved_problem()
+    assert set(problem.unknowns) == {"a[::2]"}
+    unknown = problem.unknowns["a[::2]"]
     assert np.array_equal(unknown.mask, [True, False, True])
 
     with pytest.raises(IndexError):
@@ -1730,7 +1730,7 @@ def test_System_add_equation(DummyFactory):
         def setup(self):
             self.add_inward("x", 1.0)
             m = self.add_equation("x == 0", name="cancel_x")
-            self.add_outward("math_problem", m)
+            self.add_property("math_problem", m)
 
     s = ASyst("s")
     assert s.math_problem is s._math
@@ -1743,7 +1743,7 @@ def test_System_add_equation(DummyFactory):
         assert residue.name == name
     assert residues["cancel_x"].value == 1
 
-    s = DummyFactory("dummy",
+    s: System = DummyFactory("dummy",
         inwards = [
             get_args("x", 1.0),
             get_args("y", 1.0),
@@ -1770,23 +1770,29 @@ def test_System_add_design_method():
     class ASyst(System):
         def setup(self):
             m = self.add_design_method("method1")
-            self.add_outward("math_problem", m)
+            self.add_property("design_method", m)
 
     a = ASyst("a")
     with pytest.raises(AttributeError, match="`add_design_method` cannot be called outside `setup`"):
         a.add_design_method("methodX")
     assert isinstance(a.design("method1"), MathematicalProblem)
-    assert a.design("method1") is a.math_problem
+    assert a.design("method1") is a.design_method
 
 
 def test_System_design(DummyFactory):
-    a = DummyFactory("a", design_methods=get_args("method1"))
+    a: System = DummyFactory("a", design_methods=[get_args("method1"), get_args("method2")])
+
+    assert set(a.design_methods) == {'method1', 'method2'}
+    for name, design_method in a.design_methods.items():
+        assert isinstance(design_method, MathematicalProblem)
+        assert a.design(name) is design_method
+
     with pytest.raises(KeyError):
-        a.design("method2")
+        a.design("method3")
 
 
 def test_System_add_target(DummyFactory):
-    s = DummyFactory('s',
+    s: System = DummyFactory('s',
         inwards = [get_args('x', 1.0), get_args('y', 0.0)],
         outwards = get_args('z', 0.0),
         targets = get_args('z'),
@@ -1840,8 +1846,11 @@ def test_System_add_target_offdesign():
     s.run_drivers()
     assert s.z == pytest.approx(2)
     assert s.y == pytest.approx(2)
-    assert set(solver.problem.residues) == {"runner[Target[z]]"}
-    assert solver.problem.residues["runner[Target[z]]"].equation == "z == 2.0"
+    assert set(solver.problem.residues) == {"z == 2.0"}
+    assert solver.problem.residues["z == 2.0"].equation == "z == 2.0"
+    # TODO: should be as below (with 'target' suffix)
+    # assert set(solver.problem.residues) == {"z == 2.0 (target)"}
+    # assert solver.problem.residues["z == 2.0 (target)"].equation == "z == 2.0"
 
     s.z = 4.0
     s.run_drivers()
@@ -2070,7 +2079,7 @@ def test_System_add_target_pulled_output_2():
             a = self.add_child(SubSystem('a'), pulling='x')
             b = self.add_child(SubSystem('b'), pulling='y')
 
-            self.connect(a.outwards, b.inwards, {'y': 'x'})
+            self.connect(a, b, {'y': 'x'})
 
     top = TopSystem('top')
     solver = top.add_driver(NonLinearSolver('solver', tol=1e-6))
@@ -2121,7 +2130,7 @@ def test_System_add_target_weak(weak):
     top = TopSystem('top')
 
     offdesign = top.get_unsolved_problem()
-    assert set(offdesign.unknowns) == {'a.inwards.y'}
+    assert set(offdesign.unknowns) == {'a.y'}
     assert len(offdesign.residues) == 0
 
     if weak:
@@ -2147,6 +2156,58 @@ def test_System_add_target_weak(weak):
         assert solver.problem.shape == (1, 1)
 
 
+# @pytest.mark.parametrize("weak", [True, False])
+# def test_System_add_target_weak_in(weak):
+#     """Use of `add_target` on an input with `weak` option"""
+#     class SystemA(System):
+#         def setup(self):
+#             self.add_inward('x', 1.0)
+
+#     class SystemB(System):
+#         def setup(self):
+#             self.add_inward('u', 0.0)
+#             self.add_outward('v', 0.0)
+
+#         def compute(self):
+#             self.v = 2 * self.u
+
+#     class TopSystem(System):
+#         def setup(self):
+#             a = self.add_child(SystemA('a'))
+#             b = self.add_child(SystemB('b'))
+
+#             self.connect(a, b, {'x': 'v'})
+#             self.add_unknown('b.u').add_target('a.x', weak=weak)
+#             self.exec_order = ['b', 'a']
+
+#     top = TopSystem('top')
+
+#     offdesign = top.get_unsolved_problem()
+#     assert set(offdesign.unknowns) == {'b.u'}
+#     assert len(offdesign.residues) == 0
+
+#     if weak:
+#         # Weak target: residue is suppressed due to b.v -> a.x connection
+#         print(offdesign, offdesign.shape, sep="\n")
+#         assert len(offdesign.deferred_residues) == 0
+#         assert offdesign.shape == (1, 0)
+
+#     else:
+#         # Strong target: residue is maintained despite connection
+#         assert len(offdesign.deferred_residues) == 1
+#         assert offdesign.shape == (1, 1)
+
+#         solver = top.add_driver(NonLinearSolver('solver', tol=1e-9))
+
+#         top.b.u = 0.1
+#         top.a.x = 0.5  # set target
+#         top.run_drivers()
+#         assert top.b.u == pytest.approx(0.25)
+#         assert top.a.x == pytest.approx(0.5)
+#         assert top.b.v == pytest.approx(0.5)
+#         assert solver.problem.shape == (1, 1)
+
+
 @pytest.mark.parametrize("ctor_data, expected_data", [
     (dict(), dict()),
     (
@@ -2163,7 +2224,7 @@ def test_System_add_target_weak(weak):
             equations = get_args("x == 1", name="dummy", reference="norm"),
         ),
         dict(
-            unknowns = {"inwards.y": dict()},
+            unknowns = {"y": dict()},
             residues = {"dummy": dict(value=2.1)}
         )
     ),
@@ -2176,7 +2237,7 @@ def test_System_add_target_weak(weak):
         dict(
             n_residues = 1,
             n_unknowns = 1,
-            unknowns = {"inwards.x": dict(
+            unknowns = {"x": dict(
                 max_abs_step = 1,
                 max_rel_step = 0.1,
                 lower_bound = -5,
@@ -2187,15 +2248,15 @@ def test_System_add_target_weak(weak):
     ),
 ])
 def test_System_get_unsolved_problem(DummyFactory, ctor_data, expected_data):
-    system = DummyFactory("test", **ctor_data)  # test object
+    system: System = DummyFactory("test", **ctor_data)  # test object
     problem = system.get_unsolved_problem()
     assert isinstance(problem, MathematicalProblem)
     expected_unknowns = expected_data.get("unknowns", dict())
     expected_residues = expected_data.get("residues", dict())
     assert problem.shape == (len(expected_unknowns), len(expected_residues))
     # Test unknowns
-    assert_keys(system.unknowns, *expected_unknowns.keys())
-    assert_keys(problem.unknowns, *expected_unknowns.keys())
+    assert set(system.unknowns) == set(expected_unknowns)
+    assert set(problem.unknowns) == set(expected_unknowns)
     for name, unknown in problem.unknowns.items():
         expected = { 
             # default values:
@@ -2213,8 +2274,8 @@ def test_System_get_unsolved_problem(DummyFactory, ctor_data, expected_data):
         assert unknown.max_abs_step == pytest.approx(expected['max_abs_step'], rel=1e-14)
         assert unknown.max_rel_step == pytest.approx(expected['max_rel_step'], rel=1e-14)
     # Test equations/residues
-    assert_keys(system.residues, *expected_residues.keys())
-    assert_keys(problem.residues, *expected_residues.keys())
+    assert set(system.residues) == set(expected_residues)
+    assert set(problem.residues) == set(expected_residues)
     for name, residue in problem.residues.items():
         expected = expected_residues[name]
         assert isinstance(residue, Residue)
@@ -2226,7 +2287,7 @@ def test_System_get_unsolved_problem(DummyFactory, ctor_data, expected_data):
 def test_System_get_unsolved_problem_seq(DummyFactory):
     """Non-parametric version of `test_System_get_unsolved_system()`.
     Tests method `get_unsolved_problem` for systems with children."""
-    a = DummyFactory("a",
+    a: System = DummyFactory("a",
         inwards = [get_args("x", 22.0), get_args("y", 42.0)],
         unknowns = get_args("x", 1.0, 0.1, -5, 40.0),
         equations = get_args("y == 1", name="dummy"),
@@ -2236,7 +2297,7 @@ def test_System_get_unsolved_problem_seq(DummyFactory):
     assert len(problem.unknowns) == 1
     assert len(problem.residues) == 1
 
-    T = DummyFactory("top")
+    T: System = DummyFactory("top")
     assert isinstance(T, System)
     T.add_child(a)
     problem = T.get_unsolved_problem()
@@ -2244,22 +2305,22 @@ def test_System_get_unsolved_problem_seq(DummyFactory):
     assert len(problem.unknowns) == 1
     assert len(problem.residues) == 1
     # Test unknowns
-    assert_keys(problem.unknowns, "a.inwards.x")
-    unknown = problem.unknowns["a.inwards.x"]
-    assert unknown is a._math.unknowns["inwards.x"]
-    assert unknown.name == "inwards.x"
+    assert set(problem.unknowns) == {"a.x"}
+    unknown = problem.unknowns["a.x"]
+    assert unknown is a._math.unknowns["x"]
+    assert unknown.name == "x"
     assert unknown.context is a
     # Test residues/equations
-    assert_keys(problem.residues, "a.(dummy)")
-    residue = problem.residues["a.(dummy)"]
+    assert set(problem.residues) == {"a: dummy"}
+    residue = problem.residues["a: dummy"]
     assert residue is a._math.residues["dummy"]
     assert residue.name == "dummy"
     assert residue.context is a
 
     # Test that unknowns are suppressed by connection to a peer
-    T = DummyFactory('top')
-    b = DummyFactory('b', inwards=get_args('x'), outwards=get_args('y'))
-    c = DummyFactory('c', base=b.__class__, unknowns=get_args('x'))
+    T: System = DummyFactory('top')
+    b: System = DummyFactory('b', inwards=get_args('x'), outwards=get_args('y'))
+    c: System = DummyFactory('c', base=b.__class__, unknowns=get_args('x'))
     T.add_child(b)
     T.add_child(c)
     T.connect(T.b.outwards, T.c.inwards, {"y": "x"})
@@ -2268,8 +2329,8 @@ def test_System_get_unsolved_problem_seq(DummyFactory):
     assert problem.shape == (0, 0)
 
     # Test that unknowns are forwarded by connection to the parent
-    T = DummyFactory('top')
-    s = DummyFactory('sub',
+    T: System = DummyFactory('top')
+    s: System = DummyFactory('sub',
         inwards=get_args('x'),
         outwards=get_args('y'),
         unknowns=get_args('x'),
@@ -2278,13 +2339,13 @@ def test_System_get_unsolved_problem_seq(DummyFactory):
 
     problem = T.get_unsolved_problem()
     assert problem.shape == (1, 0)
-    unknown = problem.unknowns["inwards.x"]
+    unknown = problem.unknowns["x"]
     assert unknown.context is T
 
 
 @pytest.mark.parametrize("direction", PortType)
 def test_System_connect_orphan_ports(DummyFactory, direction):
-    s = DummyFactory("s",
+    s: System = DummyFactory("s",
         inputs = get_args(PtWPort, "flow_in"),
         outputs = get_args(PtWPort, "flow_out"),
     )
@@ -2358,7 +2419,7 @@ def test_System_connect_ports(caplog, DummyFactory):
     assert connector._unit_conversions == {"Pt": (1, 0), "W": (1, 0)}
 
     s1 = SubSystem("s1")
-    group = DummyFactory("hat",
+    group: System = DummyFactory("hat",
         inputs=get_args(PtWPort, "hat_in"),
         outputs=get_args(PtWPort, "hat_out"))
     group.add_child(s1)
@@ -2389,7 +2450,7 @@ def test_System_connect_ports(caplog, DummyFactory):
 
     # Same as previous test, with different args order in group.connect(...)
     s1 = SubSystem("s1")
-    group = DummyFactory("hat",
+    group: System = DummyFactory("hat",
         inputs=get_args(PtWPort, "hat_in"),
         outputs=get_args(PtWPort, "hat_out"))
     group.add_child(s1)
@@ -2457,7 +2518,7 @@ def test_System_connect_hybrid(DummyFactory):
             self.add_variable("W", 1.0, unit="kg/s")
 
     s1 = SubSystem("s1")
-    s2 = DummyFactory("s2", inputs=get_args(CopyCatPort, "in_"))
+    s2: System = DummyFactory("s2", inputs=get_args(CopyCatPort, "in_"))
     group = System("hat")
     group.add_child(s1)
     group.add_child(s2)
@@ -2479,7 +2540,7 @@ def test_System_connect_hybrid(DummyFactory):
             self.add_variable("Mfr", 1.0, unit="lbm/s")
 
     s1 = SubSystem("s1")
-    s2 = DummyFactory("s2", inputs=get_args(CopyCatPort, "in_"))
+    s2: System = DummyFactory("s2", inputs=get_args(CopyCatPort, "in_"))
     group = System("hat")
     group.add_child(s1)
     group.add_child(s2)
@@ -2502,7 +2563,7 @@ def test_System_connect_hybrid(DummyFactory):
             self.add_variable("Mfr", 1.0, unit="kg/s")
 
     s1 = SubSystem("s1")
-    s2 = DummyFactory("s2", inputs=get_args(CopyCatPort, "in_"))
+    s2: System = DummyFactory("s2", inputs=get_args(CopyCatPort, "in_"))
     group = System("hat")
     group.add_child(s1)
     group.add_child(s2)
@@ -3094,7 +3155,7 @@ def test_System_properties(DummyFactory, ctor_data, expected):
     error = expected.get('error', None)
 
     if error is None:
-        system = DummyFactory("dummy", **ctor_data)  # test object
+        system: System = DummyFactory("dummy", **ctor_data)  # test object
         assert system.properties == expected.get('properties', {})
 
     else:
@@ -3103,7 +3164,7 @@ def test_System_properties(DummyFactory, ctor_data, expected):
 
 
 def test_System_properties_safeview(DummyFactory):
-    dummy = DummyFactory("dummy", 
+    dummy: System = DummyFactory("dummy", 
         inwards = [get_args("x", 22.0), get_args("y", 42.0, desc="that's why")],
         properties = [get_args("Z", 3.2), get_args("n", 12)],
     )
@@ -3198,7 +3259,7 @@ def test_System_log_debug_message(format, msg, kwargs, to_log, emitted):
 ])
 def test_System_add_outward_modevar(DummyFactory, args_kwargs, expected):
     args, kwargs = args_kwargs
-    s = DummyFactory("dummy",
+    s: System = DummyFactory("dummy",
         inwards = get_args('x', 1.0),
         outwards = get_args('y', 0.5),
         outward_modevars = get_args('a', *args, **kwargs),
@@ -3209,7 +3270,7 @@ def test_System_add_outward_modevar(DummyFactory, args_kwargs, expected):
 
 
 def test_System_add_outward_modevar_init(DummyFactory):
-    s = DummyFactory("dummy",
+    s: System = DummyFactory("dummy",
         inwards = get_args('x', 1.0),
         outwards = get_args('y', 0.5),
         outward_modevars = [

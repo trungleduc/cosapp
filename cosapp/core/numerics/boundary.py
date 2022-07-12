@@ -67,80 +67,40 @@ class Boundary:
         info: SimpleNameSpace
             Structure containing fields `varname`, `fullname`, `port` and `mask`.
         """
+        from cosapp.ports.port import BasePort
         if not isinstance(name, str):
             raise TypeError(f"Variable name {type(name).__qualname__!r} is not a string.")
 
-        var_name, auto_mask = get_indices(context, name)
+        info = get_indices(context, name)
+        ref = context.name2variable[info.basename]
+        container = ref.mapping
 
-        container = Boundary.container(context, var_name)
-
-        # Force port name to be included in unknown name
-        fullpath = var_name.split(".")
-        if len(fullpath) < 2 or fullpath[-2] != container.name:
-            fullpath.insert(-1, container.name)
-        portname = ".".join(fullpath[:-1])
-
-        return SimpleNamespace(
-            varname = fullpath[-1],
-            fullname = ".".join(fullpath),
-            port = context[portname],
-            mask = mask if mask is not None else auto_mask,
-            ref = context.name2variable[var_name],
-        )
-
-    @staticmethod
-    def container(system: "cosapp.systems.System", name: str) -> "BasePort":
-        """
-        Checks that variable `name` is a valid boundary in `system`.
-        If so, returns the container port. Raises an exception otherwise.
-
-        Parameters
-        ----------
-        - system: cosapp.systems.System
-            System in which a boundary may be defined.
-        - name: str
-            Name of the variable to check
-        
-        Returns
-        -------
-        - container: BasePort
-            Port containing the variable, if the latter is found valid (raises an exception otherwise)
-
-        Raises
-        ------
-        - `AttributeError` if name is not found in system
-        - `TypeError` if container is a sub-system (not a port)
-        - `ValueError` if container is an output port
-        - `ScopeError` if container port does not belong to system
-        """
-        from cosapp.ports.port import BasePort
-        if name not in system:
-            raise AttributeError(
-                f"Variable {name!r} is not present in {system.name!r}."
-            )
-
-        _, container, key = system.name2variable[name]
         if not isinstance(container, BasePort):
             raise TypeError(
-                f"Only variables can be used in mathematical algorithms; got {name!r} in {system.name!r}"
+                f"Only variables can be used in mathematical algorithms; got {info.basename!r} in {context.name!r}"
             )
-
         if not container.is_input:
-            path =  f"{system.name}.{container.name}"
             raise ValueError(
-                f"Only variables in input ports can be used as boundaries; got {name!r} in {path!r}."
+                f"Only variables in input ports can be used as boundaries; got {info.basename!r} in {container.contextual_name!r}."
             )
-
-        # Test if the type and scoping are compatible with the boundary status
+        # Test if type and scope are compatible with boundary status
         try:
-            container.validate(key, system[name])
+            container.validate(ref.key, ref.value)
         except ScopeError:  # Type error should still be raised
-            if system is not container.owner:
+            if context is not container.owner:
                 # Only owner can set its variables
                 raise ScopeError(
                     f"Trying to set variable {name!r} out of your scope through a boundary."
                 )
-        return container
+
+        return SimpleNamespace(
+            name = info.fullname,  # may differ from `basename`, if masked
+            varname = ref.key,
+            basename = info.basename,
+            port = container,
+            mask = mask if mask is not None else info.mask,
+            ref = ref,
+        )
 
     def __str__(self) -> str:
         return str(self.default_value)
@@ -161,7 +121,22 @@ class Boundary:
     @property
     def name(self) -> str:
         """str : Contextual name of the boundary."""
-        return self.__info.fullname
+        return self.__info.name
+
+    @property
+    def basename(self) -> str:
+        """str : Contextual name of the boundary."""
+        return self.__info.basename
+
+    def contextual_name(self, context: Optional["System"] = None) -> str:
+        """str : Contextual name of the boundary, relative to `context`.
+        If `context` is `None` (default), uses current variable context.
+        """
+        if context is None:
+            path = self.context.name
+        else:
+            path = context.get_path_to_child(self.context) or self.context.name
+        return f"{path}.{self.name}"
 
     @property
     def ref(self) -> VariableReference:
@@ -462,6 +437,7 @@ class Unknown(Boundary):
         return {
             "context": self.context.contextual_name,
             "name": self.name,
+            "varname": self.variable,
             "max_abs_step": self.max_abs_step,
             "max_rel_step": self.max_rel_step,
             "lower_bound": self.lower_bound,

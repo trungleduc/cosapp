@@ -33,7 +33,6 @@ from cosapp.core.eval_str import EvalString
 from cosapp.core.variableref import VariableReference
 from cosapp.core.numerics.basics import MathematicalProblem
 from cosapp.core.numerics.boundary import TimeDerivative, TimeUnknown, Unknown
-from cosapp.core.numerics.residues import AbstractResidue, Residue
 from cosapp.core.time import TimeObserver
 from cosapp.ports.enum import PortType, Scope, Validity
 from cosapp.ports.port import BasePort, ExtensiblePort, ModeVarPort, Port
@@ -222,7 +221,7 @@ class System(Module, TimeObserver):
         self._math = MathematicalProblem(name, self)  # type: MathematicalProblem
         self.__loop_problem = MathematicalProblem('loop', self)  # type: MathematicalProblem
         self.drivers = collections.OrderedDict()  # type: Dict[str, Driver]
-        self.design_methods = dict()  # type: Dict[str, Tuple[Tuple[Unknown], Tuple[AbstractResidue]]]
+        self.design_methods = dict()  # type: Dict[str, MathematicalProblem]
         self.__readonly = dict()  # type: Dict[str, Any]
 
         self._context_lock = ContextLock()  # type: ContextLock
@@ -1261,25 +1260,25 @@ class System(Module, TimeObserver):
         return self._context_lock.is_locked()
 
     @property
-    def residues(self) -> Dict[str, Residue]:
+    def residues(self):
         """Dict[str, Residue] : Get the residues for the current `System`."""
         # MappingProxyType forbids external modification
         return MappingProxyType(self._math.residues)
 
     @property
-    def unknowns(self) -> Dict[str, Unknown]:
+    def unknowns(self):
         """Dict[str, Unknown] : Get the unknowns for the current `System`."""
         # MappingProxyType forbids external modification
         return MappingProxyType(self._math.unknowns)
 
     @property
-    def transients(self) -> Dict[str, TimeUnknown]:
+    def transients(self):
         """Returns a dictionary containing all transient unknowns in current system tree"""
         # MappingProxyType forbids external modification
         return MappingProxyType(self._math.transients)
 
     @property
-    def rates(self) -> Dict[str, TimeDerivative]:
+    def rates(self):
         """Returns a dictionary containing all time derivatives (rates) in current system tree"""
         # MappingProxyType forbids external modification
         return MappingProxyType(self._math.rates)
@@ -1341,7 +1340,7 @@ class System(Module, TimeObserver):
             problem.add_unknown(name, **options)
 
         def transfer_transient(unknown, name):
-            ref = unknown.context.name2variable[unknown.name]
+            ref = unknown.context.name2variable[unknown.basename]
             problem.add_transient(name, 
                 der = unknown.der,
                 max_time_step = unknown.max_time_step_expr,
@@ -1372,10 +1371,12 @@ class System(Module, TimeObserver):
                     for name in list(unknowns.keys()):
                         unknown = unknowns[name]
                         port = unknown.port
-                        if (port.owner.name in self.children
+                        connected = (
+                            port.owner in self.children.values()
                             and port is connector.sink 
                             and unknown.variable in connector.sink_variables()
-                        ):
+                        )
+                        if connected:
                             # Port is connected => remove unknown
                             unknowns.pop(name)
                             if connector.source.owner is self:
@@ -1391,10 +1392,11 @@ class System(Module, TimeObserver):
                     targetted = list(deferred.variables)[0]
                     ref = origin.name2variable[targetted]
                     port = ref.mapping
+                    name = ref.key
                     connected = (
-                        port.owner.name in self.children
+                        port.owner in self.children.values()
                         and port is connector.source 
-                        and ref.key in connector.source_variables()
+                        and name in connector.source_variables()
                     )
                     if connected:
                         # Remove deferred equation
@@ -2103,7 +2105,6 @@ class System(Module, TimeObserver):
                 logger.debug("Start clean_run recursive calls.")
                 self.call_clean_run(skip_driver=True)
 
-    @property
     def any_active_driver(self) -> bool:
         return any(driver.is_active() for driver in self.drivers.values())
 
@@ -2116,7 +2117,7 @@ class System(Module, TimeObserver):
                 logger.debug("Start setup_run recursive calls.")
                 self.call_setup_run()
 
-            if self.drivers and self.any_active_driver:
+            if self.drivers and self.any_active_driver():
                 if self.is_standalone():  # System not standalone can't set the mathematical problem
                     logger.debug(f"Exec order for {self.name}: {list(self.exec_order)}")
 
@@ -2151,15 +2152,16 @@ class System(Module, TimeObserver):
                         logger.debug(f"Skip {self.name}.compute_before - Clean inputs")
 
                     if not self.is_clean():
-                        for child in self.exec_order:
+                        sys_connectors = self.__sys_connectors
+                        for child in self.children.values():
                             # Update connectors
-                            for connector in self.__sys_connectors.get(child, []):
+                            for connector in sys_connectors.get(child.name, []):
                                 connector.transfer()
                             # Execute the child
-                            self.children[child].run_drivers()
+                            child.run_drivers()
 
                         # Pull values from inside Modules to top shelve border
-                        for connector in self.__sys_connectors.get(self.name, []):
+                        for connector in sys_connectors.get(self.name, []):
                             connector.transfer()
                     else:
                         logger.debug(f"Skip {self.name} children execution - Clean interfaces")
@@ -2188,11 +2190,7 @@ class System(Module, TimeObserver):
         bool
             Ability to solve the system or not.
         """
-        for driver in self.drivers.values():
-            if driver.is_standalone():
-                return True
-
-        return False
+        return any(driver.is_standalone() for driver in self.drivers.values())
 
     def connect(self,
         object1: Union[BasePort, System],
@@ -2757,7 +2755,7 @@ class System(Module, TimeObserver):
         jsonschema.validate(params, config_schema)
 
     @classmethod
-    def load(cls, filepath: Union[str, Path, StringIO]) -> 'System':
+    def load(cls, filepath: Union[str, Path, StringIO]) -> System:
         """Load configuration from file-like object.
 
         Parameters
@@ -2787,7 +2785,7 @@ class System(Module, TimeObserver):
         return cls.load_from_dict(*params.popitem())
 
     @classmethod
-    def load_from_dict(cls, name: str, parameters: dict) -> 'System':
+    def load_from_dict(cls, name: str, parameters: dict) -> System:
         """Instantiate a `System` from its name and its parameters.
 
         The construction of the `System` is done recursively from the lower level. Therefore this
@@ -2885,7 +2883,7 @@ class System(Module, TimeObserver):
         for name_system, params in parameters.get('subsystems', {}).items():
             subsystem = cls.load_from_dict(name_system, params)
             top_system.add_child(subsystem)
-            
+        
         for connection in parameters.get('connections', []):
             if len(connection) == 2:
                 sink, source = connection

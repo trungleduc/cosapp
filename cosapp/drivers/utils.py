@@ -1,10 +1,10 @@
+from __future__ import annotations
 import enum
 from typing import Optional, Union, Dict, Tuple, List, Set, NamedTuple
 from collections.abc import Collection
 
 from cosapp.core.numerics.boundary import Unknown
 from cosapp.core.numerics.basics import MathematicalProblem
-from cosapp.core.eval_str import EvalString
 from cosapp.utils.helpers import check_arg
 from cosapp.utils.parsing import multi_split
 
@@ -75,38 +75,39 @@ class UnknownAnalyzer(SystemAnalyzer):
         # Add unknowns
         input_mapping = self.input_mapping
 
-        def get_free_unknown(unknown: Unknown, key: str) -> Union[Unknown, None]:
+        def get_free_unknown(unknown: Unknown) -> Union[Unknown, None]:
             """Checks if `unknown` is aliased by pulling.
             If so, returns alias unknown; else, returns original unknown.
             """
+            if unknown.context is system:
+                contextual_name = unknown.basename
+            else:
+                contextual_name = f"{system.get_path_to_child(unknown.context)}.{unknown.basename}"
             try:
-                alias = input_mapping[key]
+                alias = input_mapping[contextual_name]
             except KeyError:
-                logger.warning(f"Skip connected unknown {key!r}")
+                logger.warning(f"Skip connected unknown {contextual_name!r}")
                 return None
-            aliased = (alias.mapping is not unknown.port)
+            aliased = (alias is not unknown.ref)
             if aliased:
                 try:
                     path = system.get_path_to_child(alias.context)
                 except ValueError:
-                    # `alias.context` is not a child of `system`
-                    alias_name = f"{alias.mapping.contextual_name}.{alias.key}"
-                    unknown_name = f"{unknown.context.name}.{key}"
+                    # `alias.context` is not in `system` tree
                     logger.warning(
-                        f"Unknown {unknown_name!r} is aliased by {alias_name!r}"
+                        f"Unknown {unknown.contextual_name()!r} is aliased by {alias.contextual_name!r}"
                         f", defined outside the context of {system.name!r}"
                         f"; it is likely to be overwritten after the computation."
                     )
                 else:
-                    alias_name = f"{alias.mapping.name}.{alias.key}"
-                    unknown = unknown.transfer(alias.context, alias_name)
-                    alias_contextual_name = f"{path}.{alias_name}" if path else alias_name
-                    logger.info(f"Replace unknown {key!r} by {alias_contextual_name!r}")
+                    alias_contextual_name = f"{path}.{alias.name}" if path else alias.name
+                    unknown = unknown.transfer(system, alias_contextual_name)
+                    logger.info(f"Replace unknown {contextual_name!r} by {alias_contextual_name!r}")
 
             return unknown
         
         for key, unknown in problem.unknowns.items():
-            free_unknown = get_free_unknown(unknown, key)
+            free_unknown = get_free_unknown(unknown)
             if free_unknown is None:
                 continue
             aliased = (free_unknown is not unknown)
@@ -125,10 +126,11 @@ class DesignProblemHandler:
     """
     def __init__(self, system: "cosapp.systems.System"):
         self.__handler = UnknownAnalyzer(system)
-        self.reset()
+        self.design = self.new_problem('design')
+        self.offdesign = self.new_problem('offdesign')
 
     @classmethod
-    def make(cls, design: MathematicalProblem, offdesign: MathematicalProblem) -> "DesignProblemHandler":
+    def make(cls, design: MathematicalProblem, offdesign: MathematicalProblem) -> DesignProblemHandler:
         handler = cls(design.context)
         handler.problems = (design, offdesign)
         return handler
@@ -153,7 +155,7 @@ class DesignProblemHandler:
         return self.design, self.offdesign
 
     @problems.setter
-    def problems(self, problems) -> None:
+    def problems(self, problems: Tuple[MathematicalProblem, MathematicalProblem]) -> None:
         """Setter for (design, offdesign) tuple"""
         design, offdesign = problems
         if design is None:
@@ -165,16 +167,16 @@ class DesignProblemHandler:
         self.design, self.offdesign = problems
         self.__handler.system = design.context
 
-    def reset(self) -> None:
-        """Reset handler"""
-        self.design = self.new_problem('design')
-        self.offdesign = self.new_problem('offdesign')
+    def clear(self) -> None:
+        """Reset inner problems"""
+        self.design.clear()
+        self.offdesign.clear()
 
     def new_problem(self, name: str) -> MathematicalProblem:
         """Create new `MathematicalProblem` instance"""
         return MathematicalProblem(name, self.system)
 
-    def export_problems(self, prune=True) -> Tuple[MathematicalProblem, MathematicalProblem]:
+    def copy_problems(self, prune=True) -> Tuple[MathematicalProblem, MathematicalProblem]:
         """Export design and off-design problems.
         
         Parameters:
@@ -185,7 +187,7 @@ class DesignProblemHandler:
 
         Results:
         --------
-        - (design, offdesign): Filtered design and off-design problems,
+        - (design, offdesign): Copies of design and off-design problems,
             as a tuple of `MathematicalProblem` objects.
         """
         if prune:
@@ -197,10 +199,37 @@ class DesignProblemHandler:
             offdesign = self.offdesign.copy()
         return design, offdesign
 
-    def merged_problem(self, name="merged", offdesign_prefix="offdesign") -> MathematicalProblem:
-        """Merge design and off-design problems into a single `MathematicalProblem` instance.
+    def copy(self, prune=True) -> DesignProblemHandler:
+        """Returns a copy of the current object.
+        
+        Parameters:
+        -----------
+        - prune, Optional[bool]:
+            If `True` (default), resolve unknown aliasing first.
+            If `False`, returned handler contains copies of object problems.
         """
-        design, offdesign = self.export_problems()
+        design, offdesign = self.copy_problems(prune)
+        return DesignProblemHandler.make(design, offdesign)
+
+    def prune(self) -> None:
+        """Remove connected unknowns and resolve unknown aliasing
+        in design and off-desing problems.
+        """
+        self.design, self.offdesign = self.copy_problems(prune=True)
+
+    def merged_problem(self, name="merged", offdesign_prefix="offdesign", copy=True) -> MathematicalProblem:
+        """Merge design and off-design problems into a single `MathematicalProblem` instance.
+
+        Parameters
+        ----------
+        - name [str, optional]:
+            Merged problem name (default: 'merged').
+        - offdesign_prefix [str, optional]:
+            If not empty or `None`, applies a prefix to dict keys in off-design unknowns and equations.
+        - copy [bool, optional]:
+            Perform copies if `True` (default).
+        """
+        design, offdesign = self.copy_problems() if copy else self.problems
 
         def check(attr, kind):
             design_attr = getattr(design, attr)
@@ -229,11 +258,11 @@ class DesignProblemHandler:
 
             # Add unknowns
             for name in list(problem.unknowns.keys()):
-                merged.unknowns[rename(name)] = problem.unknowns.pop(name)
+                merged.unknowns[rename(name)] = problem.unknowns.get(name)
             
             # Add residues
             for name in list(problem.residues.keys()):
-                merged.residues[local_name(name)] = problem.residues.pop(name)
+                merged.residues[local_name(name)] = problem.residues.get(name)
 
             for name, residue in problem.get_target_residues().items():
                 merged.residues[local_name(name)] = residue
@@ -242,9 +271,20 @@ class DesignProblemHandler:
         add_problem(offdesign, rename_unknowns=True)
         return merged
 
-    def extend(self, other: "DesignProblemHandler", prune=True, copy=True, overwrite=False) -> "DesignProblemHandler":
+    def extend(self, other: DesignProblemHandler, prune=True, copy=True, overwrite=False) -> DesignProblemHandler:
+        """Extend both design and off-design problems from `other` handler.
+        
+        Parameters
+        ----------
+        - prune [bool, optional]:
+            If `True` (default), added problems are pruned before being added.
+        - copy [bool, optional]:
+            Determines whether problem copies should be made before extension.
+        - overwrite [bool, optional]:
+            Overwrite option, forwarded to `MathematicalProblem.extend`.
+        """
         if prune or copy:
-            design, offdesign = other.export_problems(prune)
+            design, offdesign = other.copy_problems(prune)
         else:
             design, offdesign = other.problems
         # Extend inner problems; copy is unnecessary at this point,
@@ -386,20 +426,3 @@ class ConstraintParser:
             "==": ConstraintType.EQ,
             ">=": ConstraintType.GE,
         }
-
-
-class ExecutionAnalyzer(SystemAnalyzer):
-    """Class performing a system tree analysis to
-    determine the minimal execution sequence, based
-    on the clean/dirty status of each sub-system.
-    """
-    def __init__(self, system: "cosapp.systems.System"):
-        super().__init__(system)
-        self.update()
-
-    @property
-    def exec_list(self) -> List["cosapp.systems.System"]:
-        return self.__exec_list
-
-    def update(self) -> None:
-        self.__exec_list = []

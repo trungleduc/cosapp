@@ -2,6 +2,7 @@ import pytest
 import numpy
 import pandas
 import itertools
+import warnings
 from unittest.mock import patch, DEFAULT
 from scipy.linalg import LinAlgWarning
 from contextlib import nullcontext as does_not_raise
@@ -748,38 +749,53 @@ def test_SystemSurrogate_no_output(no_output_sys, cubic_DoE):
         SystemSurrogate(no_output_sys, training_data_, FloatKrigingSurrogate)
 
 
-@pytest.mark.parametrize("data, pattern", [
+@pytest.mark.parametrize("data, varlist", [
     (
         {'a.a_in.x': [0.5, 1., 1.5], 'a.c.j.x': [0.5, 1., 1.3333]},
-        ["b.inwards.u", "a.c.h"],
+        ["b.u", "a.c.h"],
     ),
     (
-        {'a.a_in.x': [0.5, 1., 1.5], 'a.c.j.x': [0.5, 1., 1.3333], 'b.inwards.u':[1., 2.]},
+        {'a.a_in.x': [0.5, 1., 1.5], 'a.c.j.x': [0.5, 1., 1.3333], 'b.u':[1., 2.]},
         ["a.c.h"],
     ),
     (
         {'a.a_in.x': [0.5, 1., 1.5], 'a.c.j.x': [0.5, 1., 1.3333], 'a.c.h':[1., 2.]},
-        ["b.inwards.u"],
+        ["b.u"],
+    ),
+    (
+        {'a.a_in.x': [0.5, 1., 1.5], 'a.c.j.x': [0.5, 1., 1.3333], 'a.c.inwards.h':[1., 2.], 'b.inwards.u':[1., 2.]},
+        [],
     ),
     (
         {'a.a_in.x': [0.5, 1., 1.5], 'a.c.j.x': [0.5, 1., 1.3333], 'a.c.h':[1., 2.], 'b.inwards.u':[1., 2.]},
         [],
     ),
+    (
+        {'a.a_in.x': [0.5, 1., 1.5], 'a.c.j.x': [0.5, 1., 1.3333], 'a.c.h':[1., 2.], 'b.u':[1., 2.]},
+        [],
+    ),
 ])
-def test_SystemSurrogate_check_unknowns_and_transients(no_output_sys, DummyFactory, cubic_DoE, data, pattern):
+def test_SystemSurrogate_check_unknowns_and_transients(no_output_sys, DummyFactory, cubic_DoE, data, varlist):
     no_output_sys.add_child(
         DummyFactory('sub', outwards=get_args('u_out', 1.0, desc='blah')),
     )
-    if data != {'a.a_in.x': [0.5, 1., 1.5], 'a.c.j.x': [0.5, 1., 1.3333], 'a.c.h':[1., 2.], 'b.inwards.u':[1., 2.]}:
+
+    if varlist:
         with pytest.warns(UserWarning) as records:
             SystemSurrogate(no_output_sys, cubic_DoE(data), LinearNearestNeighbor)
 
         assert len(records) == 1
-        message = records[0].message.args[0]
-        for var in pattern:
+        message: str = records[0].message.args[0]
+        assert message.startswith(
+            "The following unknowns/transients are not part of the training set"
+        )
+        for var in varlist:
             assert var in message
+
     else:
-        SystemSurrogate(no_output_sys, cubic_DoE(data), LinearNearestNeighbor)
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            SystemSurrogate(no_output_sys, cubic_DoE(data), LinearNearestNeighbor)
 
 
 def test_get_dependent_connections_with_NLS(sumg_bare):
@@ -792,7 +808,7 @@ def test_get_dependent_connections_with_NLS(sumg_bare):
         'Eq_2Mult.u_out.x', 'Eq_2Mult.x_out.x',
         'Eq_2Mult.Mult_by_2_1.x_in.x', 'Eq_2Mult.Mult_by_2_1.x_out.x',
         'Eq_2Mult.Mult_by_2_2.x_in.x', 'Eq_2Mult.Mult_by_2_2.x_out.x',
-        'Eq_2Mult.Eq2u1.inwards.u', 'Eq_2Mult.Basic_Eq.x_in.x',
+        'Eq_2Mult.Eq2u1.u', 'Eq_2Mult.Basic_Eq.x_in.x',
         'Get2D.x_in.x', 'Get2D.u_in.x',
         'Get2D.x_out.x', 'Get2D.u_out.x',
     }
@@ -803,7 +819,7 @@ def test_SystemSurrogate_check_unknowns_with_NLS(sumg_bare, training_data3):
     meta = sumg_bare.Eq_2Mult.make_surrogate(training_data3, FloatKrigingSurrogate)
     assert set(meta.state.doe_out.keys()) == {
         'Basic_Eq.x_in.x',
-        'Eq2u1.inwards.u',
+        'Eq2u1.u',
         'Mult_by_2_1.x_in.x',
         'Mult_by_2_1.x_out.x',
         'Mult_by_2_2.x_in.x',

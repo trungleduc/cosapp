@@ -182,7 +182,7 @@ def test_system22(system22):
     assert s.p2.flnum_out.Pt == pytest.approx(70000, rel=5.0e-8)
 
 
-def test_system121(system121):
+def test_system121(system121: System):
     s = system121
     # test sub-systems are listed in the execution order list
     assert list(s.children) == list(s.exec_order)
@@ -195,8 +195,8 @@ def test_system121(system121):
 
     # test iterative loop detection
     assert len(s.residues) == 0
-    residues = s.get_unsolved_problem().residues
-    assert "mx.(epsilon == 0)" in residues
+    problem = s.get_unsolved_problem()
+    assert set(problem.residues) == {"mx: epsilon == 0"}
 
     assert s.p4.flnum_out.Pt == pytest.approx(77500, rel=1e-6)
     assert s.p2.flnum_out.W == pytest.approx(5, rel=1e-6)
@@ -212,7 +212,7 @@ def test_system121_redundant_1(system121):
     d = s.add_driver(NonLinearSolver("solver"))
     d.add_unknown("sp.x")
 
-    with pytest.raises(ValueError, match="'sp\.inwards\.x' is defined as design and off-design unknown"):
+    with pytest.raises(ValueError, match="'sp\.x' is defined as design and off-design unknown"):
         s.run_drivers()
 
 
@@ -225,7 +225,7 @@ def test_system121_redundant_2(system121):
     d = s.add_driver(NonLinearSolver("solver"))
     d.runner.add_unknown("sp.x")
 
-    with pytest.raises(ValueError, match="'sp\.inwards\.x' already exists in 'offdesign'"):
+    with pytest.raises(ValueError, match="'sp\.x' already exists in 'offdesign'"):
         s.run_drivers()
 
 
@@ -285,5 +285,5 @@ def test_system222_redundant(system222):
     d = s.add_driver(NonLinearSolver("solver"))
     d.runner.add_unknown(["p2.s21.x", "s1.x"])
 
-    with pytest.raises(ValueError, match="'p2\.s21\.inwards\.x' already exists in 'offdesign'"):
+    with pytest.raises(ValueError, match="'p2\.s21\.x' already exists in 'offdesign'"):
         s.run_drivers()

@@ -48,7 +48,7 @@ def test_design_unknown_aliasing_1(caplog):
     
     assert len(caplog.records) > 0
     assert re.match(
-        "Replace unknown 'foo.inwards.k' by 'inwards.c'",
+        "Replace unknown 'foo.k' by 'c'",
         caplog.records[0].message
     )
     assert top.foo.k == pytest.approx(1.5)
@@ -85,7 +85,7 @@ def test_design_unknown_aliasing_2(caplog):
     assert len(caplog.records) > 0
     assert any(
         re.match(
-            "Unknown 'foo.inwards.k' is aliased by 'top.inwards.c', defined outside the context of 'foo'",
+            "Unknown 'foo.k' is aliased by 'top.c', defined outside the context of 'foo'",
             record.message
         )
         for record in caplog.records
@@ -115,7 +115,7 @@ def test_design_unknown_aliasing_3(caplog):
     
     assert len(caplog.records) > 0
     assert re.match(
-        "Skip connected unknown 'sub2.bar.inwards.k'",
+        "Skip connected unknown 'sub2.bar.k'",
         caplog.records[0].message
     )
 
@@ -141,7 +141,7 @@ def test_design_unknown_aliasing_4(caplog):
     assert sub.foo.k == sub.c
     assert len(caplog.records) > 0
     assert re.match(
-        "Replace unknown 'sub.foo.inwards.k' by 'sub.inwards.c'",
+        "Replace unknown 'sub.foo.k' by 'sub.c'",
         caplog.records[0].message
     )
 
@@ -161,7 +161,7 @@ def test_design_connected_unknown_1(caplog):
     
     assert len(caplog.records) > 0
     assert re.match(
-        "Skip connected unknown 'bar.inwards.k'",
+        "Skip connected unknown 'bar.k'",
         caplog.records[0].message
     )
 
@@ -184,7 +184,7 @@ def test_design_connected_unknown_2(caplog):
     
     assert len(caplog.records) > 0
     assert re.match(
-        "Skip connected unknown 'inwards.k'",
+        "Skip connected unknown 'k'",
         caplog.records[0].message
     )
 
@@ -208,14 +208,14 @@ def test_design_offdesign_aliasing_1(caplog):
     solver.runner.design.add_equation('foo.y == 7').add_unknown('foo.k')
 
     caplog.clear()
-    with pytest.raises(ValueError, match="'inwards.c' is defined as design and off-design unknown"):
+    with pytest.raises(ValueError, match="'c' is defined as design and off-design unknown"):
         with caplog.at_level(logging.INFO):
             top.run_drivers()
     
     assert len(caplog.records) > 0
     assert any(
         re.match(
-            "Replace unknown 'foo.inwards.k' by 'inwards.c'",
+            "Replace unknown 'foo.k' by 'c'",
             record.message
         )
         for record in caplog.records
@@ -241,14 +241,14 @@ def test_design_offdesign_aliasing_2(caplog):
     solver.runner.design.add_equation('foo.y == 7').add_unknown('c')
 
     caplog.clear()
-    with pytest.raises(ValueError, match="'inwards.c' is defined as design and off-design unknown"):
+    with pytest.raises(ValueError, match="'c' is defined as design and off-design unknown"):
         with caplog.at_level(logging.INFO):
             top.run_drivers()
     
     assert len(caplog.records) > 0
     assert any(
         re.match(
-            "Replace unknown 'foo.inwards.k' by 'inwards.c'",
+            "Replace unknown 'foo.k' by 'c'",
             record.message
         )
         for record in caplog.records
@@ -274,7 +274,7 @@ def test_design_offdesign_aliasing_3(caplog):
     solver.add_equation('foo.y == 7').add_unknown('foo.k')
 
     caplog.clear()
-    with pytest.raises(ValueError, match="'inwards.c' is defined as design and off-design unknown"):
+    with pytest.raises(ValueError, match="'c' is defined as design and off-design unknown"):
         with caplog.at_level(logging.INFO):
             top.run_drivers()
             # print(solver.problem)
@@ -282,7 +282,7 @@ def test_design_offdesign_aliasing_3(caplog):
     assert len(caplog.records) > 0
     assert any(
         re.match(
-            "Replace unknown 'foo.inwards.k' by 'inwards.c'",
+            "Replace unknown 'foo.k' by 'c'",
             record.message
         )
         for record in caplog.records
@@ -321,7 +321,7 @@ def test_connected_unknown_changing_conf(caplog):
     
     assert len(caplog.records) > 0
     assert re.match(
-        "Skip connected unknown 'bar.inwards.x'",
+        "Skip connected unknown 'bar.x'",
         caplog.records[0].message
     )
 

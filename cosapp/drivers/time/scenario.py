@@ -317,7 +317,7 @@ class Scenario:
         """
         context = self.__context
         info = Boundary.parse(context, lhs)  # checks that variable is valid
-        varname = natural_varname(info.fullname)
+        varname = natural_varname(info.basename)
         variable = info.ref
         try:
             alias = context.input_mapping[varname]

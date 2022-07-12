@@ -1,6 +1,10 @@
 """Utility functions for testing purposes"""
 import numpy
 from contextlib import contextmanager
+from typing import Tuple, Dict, Any
+
+
+ArgsKwargs = Tuple[Tuple[Any], Dict[str, Any]]
 
 
 def assert_keys(dictionary, *keys):
@@ -33,7 +37,7 @@ def rel_error(actual, expected):
         return res(actual, expected)
 
 
-def get_args(*args, **kwargs):
+def get_args(*args, **kwargs) -> ArgsKwargs:
     """Utility function to collect args and kwargs in a tuple"""
     return args, kwargs
 

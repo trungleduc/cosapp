@@ -66,6 +66,19 @@ def FixedPointArray():
     return factory
 
 
+class QuadraticFunction(System):
+    def setup(self):
+        self.add_inward('a', 0.0)
+        self.add_inward('x', 1.0)
+        self.add_outward('y', 0.0)
+
+        design = self.add_design_method('y')
+        design.add_unknown('x').add_target('y')
+    
+    def compute(self) -> None:
+        self.y = self.x**2 - self.a
+
+
 def test_NonLinearSolver__setattr__():
     # Error is raised when setting an absent attribute
     d = NonLinearSolver("driver")
@@ -221,7 +234,7 @@ def test_NonLinearSolver_setup_run(caplog, set_master_system):
     system.call_setup_run()
     solver._precompute()
     assert set(solver.problem.unknowns) == {
-        "inwards.K1", "inwards.K2", "p_in.x",
+        "K1", "K2", "p_in.x",
     }
     assert set(solver.problem.residues) == set()
 
@@ -233,26 +246,26 @@ def test_NonLinearSolver_setup_run(caplog, set_master_system):
     runner.design.add_unknown("K1").add_equation("p_out.x == 20")
     init = np.random.rand(2)
     runner.set_init({"K1": init[0], "p_in.x": init[1]})
-    assert set(runner.initial_values) == {"inwards.K1", "p_in.x"}
-    assert runner.initial_values["inwards.K1"].default_value == init[0]
+    assert set(runner.initial_values) == {"K1", "p_in.x"}
+    assert runner.initial_values["K1"].default_value == init[0]
     assert runner.initial_values["p_in.x"].default_value == init[1]
     system.call_setup_run()
     solver._precompute()
     assert set(solver.problem.unknowns) == {
-        "inwards.K1", f"{runner.name}[p_in.x]",
+        "K1", "p_in.x",
     }
     assert set(solver.problem.residues) == {
-        f"{runner.name}[p_out.x == 20]",
-        f"{runner.name}[p_in.x == 2]",
+        "p_out.x == 20",
+        "p_in.x == 2",
     }
     assert list(solver.initial_values) == list(init)
-    assert runner.initial_values["inwards.K1"].default_value == init[0]
+    assert runner.initial_values["K1"].default_value == init[0]
     assert runner.initial_values["p_in.x"].default_value == init[1]
 
     system.K1 = 0.8
     system.call_setup_run()
     assert list(solver.initial_values) == list(init)
-    solver.children[solver._default_driver_name].solution["inwards.K1"] = 0.8
+    solver.children[solver._default_driver_name].solution["K1"] = 0.8
     system.call_setup_run()
     assert list(solver.initial_values) == [0.8, init[1]]
 
@@ -285,7 +298,7 @@ def test_NonLinearSolver_setup_run(caplog, set_master_system):
     solver._precompute()
 
     assert list(solver.problem.unknowns) == [
-        "inwards.K1", "inwards.K2",  # design unknowns
+        "K1", "K2",  # design unknowns
         "point1[p_in.x]", "point2[p_in.x]",
     ]
     assert set(solver.problem.residues) == {
@@ -301,7 +314,7 @@ def test_NonLinearSolver_setup_run(caplog, set_master_system):
     assert list(solver.initial_values) == [0.123] + expected_init[1:]
 
     system.K1 = expected_init[0]
-    solver.point1.solution["inwards.K1"] = 0.123
+    solver.point1.solution["K1"] = 0.123
     system.call_setup_run()
     assert list(solver.initial_values) == expected_init
 
@@ -323,15 +336,15 @@ def test_NonLinearSolver_setup_run(caplog, set_master_system):
     system.call_setup_run()
 
     assert set(solver.problem.unknowns) == {
-        "inwards.K1", "point1[p_in.x]",
-        "inwards.K2", "point2[p_in.x]",
+        "K1", "point1[p_in.x]",
+        "K2", "point2[p_in.x]",
     }
     assert list(solver.initial_values) == list(init)
 
     system.K1 = 0.2
     system.call_setup_run()
     assert list(solver.initial_values) == list(init)
-    solver.point1.solution["inwards.K1"] = 0.2
+    solver.point1.solution["K1"] = 0.2
     system.call_setup_run()
     assert list(solver.initial_values) == [0.2, init[1], init[2], init[3]]
 
@@ -537,7 +550,7 @@ def test_NonLinearSolver__postcompute(set_master_system):
     solver._precompute()
     solver._postcompute()
     assert set(solver.problem.unknowns) == {
-        "inwards.K1", "inwards.K2", "p_in.x",
+        "K1", "K2", "p_in.x",
     }
     assert set(solver.problem.residues) == set()
 
@@ -551,11 +564,11 @@ def test_NonLinearSolver__postcompute(set_master_system):
     solver._precompute()
     solver._postcompute()
     assert set(solver.problem.unknowns) == {
-        "inwards.K1", f"{runner.name}[p_in.x]",
+        "K1", "p_in.x",
     }
     assert set(solver.problem.residues) == {
-        f"{runner.name}[p_out.x == 20]",
-        f"{runner.name}[p_in.x == 2]",
+        "p_out.x == 20",
+        "p_in.x == 2",
     }
 
     # Multiple cases
@@ -572,8 +585,8 @@ def test_NonLinearSolver__postcompute(set_master_system):
     solver._precompute()
     solver._postcompute()
     assert set(solver.problem.unknowns) == {
-        "inwards.K1", "point1[p_in.x]",
-        "inwards.K2", "point2[p_in.x]",
+        "K1", "point1[p_in.x]",
+        "K2", "point2[p_in.x]",
     }
     assert set(solver.problem.residues) == {
         "point1[p_out.x == 20]", "point1[p_in.x == 2]",
@@ -596,8 +609,8 @@ def test_NonLinearSolver__postcompute(set_master_system):
     solver._precompute()
     solver._postcompute()
     assert set(solver.problem.unknowns) == {
-        "inwards.K1", "point1[p_in.x]",
-        "inwards.K2", "point2[p_in.x]",
+        "K1", "point1[p_in.x]",
+        "K2", "point2[p_in.x]",
     }
     assert set(solver.problem.residues) == {
         "point1[p_out.x == 20]", "point1[p_in.x == 2]",
@@ -626,10 +639,10 @@ def test_NonLinearSolver_residues_singlePoint(set_master_system):
     solver.owner.call_setup_run()
     solver._precompute()
     solver.compute()
-    assert set(solver.problem.residues) == set(
-        f"{runner.name}[{eq}]"
-        for eq in ("p_in.x == 2", "p_out.x == 20",)
-    )
+    assert set(solver.problem.residues) == {
+        "p_in.x == 2",
+        "p_out.x == 20",
+    }
     for v in solver.problem.residues.values():
         assert isinstance(v, Residue)
 
@@ -642,10 +655,10 @@ def test_NonLinearSolver_residues_singlePoint(set_master_system):
     solver.owner.call_setup_run()
     solver._precompute()
     solver.compute()
-    assert set(solver.problem.residues) == set(
-        f"{runner.name}[{eq}]"
-        for eq in ("p_in.x == 2", "p_out.x == 20",)
-    )
+    assert set(solver.problem.residues) == {
+        "p_in.x == 2",
+        "p_out.x == 20",
+    }
     for v in solver.problem.residues.values():
         assert isinstance(v, Residue)
 
@@ -671,8 +684,8 @@ def test_NonLinearSolver_problem_multiPoint(set_master_system):
     solver.owner.call_setup_run()
     solver._precompute()
     assert set(solver.problem.unknowns) == {
-        "inwards.K1",
-        "inwards.K2",
+        "K1",
+        "K2",
         "point1[p_in.x]",
         "point2[p_in.x]",
     }
@@ -695,8 +708,8 @@ def test_NonLinearSolver_problem_multiPoint(set_master_system):
     solver.owner.call_setup_run()
     solver._precompute()
     assert set(solver.problem.unknowns) == {
-        "inwards.K1",
-        "point2[inwards.K2]",
+        "K1",
+        "point2[K2]",
         "point1[p_in.x]",
         "point2[p_in.x]",
     }
@@ -719,7 +732,7 @@ def test_NonLinearSolver_problem_multiPoint(set_master_system):
     solver.owner.call_setup_run()
     solver._precompute()
     assert set(solver.problem.unknowns) == {
-        "inwards.K1",
+        "K1",
         "point1[p_in.x]",
         "point2[p_in.x]",
     }
@@ -836,7 +849,7 @@ def test_NonLinearSolver_multiPoint_error():
 
     with pytest.raises(
         ValueError,
-        match="'inwards\.K1' is defined as design and off-design unknown in 'point1'"
+        match="'K1' is defined as design and off-design unknown in 'point1'"
     ):
         s.run_drivers()
 
@@ -850,7 +863,7 @@ def test_NonLinearSolver_multiPoint_error():
 
     with pytest.raises(
         ValueError,
-        match="\('inwards\.K1', 'inwards\.K2'\) are defined as design and off-design unknowns in 'point2'"
+        match="\('K1', 'K2'\) are defined as design and off-design unknowns in 'point2'"
     ):
         s.run_drivers()
 
@@ -864,7 +877,7 @@ def test_NonLinearSolver_multiPoint_error():
 
     with pytest.raises(
         ValueError,
-        match="'inwards\.K1' already exists in 'solver'"
+        match="'K1' already exists in 'solver'"
     ):
         s.run_drivers()
 
@@ -877,7 +890,7 @@ def test_NonLinearSolver_multiPoint_error():
 
     with pytest.raises(
         ValueError,
-        match="'inwards\.K1' is defined as design and off-design unknown in 'point2'"
+        match="'K1' is defined as design and off-design unknown in 'point2'"
     ):
         s.run_drivers()
 
@@ -892,7 +905,7 @@ def test_NonLinearSolver_multiPoint_error():
     # Error is raised for point2, after point1 has been parsed
     with pytest.raises(
         ValueError,
-        match="'inwards\.K1' is defined as design and off-design unknown in 'point2'"
+        match="'K1' is defined as design and off-design unknown in 'point2'"
     ):
         s.run_drivers()
 
@@ -905,9 +918,51 @@ def test_NonLinearSolver_multiPoint_error():
 
     with pytest.raises(
         ValueError,
-        match="'inwards\.K1' is defined as design and off-design unknown in 'point1'"
+        match="'K1' is defined as design and off-design unknown in 'point1'"
     ):
         s.run_drivers()
+
+
+def test_NonLinearSolver_add_target_solver():
+    """Test target definition at solver level"""
+    f = QuadraticFunction('f')
+
+    solver = f.add_driver(NonLinearSolver('solver', tol=1e-9))
+    solver.add_unknown('x').add_target('y')
+
+    f.a = 2.0
+    f.y = 0.0   # set target value by setting output variable
+    f.run_drivers()
+    assert f.x == pytest.approx(np.sqrt(2))
+    assert f.y == pytest.approx(0)
+
+    f.y = -0.5   # update target value
+    f.run_drivers()
+    assert f.x == pytest.approx(np.sqrt(1.5))
+    assert f.y == pytest.approx(-0.5)
+
+
+@pytest.mark.parametrize("design", [True, False])
+def test_NonLinearSolver_add_target_case(design):
+    """Test target definition at `RunSingleCase` driver level"""
+    f = QuadraticFunction('f')
+
+    solver = f.add_driver(NonLinearSolver('solver', tol=1e-9))
+    case = solver.add_child(RunSingleCase('case'))
+    # Use design or off-design problem according to test parameter
+    problem = case.design if design else case.offdesign
+    problem.add_unknown('x').add_target('y')
+
+    f.a = 2.0
+    f.y = 0.0   # set target value by setting output variable
+    f.run_drivers()
+    assert f.x == pytest.approx(np.sqrt(2))
+    assert f.y == pytest.approx(0)
+
+    f.y = -0.5   # update target value
+    f.run_drivers()
+    assert f.x == pytest.approx(np.sqrt(1.5))
+    assert f.y == pytest.approx(-0.5)
 
 
 def test_NonLinearSolver_vector1d_system():
@@ -988,15 +1043,15 @@ def test_NonLinearSolver_init_handling_design(mock_postcompute):
     )
     run1 = design.add_child(RunSingleCase("run1"))
 
-    s2.inwards.k1 = 11.0
-    s2.inwards.k2 = 8.0
+    s2.k1 = 11.0
+    s2.k2 = 8.0
 
     run1.set_values({"p_in.x1": 4.0, "p_in.x2": 10.0})
-    run1.design.add_unknown("inwards.k1").add_equation("p_out.x == 100")
+    run1.design.add_unknown("k1").add_equation("p_out.x == 100")
 
     # Read from current system
     s2.run_drivers()
-    assert s2.inwards.k1 == pytest.approx(5, abs=1e-5)
+    assert s2.k1 == pytest.approx(5, abs=1e-5)
     assert design.initial_values == pytest.approx([11])
     assert list(run1.solution.values()) == pytest.approx([5])
     mock_postcompute.assert_called_once()
@@ -1022,7 +1077,7 @@ def test_NonLinearSolver_init_handling_design(mock_postcompute):
 
     run2 = design.add_child(RunSingleCase("run2"))
     run2.set_values({"p_in.x1": 2, "p_in.x2": 8.0})
-    run2.design.add_unknown("inwards.k2").add_equation("p_out.x == 76")
+    run2.design.add_unknown("k2").add_equation("p_out.x == 76")
 
     # Use latest solution for run1 but current system for run2
     mock_postcompute.reset_mock()
@@ -1031,8 +1086,8 @@ def test_NonLinearSolver_init_handling_design(mock_postcompute):
     assert list(run1.solution.values()) == pytest.approx([10 / 3])
     assert list(run2.solution.values()) == pytest.approx([26 / 3])
     mock_postcompute.assert_called_once()
-    assert s2.inwards.k1 == pytest.approx(10 / 3, abs=1e-5)
-    assert s2.inwards.k2 == pytest.approx(26 / 3, abs=1e-5)
+    assert s2.k1 == pytest.approx(10 / 3, abs=1e-5)
+    assert s2.k2 == pytest.approx(26 / 3, abs=1e-5)
 
     # Use latest solution for run1 but init for run2
     run2.set_init({"k2": 7.0})
@@ -1078,7 +1133,7 @@ def test_NonLinearSolver_init_handling_offdesign(test_library, test_data):
     assert list(design.runner.solution.values()) == pytest.approx([0.5], rel=1e-4)
 
     # Initial value
-    design.runner.set_init({"sp.inwards.x": 2.0})
+    design.runner.set_init({"sp.x": 2.0})
     s.run_drivers()
     assert design.initial_values == pytest.approx([2], abs=0)
     assert list(design.runner.solution.values()) == pytest.approx([0.5], rel=1e-4)
