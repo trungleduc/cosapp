@@ -37,7 +37,7 @@ def bogus():
         dict(),
         dict(
             port = 'inwards',
-            name = 'inwards.dh_dt',
+            name = 'dh_dt',
             desc = 'd(-1)/dt',
             source = -1,
         )
@@ -47,7 +47,7 @@ def bogus():
         dict(h = 0.35),
         dict(
             port = 'inwards',
-            name = 'inwards.dh_dt',
+            name = 'dh_dt',
             desc = 'd(h)/dt',
             source = 0.7,
             value = -0.1,
@@ -58,7 +58,7 @@ def bogus():
         dict(x = np.r_[0.5, 2, 1.3]),
         dict(
             port = 'inwards',
-            name = 'inwards.v',
+            name = 'v',
             desc = 'd(v)/dt',
             source = [-0.05, -0.2, -0.13],
         )
@@ -68,7 +68,7 @@ def bogus():
         dict(x = np.r_[0.5, 2, 1.3]),
         dict(
             port = 'inwards',
-            name = 'inwards.v',
+            name = 'v',
             desc = 'd(v)/dt',
             source = [-0.05, -0.2, -0.13],
             value = [1.6, 2, 3],
@@ -79,7 +79,7 @@ def bogus():
         dict(x = np.r_[0.5, 2, 1.3]),
         dict(
             port = 'inwards',
-            name = 'inwards.dh_dt',
+            name = 'dh_dt',
             desc = 'd(h)/dt',
             source = 1.3,
             value = 0.05,
@@ -213,10 +213,10 @@ def test_TimeDerivative_update(bogus):
 
 
 @pytest.mark.parametrize("name, options, expected", [
-    ('dh_dt', dict(source=-1), dict(name='inwards.dh_dt')),
-    ('v', dict(source='-0.1 * x'), dict(name='inwards.v')),
-    ('dh_dt', dict(source='x[-1]'), dict(name='inwards.dh_dt')),
-    ('h', dict(source=0.5), dict(name='inwards.h')),
+    ('dh_dt', dict(source=-1), dict(name='dh_dt')),
+    ('v', dict(source='-0.1 * x'), dict(name='v')),
+    ('dh_dt', dict(source='x[-1]'), dict(name='dh_dt')),
+    ('h', dict(source=0.5), dict(name='h')),
 ])
 def test_TimeDerivative_to_dict(bogus, name, options, expected):
     der = TimeDerivative(bogus, name, **options)

@@ -265,14 +265,14 @@ def test_Optimizer_compute_with_solver_3(caplog):
     messages = [record.message for record in caplog.records]
     assert any(
         re.match(
-            "Replace unknown 'sub.inwards.a' by 'inwards.a'",
+            "Replace unknown 'sub.a' by 'a'",
             message
         )
         for message in messages[:2]
     )
     assert any(
         re.match(
-            "Replace unknown 'sub.inwards.x' by 'inwards.x'",
+            "Replace unknown 'sub.x' by 'x'",
             message
         )
         for message in messages[:2]

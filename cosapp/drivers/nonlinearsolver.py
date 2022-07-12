@@ -208,44 +208,60 @@ class NonLinearSolver(AbstractSolver):
                 "*" * 40,
             ])
         )
-        self.problem = MathematicalProblem(self.name, self.owner)
         handler = DesignProblemHandler(self.owner)
         handler.design.extend(self._raw_problem, equations=False)
         handler.offdesign.extend(self._raw_problem, unknowns=False)
-        handler.problems = handler.export_problems()  # resolve aliasing
+        handler.prune()  # resolve aliasing
         self.__design_unknowns = handler.design.unknowns
-        self.problem.extend(handler.design)
-        # handler.offdesign.extend(self.owner.get_unsolved_problem(), copy=True)
         self.initial_values = numpy.append(self.initial_values, self.get_init())
         # Set of unknown names to detect design/offdesign conflicts
-        design_unknowns = set(handler.design.unknowns)
+        design_unknown_set = set(handler.design.unknowns)
+        # Create assembled problem
+        problem = self.problem = MathematicalProblem(self.name, self.owner)
+        problem.extend(handler.design)
 
-        for child in self.children.values():
-            if isinstance(child, RunSingleCase):
-                local = child.processed_problems
-                design_unknowns |= set(local.design.unknowns)
-                common = design_unknowns.intersection(local.offdesign.unknowns)
-                if common:
-                    kind = "unknown"
-                    if len(common) > 1:
-                        names = ", ".join(repr(v) for v in sorted(common))
-                        names = f"({names}) are"
-                        kind += "s"
-                    else:
-                        names = f"{common.pop()!r} is"
-                    raise ValueError(
-                        f"{names} defined as design and off-design {kind} in {child.name!r}"
-                    )
-                self.__design_unknowns.update(local.design.unknowns)
-                # Enforce solver-level off-design problem to child case
-                case_problem = child.add_offdesign_problem(handler.offdesign)
-                self.problem.extend(case_problem, copy=False)
-                self.initial_values = numpy.append(self.initial_values, child.get_init(self.force_init))
-
+        run_cases: List[RunSingleCase] = []
+        for driver in self.children.values():
+            if isinstance(driver, RunSingleCase):
+                run_cases.append(driver)
             else:
                 logger.warning(
-                    f"Including Driver {child.name!r} without iteratives in Driver {self.name!r} is not numerically advised."
+                    f"Including Driver {driver.name!r} without iteratives in Driver {self.name!r} is not numerically advised."
                 )
+
+        if len(run_cases) > 1:
+            # If more than one RunSingleCase drivers are present,
+            # use a name wrapper to distinguish dict entries for
+            # residues and off-design unknowns in global problem
+            get_key_wrapper = lambda case: (
+               lambda key: f"{case.name}[{key}]"
+            )
+        else:
+            get_key_wrapper = lambda case: None
+
+        for case in run_cases:
+            local = case.processed_problems
+            design_unknown_set.update(local.design.unknowns)
+            common = design_unknown_set.intersection(local.offdesign.unknowns)
+            if common:
+                kind = "unknown"
+                if len(common) > 1:
+                    names = ", ".join(repr(v) for v in sorted(common))
+                    names = f"({names}) are"
+                    kind += "s"
+                else:
+                    names = f"{common.pop()!r} is"
+                raise ValueError(
+                    f"{names} defined as design and off-design {kind} in {case.name!r}"
+                )
+            self.__design_unknowns.update(local.design.unknowns)
+            # Enforce solver-level off-design problem to child case
+            case.add_offdesign_problem(handler.offdesign)
+            # Assemble case problems (design & off-design)
+            wrapper = get_key_wrapper(case)
+            problem.extend(local.design, copy=False, residue_wrapper=wrapper)
+            problem.extend(local.offdesign, copy=False, unknown_wrapper=wrapper, residue_wrapper=wrapper)
+            self.initial_values = numpy.append(self.initial_values, case.get_init(self.force_init))
 
         logger.debug(
             "\n".join([

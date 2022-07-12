@@ -99,13 +99,35 @@ def test_Residue___init__(args, kwargs, name, value, reference):
     (2.5e9, 1e9, 1e9),
     (2.5e-6, 4e7, 1e7),
     (2.5e-6, 0, 1e-6),
+    (2.5e-6, 1e-3, 1e-3),
+    (2.5e-6, 1, 1),
     (2.5e-6, -1, 1),
+    (2.5e-1, 1, 1),
+    (2.5e+1, 1, 10),
     (np.r_[4., 0.4, -2.], np.r_[5., -0.3, -4], np.r_[1, 0.1, 1]),
     (np.r_[4., 7.1e-12, -2e9], np.r_[0, 0, 0], np.r_[1, 1e-12, 1e9]),
+    (np.r_[4., 7.1e-12, -2e9], np.r_[1, 1, 1], np.r_[1, 1, 1e9]),
+    (np.logspace(-12, 0, 13), np.ones(13), np.ones(13)),
+    (np.logspace(0, 12, 13), np.ones(13), np.logspace(0, 12, 13)),
+    # cases involving zero
+    (0, 0, 1),
+    (0, 1, 1),
+    (0, 123.456, 100),
+    (0, None, 1),
 ])
 def test_Residue_residue_norm(lhs, rhs, expected):
     assert Residue.residue_norm(lhs, rhs) == pytest.approx(expected, rel=1e-14)
-    assert Residue.residue_norm(rhs, lhs) == pytest.approx(expected, rel=1e-14)
+    if rhs is not None:
+        assert Residue.residue_norm(rhs, lhs) == pytest.approx(expected, rel=1e-14)
+
+
+@pytest.mark.parametrize("factor", [1, 5, 9])
+@pytest.mark.parametrize("magnitude", np.logspace(-12, 12, 25))
+def test_Residue_residue_norm_single(magnitude, factor):
+    """Test `Residue.residue_norm` with a single parameter"""
+    r = factor * magnitude
+    assert Residue.residue_norm(r) == pytest.approx(magnitude, rel=1e-14)
+    assert Residue.residue_norm(-r) == pytest.approx(magnitude, rel=1e-14)
 
 
 @pytest.mark.parametrize("args, expected", [

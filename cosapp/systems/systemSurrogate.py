@@ -121,6 +121,7 @@ class SystemSurrogate:
         
         doe_in = pandas.DataFrame.from_dict(data_in) if isinstance(data_in, dict) else data_in
         doe_out = self.__init_doe_out(data_out, postsynch)
+        self.filter_headers(doe_in)
         model_obj = None if model is None else SurrogateModelProxy(model(*args, **kwargs))
         self.__state = SystemSurrogateState(doe_in, doe_out, model_obj, OrderedDict())
 
@@ -158,16 +159,28 @@ class SystemSurrogate:
         """List[str]: list of synchronized output variable names"""
         return list(self.__state.doe_out_sizes)
 
-    def __init_doe_out(self, data_out, postsynch) -> "OrderedDict[str, List]":
+    @staticmethod
+    def filter_headers(doe: pandas.DataFrame) -> None:
+        """Apply `natural_varname` to dataframe column names"""
+        mapping = dict(
+            (name, natural_varname(name))
+            for name in doe.columns
+        )
+        doe.rename(mapping, axis=1, inplace=True)
+
+    def __init_doe_out(self, data_out, postsynch) -> Dict[str, List]:
         doe_out = OrderedDict()
         if isinstance(data_out, pandas.DataFrame):
             doe_out = data_out.to_dict(into=OrderedDict)
         elif data_out is not None:
             doe_out = OrderedDict(data_out)
         elif self.owner is not None:
-            watched = self.__get_owner_connections()
-            varlist = watched.keys()
-            if '*' not in postsynch:
+            if isinstance(postsynch, str):
+                postsynch = [postsynch]
+            if '*' in postsynch:
+                watched = self.__get_owner_connections()
+                varlist = watched.keys()
+            else:
                 owner = self.owner
                 def writeable(var) -> bool:
                     try:
@@ -176,15 +189,16 @@ class SystemSurrogate:
                         return False
                     else:
                         return True
-                varlist = find_variables(owner,
-                        includes=postsynch,
-                        excludes=None,
-                        inputs=False,
-                    )
+                varlist = find_variables(
+                    owner,
+                    includes=postsynch,
+                    excludes=None,
+                    inputs=False,
+                )
                 varlist = set(filter(writeable, varlist))
                 # Make sure varlist contains at least owner system outputs
-                for port, output in owner.outputs.items():
-                    varlist |= set(natural_varname(f"{port}.{var}") for var in output)
+                for portname, port in owner.outputs.items():
+                    varlist.update(natural_varname(f"{portname}.{var}") for var in port)
             doe_out = OrderedDict((var, []) for var in varlist)
         return doe_out
 
@@ -323,11 +337,11 @@ class SystemSurrogate:
         unsolvable_unknowns = set(unknowns).difference(state.doe_out)
         trained_unknowns = unsolvable_unknowns.issubset(state.doe_in)
         if not trained_unknowns:
-            message = "The following unknowns/transients are not part of the training set; "\
-                "future attempts to compute them with a driver may fail:"
-            for name in unknowns.difference(state.doe_in):
-                message += f"\n\t- {name}"
-            warnings.warn(message)
+            warnings.warn(
+                "The following unknowns/transients are not part of the training set; "
+                f"future attempts to compute them with a driver may fail: "
+                f"{list(unknowns.difference(state.doe_in))}"
+            )
 
     def __get_owner_connections(self) -> "OrderedDict[str, list]":
         return get_dependent_connections(self.__owner)
@@ -389,5 +403,5 @@ def get_unknowns_transients(system: "cosapp.systems.System") -> set:
     res = set()
     problem = system.get_unsolved_problem()
     for collection in (problem.unknowns, problem.transients):
-        res |= set(collection)
+        res.update(collection)
     return res

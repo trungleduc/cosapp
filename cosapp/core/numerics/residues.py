@@ -7,6 +7,7 @@ import numpy
 
 from cosapp.core.eval_str import EvalString
 from cosapp.utils.helpers import check_arg
+from cosapp.utils.naming import natural_varname
 
 
 class AbstractResidue:
@@ -19,7 +20,6 @@ class AbstractResidue:
     - name : str
         Residue name
     """
-
     def __init__(
         self,
         context: "System",
@@ -31,7 +31,7 @@ class AbstractResidue:
         self._reference_value = 1.0
         self._value = None  # type: Union[Number, numpy.ndarray]
         self._context = context  # type: System
-        self._name = name  # type: str
+        self._name = natural_varname(name)  # type: str
         super().__init__()
 
     def __str__(self) -> str:
@@ -219,16 +219,14 @@ class Residue(AbstractResidue):
         check_arg(reference, 'reference', (Number, Collection, numpy.ndarray, str),
             lambda r: r == "norm" if isinstance(r, str) else numpy.all(numpy.asarray(r) > 0)
         )
-
         super().__init__(context, "temp")
-        self.__lhs = None  # type: EvalString
-        self.__rhs = None  # type: EvalString
+        self.__sides = None   # type: EvalString
         self.__equation = ""  # type: str
         self.__set_equation(equation)
         self._name = name or self.equation
 
         if isinstance(reference, str) and reference == "norm":  # type check avoids a warning for numpy arrays
-            reference = Residue.residue_norm(self.__lhs.eval(), self.__rhs.eval())
+            reference = Residue.residue_norm(*self.eval_sides())
         self.reference = reference
         self.update()
 
@@ -256,24 +254,27 @@ class Residue(AbstractResidue):
         and that residue (lhs - rhs) is not trivially constant.
         Left- and right-hand sides are finally stored as two evaluable expressions (EvalString).
         """
-        lhs, rhs = Residue.split_equation(equation)
         context = self.context
-        elhs = EvalString(lhs, context)
-        erhs = EvalString(rhs, context)
-        if elhs.constant and erhs.constant:
+        lhs, rhs = Residue.split_equation(natural_varname(equation))
+        sides = EvalString(f"({lhs}, {rhs})", context)
+        if sides.constant:
             raise RuntimeWarning(f"Equation {lhs} == {rhs} is trivially constant")
+        lval, rval = sides.eval()
         try:
-            elhs.eval() == erhs.eval()
+            lval == rval
         except:
             raise TypeError(f"Expressions {lhs!r} and {rhs!r} are not comparable")
         else:
-            self.__lhs = elhs
-            self.__rhs = erhs
-            self.__equation = equation.strip()
+            self.__sides = sides
+            self.__equation = f"{lhs} == {rhs}"
 
     def __str__(self) -> str:
         name = self.__equation or self._name
         return f"{name} := {self._value}"
+
+    def eval_sides(self) -> Tuple[Any, Any]:
+        """Evaluate and return left- and right-hand sides as a tuple"""
+        return self.__sides.eval()
 
     def update(self) -> Union[Number, numpy.ndarray]:
         """Update the residue value
@@ -283,8 +284,9 @@ class Residue(AbstractResidue):
         Number or numpy.ndarray
             The updated residues
         """
+        lval, rval = self.__sides.eval()
         self._value = Residue.evaluate_residue(
-            self.__lhs.eval(), self.__rhs.eval(), self.reference
+            lval, rval, self.reference
         )
         return self._value
 
@@ -340,12 +342,12 @@ class DeferredResidue:
         from cosapp.systems import System
         check_arg(context, "context", System)
         check_arg(target, "target", str)
-        self.__context = context
+        self.__context: System = context
         self.reference = reference
         self.target = target
 
     @property
-    def context(self) -> "System":
+    def context(self):
         """System: evaluation context of residue"""
         return self.__context
 

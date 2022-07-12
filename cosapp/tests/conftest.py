@@ -1,6 +1,7 @@
 import pytest
 import sys
 from pathlib import Path
+from typing import Type
 
 from cosapp.systems import System
 
@@ -28,33 +29,48 @@ def DummySystemFactory():
     """Factory creating a dummy system class with custom attributes"""
     # mapping option / method
     # for example: `inputs` <-> `add_input`
+    basics = (
+        "inputs", "outputs",
+        "inwards", "outwards",
+        "transients", "rates",
+    )
+    extra = (
+        "unknowns", "equations",
+        "targets", "design_methods",
+    )
     mapping = dict(
         (option, f"add_{option[:-1]}")
-        for option in (
-            "inputs", "outputs", "inwards", "outwards",
-            "transients", "rates", "unknowns", "equations",
-            "targets", "design_methods",
-        )
+        for option in basics + extra
     )
     mapping["properties"] = "add_property"
-    traits = set(mapping)
 
     def Factory(classname, **settings):
-        method_dict = dict(
-            (mapping[option], settings.get(option))
-            for option in traits.intersection(settings)
+        struct_methods = dict(
+            (mapping[option], settings.get(option, None))
+            for option in basics
         )
-        base = settings.get("base", System)
+        extra_methods = dict(
+            (mapping[option], settings.get(option, None))
+            for option in extra
+        )
+        base: Type[System] = settings.get("base", System)
+
         class Prototype(base):
             def setup(self, **kwargs):
                 super().setup(**kwargs)
-                for method, values in method_dict.items():
-                    if values is None:
-                        continue
-                    if not isinstance(values, list):
-                        values = [values]
-                    for args, kwargs in values:  # expects a list of (tuple, dict)
-                        getattr(self, method)(*args, **kwargs)
+                def add_attributes(method_dict: dict):
+                    for method, values in method_dict.items():
+                        if values is None:
+                            continue
+                        if not isinstance(values, list):
+                            values = [values]
+                        for args, kwargs in values:  # expects a list of (tuple, dict)
+                            getattr(self, method)(*args, **kwargs)
+                # Add inputs, outputs, transients, etc.
+                add_attributes(struct_methods)
+                # Add unknowns, equations & design methods
+                add_attributes(extra_methods)
+        
         return type(classname, (Prototype,), {})
 
     return Factory

@@ -160,7 +160,7 @@ def test_Scenario_stop(case):
         dict(content=['tank1.height = pipe.L / 2', 'tank2.height = 10 * pipe.D'], n_const=0)
     ),
     # Erroneous cases:
-    ({'foo.bar': 2}, dict(error=AttributeError, match=r"'foo\.bar' is not known in system")),
+    ({'foo.bar': 2}, dict(error=AttributeError, match=r"'foo\.bar' is not known in \w*")),
     ({'pipe.k': 2}, dict(error=ValueError, match="Only variables in input ports can be used as boundaries")),
 ])
 def test_Scenario_set_init(scenario, init, expected):
@@ -214,7 +214,7 @@ def test_Scenario_set_init(scenario, init, expected):
         )
     ),
     # Erroneous cases:
-    ({'foo.bar': 2}, dict(error=AttributeError, match=r"'foo\.bar' is not known in system")),
+    ({'foo.bar': 2}, dict(error=AttributeError, match=r"'foo\.bar' is not known in \w*")),
     ({'pipe.k': 2}, dict(error=ValueError, match="Only variables in input ports can be used as boundaries")),
 ])
 def test_Scenario_set_values(scenario, values, expected):

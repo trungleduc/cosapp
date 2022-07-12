@@ -1,4 +1,5 @@
 from typing import Any, Mapping, NamedTuple, Union
+from cosapp.utils.naming import natural_varname
 
 
 # The real storage of a value is to its final port. Therefore the name mapping, to speed-up the
@@ -31,7 +32,21 @@ class VariableReference(NamedTuple):
     
     def __repr__(self) -> str:
         name = self.context.name
-        mapping_name = getattr(self.mapping, "name", "")
+        mapping_name = self._mapping_name()
         if mapping_name:
             name = f"{name}.{mapping_name}"
         return f"<VariableReference ({name}, {self.key})>"
+
+    @property
+    def name(self) -> str:
+        mapping_name = self._mapping_name()
+        if mapping_name:
+            return natural_varname(f"{mapping_name}.{self.key}")
+        return self.key
+
+    @property
+    def contextual_name(self) -> str:
+        return natural_varname(f"{self.context.name}.{self.name}")
+    
+    def _mapping_name(self) -> str:
+        return getattr(self.mapping, "name", "")

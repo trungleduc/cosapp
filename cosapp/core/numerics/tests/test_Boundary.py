@@ -21,52 +21,55 @@ class ASyst(System):
         self.add_outward('v')
 
 
-@pytest.mark.parametrize("args, kwargs, attributes", [
-    (('in_.m',), dict(), dict(port='in_', variable='m')),
-    (('x',), dict(), dict(variable='x')),
-    (('y',), dict(), dict(variable='y', mask=np.full(2, True))),
-    (('y[0]',), dict(), dict(variable='y', mask=[True, False])),
-    (('y[1]',), dict(), dict(variable='y', mask=[False, True])),
-    (('y[:]',), dict(), dict(variable='y', mask=[True, True])),
-    (('x',), dict(default=4.), dict(variable='x', default_value=4)),
-    (('y',), dict(default=[0, 0]), dict(variable='y', default_value=np.zeros(2), mask=[True, True])),
-    (('y',), dict(default=np.zeros(2)), dict(variable='y', default_value=np.zeros(2), mask=[True, True])),
-    (('y',), dict(default=1.234), dict(variable='y', default_value=np.full(2, 1.234), mask=[True, True])),
-    (('y[1]',), dict(default=np.array([-2.])), dict(variable='y', default_value=np.array([-2]), mask=[False, True])),
-    (('y[1]',), dict(default=[-2.]), dict(variable='y', default_value=np.array([-2]), mask=[False, True])),
-    (('y[1]',), dict(default=-2), dict(variable='y', default_value=np.array([-2]), mask=[False, True])),
-    (('y[1:]',), dict(default=-2), dict(variable='y', default_value=np.array([-2]), mask=[False, True])),
-    (('y[:-1]',), dict(default=-2), dict(variable='y', default_value=np.array([-2]), mask=[True, False])),
-    (('y[:]',), dict(default=np.array([-2., 1.])), dict(variable='y', default_value=[-2, 1], mask=[True, True])),
-    (('y[:]',), dict(default=[-2., 1.]), dict(variable='y', default_value=[-2, 1], mask=[True, True])),
-    (('x',), dict(mask=[False]), dict(variable='x', mask=[False])),
-    (('x',), dict(mask=[True]), dict(variable='x', mask=None)),
-    (('y',), dict(mask=[True, False]), dict(variable='y', mask=[True, False])),
-    (('y',), dict(mask=(False, False)), dict(variable='y', mask=[False, False])),
-    (('y',), dict(mask=(True, True)), dict(variable='y', mask=[True, True])),
-    (('y',), dict(mask=np.full(2, True)), dict(variable='y', mask=[True, True])),
-    (('u[::2]',), dict(), dict(variable='u', mask=[True, False, True, False, True])),
-    (('u[::2]',), dict(default=[1, 2, 3]), dict(variable='u', default_value=[1, 2, 3], mask=[True, False, True, False, True])),
-    # (('',), dict(), dict(variable='', default_value=, mask=[True, True])),
+@pytest.fixture
+def a():
+    return ASyst('a')
+
+
+@pytest.mark.parametrize("name, kwargs, expected", [
+    ('in_.m', dict(), dict(portname='in_', name='in_.m', variable='m')),
+    ('x', dict(), dict(variable='x')),
+    ('inwards.x', dict(), dict(variable='x', name='x')),
+    ('y', dict(), dict(variable='y', mask=np.full(2, True))),
+    ('y[0]', dict(), dict(variable='y', mask=[True, False])),
+    ('y[1]', dict(), dict(variable='y', mask=[False, True])),
+    ('y[:]', dict(), dict(variable='y', mask=[True, True])),
+    ('x', dict(default=4.), dict(variable='x', default_value=4)),
+    ('y', dict(default=[0, 0]), dict(variable='y', default_value=np.zeros(2), mask=[True, True])),
+    ('y', dict(default=np.zeros(2)), dict(variable='y', default_value=np.zeros(2), mask=[True, True])),
+    ('y', dict(default=1.234), dict(variable='y', default_value=np.full(2, 1.234), mask=[True, True])),
+    ('y[1]', dict(default=np.array([-2.])), dict(variable='y', default_value=np.array([-2]), mask=[False, True])),
+    ('y[1]', dict(default=[-2.]), dict(variable='y', default_value=np.array([-2]), mask=[False, True])),
+    ('y[1]', dict(default=-2), dict(variable='y', default_value=np.array([-2]), mask=[False, True])),
+    ('y[1:]', dict(default=-2), dict(variable='y', default_value=np.array([-2]), mask=[False, True])),
+    ('y[:-1]', dict(default=-2), dict(variable='y', default_value=np.array([-2]), mask=[True, False])),
+    ('y[:]', dict(default=np.array([-2., 1.])), dict(variable='y', default_value=[-2, 1], mask=[True, True])),
+    ('y[:]', dict(default=[-2., 1.]), dict(variable='y', default_value=[-2, 1], mask=[True, True])),
+    ('x', dict(mask=[False]), dict(variable='x', mask=[False])),
+    ('x', dict(mask=[True]), dict(variable='x', mask=None)),
+    ('y', dict(mask=[True, False]), dict(variable='y', mask=[True, False])),
+    ('y', dict(mask=(False, False)), dict(variable='y', mask=[False, False])),
+    ('y', dict(mask=(True, True)), dict(variable='y', mask=[True, True])),
+    ('y', dict(mask=np.full(2, True)), dict(variable='y', mask=[True, True])),
+    ('u[::2]', dict(), dict(variable='u', mask=[True, False, True, False, True])),
+    ('u[::2]', dict(default=[1, 2, 3]), dict(variable='u', default_value=[1, 2, 3], mask=[True, False, True, False, True])),
+    # ('', dict(), dict(variable='', default_value=, mask=[True, True])),
 ])
-def test_Boundary___init__(args, kwargs, attributes):
-    a = ASyst('a')
-    x = Boundary(a, *args, **kwargs)
+def test_Boundary___init__(a, name, kwargs, expected):
+    x = Boundary(a, name, **kwargs)
     # Set of expected attributes:
-    expected = dict(variable='', name=None, mask=None, default_value=None)
-    expected.update(attributes)
-    portname = expected.pop('port', 'inwards')
-    if expected['name'] is None:
-        expected['name'] = f"{portname}.{expected['variable']}"
+    portname = expected.pop('portname', 'inwards')
+    expected.setdefault('variable', name)
+    expected.setdefault('name', name)
+    expected.setdefault('default_value', None)
     # Test object attributes:
     assert x.context is a
     assert x.port is a[portname]
-    if x.mask is not None:
-        assert isinstance(x.mask, np.ndarray)
-    mask = expected.pop('mask')
+    mask = expected.pop('mask', None)
     if mask is None:
         assert x.mask is None
     else:
+        assert isinstance(x.mask, np.ndarray)
         assert np.all(x.mask == np.asarray(mask))
     for attr, value in expected.items():
         err_msg = f"for attribute {attr!r}"
@@ -77,26 +80,26 @@ def test_Boundary___init__(args, kwargs, attributes):
             assert x_attr == pytest.approx(value), err_msg
 
 
-@pytest.mark.parametrize("args, kwargs, exception", [
-    (('_',), dict(), AttributeError),
-    (('foo',), dict(), AttributeError),
-    (('in_.x',), dict(), AttributeError),
-    (('inwards.m',), dict(), AttributeError),
-    (('v',), dict(), ValueError),
-    (('outwards.v',), dict(), ValueError),
-    (('x',), dict(mask=False), TypeError),
-    (('y',), dict(mask=False), TypeError),
-    (('y',), dict(mask="False"), TypeError),
-    (('y',), dict(mask=0), TypeError),
-    (('in_',), dict(), TypeError),
-    (('inwards',), dict(), TypeError),
-    (('outwards',), dict(), TypeError),
-    (('y[',), dict(), SyntaxError),
+@pytest.mark.parametrize("name, kwargs, exception", [
+    ('_', dict(), AttributeError),
+    ('foo', dict(), AttributeError),
+    ('in_.x', dict(), AttributeError),
+    ('inwards.m', dict(), AttributeError),
+    ('v', dict(), ValueError),
+    ('outwards.v', dict(), ValueError),
+    ('x', dict(mask=False), TypeError),
+    ('y', dict(mask=False), TypeError),
+    ('y', dict(mask="False"), TypeError),
+    ('y', dict(mask=0), TypeError),
+    ('in_', dict(), TypeError),
+    ('inwards', dict(), TypeError),
+    ('outwards', dict(), TypeError),
+    ('y[', dict(), SyntaxError),
+    ('y(', dict(), SyntaxError),
 ])
-def test_Boundary___init__error(args, kwargs, exception):
-    a = ASyst('a')
+def test_Boundary___init__error(a, name, kwargs, exception):
     with pytest.raises(exception):
-        Boundary(a, *args, **kwargs)
+        Boundary(a, name, **kwargs)
 
 
 @pytest.mark.parametrize("attr, value", [
@@ -105,8 +108,7 @@ def test_Boundary___init__error(args, kwargs, exception):
     ('name', 'blade_runner'),
     ('variable', 'y'),
 ])
-def test_Boundary_setattr_error(attr, value):
-    a = ASyst('a')
+def test_Boundary_setattr_error(a, attr, value):
     x = Boundary(a, 'x')
     with pytest.raises(AttributeError):
         setattr(x, attr, value)
@@ -119,8 +121,7 @@ def test_Boundary_setattr_error(attr, value):
     ('y', dict(), [False, False], [False, False]),
     ('y[1]', dict(), [True, True], [True, True]),
 ])
-def test_Boundary_mask(name, kwargs, mask, expected):
-    a = ASyst('a')
+def test_Boundary_mask(a, name, kwargs, mask, expected):
     x = Boundary(a, name, **kwargs)
     x.mask = np.asarray(mask)
     if expected is None:
@@ -129,15 +130,13 @@ def test_Boundary_mask(name, kwargs, mask, expected):
         assert np.all(x.mask == expected)
 
 
-def test_Boundary_default_value():
-    a = ASyst('a')
+def test_Boundary_default_value(a):
     x = Boundary(a, 'x')
     with pytest.raises(AttributeError, match="can't set attribute"):
         setattr(x, 'default_value', 25.)
 
 
-def test_Boundary_set_default_value_full_array():
-    a = ASyst('a')
+def test_Boundary_set_default_value_full_array(a):
     x = Boundary(a, 'y')
 
     x.set_default_value(np.r_[-3.14, 5.85], mask=np.r_[True, False])
@@ -163,8 +162,7 @@ def test_Boundary_set_default_value_full_array():
     ('y[:]', dict(mask=np.r_[True, False]), dict(value=np.r_[-3., 22.], expected=[-3, 2])),
     # (, dict(), dict(value=, expected=, mask=)),
 ])
-def test_Boundary_set_default_value(name, kwargs, data):
-    a = ASyst('a')
+def test_Boundary_set_default_value(a, name, kwargs, data):
     x = Boundary(a, name)
     # Filter test data
     expected = data.pop('expected', data['value'])
@@ -212,15 +210,14 @@ def test_Boundary__merge_masked_array(args, expected):
     ('y[1]', dict(default=np.array([-2.])), dict(value=[-2], context_value=[1, -2])),
     ('y[:]', dict(default=[-3, 5]), dict(value=[-3, 5])),
 ])
-def test_Boundary_set_to_default(name, kwargs, expected):
-    a = ASyst('a')
+def test_Boundary_set_to_default(a, name, kwargs, expected):
     x = Boundary(a, name, **kwargs)
     # Set expected values
-    context_value = expected.get('context_value', expected['value'])
-    attr = expected.get('context_attr', x.name)
+    expected.setdefault('context_value', expected['value'])
+    attr = x.basename
     # Test
     x.set_to_default()
-    assert a[attr] == pytest.approx(context_value, rel=1e-14)
+    assert a[attr] == pytest.approx(expected['context_value'], rel=1e-14)
     assert x.value == pytest.approx(expected['value'], rel=1e-14)
 
 
@@ -241,22 +238,23 @@ def test_Boundary_set_to_default(name, kwargs, expected):
     ("x", dict(mask=[False]), dict(value=-99, expected=[], context_value=1, clean=True)),
     ("y", dict(mask=[False, False]), dict(value=[-0.1, 6.3], expected=[], context_value=[1, 2], clean=True)),
 ])
-def test_Boundary_value(name, kwargs, data):
-    a = ASyst('a')
+def test_Boundary_value(a, name, kwargs, data):
     x = Boundary(a, name, **kwargs)
     a.set_clean(PortType.IN)
     # Test
     value = data['value']
     error = data.get('error', None)
+
     if error is None:
         x.value = value  # tested setter
-        attr = data.get('context_attr', x.name)
+        attr = x.basename
         context_value = data.get('context_value', value)
         expected = data.get('expected', value)
         # assert np.shape(x.value) == np.shape(expected)
         assert x.value == pytest.approx(expected)
         assert a[attr] == pytest.approx(context_value)
         assert a.is_clean(PortType.IN) == data.get('clean', False)
+
     else:
         with pytest.raises(error):
             x.value = value

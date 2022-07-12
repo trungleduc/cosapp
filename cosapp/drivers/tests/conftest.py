@@ -1,7 +1,8 @@
+import pytest
+
 import sys
 from pathlib import Path
-
-import pytest
+from typing import Type
 
 import cosapp.tests as test
 from cosapp.utils.distributions import Uniform
@@ -53,7 +54,7 @@ class Multiply2(System):
 
 
 @pytest.fixture(scope="function")
-def DummyFactory():
+def DummyFactory() -> Type[Multiply2]:
     class DummyMultiply(Multiply2):
         def setup(self, unknown=None, equation=None):
             super().setup()
@@ -82,3 +83,59 @@ def hat_case(hat):
         return hat, case
 
     return factory
+
+
+@pytest.fixture(scope="function")
+def DummySystemFactory():
+    """Factory creating a dummy system class with custom attributes"""
+    # mapping option / method
+    # for example: `inputs` <-> `add_input`
+    basics = (
+        "inputs", "outputs",
+        "inwards", "outwards",
+        "transients", "rates",
+    )
+    extra = (
+        "unknowns", "equations",
+        "targets", "design_methods",
+    )
+    mapping = dict(
+        (option, f"add_{option[:-1]}")
+        for option in basics + extra
+    )
+    mapping["properties"] = "add_property"
+
+    def Factory(classname, **settings) -> Type[System]:
+        struct_methods = dict(
+            (mapping[option], settings.get(option, None))
+            for option in basics
+        )
+        extra_methods = dict(
+            (mapping[option], settings.get(option, None))
+            for option in extra
+        )
+        base: Type[System] = settings.get("base", System)
+
+        class Prototype(base):
+            def setup(self, **kwargs):
+                super().setup(**kwargs)
+                def add_attributes(method_dict: dict):
+                    for method, values in method_dict.items():
+                        if values is None:
+                            continue
+                        if not isinstance(values, list):
+                            values = [values]
+                        for info in values:
+                            try:
+                                args, kwargs = info  # expects a list of (tuple, dict)
+                            except ValueError:
+                                args, kwargs = [info], {}  # fallback
+                            getattr(self, method)(*args, **kwargs)
+                # Add inputs, outputs, transients, etc.
+                add_attributes(struct_methods)
+                # Add unknowns, equations & design methods
+                add_attributes(extra_methods)
+        
+        return type(classname, (Prototype,), {})
+
+    return Factory

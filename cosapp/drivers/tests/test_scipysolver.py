@@ -35,7 +35,7 @@ def test_ScipySolverHybr_get_residues():
     d.children[name].design.add_unknown("K1").add_equation("p_out.x == 100")
     d.owner.call_setup_run()
     d._precompute()
-    rname = f"{name}[p_out.x == 100]"
+    rname = "p_out.x == 100"
     residues = d.problem.residues
     assert set(residues) == {rname}
     assert residues[rname].value == Residue.evaluate_residue(s.p_out.x, 100.0)
@@ -244,7 +244,7 @@ def test_ScipySolverBroyden1_get_residues():
     d.children[name].design.add_unknown("K1").add_equation("p_out.x == 100")
     d.owner.call_setup_run()
     d._precompute()
-    rname = f"{name}[p_out.x == 100]"
+    rname = "p_out.x == 100"
     residues = d.problem.residues
     assert set(residues) == {rname}
     assert residues[rname].value == Residue.evaluate_residue(s.p_out.x, 100.0)
