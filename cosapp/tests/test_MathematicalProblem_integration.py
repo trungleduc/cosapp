@@ -68,7 +68,19 @@ def A(A_factory) -> Type[System]:
 @pytest.fixture
 def Aun(A_factory) -> Type[System]:
     return A_factory("Aun",
-        unknowns = get_args("p_in.x"),
+        unknowns = "p_in.x",
+    )
+
+
+@pytest.fixture
+def Atrg(A_factory) -> Type[System]:
+    return A_factory("Atrg",
+        targets = [
+            "z",
+            "q_out.a",
+            "abs(q_out.b)",
+            "q_out.c[::2]",
+        ],
     )
 
 
@@ -80,7 +92,7 @@ def B(B_factory) -> Type[System]:
 @pytest.fixture
 def Beq(B_factory) -> Type[System]:
     return B_factory("Beq",
-        equations = get_args("v[::2] == [0, 1]"),
+        equations = "v[::2] == [0, 1]",
     )
 
 
@@ -113,6 +125,28 @@ def s1(A, Aun, B, Beq):
     return top
 
 
+@pytest.fixture
+def s2(Atrg):
+    """Generates simple composite system `top/sub`.
+    Sub-system `sub` has targets, some of which are pulled.
+    """
+    top = System('s2')
+    top.add_child(Atrg('sub'), pulling={'q_out': 'out'})
+    # Initialize outputs manually
+    top.sub.z = 0.12
+    top.out.set_values(
+        a = 3.14,
+        b = -2.3,
+        c = np.r_[0.1, 0.2, 0.3, 0.4],
+    )
+    top.sub.q_out.set_values(
+        a = 0.0,
+        b = 0.0,
+        c = np.zeros(4),
+    )
+    return top
+
+
 def test_s1(s1):
     """Check fixture `s1` tree"""
     get_name = lambda system: system.name
@@ -122,7 +156,7 @@ def test_s1(s1):
     ]
 
 
-def test_MathematicalProblem_keys_1(s1: System, caplog):
+def test_MathematicalProblem_repr_1(s1: System, caplog):
     """Test off-design unknown and equation assembly in system `s1`"""
     solver = s1.add_driver(NonLinearSolver('solver'))
 
@@ -140,9 +174,16 @@ def test_MathematicalProblem_keys_1(s1: System, caplog):
     assert set(problem.unknowns) == {
         "a.p.x",
     }
+    pattern = "\n".join([
+        r"Unknowns",
+        r"  a\.p\.x = .*",
+        r"Equations",
+        r"  foo\.beq: v\[::2\] == \[0, 1\] := \[.* .*\]",
+    ])
+    assert re.match(pattern, repr(problem))
 
 
-def test_MathematicalProblem_keys_2(s1: System, caplog):
+def test_MathematicalProblem_repr_2(s1: System, caplog):
     """Same as `test_MathematicalProblem_keys_1`, with additional
     unknowns and equations added at solver level.
     """
@@ -175,9 +216,20 @@ def test_MathematicalProblem_keys_2(s1: System, caplog):
         "a.p.y",
         "b.width",
     }
+    pattern = "\n".join([
+        r"Unknowns",
+        r"  b\.width = .*",
+        r"  a\.p\.y = .*",
+        r"  a\.p\.x = .*",
+        r"Equations",
+        r"  foo\.beq: v\[::2\] == \[0, 1\] := \[.* .*\]",
+        r"  b\.area == 10 := .*",
+    ])
+    # print(pattern, problem, sep="\n")
+    assert re.match(pattern, repr(problem))
 
 
-def test_MathematicalProblem_keys_3(s1: System, caplog):
+def test_MathematicalProblem_repr_3(s1: System, caplog):
     """Check unknowns and equations in a multi-point solver.
     """
     solver = s1.add_driver(NonLinearSolver('solver'))
@@ -193,6 +245,11 @@ def test_MathematicalProblem_keys_3(s1: System, caplog):
         for driver in solver.tree():
             driver.setup_run()
     
+    assert len(caplog.records) > 0
+    assert re.match(
+        "Replace unknown 'foo.beq.p_in.y' by 'foo.xyz_in.y'",
+        caplog.records[0].message
+    )
     problem = solver.problem
     assert problem is not None
     # print("", problem, sep="\n")
@@ -215,3 +272,93 @@ def test_MathematicalProblem_keys_3(s1: System, caplog):
         "point2[a.p.x]",
         "point1[a.aun.u[-1]]",
     }
+    pattern = "\n".join([
+        r"Unknowns",
+        r"  b\.width = .*",
+        r"  b\.length = .*",
+        r"  point1\[a\.aun\.u\[-1\]\] = \[.*\]",
+        r"  point1\[a\.p\.x\] = .*",
+        r"  foo\.xyz_in\.y = .*",
+        r"  point2\[a\.p\.x\] = .*",
+        r"Equations",
+        r"  point1\[a\.z == 0\] := .*",
+        r"  point1\[foo\.beq: v\[::2\] == \[0, 1\]\] := \[.* .*\]",
+        r"  point1\[q_out\.a == x \+ y\] := .*",
+        r"  point2\[q_out\.b == 0\] := .*",
+        r"  point2\[foo\.beq: v\[::2\] == \[0, 1\]\] := \[.* .*\]",
+        r"  point2\[q_out\.a == x \+ y\] := .*",
+    ])
+    # print(pattern, problem, sep="\n")
+    assert re.match(pattern, repr(problem))
+
+
+def test_MathematicalProblem_repr_4(s2: System):
+    """Test representation of a math problem with targets.
+    """
+    problem = s2.get_unsolved_problem()
+    assert repr(problem) == "\n".join([
+        "Equations",
+        "  sub.z == 0.12 (target)",
+        "  out.a == 3.14 (target)",
+        "  abs(out.b) == 2.3 (target)",
+        "  out.c[::2] == array([0.1, 0.3]) (target)",
+    ])
+
+
+def test_MathematicalProblem_repr_5(s2: System):
+    """Test math problem representation.
+    Case: single-point design.
+    """
+    solver = s2.add_driver(NonLinearSolver('solver'))
+    for driver in solver.tree():
+        driver.setup_run()
+    problem = solver.problem
+    assert repr(problem) == "\n".join([
+        "Equations",
+        "  sub.z == 0.12 := 0.0",
+        "  out.a == 3.14 := 0.0",
+        "  abs(out.b) == 2.3 := 0.0",
+        "  out.c[::2] == array([0.1, 0.3]) := [0. 0.]",
+    ])
+
+
+def test_MathematicalProblem_repr_6(s2: System):
+    """Test math problem representation.
+    Case: multi-point design with targets.
+    """
+    solver = s2.add_driver(NonLinearSolver('solver'))
+    point1 = solver.add_driver(RunSingleCase('point1'))
+    point2 = solver.add_driver(RunSingleCase('point2'))
+
+    # TODO: allow outputs in RunSingleCase.set_init,
+    #       to set different targets in different points.
+    # point1.set_init({
+    #     'sub.z': 0.12,
+    #     'out.a': 3.14,
+    #     'out.b': -2.3,
+    #     'out.c': np.r_[0.1, 0.2, 0.3, 0.4],
+    # })
+    # point2.set_init({
+    #     'sub.z': 0.0,
+    #     'out.a': 0.0,
+    #     'out.b': 0.0,
+    #     'out.c': np.ones(4),
+    # })
+
+    for driver in solver.tree():
+        driver.setup_run()
+
+    # print(solver.problem)
+    assert repr(solver.problem) == "\n".join([
+        "Equations",
+        #  point1 equations
+        "  point1[sub.z == 0.12] := 0.0",
+        "  point1[out.a == 3.14] := 0.0",
+        "  point1[abs(out.b) == 2.3] := 0.0",
+        "  point1[out.c[::2] == array([0.1, 0.3])] := [0. 0.]",
+        #  point2 equations
+        "  point2[sub.z == 0.12] := 0.0",
+        "  point2[out.a == 3.14] := 0.0",
+        "  point2[abs(out.b) == 2.3] := 0.0",
+        "  point2[out.c[::2] == array([0.1, 0.3])] := [0. 0.]",
+    ])

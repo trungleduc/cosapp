@@ -51,7 +51,7 @@ class SolverResults:
         self.message = ''  # type: str
         self.fun = numpy.array([], dtype=float)  # type: numpy.ndarray
         self.tol = numpy.nan
-        self.jac_lup = (None, None)  # type: Optional[(numpy.ndarray, numpy.ndarray)]
+        self.jac_lup = (None, None)  # type: Optional[Tuple[numpy.ndarray, numpy.ndarray]]
         self.jac = None  # type: Optional[numpy.ndarray]
         self.jac_errors = dict()
         self.jac_calls = 0  # type: int
@@ -111,40 +111,32 @@ class MathematicalProblem:
         self._rates = OrderedDict()  # type: Dict[str, TimeDerivative]
         self._targets = OrderedDict()  # type: Dict[str, WeakDeferredResidue]
 
-    def __str__(self) -> str:
-        return self.__to_string(apply_repr=False)
-
     def __repr__(self) -> str:
-        return self.__to_string(apply_repr=True)
-
-    def __to_string(self, apply_repr=False) -> str:
-        from cosapp.systems import System
-        context: System = self.context
-        def residue_name(residue: Residue) -> str:
-            if residue.context is context:
-                return str(residue)
-            else:
-                path = context.get_path_to_child(residue.context)
-                return f"{path}: {residue!s}"
-        indent = "  "
         lines = []
+        indent = "  "
+        def format_unknown(items: Tuple[str, Unknown]) -> str:
+            key, unknown = items
+            value = unknown.default_value
+            if value is None:
+                value = unknown.value
+            return f"{indent}{key} = {value}"
+
         if self.unknowns:
             lines.append("Unknowns")
             lines.extend(
-                f"{indent}{key} := {unknown.value}"
-                for key, unknown in self.unknowns.items()
+                map(format_unknown, self.unknowns.items())
             )
         if self.residues or self.deferred_residues:
             lines.append("Equations")
             lines.extend(
-                f"{indent}{residue_name(residue)}"
-                for residue in self.residues.values()
+                f"{indent}{key} := {residue.value}"
+                for key, residue in self.residues.items()
             )
             lines.extend(
-                f"{indent}{residue_name(deferred.make_residue())} (target)"
+                f"{indent}{deferred.equation()} (target)"
                 for deferred in self.deferred_residues.values()
             )
-        return "\n".join(lines)
+        return "\n".join(lines) if lines else "empty problem"
 
     @property
     def name(self) -> str:

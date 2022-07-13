@@ -64,7 +64,11 @@ def DummySystemFactory():
                             continue
                         if not isinstance(values, list):
                             values = [values]
-                        for args, kwargs in values:  # expects a list of (tuple, dict)
+                        for info in values:
+                            try:
+                                args, kwargs = info  # expects a list of (tuple, dict)
+                            except ValueError:
+                                args, kwargs = [info], {}  # fallback
                             getattr(self, method)(*args, **kwargs)
                 # Add inputs, outputs, transients, etc.
                 add_attributes(struct_methods)
