@@ -1,5 +1,6 @@
 import pytest
 import numpy as np
+import json
 from io import StringIO
 
 from cosapp.utils.testing import assert_keys
@@ -7,6 +8,20 @@ from cosapp.tests.library.systems import AllTypesSystem
 from cosapp.tests.library.ports import NumPort, V1dPort
 from cosapp.ports.port import ExtensiblePort, ModeVarPort
 from cosapp.systems import System
+
+
+class SomeClass:
+    """Regular, non-CoSApp class"""
+    def __init__(self) -> None:
+        self.x = np.linspace(-1, 1, 3)
+
+
+class SystemWithProps(System):
+    """CoSApp system class with various properties"""
+    def setup(self) -> None:
+        self.add_property('n', 3)
+        self.add_property('g', 9.81)
+        self.add_property('c', SomeClass())
 
 
 def test_System_load(test_library):
@@ -270,6 +285,45 @@ def test_System_load(test_library):
     connector = connectors["p12.flnum_out -> p1.flnum_out"]
     assert connector.source is s.p12.flnum_out
     assert connector.sink is s.flnum_out
+
+
+@pytest.mark.parametrize("name, expected_name", [
+    (None, "p1"),
+    ("s", "s"),
+])
+def test_System_load_rename(test_library, name, expected_name):
+    """Test `System.load` with specified output name"""
+    config = StringIO(
+        """{
+            "$schema": "0-2-0/system.schema.json",
+            "p1": {
+            "class": "pressurelossvarious.PressureLoss0D",
+            "inputs": {
+                "flnum_in.Pt": 1000000.0,
+                "flnum_in.W": 10.0
+            }
+            }}"""
+    )
+    s = System.load(config, name=name)
+
+    assert s.__module__ == "pressurelossvarious"
+    assert s.__class__.__qualname__ == "PressureLoss0D"
+    assert s.name == expected_name
+    assert s.parent is None
+    assert len(s.children) == 0
+
+    assert set(s.inputs) == {"inwards", "modevars_in", "flnum_in"}
+    assert isinstance(s.inputs["inwards"], ExtensiblePort)
+    assert isinstance(s.inputs["modevars_in"], ModeVarPort)
+    port = s.inputs["flnum_in"]
+    assert isinstance(port, NumPort)
+    assert port.Pt == 1e6
+    assert port.W == 10
+
+    assert set(s.outputs) == {"outwards", "modevars_out", "flnum_out"}
+    assert isinstance(s.outputs["outwards"], ExtensiblePort)
+    assert isinstance(s.outputs["modevars_out"], ModeVarPort)
+    assert isinstance(s.outputs["flnum_out"], NumPort)
 
 
 def test_System_load_from_dict(test_library):
@@ -690,3 +744,60 @@ def test_System_AllTypesSystem_serialization():
     assert_keys(s.outputs, "outwards", "modevars_out", "out")
     assert isinstance(s.outputs["outwards"], ExtensiblePort)
     assert isinstance(s.outputs["out"], V1dPort)
+
+
+def test_System_property_to_json():
+    """Test method `to_json` with a system containing properties.
+    Related to https://gitlab.com/cosapp/cosapp/-/issues/95
+    """
+    original = SystemWithProps('original')
+
+    # Serialization using dictionaries
+    data = original.to_dict()
+
+    assert set(data) == {original.name}
+    assert set(data[original.name]) == {
+        'class',
+        'properties',
+    }
+    properties = data[original.name]['properties']
+    assert set(properties) == {'n', 'g', 'c'}
+    assert properties['n'] == original.n
+    assert properties['g'] == original.g
+    assert isinstance(properties['c'], SomeClass)
+    assert np.array_equal(properties['c'].x, [-1, 0, 1])
+
+    loaded = System.load_from_dict('loaded', data[original.name])
+
+    assert isinstance(loaded, SystemWithProps)
+    assert loaded.n == original.n
+    assert loaded.g == original.g
+    assert isinstance(loaded.c, SomeClass)
+    assert np.array_equal(loaded.c.x, original.c.x)
+
+    # Serialization using `System.to_json``
+    jstr = original.to_json()
+    other = json.loads(jstr)
+    assert isinstance(other, dict)
+    assert set(other) == {original.name, '$schema'}
+    assert set(other[original.name]) == set(data[original.name])
+    assert set(other[original.name]['properties']) == set(properties)
+
+
+def test_System_property_serialization(tmp_path):
+    """Test serialization of a system containing properties.
+    """
+    original = System('original')
+    original.add_child(SystemWithProps('sub'))
+
+    filepath = tmp_path / 'original.json'
+
+    original.save(filepath)
+    loaded = System.load(filepath, name='loaded')
+
+    assert loaded.name == 'loaded'
+    assert isinstance(loaded.sub, type(original.sub))
+    assert loaded.sub.n == original.sub.n
+    assert loaded.sub.g == original.sub.g
+    assert isinstance(loaded.sub.c, SomeClass)
+    assert np.array_equal(loaded.sub.c.x, original.sub.c.x)
