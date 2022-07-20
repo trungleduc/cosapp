@@ -1698,12 +1698,12 @@ class System(Module, TimeObserver):
         >>>         if self.rebound.present:
         >>>             self.v[2] *= -1
         """
-        self._System__lock_check("add_event")
+        self.__lock_check("add_event")
 
         # Type and name validation
         check_arg(name, 'name', str)
         name = Variable.name_check(name)
-        self._System__check_attr(name, f"cannot add event {name!r};")
+        self.__check_attr(name, f"cannot add event {name!r};")
 
         # Event creation
         self.__events[name] = event = Event(name, self, desc, trigger, final)
@@ -1769,11 +1769,11 @@ class System(Module, TimeObserver):
         >>>     def transition(self):
         >>>         self.reconfig()
         """
-        self._System__lock_check("add_inward_modevar")
+        self.__lock_check("add_inward_modevar")
 
         # Type validation
         check_arg(name, 'name', str)
-        self._System__check_attr(name, f"cannot add inward {name!r};")
+        self.__check_attr(name, f"cannot add inward {name!r};")
 
         port = self.inputs[System.MODEVARS_IN]
         port.add_mode_variable(name, value, unit, dtype, desc, scope=scope)
@@ -1837,11 +1837,11 @@ class System(Module, TimeObserver):
         >>>         if self.activates.present:
         >>>             self.activated = True
         """
-        self._System__lock_check("add_outward_modevar")
+        self.__lock_check("add_outward_modevar")
 
         # Type validation
         check_arg(name, 'name', str)
-        self._System__check_attr(name, f"cannot add outward {name!r};")
+        self.__check_attr(name, f"cannot add outward {name!r};")
     
         port = self.outputs[System.MODEVARS_OUT]
         port.add_mode_variable(name, value, unit, dtype, desc, init=init, scope=scope)
@@ -2755,22 +2755,25 @@ class System(Module, TimeObserver):
         jsonschema.validate(params, config_schema)
 
     @classmethod
-    def load(cls, filepath: Union[str, Path, StringIO]) -> System:
+    def load(cls, filepath: Union[str, Path, StringIO], name: Optional[str] = None) -> System:
         """Load configuration from file-like object.
 
         Parameters
         ----------
         filepath : str or Path or file-like
             Filepath or file-like object (i.e. has a .read() method)
+        name : str, optional
+            Name of the newly created system.
+            If unspecified (default), uses the name contained in `filepath`.
 
         Returns
         -------
         System
-            The built system.
+            The loaded system.
         """
         if isinstance(filepath, (str, Path)):
-            with open(filepath) as f:
-                params = json.load(f)
+            with open(filepath) as fp:
+                params = json.load(fp)
         elif hasattr(filepath, 'read'):
             params = json.load(filepath)
         else:
@@ -2782,7 +2785,10 @@ class System(Module, TimeObserver):
         # Convert variables if needed
         params = decode_cosapp_dict(params)
 
-        return cls.load_from_dict(*params.popitem())
+        system = cls.load_from_dict(*params.popitem())
+        if name:
+            system.name = name
+        return system
 
     @classmethod
     def load_from_dict(cls, name: str, parameters: dict) -> System:
@@ -2937,7 +2943,17 @@ class System(Module, TimeObserver):
         """
         return self.__to_dict(False)
 
-    def __to_dict(self, with_struct: bool, port_cls_data: Dict = None) -> Dict:
+    def __json__(self) -> Dict[str, Dict[str, Any]]:
+        """JSONable dictionary representing a variable.
+        
+        Returns
+        -------
+        Dict[str, Any]
+            The dictionary
+        """
+        return self.to_dict()
+
+    def __to_dict(self, with_struct: bool, port_cls_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Convert the `System` to a dictionary.
         In default mode, `with_struct` flag is `False`, only export input ports
         and its variable values.
@@ -2946,13 +2962,12 @@ class System(Module, TimeObserver):
         values and class name. `port_cls_data` can be provided to recover the
         definitions of all ports inside system.
         
-        
         Parameters
         ----------
         with_struct : bool, optional
             Flag to export output ports and the class name of ports (default: False).
 
-        port_cls_data : Dict, optional
+        port_cls_data : dict, optional
             A dictionary to hold the definition of all ports inside system.
 
         Returns
@@ -2963,59 +2978,61 @@ class System(Module, TimeObserver):
         # TODO Fred - BUG Information missing from dictionary conversion
         # - kwargs of setup - e.g. Shaft system of librairies_sae has its ports functions of kwargs
         # - design equations - are not saved (should they be?)
-        tmp = dict()
+        data = dict()
 
         if self.__class__.__qualname__ == 'System':
-            tmp['class'] = 'System'  # Trick to allow container `System` without special type
+            data['class'] = 'System'  # Trick to allow container `System` without special type
         else:
-            tmp['class'] = f"{self.__module__}.{self.__class__.__qualname__}"
+            data['class'] = f"{self.__module__}.{self.__class__.__qualname__}"
 
-        properties = self.properties
-        if len(properties) > 0:
-            tmp['properties'] = properties
+        properties = self.__readonly
+        if properties:
+            data['properties'] = properties
 
-        if with_struct:            
+        port_data_required = isinstance(port_cls_data, dict)
+
+        if with_struct:
             for direction in ["inputs", "outputs"]:
-                ports = getattr(self, direction)
+                ports: Dict[str, BasePort] = getattr(self, direction)
                 temp_dict = {}
-                for name, port in ports.items():
-                    if isinstance(port, Port):
-                        port_cls_name = port.__class__.__qualname__
-                        if port_cls_data is not None and isinstance(port_cls_data, Dict) and port_cls_name not in port_cls_data :
-                            port_cls_data[port_cls_name] = {}
-                            for var_name, var_data in port._variables.items():
-                                var_dict = var_data.to_dict()
-                                port_cls_data[port_cls_name][var_name] = var_dict
-
+                for port in ports.values():
+                    if port_data_required and isinstance(port, Port):
+                        key = port.__class__.__qualname__
+                        if key not in port_cls_data:
+                            port_cls_data[key] = {
+                                name: variable.to_dict()
+                                for name, variable in port._variables.items()
+                            }
                     port_dict = port.to_dict(with_struct)
                     temp_dict.update(port_dict)
 
-                if len(temp_dict) > 0:
-                    tmp[direction] = temp_dict           
+                if temp_dict:
+                    data[direction] = temp_dict           
         else:
             inputs = {}
-            for name, port in self.inputs.items():
+            for port in self.inputs.values():
                 port_dict = port.to_dict()
                 inputs.update(port_dict)
-            if len(inputs) > 0:
-                tmp['inputs'] = inputs
+            if inputs:
+                data['inputs'] = inputs
 
         connections = [
             connector.info()
             for connector in self.all_connectors()
         ]
-        if len(connections) > 0:
-            tmp['connections'] = connections
+        if connections:
+            data['connections'] = connections
 
         if len(self.children) > 0:
-            tmp['subsystems'] = dict()
-            for name, component in self.children.items():
-                tmp['subsystems'][name] = component._System__to_dict(with_struct, port_cls_data)[name]
-            tmp['exec_order'] = list(self.exec_order)
+            data['subsystems'] = {
+                name: component.__to_dict(with_struct, port_cls_data)[name]
+                for name, component in self.children.items()
+            }
+            data['exec_order'] = list(self.exec_order)
 
-        return {self.name: tmp}
+        return {self.name: data}
 
-    def to_json(self, indent: int = 2, sort_keys: bool = True) -> str:
+    def to_json(self, indent=2, sort_keys=True) -> str:
         """Return a string in JSON format representing the `System`.
 
         Parameters
@@ -3023,7 +3040,7 @@ class System(Module, TimeObserver):
         indent : int, optional
             Indentation of the JSON string (default: 2)
         sort_keys : bool, optional
-            Sort the keys in alphabetic order (default: False)
+            Sort keys in alphabetic order (default: True)
 
         Returns
         -------
