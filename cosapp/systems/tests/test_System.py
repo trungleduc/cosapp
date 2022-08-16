@@ -1769,6 +1769,20 @@ def test_System_add_equation(DummyFactory):
     assert residues["test_r"].reference == 25
 
 
+@pytest.mark.parametrize("args_kwargs, expected_name", [
+    (get_args(), 'problem'),  # no args - default
+    (get_args('foo'), 'foo'),
+])
+def test_System_new_problem(args_kwargs, expected_name):
+    args, kwargs = args_kwargs
+    s = System('s')
+    p = s.new_problem(*args, **kwargs)
+    assert isinstance(p, MathematicalProblem)
+    assert p.context is s
+    assert p.name == expected_name
+    assert p.shape == (0, 0)
+
+
 def test_System_add_design_method():
     class ASyst(System):
         def setup(self):

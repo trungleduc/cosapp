@@ -1851,6 +1851,21 @@ class System(Module, TimeObserver):
             [(f"{System.MODEVARS_OUT}.{name}", ref), (name, ref)]
         )
 
+    def new_problem(self, name='problem') -> MathematicalProblem:
+        """Create a new, empty `MathematicalProblem` in the context of system.
+
+        Parameters
+        ----------
+        name: str
+            Name of the mathematical problem. Defaults to 'problem'.
+
+        Returns
+        -------
+        MathematicalProblem
+            The newly created mathematical problem.
+        """
+        return MathematicalProblem(name, self)
+
     def add_design_method(self, name: str) -> MathematicalProblem:
         """Add a design method to the `System`
 
@@ -1883,7 +1898,7 @@ class System(Module, TimeObserver):
         >>>         ])
         """
         self.__lock_check("add_design_method")
-        self.design_methods[name] = mathpb = MathematicalProblem(name, self)
+        self.design_methods[name] = mathpb = self.new_problem(name)
         return mathpb
 
     def design(self, method: str) -> MathematicalProblem:
