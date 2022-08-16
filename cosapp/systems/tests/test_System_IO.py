@@ -269,12 +269,12 @@ def test_System_load(test_library):
     # check connectors
     connectors = s.connectors
     assert set(connectors) == {
-        "p1.flnum_in -> p11.flnum_in",
+        "flnum_in -> p11.flnum_in",
         "p11.flnum_out -> p12.flnum_in",
-        "p12.flnum_out -> p1.flnum_out",
+        "p12.flnum_out -> flnum_out",
     }
 
-    connector = connectors["p1.flnum_in -> p11.flnum_in"]
+    connector = connectors["flnum_in -> p11.flnum_in"]
     assert connector.source is s.flnum_in
     assert connector.sink is s.p11.flnum_in
 
@@ -282,7 +282,7 @@ def test_System_load(test_library):
     assert connector.source is s.p11.flnum_out
     assert connector.sink is s.p12.flnum_in
 
-    connector = connectors["p12.flnum_out -> p1.flnum_out"]
+    connector = connectors["p12.flnum_out -> flnum_out"]
     assert connector.source is s.p12.flnum_out
     assert connector.sink is s.flnum_out
 
@@ -428,15 +428,15 @@ def test_System_load_from_dict(test_library):
     # check connectors
     connectors = s.connectors
     assert set(connectors) == {
-        "p1.flnum_in -> p11.flnum_in",
-        "p11.flnum_out -> p1.flnum_out",
+        "flnum_in -> p11.flnum_in",
+        "p11.flnum_out -> flnum_out",
     }
 
-    connector = connectors["p1.flnum_in -> p11.flnum_in"]
+    connector = connectors["flnum_in -> p11.flnum_in"]
     assert connector.source is s.flnum_in
     assert connector.sink is s.p11.flnum_in
 
-    connector = connectors["p11.flnum_out -> p1.flnum_out"]
+    connector = connectors["p11.flnum_out -> flnum_out"]
     assert connector.source is s.p11.flnum_out
     assert connector.sink is s.flnum_out
 
@@ -513,12 +513,12 @@ def test_System_load_from_dict(test_library):
     # check connectors
     connectors = s.connectors
     assert set(connectors) == {
-        "p1.flnum_in -> p11.flnum_in",
+        "flnum_in -> p11.flnum_in",
         "p11.flnum_out -> p12.flnum_in",
-        "p12.flnum_out -> p1.flnum_out",
+        "p12.flnum_out -> flnum_out",
     }
 
-    connector = connectors["p1.flnum_in -> p11.flnum_in"]
+    connector = connectors["flnum_in -> p11.flnum_in"]
     assert connector.source is s.flnum_in
     assert connector.sink is s.p11.flnum_in
 
@@ -526,7 +526,7 @@ def test_System_load_from_dict(test_library):
     assert connector.source is s.p11.flnum_out
     assert connector.sink is s.p12.flnum_in
 
-    connector = connectors["p12.flnum_out -> p1.flnum_out"]
+    connector = connectors["p12.flnum_out -> flnum_out"]
     assert connector.source is s.p12.flnum_out
     assert connector.sink is s.flnum_out
 

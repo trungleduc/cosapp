@@ -45,8 +45,8 @@ class TestMultiplyFamily:
         s.mult1.convert_to("Multiply2")
 
         connectors = s.connectors
-        assert connectors["head.p_in -> mult1.p_in"].source.owner is s
-        assert connectors["head.p_in -> mult1.p_in"].source is s.p_in
+        assert connectors["p_in -> mult1.p_in"].source.owner is s
+        assert connectors["p_in -> mult1.p_in"].source is s.p_in
 
         class Fake(Port):
             def setup(self):
@@ -56,7 +56,7 @@ class TestMultiplyFamily:
         s.mult1.outputs["fake_port"].owner = s.mult1
         s.mult1.convert_to("Multiply3")
 
-        connector = s.connectors["head.p_in -> mult1.p_in"]
+        connector = s.connectors["p_in -> mult1.p_in"]
         assert connector.source.owner is s
         assert connector.source is s.p_in
 
@@ -133,13 +133,20 @@ def test_SystemFamily_convert_to():
     assert s.fanC.ductC.parent is s.fanC
 
     connectors = s.fanC.connectors
-    assert len(connectors) == 5
-    
-    connector = connectors["fanC.fl_in -> ductC.fl_in"]
+    assert set(connectors) == {
+        'inwards -> fan.inwards',
+        'fl_in -> ductC.fl_in',
+        'mech_in -> fan.mech_in',
+        'ductC.fl_out -> fan.fl_in',
+        'fan.fl_out -> fl_out',
+    }
+    connector = connectors["fl_in -> ductC.fl_in"]
     assert connector.source is s.fanC.fl_in
+    assert connector.sink is s.fanC.ductC.fl_in
     
     connector = connectors["ductC.fl_out -> fan.fl_in"]
     assert connector.source is s.fanC.ductC.fl_out
+    assert connector.sink is s.fanC.fan.fl_in
 
     with pytest.raises(TypeError):
         s.fanC.ductC.convert_to(1.0)

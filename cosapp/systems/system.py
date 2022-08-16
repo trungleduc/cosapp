@@ -2464,13 +2464,16 @@ class System(Module, TimeObserver):
 
         systems_connectors = self.__sys_connectors
 
+        def contextual_name(port: BasePort) -> str:
+            return port.name if port.owner is self else port.contextual_name
+
         def create_connector(sink: BasePort, source: BasePort, mapping: Dict[str, str]):
             # Additional validation for sink Port
             # - Source should be Port (the opposite case is possible == connect sensor)
             # - If mapping does not cover all variables, print a log message
 
-            source_name = source.contextual_name
-            sink_name = sink.contextual_name
+            source_name = contextual_name(source)
+            sink_name = contextual_name(sink)
 
             if isinstance(sink, ModeVarPort) and sink.is_input and not isinstance(source, ModeVarPort):
                 raise ConnectorError(
