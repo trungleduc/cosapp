@@ -74,7 +74,7 @@ def _get_connections(system: System, include_orphan_vars: bool) -> Dict[str, str
         return s if s.startswith(name) else f"{name}.{s}"
 
     # Gather connections for current system
-    for c in system.connectors.values():
+    for c in system.all_connectors():
         if not include_orphan_vars and isinstance(c.sink, ExtensiblePort):
             continue
 

@@ -1297,13 +1297,12 @@ class System(Module, TimeObserver):
         """Dict[str, List[Connector]] : Connectors within system, referenced by sub-system names."""
         return MappingProxyType(self.__sys_connectors)
 
-    @property
     def connectors(self) -> Dict[str, Connector]:
-        """Dict[str, Connector] : Connectors within system, referenced by connector name."""
-        return dict(
-            (connector.name, connector)
-            for connector in self.all_connectors()
-        )
+        """Constructs a dictionary of all connectors within system,
+        referenced by connector name.
+        """
+        make_items = lambda connector: (connector.name, connector)
+        return dict(map(make_items, self.all_connectors()))
 
     def all_connectors(self) -> Iterator[Connector]:
         """Iterator yielding all connectors within system."""
@@ -1851,6 +1850,21 @@ class System(Module, TimeObserver):
             [(f"{System.MODEVARS_OUT}.{name}", ref), (name, ref)]
         )
 
+    def new_problem(self, name='problem') -> MathematicalProblem:
+        """Create a new, empty `MathematicalProblem` in the context of system.
+
+        Parameters
+        ----------
+        name: str
+            Name of the mathematical problem. Defaults to 'problem'.
+
+        Returns
+        -------
+        MathematicalProblem
+            The newly created mathematical problem.
+        """
+        return MathematicalProblem(name, self)
+
     def add_design_method(self, name: str) -> MathematicalProblem:
         """Add a design method to the `System`
 
@@ -1883,7 +1897,7 @@ class System(Module, TimeObserver):
         >>>         ])
         """
         self.__lock_check("add_design_method")
-        self.design_methods[name] = mathpb = MathematicalProblem(name, self)
+        self.design_methods[name] = mathpb = self.new_problem(name)
         return mathpb
 
     def design(self, method: str) -> MathematicalProblem:
@@ -2464,13 +2478,16 @@ class System(Module, TimeObserver):
 
         systems_connectors = self.__sys_connectors
 
+        def contextual_name(port: BasePort) -> str:
+            return port.name if port.owner is self else port.contextual_name
+
         def create_connector(sink: BasePort, source: BasePort, mapping: Dict[str, str]):
             # Additional validation for sink Port
             # - Source should be Port (the opposite case is possible == connect sensor)
             # - If mapping does not cover all variables, print a log message
 
-            source_name = source.contextual_name
-            sink_name = sink.contextual_name
+            source_name = contextual_name(source)
+            sink_name = contextual_name(sink)
 
             if isinstance(sink, ModeVarPort) and sink.is_input and not isinstance(source, ModeVarPort):
                 raise ConnectorError(
@@ -2493,7 +2510,7 @@ class System(Module, TimeObserver):
             new_connector = SystemConnector(
                 cls(name, sink, source, mapping, **kwargs)
             )
-            connectors = self.connectors
+            connectors = self.connectors()
             # Check that variables are set only once
             for connector in connectors.values():
                 if connector.sink is sink:
