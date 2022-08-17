@@ -1297,13 +1297,12 @@ class System(Module, TimeObserver):
         """Dict[str, List[Connector]] : Connectors within system, referenced by sub-system names."""
         return MappingProxyType(self.__sys_connectors)
 
-    @property
     def connectors(self) -> Dict[str, Connector]:
-        """Dict[str, Connector] : Connectors within system, referenced by connector name."""
-        return dict(
-            (connector.name, connector)
-            for connector in self.all_connectors()
-        )
+        """Constructs a dictionary of all connectors within system,
+        referenced by connector name.
+        """
+        make_items = lambda connector: (connector.name, connector)
+        return dict(map(make_items, self.all_connectors()))
 
     def all_connectors(self) -> Iterator[Connector]:
         """Iterator yielding all connectors within system."""
@@ -2511,7 +2510,7 @@ class System(Module, TimeObserver):
             new_connector = SystemConnector(
                 cls(name, sink, source, mapping, **kwargs)
             )
-            connectors = self.connectors
+            connectors = self.connectors()
             # Check that variables are set only once
             for connector in connectors.values():
                 if connector.sink is sink:

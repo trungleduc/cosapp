@@ -176,14 +176,19 @@ def test_System_load(test_library):
     assert isinstance(child.outputs["modevars_out"], ModeVarPort)
     assert isinstance(child.outputs["flnum_out"], NumPort)
 
-    assert len(s.connectors) == 2
-    for connector in s.connectors.values():
-        try:
-            assert connector.source is s.flnum_in
-            assert connector.sink is child.flnum_in
-        except:
-            assert connector.source is child.flnum_out
-            assert connector.sink is s.flnum_out
+    connectors = s.connectors()
+    assert set(connectors) == {
+        'flnum_in -> p11.flnum_in',
+        'p11.flnum_out -> flnum_out',
+    }
+    
+    connector = connectors['flnum_in -> p11.flnum_in']
+    assert connector.source is s.flnum_in
+    assert connector.sink is child.flnum_in
+
+    connector = connectors['p11.flnum_out -> flnum_out']
+    assert connector.source is child.flnum_out
+    assert connector.sink is s.flnum_out
 
     # Load 2 modules in module - test for connector from submodule to top system
     #   Pushing port is the only possibility - pulling port is forbidden
@@ -267,7 +272,7 @@ def test_System_load(test_library):
     assert isinstance(child.outputs["flnum_out"], NumPort)
 
     # check connectors
-    connectors = s.connectors
+    connectors = s.connectors()
     assert set(connectors) == {
         "flnum_in -> p11.flnum_in",
         "p11.flnum_out -> p12.flnum_in",
@@ -426,7 +431,7 @@ def test_System_load_from_dict(test_library):
     assert isinstance(child.outputs["flnum_out"], NumPort)
 
     # check connectors
-    connectors = s.connectors
+    connectors = s.connectors()
     assert set(connectors) == {
         "flnum_in -> p11.flnum_in",
         "p11.flnum_out -> flnum_out",
@@ -511,7 +516,7 @@ def test_System_load_from_dict(test_library):
     assert isinstance(child.outputs["flnum_out"], NumPort)
 
     # check connectors
-    connectors = s.connectors
+    connectors = s.connectors()
     assert set(connectors) == {
         "flnum_in -> p11.flnum_in",
         "p11.flnum_out -> p12.flnum_in",

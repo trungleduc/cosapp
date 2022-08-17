@@ -67,7 +67,7 @@ class SystemFamily(System):
                 )
             )
 
-        parent = self.parent
+        parent: System = self.parent
         if parent is None:
             raise ValueError(
                 'Failed to convert "{}" #{} to #{}: parent system is immutable'.format(
@@ -76,7 +76,7 @@ class SystemFamily(System):
             )
 
         # Restore connections
-        to_restore = list(filter(lambda c: c.sink.owner is self, parent.connectors.values()))
+        to_restore = list(filter(lambda c: c.sink.owner is self, parent.all_connectors()))
         new_obj = converter()
         new_obj.name = name = self.name
         # TODO this is really ugly and should be done by the parent...

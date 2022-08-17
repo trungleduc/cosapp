@@ -139,7 +139,7 @@ class VisJsRenderer(BaseRenderer):
                     """
                     edges = list()
 
-                    for connection in system.connectors.values():
+                    for connection in system.all_connectors():
                         supplier = connection.source.owner
                         if supplier.children:  # Insert port as node
                             supplier = connection.source
