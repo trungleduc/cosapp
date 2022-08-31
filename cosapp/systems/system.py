@@ -42,6 +42,7 @@ from cosapp.utils.context import ContextLock
 from cosapp.utils.helpers import check_arg, is_number, is_numerical
 from cosapp.utils.json import JSONEncoder, decode_cosapp_dict
 from cosapp.utils.logging import LogFormat, LogLevel, rollover_logfile
+from cosapp.utils.naming import natural_varname
 from cosapp.utils.pull_variables import pull_variables
 from cosapp.utils.find_variables import get_attributes
 from cosapp.utils.surrogate_models import FloatKrigingSurrogate
@@ -218,8 +219,8 @@ class System(Module, TimeObserver):
         TimeObserver.__init__(self, sign_in=False)
         from cosapp.drivers import Driver
 
-        self._math = MathematicalProblem(name, self)  # type: MathematicalProblem
-        self.__loop_problem = MathematicalProblem('loop', self)  # type: MathematicalProblem
+        self._math = self.new_problem(name)
+        self.__loop_problem = self.new_problem('loop')
         self.drivers = collections.OrderedDict()  # type: Dict[str, Driver]
         self.design_methods = dict()  # type: Dict[str, MathematicalProblem]
         self.__readonly = dict()  # type: Dict[str, Any]
@@ -232,13 +233,12 @@ class System(Module, TimeObserver):
         self.__sys_connectors = dict()  # type: Dict[str, List[Connector]]
         
         self._locked = False  # type: bool
-        self._is_clean = { PortType.IN: False, PortType.OUT: False }  # type: Dict[PortType, bool]
+        self._is_clean = dict.fromkeys(PortType, False)
         self._meta = None
         self.__runner = self  # type: Union[System, SystemSurrogate]
         self.__input_mapping = None  # type: Dict[str, VariableReference]
         # For efficiency purpose, links to objects are stored as reference
         # !! name2variable must be the latest attribute set 
-        # => KeyError will be raised instead of AttributeError in __setattr__ 
         # => lock __setattr__ on previously defined attributes
         self.name2variable = dict()  # type: Dict[str, VariableReference]
 
@@ -1324,7 +1324,7 @@ class System(Module, TimeObserver):
         MathematicalProblem
             The unsolved mathematical problem
         """
-        problem = MathematicalProblem('off-design', self)
+        problem = self.new_problem('off-design')
 
         # Make shallow copy of `self._math` properties
         for name in ('residues', 'deferred_residues', 'unknowns', 'transients', 'rates'):
@@ -2705,7 +2705,7 @@ class System(Module, TimeObserver):
                 for unknown in sink.owner.unknowns.values()
             )
             for target, origin in connector.mapping.items():
-                unknown_name = f"{sink_name}.{target}"
+                unknown_name = natural_varname(f"{sink_name}.{target}")
                 var = name2var[unknown_name]
                 options = {}
                 try:
@@ -2722,9 +2722,11 @@ class System(Module, TimeObserver):
                             'lower_bound',
                         )
                     }
+                equation = natural_varname(f"{unknown_name} == {source_name}.{origin}")
                 loop.add_unknown(unknown_name, **options)
                 loop.add_equation(
-                    f"{unknown_name} == {source_name}.{origin}",
+                    equation,
+                    name=f"{equation} (loop)",
                     reference=1.0,
                 )
 
