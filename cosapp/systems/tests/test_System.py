@@ -1194,8 +1194,8 @@ def test_System_loops_1():
         'a.entry.v',
     }
     assert set(problem.residues) == {
-        'a.entry.x == b.exit.x',
-        'a.entry.v == b.exit.v',
+        'a.entry.x == b.exit.x (loop)',
+        'a.entry.v == b.exit.v (loop)',
     }
     connectors = s.connectors()
     assert set(connectors) == {
@@ -1228,8 +1228,8 @@ def test_System_loops_1():
         'b.entry.v',
     }
     assert set(problem.residues) == {
-        'b.entry.x == a.exit.x',
-        'b.entry.v == a.exit.v',
+        'b.entry.x == a.exit.x (loop)',
+        'b.entry.v == a.exit.v (loop)',
     }
     connectors = s.connectors()
     assert set(connectors) == {
@@ -1255,7 +1255,7 @@ def test_System_loops_1():
         'a.a_in',
     }
     assert set(problem.residues) == {
-        'a.a_in == b.a_out',
+        'a.a_in == b.a_out (loop)',
     }
     connectors = s.connectors()
     assert set(connectors) == {
@@ -1283,9 +1283,9 @@ def test_System_loops_1():
         'a.a_in',
     }
     assert set(problem.residues) == {
-        'a.entry.x == b.exit.x',
-        'a.entry.v == b.exit.v',
-        'a.a_in == b.a_out',
+        'a.entry.x == b.exit.x (loop)',
+        'a.entry.v == b.exit.v (loop)',
+        'a.a_in == b.a_out (loop)',
     }
     connectors = s.connectors()
     assert set(connectors) == {
@@ -1335,8 +1335,8 @@ def test_System_loops_2():
         's1.y',
     }
     assert set(problem.residues) == {
-        's1.x == s2.z',
-        's1.y == s3.z',
+        's1.x == s2.z (loop)',
+        's1.y == s3.z (loop)',
     }
     connectors = top.connectors()
     assert set(connectors) == {
@@ -1363,8 +1363,8 @@ def test_System_loops_2():
         's2.y',
     }
     assert set(problem.residues) == {
-        's1.x == s2.z',
-        's2.y == s3.z',
+        's1.x == s2.z (loop)',
+        's2.y == s3.z (loop)',
     }
     connectors = top.connectors()
     assert set(connectors) == {
@@ -1391,8 +1391,8 @@ def test_System_loops_2():
         's2.y',
     }
     assert set(problem.residues) == {
-        's1.x == s2.z',
-        's2.y == s3.z',
+        's1.x == s2.z (loop)',
+        's2.y == s3.z (loop)',
     }
     connectors = top.connectors()
     assert set(connectors) == {
@@ -1482,6 +1482,101 @@ def test_System_loops_control_unknowns():
     assert s.a.x == pytest.approx(1, abs=1e-6)
 
 
+def test_System_loops_control_array_unknowns():
+    """Test mathematical problem created by `open_loops`,
+    with control over loop *array* unknowns.
+    In particular, check that mask is full after `open_loops`.
+    """
+    class A(System):
+        def setup(self, n=3):
+            self.add_inward('x', np.full(n, 2.0))
+            self.add_outward('y', np.zeros_like(self.x))
+
+        def compute(self):
+            self.y = self.x**2
+    
+    class B(System):
+        def setup(self, n=3):
+            self.add_inward('u', np.full(n, 3.0))
+            self.add_outward('v', np.zeros_like(self.u))
+
+        def compute(self):
+            self.v = self.u
+    
+    class Assembly(System):
+        def setup(self, ndim: int):
+            self.add_property('ndim', ndim)
+
+            a = self.add_child(A('a', n=ndim))
+            b = self.add_child(B('b', n=ndim))
+
+            # Set inter-dependency between `a` and `b`
+            # Solution is a.x = 0 or 1
+            self.connect(a, b, {'y': 'u', 'x': 'v'})
+            # Declare connected inputs as unknowns, **with masks**
+            a.add_unknown('x[::2]', max_rel_step=0.5)  # in case `a.x` is ever used as an unknown
+            b.add_unknown('u[:-1]', max_abs_step=0.1)  # in case `b.u` is ever used as an unknown
+
+    s = Assembly('s', ndim=4)
+    # Check that assembled problem is empty, since
+    # `s.a.x` and `s.b.u` are both connected to outputs
+    assert s.get_unsolved_problem().shape == (0, 0)
+    # Check that sub-system inner problems have masked unknowns
+    problem_a = s.a.get_unsolved_problem()
+    problem_b = s.b.get_unsolved_problem()
+    assert problem_a.n_unknowns == s.ndim - 2
+    assert problem_b.n_unknowns == s.ndim - 1
+    assert set(problem_a.unknowns) == {'x[::2]'}
+    assert np.array_equal(
+        problem_a.unknowns['x[::2]'].mask,
+        [True, False, True, False],
+    )
+    assert set(problem_b.unknowns) == {'u[:-1]'}
+    assert np.array_equal(
+        problem_b.unknowns['u[:-1]'].mask,
+        [True, True, True, False],
+    )
+
+    s.exec_order = ('a', 'b')
+    s.open_loops()
+    problem = s.get_unsolved_problem()
+    assert problem.n_unknowns == s.ndim
+    assert problem.n_equations == s.ndim
+    assert set(problem.unknowns) == {'a.x'}
+    # Check that off-design unknown options are preserved, **except mask**
+    unknown = problem.unknowns['a.x']
+    assert unknown.max_abs_step == np.inf
+    assert unknown.max_rel_step == 0.5
+    assert np.array_equal(unknown.mask, [True] * s.ndim)
+    s.close_loops()
+    assert s.get_unsolved_problem().shape == (0, 0)
+    # Solve problem
+    s.add_driver(NonLinearSolver('solver', tol=1e-7))
+    s.a.x.fill(10)
+    s.run_drivers()
+    assert s.a.x == pytest.approx(1, abs=1e-6)
+
+    s = Assembly('s', ndim=4)
+    s.exec_order = ('b', 'a')
+    s.open_loops()
+    problem = s.get_unsolved_problem()
+    assert problem.n_unknowns == s.ndim
+    assert problem.n_equations == s.ndim
+    assert set(problem.unknowns) == {'b.u'}
+    # Check that off-design unknown options are preserved, **except mask**
+    unknown = problem.unknowns['b.u']
+    assert unknown.max_abs_step == 0.1
+    assert unknown.max_rel_step == np.inf
+    assert np.array_equal(unknown.mask, [True] * s.ndim)
+    s.close_loops()
+    assert s.get_unsolved_problem().shape == (0, 0)
+    # Solve problem
+    s.add_driver(NonLinearSolver('solver', tol=1e-7))
+    s.b.u.fill(3)
+    s.run_drivers()
+    assert s.a.x == pytest.approx(1, abs=1e-6)
+
+
 def test_System_loop_residue_reference():
     """Test normalization factor of residues created by `open_loops`.
 
@@ -1529,8 +1624,8 @@ def test_System_loop_residue_reference():
     problem = s.get_unsolved_problem()
     assert problem.shape == (1, 1)
     assert set(problem.unknowns) == {'a.x'}
-    assert set(problem.residues) == {'a.x == b.y'}
-    key = 'a.x == b.y'
+    assert set(problem.residues) == {'a.x == b.y (loop)'}
+    key = 'a.x == b.y (loop)'
     residue = problem.residues[key]
     assert residue.reference == 1.0, "Loop residue should not be normalized"
     s.close_loops()
@@ -1626,7 +1721,7 @@ def test_System_clean_partial_inwards():
         'sink.loop',
     }
     assert set(problem.residues) == {
-        'sink.loop == source.loop',
+        'sink.loop == source.loop (loop)',
     }
     connectors = top.connectors()
     assert set(connectors) == {
