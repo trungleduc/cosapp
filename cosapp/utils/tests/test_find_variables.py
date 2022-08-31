@@ -293,6 +293,8 @@ def test_find_system_properties(include_const, expected):
             self.add_output(XyPort, 'out')
             self.add_property('magic_ratio', 0.123)
             self.add_event('beep', trigger="y > x")
+            self.add_inward_modevar('m_in', True)
+            self.add_outward_modevar('m_out', init="y > x")
 
         def compute(self):
             self.out.x = self.x
@@ -302,6 +304,16 @@ def test_find_system_properties(include_const, expected):
     top.add_child(SystemWithProps("foo"))
     top.add_child(Bar("bar"))
 
+    actual = find_system_properties(top, include_const)
+    assert actual == expected
+
+
+@pytest.mark.parametrize("include_const, expected", [
+    (False, {'bogus_ratio'}),
+    (True,  {'bogus_ratio', 'const_ratio', 'n'}),
+])
+def test_find_system_properties_simple(include_const, expected):
+    top = SystemWithProps("top")
     actual = find_system_properties(top, include_const)
     assert actual == expected
 
