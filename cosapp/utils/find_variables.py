@@ -2,9 +2,10 @@ from fnmatch import fnmatchcase
 from typing import List, Any, Callable, Set, Union
 from collections.abc import Collection
 import inspect
+import itertools
 
 from cosapp.ports.port import BasePort, Port
-from cosapp.utils.naming import natural_varname
+from cosapp.utils.naming import natural_varname, CommonPorts
 from cosapp.utils.helpers import check_arg
 
 SearchPattern = Union[str, List[str]]
@@ -108,7 +109,6 @@ def find_variables(
         return result
 
     ports = set()
-    names = set()
 
     for name, ref in watched_object.name2variable.items():
         # Save variable for non virtual port
@@ -122,7 +122,6 @@ def find_variables(
             continue  # skip `name`
 
         ports.add(port)
-        names.add(name)
         result |= find_matches(name, watched_object[name])
     
     # Find matches among port properties
@@ -174,12 +173,22 @@ def find_system_properties(system, include_const=False) -> Set[str]:
     check_arg(system, 'system', System)
 
     base_cls_attr = get_attributes(System)
+    get_name = lambda obj: obj.name
 
     def local_properties(system: System) -> Set[str]:
         local_attr = get_attributes(system) - base_cls_attr
-        local_attr -= set(
-            event.name for event in system.events()
+        writable = set(
+            map(get_name,
+                itertools.chain(
+                    system.ports(),
+                    system.events(),
+                    system.children.values(),
+                )
+            )
         )
+        local_attr -= writable
+        for port_name in CommonPorts.names():
+            local_attr -= set(system[port_name])
         if not include_const:
             local_attr -= set(system.properties)
         return local_attr

@@ -350,6 +350,38 @@ def test_System__repr__():
     assert repr(top.sub) == "sub - SubSystem"
 
 
+def test_System_ports(DummyFactory):
+    top: System = DummyFactory("top",
+        inwards = get_args('x', 1.0),
+        outwards = get_args('y', 0.0),
+        properties = get_args('const', 0.123),
+        events = get_args('boom', trigger="y > x"),
+    )
+    sub: System = DummyFactory("sub",
+        inputs = get_args(DummyPort, 'p_in'),
+        outputs = get_args(DummyPort, 'p_out'),
+        inward_modevars = get_args('m_in', True),
+        outward_modevars = get_args('m_out', init=0, dtype=int),
+    )
+    top.add_child(sub, pulling={'p_in': 'q_in', 'm_out': 'mod_out'})
+
+    assert set(map(get_name, top.ports())) == {
+        'inwards',
+        'outwards',
+        'modevars_in',
+        'modevars_out',
+        'q_in',
+    }
+    assert set(map(get_name, sub.ports())) == {
+        'inwards',
+        'outwards',
+        'modevars_in',
+        'modevars_out',
+        'p_in',
+        'p_out',
+    }
+
+
 def test_System__dir__(DummyFactory):
     """Test function dir(), useful for autocompletion
     """

@@ -271,6 +271,11 @@ class System(Module, TimeObserver):
         """Specifies course of action when visited by `visitor`"""
         visitor.visit_system(self)
     
+    def ports(self) -> Iterator[BasePort]:
+        """Iterator on all system ports (both inputs and outputs)"""
+        yield from self.inputs.values()
+        yield from self.outputs.values()
+
     def is_clean(self, direction: Optional[PortType] = None) -> bool:
         """Are the `System` ports with the given direction clean?
         If no direction is specified, checks if both directions are clean.
