@@ -237,6 +237,7 @@ class System(Module, TimeObserver):
         self._meta = None
         self.__runner = self  # type: Union[System, SystemSurrogate]
         self.__input_mapping = None  # type: Dict[str, VariableReference]
+        self.__members = set(dir(type(self)))
         # For efficiency purpose, links to objects are stored as reference
         # !! name2variable must be the latest attribute set 
         # => lock __setattr__ on previously defined attributes
@@ -257,6 +258,10 @@ class System(Module, TimeObserver):
 
         self.__enforce_scope()
         self._locked = True
+
+    def __dir__(self):
+        """Collection of all member names (used for autocompletion)"""
+        return self.__members
 
     def _update(self, dt) -> None:
         """Required by `TimeObserver` base class"""
@@ -459,15 +464,15 @@ class System(Module, TimeObserver):
         try:  # Faster than testing `if name in self`
             # Faster to duplicate __getitem__ call than calling it
             variable_ref = self.name2variable[name]
-            return variable_ref.value
         except KeyError:
             return super().__getattribute__(name)
+        else:
+            return variable_ref.value
 
     def __setattr__(self, name: str, value: Any) -> None:
         try:  # Faster than testing `if name in self`
             # Faster to duplicate __setitem__ call than calling it
             variable_ref = super().__getattribute__("name2variable")[name]
-            variable_ref.value = value
         except KeyError:
             if hasattr(self, name):
                 super().__setattr__(name, value)
@@ -479,6 +484,8 @@ class System(Module, TimeObserver):
             # Exception catcher to create all initial variables defined prior to name2variable
             # Then KeyError will be raised and it won't be allowed to create new attributes
             super().__setattr__(name, value)
+        else:
+            variable_ref.value = value
 
     def __contains__(self, item: str) -> bool:
         return any(
@@ -531,6 +538,11 @@ class System(Module, TimeObserver):
         if parent is not None:
             parent.__reset_input_mapping()
 
+    def __add_member(self, name: str) -> None:
+        """Add `name` to dynamic member list"""
+        if '.' not in name:
+            self.__members.add(name)
+
     def append_name2variable(
         self, additional_mapping: Iterable[Tuple[str, VariableReference]]
     ) -> None:
@@ -546,6 +558,9 @@ class System(Module, TimeObserver):
         # TODO raise error if name already exists (example a inwards variable name == component name)
         additional_mapping = list(additional_mapping)
         self.name2variable.update(additional_mapping)
+
+        for key, _ in additional_mapping:
+            self.__add_member(key)
 
         if self.parent is not None:
             name = self.name
@@ -578,6 +593,7 @@ class System(Module, TimeObserver):
         name = Variable.name_check(name)
         self.__check_attr(name, f"cannot add read-only property {name!r};")
         self.__readonly[name] = value
+        self.__members.add(name)
         cls = self.__class__
         def getter(self):
             try:
@@ -1284,11 +1300,11 @@ class System(Module, TimeObserver):
         return MappingProxyType(self._math.rates)
 
     def events(self) -> Iterator["cosapp.multimode.event.Event"]:
-        """Iterator on all events local to the current `System`."""
+        """Iterator on all events locally defined on system."""
         yield from self.__events.values()
 
     def all_events(self) -> Iterator["cosapp.multimode.event.Event"]:
-        """Recursive iterator on all events in the current `System` tree."""
+        """Recursive iterator on all events in complete system tree."""
         for elem in self.tree():
             yield from elem.events()
 
@@ -1715,6 +1731,7 @@ class System(Module, TimeObserver):
             except KeyError:
                 raise AttributeError(f"{cls.__name__} object {self.name!r} has no attribute {name!r}")
         setattr(cls, name, property(getter))
+        self.__add_member(name)
         return event
 
     def add_inward_modevar(self,
