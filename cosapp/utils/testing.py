@@ -1,7 +1,9 @@
 """Utility functions for testing purposes"""
 import numpy
+import itertools
+from numbers import Number
 from contextlib import contextmanager
-from typing import Tuple, Dict, Any
+from typing import Tuple, Dict, Any, Union, Iterable
 
 
 ArgsKwargs = Tuple[Tuple[Any], Dict[str, Any]]
@@ -29,12 +31,29 @@ def assert_all_type(collection, dtype):
         for i, value in enumerate(collection):
             assert_type(f"element #{i}", value)
 
-def rel_error(actual, expected):
-    res = lambda a, b: abs(a) if b == 0 else abs(a / b - 1)
-    if isinstance(expected, (list, tuple, numpy.ndarray)):
-        return numpy.array([res(a, b) for a, b in zip(actual, expected)])
+
+def rel_error(actual: Union[Number, Iterable], expected: Union[Number, Iterable]) -> Union[float, numpy.ndarray]:
+    """Computes the relative error of `actual` compared to `expected`
+    """
+    error = lambda a, x: abs(a) if x == 0 else abs(a / x - 1)
+
+    if isinstance(actual, Number):
+        return error(actual, expected)
+    
+    actual = numpy.asarray(actual)
+
+    if isinstance(expected, Number):
+        iterator = (error(a, expected) for a in actual.flat)
     else:
-        return res(actual, expected)
+        iterator = itertools.starmap(error,
+            zip(actual.flat, numpy.ravel(expected))
+        )
+    errors = numpy.fromiter(
+        iterator,
+        dtype=float,
+        count=actual.size,
+    )
+    return errors.reshape(actual.shape)
 
 
 def get_args(*args, **kwargs) -> ArgsKwargs:

@@ -5,15 +5,8 @@ from cosapp.systems import System
 from cosapp.drivers import NonLinearSolver, RunSingleCase, RungeKutta
 from cosapp.drivers.time.scenario import Interpolator
 from cosapp.recorders import DataFrameRecorder
+from cosapp.utils.testing import rel_error
 from .conftest import case_factory, PointMass, PointMassWithPorts
-
-
-def rel_error(actual, expected):
-    res = lambda a, b: abs(a) if b == 0 else abs(a / b - 1)
-    if isinstance(expected, np.ndarray):
-        return np.array([res(a, b) for a, b in zip(actual, expected)])
-    else:
-        return res(actual, expected)
 
 
 def test_RungeKutta_init_default():
