@@ -1,4 +1,6 @@
 import pytest
+from unittest import mock
+from typing import Optional
 
 from cosapp.drivers import Driver
 from cosapp.systems import System
@@ -6,19 +8,24 @@ from cosapp.recorders import DataFrameRecorder
 from cosapp.utils.options_dictionary import OptionsDictionary
 from cosapp.utils.testing import get_args
 
-# TODO add fundamental case with subsystem solving itself - this lacks here so TurboFan
-# and PressureLosses case should be kept without those tests.
 
-class DummyDriver(Driver):
+@pytest.fixture(autouse=True)
+def PatchDriver():
+    """Patch Driver to make it instanciable for tests"""
+    patcher = mock.patch.multiple(
+        Driver,
+        __abstractmethods__ = set(),
+        is_standalone = lambda self: False,
+    )
+    patcher.start()
+    yield
+    patcher.stop()
 
-    __slots__ = ()
-
-    def compute(self):
-        pass
 
 @pytest.fixture(scope="function")
-def dummy():
-    return DummyDriver("dummy")
+def driver():
+    """Create dummy, detached driver"""
+    return Driver("driver")
 
 
 @pytest.mark.parametrize("ctor_data, expected", [
@@ -58,29 +65,31 @@ def test_Driver__init__(ctor_data, expected):
     """Test object instantiation"""
     args, kwargs = ctor_data
     assert len(args) > 0
-    try:
-        owner = args[1]
-    except:
-        owner = kwargs.get("owner", None)
+    
     error = expected.get("error", None)
 
     if error is None:
-        d = DummyDriver(*args, **kwargs)
+        d = Driver(*args, **kwargs)
+        try:
+            owner = args[1]
+        except IndexError:
+            owner = kwargs.get("owner", None)
         assert d.name == args[0]
         assert isinstance(d.options, OptionsDictionary)
         assert d.options["verbose"] == 0
         assert d.start_time == 0
         assert d.owner is owner
         assert d.recorder is None
+
     else:
         pattern = expected.get("match", None)
         with pytest.raises(error, match=pattern):
-            d = DummyDriver(*args, **kwargs)
+            Driver(*args, **kwargs)
 
 
 def test_Driver_from_System():
     s = System('boss')
-    d = s.add_driver(DummyDriver('a_driver'))
+    d = s.add_driver(Driver('a_driver'))
     assert isinstance(d.options, OptionsDictionary)
     assert d.options["verbose"] == 0
     assert d.start_time == 0
@@ -89,42 +98,63 @@ def test_Driver_from_System():
 
 
 def test_Driver_owner():
-    d = DummyDriver('the_driver')
+    """Test getter/setter for attribute `Driver.owner`
+    """
+    def make_objects():
+        return Driver('d'), System('s')
+    
+    d = Driver('d')
     assert d.owner is None
 
-    d = DummyDriver('the_driver')
-    s = System('dummy')
+    d, s = make_objects()
     s.add_driver(d)
     assert d.owner is s
 
-    d = DummyDriver('the_driver')
+    d, s = make_objects()
     d.owner = s
     assert d.owner is s
 
-    d = DummyDriver('the_driver')
-    d1 = DummyDriver('the_subdriver')
-    d.add_child(d1)
+    d, s = make_objects()
+    foo = d.add_child(Driver('foo'))
+    bar = d.add_child(Driver('bar'))
+    sub = foo.add_child(Driver('sub'))
+    assert d.owner is None
+    assert foo.owner is None
+    assert bar.owner is None
+    assert sub.owner is None
     d.owner = s
-    assert d1.owner is s
+    assert d.owner is s
+    assert foo.owner is s
+    assert bar.owner is s
+    assert sub.owner is s
 
-    d = DummyDriver('the_driver')
-    d1 = DummyDriver('the_subdriver')
+    d = Driver('d')
+    foo = Driver('foo')
     with pytest.raises(TypeError):
-        d.owner = d1
+        d.owner = foo
 
 
-def test_Driver___repr__(dummy):
-    assert repr(dummy) == "dummy (alone) - DummyDriver"
+def test_Driver___repr__(driver: Driver):
+    assert repr(driver) == "driver (alone) - Driver"
 
-    s = System('boss')
-    d = s.add_driver(DummyDriver('d'))
-    assert repr(d) == "d (on System 'boss') - DummyDriver"
+    boss = System('boss')
+    d = boss.add_driver(Driver('d'))
+    assert repr(d) == "d (on System 'boss') - Driver"
 
 
-def test_Driver__setattr__(dummy):
+def test_Driver__setattr__(driver: Driver):
     # Error is raised when setting an absent attribute
     with pytest.raises(AttributeError):
-        dummy.ftol = 1e-5
+        driver.ftol = 1e-5
+
+
+def test_Driver__dir__(driver: Driver):
+    """Test function dir(), useful for autocompletion
+    """
+    members = dir(driver)
+    assert 'owner' in members
+    assert 'children' in members
+    assert 'recorder' in members
 
 
 @pytest.mark.skip(reason="TODO")
@@ -137,64 +167,86 @@ def test_Driver__postcompute():
     pytest.fail()
 
 
-def test_Driver_add_child(dummy):
-    assert len(dummy.children) == 0
+@pytest.mark.parametrize("owner", [None, System('s')])
+def test_Driver_add_child(driver: Driver, owner: Optional[System]):
+    driver.owner = owner
+    assert driver.owner is owner
+    assert len(driver.children) == 0
+    assert 'foo' not in dir(driver)
+    assert 'bar' not in dir(driver)
 
-    update = dummy.add_child(Driver('foo'))
-    assert set(dummy.children.keys()) == {'foo'}
-    assert dummy.children['foo'] is update
-
-    with pytest.raises(ValueError, match="Module already contains an object with the same name"):
-        dummy.add_child(Driver('foo'))
-
-    with pytest.raises(TypeError):
-        dummy.add_child(Driver)
-
-    with pytest.raises(TypeError):
-        dummy.add_child(System('oops'))
-
-
-def test_Driver_add_driver(dummy):
-    assert len(dummy.children) == 0
-
-    update = dummy.add_driver(Driver('foo'))
-    assert set(dummy.children.keys()) == {'foo'}
-    assert dummy.children['foo'] is update
+    foo = driver.add_child(Driver('foo'))
+    bar = driver.add_child(Driver('bar'))
+    assert set(driver.children) == {'foo', 'bar'}
+    assert driver.children['foo'] is foo
+    assert driver.children['bar'] is bar
+    assert foo.owner is driver.owner
+    assert bar.owner is driver.owner
+    assert 'foo' in dir(driver)
+    assert 'bar' in dir(driver)
 
     with pytest.raises(ValueError, match="Module already contains an object with the same name"):
-        dummy.add_driver(Driver('foo'))
+        driver.add_child(Driver('foo'))
 
     with pytest.raises(TypeError):
-        dummy.add_driver(Driver)
+        driver.add_child(Driver)
 
     with pytest.raises(TypeError):
-        dummy.add_driver(System('oops'))
+        driver.add_child(System('oops'))
 
 
-def test_Driver_add_recorder(dummy):
+@pytest.mark.parametrize("owner", [None, System('s')])
+def test_Driver_add_driver(driver: Driver, owner: Optional[System]):
+    driver.owner = owner
+    assert driver.owner is owner
+    assert len(driver.children) == 0
+    assert 'foo' not in dir(driver)
+    assert 'bar' not in dir(driver)
+
+    foo = driver.add_driver(Driver('foo'))
+    bar = driver.add_driver(Driver('bar'))
+    assert set(driver.children) == {'foo', 'bar'}
+    assert driver.children['foo'] is foo
+    assert driver.children['bar'] is bar
+    assert foo.owner is driver.owner
+    assert bar.owner is driver.owner
+    assert 'foo' in dir(driver)
+    assert 'bar' in dir(driver)
+
+    with pytest.raises(ValueError, match="Module already contains an object with the same name"):
+        driver.add_driver(Driver('foo'))
+
+    with pytest.raises(TypeError):
+        driver.add_driver(Driver)
+
+    with pytest.raises(TypeError):
+        driver.add_driver(System('oops'))
+
+
+def test_Driver_add_recorder(driver: Driver):
     rec = DataFrameRecorder()
 
-    dummy.add_recorder(rec)
-    assert dummy.recorder is rec
+    driver.add_recorder(rec)
+    assert driver.recorder is rec
 
     rec2 = DataFrameRecorder()
-    dummy.add_recorder(rec2)
-    assert dummy.recorder is rec2
-    assert dummy.recorder is not rec
+    driver.add_recorder(rec2)
+    assert driver.recorder is rec2
+    assert driver.recorder is not rec
 
     with pytest.raises(TypeError):
-        dummy.add_recorder(System('oops'))
+        driver.add_recorder(System('oops'))
 
 
-def test_Driver_recorder(dummy):
-    assert dummy.recorder is None
+def test_Driver_recorder(driver: Driver):
+    assert driver.recorder is None
 
     rec = DataFrameRecorder()
     with pytest.raises(AttributeError):
-        dummy.recorder = rec
+        driver.recorder = rec
 
-    dummy.add_recorder(rec)
-    assert dummy.recorder is rec
+    driver.add_recorder(rec)
+    assert driver.recorder is rec
 
 
 @pytest.mark.parametrize("attr, ok", [

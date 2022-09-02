@@ -237,7 +237,6 @@ class System(Module, TimeObserver):
         self._meta = None
         self.__runner = self  # type: Union[System, SystemSurrogate]
         self.__input_mapping = None  # type: Dict[str, VariableReference]
-        self.__members = set(dir(type(self)))
         # For efficiency purpose, links to objects are stored as reference
         # !! name2variable must be the latest attribute set 
         # => lock __setattr__ on previously defined attributes
@@ -258,10 +257,6 @@ class System(Module, TimeObserver):
 
         self.__enforce_scope()
         self._locked = True
-
-    def __dir__(self):
-        """Collection of all member names (used for autocompletion)"""
-        return self.__members
 
     def _update(self, dt) -> None:
         """Required by `TimeObserver` base class"""
@@ -543,11 +538,6 @@ class System(Module, TimeObserver):
         if parent is not None:
             parent.__reset_input_mapping()
 
-    def __add_member(self, name: str) -> None:
-        """Add `name` to dynamic member list"""
-        if '.' not in name:
-            self.__members.add(name)
-
     def append_name2variable(
         self, additional_mapping: Iterable[Tuple[str, VariableReference]]
     ) -> None:
@@ -565,7 +555,7 @@ class System(Module, TimeObserver):
         self.name2variable.update(additional_mapping)
 
         for key, _ in additional_mapping:
-            self.__add_member(key)
+            self._add_member(key)
 
         if self.parent is not None:
             name = self.name
@@ -598,7 +588,7 @@ class System(Module, TimeObserver):
         name = Variable.name_check(name)
         self.__check_attr(name, f"cannot add read-only property {name!r};")
         self.__readonly[name] = value
-        self.__members.add(name)
+        self._add_member(name)
         cls = self.__class__
         def getter(self):
             try:
@@ -1455,7 +1445,6 @@ class System(Module, TimeObserver):
         """
         # Type validation
         check_arg(child, 'child', System)
-        check_arg(execution_index, 'execution_index', (type(None), int), lambda i: i is None or i >= 0)
         check_arg(pulling, 'pulling', (type(None), str, list, dict, set))
 
         child = super().add_child(child, execution_index)
@@ -1472,8 +1461,7 @@ class System(Module, TimeObserver):
         keys = [(child.name, VariableReference(context=self, mapping=self.children, key=child.name))]
         # Append child system name mapping to current mapping
         rel2absname = lambda item: (f"{child.name}.{item[0]}", item[1])
-        mapping_generator = map(rel2absname, child.name2variable.items())
-        keys.extend(mapping_generator)
+        keys.extend(map(rel2absname, child.name2variable.items()))
         self.append_name2variable(keys)
         self.__reset_input_mapping()
 
@@ -1736,7 +1724,7 @@ class System(Module, TimeObserver):
             except KeyError:
                 raise AttributeError(f"{cls.__name__} object {self.name!r} has no attribute {name!r}")
         setattr(cls, name, property(getter))
-        self.__add_member(name)
+        self._add_member(name)
         return event
 
     def add_inward_modevar(self,
