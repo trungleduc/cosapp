@@ -724,29 +724,33 @@ def test_System_add_child_TypeError(args):
 
 
 def test_System_pop_child():
-    s = System("s")
-    s1 = SubSystem("sub1")
-    s2 = SubSystem("sub2")
-    s.add_child(s1, pulling=["in_", "sloss", "tmp"])
-    s.add_child(s2)
-    s.connect(s1.out, s2.in_)
-    assert_keys(s.children, "sub1", "sub2")
-    s.exec_order = ['sub2', 'sub1']
+    head = System("head")
+    sub1 = SubSystem("sub1")
+    sub2 = SubSystem("sub2")
+    head.add_child(sub1, pulling=["in_", "sloss", "tmp"])
+    head.add_child(sub2)
+    head.connect(sub1.out, sub2.in_)
+    assert_keys(head.children, "sub1", "sub2")
+    assert 'sub1' in dir(head)
+    assert 'sub2' in dir(head)
+    head.exec_order = ['sub2', 'sub1']
 
-    assert set(s.connectors()) == {
+    assert set(head.connectors()) == {
         "in_ -> sub1.in_",
         "inwards -> sub1.inwards",
         "sub1.outwards -> outwards",
         "sub1.out -> sub2.in_",
     }
 
-    s.pop_child("sub1")
-    assert_keys(s.children, "sub2")
-    assert s1.parent is None
-    assert s1.name not in s.exec_order
-    assert list(s.exec_order) == [s2.name]
-    assert len(s.connectors()) == 0
-    assert not any(key.startswith('sub1') for key in s.name2variable)
+    head.pop_child("sub1")
+    assert_keys(head.children, "sub2")
+    assert sub1.parent is None
+    assert sub1.name not in head.exec_order
+    assert list(head.exec_order) == [sub2.name]
+    assert len(head.connectors()) == 0
+    assert not any(key.startswith('sub1') for key in head.name2variable)
+    assert 'sub2' in dir(head)
+    assert 'sub1' not in dir(head)
 
 
 def test_System_add_port():

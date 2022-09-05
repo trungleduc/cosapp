@@ -5,6 +5,7 @@ from __future__ import annotations
 import abc
 import collections
 import logging
+from numbers import Integral
 from typing import (
     Optional, Any, List, Dict, OrderedDict,
     Generator, MappingView, Sequence,
@@ -66,6 +67,7 @@ class Module(LoggerContext, VisitedComponent, metaclass=abc.ABCMeta):
     __slots__ = (
         '__weakref__', '_name', 'children', 'parent', '_active',
         '_compute_calls', 'setup_ran', 'computed', 'clean_ran',
+        '__members',
     )
 
     _name_check = NameChecker(excluded=CommonPorts.names())
@@ -88,6 +90,17 @@ class Module(LoggerContext, VisitedComponent, metaclass=abc.ABCMeta):
         self.setup_ran = Signal(name="cosapp.core.module.Module.setup_ran")
         self.clean_ran = Signal(name="cosapp.core.module.Module.clean_ran")
         self.computed = Signal(name="cosapp.core.module.Module.computed")
+        private_prefix = f"_{type(self).__qualname__}__"
+        self.__members = set(
+            filter(
+                lambda name: not name.startswith(private_prefix),
+                dir(type(self))
+            )
+        )
+
+    def __dir__(self):
+        """Collection of all member names (used for autocompletion)"""
+        return self.__members
 
     def tree(self, downwards=False) -> Generator[Module, None, None]:
         """Generator recursively yielding all elements in module tree.
@@ -167,6 +180,18 @@ class Module(LoggerContext, VisitedComponent, metaclass=abc.ABCMeta):
     def size(self) -> int:
         """int: Total number of elements in tree."""
         return sum(1 for _ in self.tree())
+
+    def _add_member(self, name: str) -> None:
+        """Add `name` to dynamic member list"""
+        if '.' not in name:
+            self.__members.add(name)
+
+    def _pop_member(self, name: str) -> None:
+        """Remove `name` to dynamic member list"""
+        try:
+            self.__members.remove(name)
+        except:
+            pass
 
     def path_to_root(self) -> Generator[Module, None, None]:
         """Generator recursively yielding all elements up to root module.
@@ -288,7 +313,7 @@ class Module(LoggerContext, VisitedComponent, metaclass=abc.ABCMeta):
 
         specific_order = None
         if execution_index is not None:
-            check_arg(execution_index, 'execution_index', int)
+            check_arg(execution_index, 'execution_index', Integral, lambda i: i >= 0)
             specific_order = list(self.exec_order)
             specific_order.insert(execution_index, child.name)
 
@@ -300,6 +325,7 @@ class Module(LoggerContext, VisitedComponent, metaclass=abc.ABCMeta):
 
         child.parent = self
         self.children[child.name] = child
+        self._add_member(child.name)
 
         if specific_order:
             self.exec_order = specific_order
@@ -330,6 +356,7 @@ class Module(LoggerContext, VisitedComponent, metaclass=abc.ABCMeta):
             logger.error(message)
             raise AttributeError(message)
 
+        self._pop_member(name)
         child = children.pop(name)
         child.parent = None
 
