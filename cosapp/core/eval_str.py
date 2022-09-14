@@ -244,6 +244,7 @@ class EvalString:
         Compiles an expression, and checks that it is evaluable within a given context.
         """
         from cosapp.systems import System
+        from cosapp.ports.port import BasePort
         if not isinstance(context, System):
             cname = type(context).__name__
             raise TypeError(
@@ -261,10 +262,16 @@ class EvalString:
         self.__locals = local_dict = ContextLocals(context)  # type: ContextLocals
         value = eval(code, global_dict, local_dict)
         
+        self.__attr = None  # type: FrozenSet[str]
         self.__vars = None  # type: FrozenSet[str]
         
         constants = context.properties
-        self.__constant = set(local_dict).issubset(constants)  # type: bool
+        self.__constant = False
+        if set(local_dict).issubset(constants):
+            self.__constant = True
+        else:
+            required = self.variables(include_const=True)
+            self.__constant = required and required.issubset(constants)
 
         if self.__constant:
             # simply return constant value
@@ -345,9 +352,15 @@ class EvalString:
         """
         return self.__eval()
 
-    def variables(self) -> FrozenSet[str]:
-        """Extracts all variables required for the evaluation of the expression
+    def variables(self, include_const=False) -> FrozenSet[str]:
+        """Extracts all variables required for the evaluation of the expression,
+        with or without system constant properties.
         
+        Parameters
+        ----------
+        include_const [bool, optional]:
+            Determines whether or not read-only properties should be included (default: `False`).
+
         Returns
         -------
         FrozenSet[str]:
@@ -360,15 +373,16 @@ class EvalString:
             expression = str(self)
             for key, obj in self.__locals.items():
                 if isinstance(obj, (System, BasePort)):
-                    names |= set(f"{key}{tail}"
+                    names.update(f"{key}{tail}"
                         for tail in re.findall(f"{key}(\.[\w\.]*)+", expression)
                     )
                 else:
                     names.add(key)
+            self.__attr = frozenset(names)
             self.__vars = frozenset(
                 names - set(self.eval_context.properties)
             )
-        return self.__vars
+        return self.__attr if include_const else self.__vars
 
 
 class AssignString:

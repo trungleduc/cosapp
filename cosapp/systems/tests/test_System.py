@@ -3380,6 +3380,23 @@ def test_System_properties(DummyFactory, ctor_data, expected):
             DummyFactory("dummy", **ctor_data)
 
 
+def test_System_subsystem_properties():
+    """Test expressions involving sub-system constants
+    """
+    class SystemWithConstants(System):
+        def setup(self, constants: dict={}):
+            for name, value in constants.items():
+                self.add_property(name, value)
+
+    top = SystemWithConstants('top', constants={'n': 12})
+    mid = top.add_child(SystemWithConstants('mid', constants={'g': 9.81}))
+    sub = mid.add_child(SystemWithConstants('sub', constants={'c': 0.10}))
+
+    assert set(top.properties) == {'n', 'mid.g', 'mid.sub.c'}
+    assert set(mid.properties) == {'g', 'sub.c'}
+    assert set(sub.properties) == {'c'}
+
+
 def test_System_properties_safeview(DummyFactory):
     dummy: System = DummyFactory("dummy", 
         inwards = [get_args("x", 22.0), get_args("y", 42.0, desc="that's why")],
