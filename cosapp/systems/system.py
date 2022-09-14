@@ -1465,6 +1465,14 @@ class System(Module, TimeObserver):
         self.append_name2variable(keys)
         self.__reset_input_mapping()
 
+        # Add read-only constants to parent line
+        prefix = f"{child.name}."
+
+        for system in self.path_to_root():
+            for name, value in child.__readonly.items():
+                system.__readonly[f"{prefix}{name}"] = value
+            prefix = f"{system.name}.{prefix}"
+
         if pulling is not None:
             try:
                 pull_variables(child, pulling)

@@ -6,6 +6,7 @@ import warnings
 
 from cosapp.core.eval_str import EvalString
 from cosapp.systems import System
+from typing import Dict, Set
 
 
 def test_EvalString__init__(eval_context):
@@ -139,6 +140,42 @@ def test_EvalString_with_constants(eval_context, expression, expected):
         assert s.eval() == expected['value']
 
 
+def test_EvalString_subsystem_constant():
+    """Test expressions involving sub-system constants"""
+    class SystemWithConstants(System):
+        def setup(self, constants: dict={}):
+            for name, value in constants.items():
+                self.add_property(name, value)
+
+    top = System('top')
+    mid = top.add_child(SystemWithConstants('mid', constants={'g': 9.81}))
+    sub = mid.add_child(SystemWithConstants('sub', constants={'c': 0.10}))
+
+    s = EvalString('2 * c', sub)
+    assert s.variables() == set()
+    assert s.variables(include_const=True) == {'c'}
+    assert s.constant
+    assert s.eval() == pytest.approx(0.2, rel=1e-14)
+
+    s = EvalString('2 * sub.c', mid)
+    assert s.variables() == set()
+    assert s.variables(include_const=True) == {'sub.c'}
+    assert s.constant
+    assert s.eval() == pytest.approx(0.2, rel=1e-14)
+
+    s = EvalString('2 * mid.sub.c', top)
+    assert s.variables() == set()
+    assert s.variables(include_const=True) == {'mid.sub.c'}
+    assert s.constant
+    assert s.eval() == pytest.approx(0.2, rel=1e-14)
+
+    s = EvalString('mid.g * mid.sub.c', top)
+    assert s.variables() == set()
+    assert s.variables(include_const=True) == {'mid.g', 'mid.sub.c'}
+    assert s.constant
+    assert s.eval() == pytest.approx(0.981, rel=1e-14)
+
+
 @pytest.mark.parametrize("expression, expected", [
     ("norm(x, inf)", 3.14),
     ("0.2 * a / 0.5", pytest.approx(0.8, rel=1e-14)),
@@ -150,7 +187,7 @@ def test_EvalString_with_constants(eval_context, expression, expected):
     ("out.q - sub.in_.q", pytest.approx(-4.5, rel=1e-14)),
     ("out. q - sub.in_ .  q", pytest.approx(-4.5, rel=1e-14)),
     ("concatenate((x, [-a, sub.in_.q]))", pytest.approx([0.1, -0.2, -3.14, -2, 5], rel=1e-14)),
-    ("len(out)", 1),
+    ("len(out)", 1),   # not constant, by convention
 ])
 def test_EvalString_nonconstant_expr(eval_context, expression, expected):
     """Test expressions expected to be interpreted as non-constant"""
@@ -253,15 +290,27 @@ def test_EvalString_locals(eval_context, expression, expected):
 
 
 @pytest.mark.parametrize("expression, expected", [
-    ("norm(x, inf)", {'x'}),
-    ("g * cos(pi * x)", {'x'}),
-    ("g * cos(pi * x) + sub.z", {'x', 'sub.z'}),
-    ("g * cos(pi * x) / out.q + sub.z * sub.in_.q + out.q", {'x', 'sub.z', 'sub.in_.q', 'out.q'}),
-    ("(g * cos(pi * x), out.q, sub.z, sub.in_.q, 2 * out.q)", {'x', 'sub.z', 'sub.in_.q', 'out.q'}),
-    ("out.q + sub.z * sub.in_.q + B52.in_.q", {'sub.z', 'sub.in_.q', 'out.q', 'B52.in_.q'}),
-    ("out. q + sub  .z * sub . in_.q + out  . q", {'sub.z', 'sub.in_.q', 'out.q'}),
-    ("len(out)", set()),
+    ("norm(x, inf)", dict(variables={'x'})),
+    ("g * cos(pi * x)", dict(variables={'x'}, constants={'g'})),
+    ("g * cos(pi * x) + sub.z", dict(variables={'x', 'sub.z'}, constants={'g'})),
+    (
+        "g * cos(pi * x) / out.q + sub.z * sub.in_.q + out.q",
+        dict(variables={'x', 'sub.z', 'sub.in_.q', 'out.q'}, constants={'g'})
+    ),
+    (
+        "(g * cos(pi * x), out.q, sub.z, sub.in_.q, 2 * out.q)",
+        dict(variables={'x', 'sub.z', 'sub.in_.q', 'out.q'}, constants={'g'}),
+    ),
+    ("out.q + sub.z * sub.in_.q + B52.in_.q", dict(variables={'sub.z', 'sub.in_.q', 'out.q', 'B52.in_.q'})),
+    ("out. q + sub  .z * sub . in_.q + out  . q", dict(variables={'sub.z', 'sub.in_.q', 'out.q'})),
+    ("len(out)", dict(variables=set())),
 ])
-def test_EvalString_variables(eval_context, expression, expected):
+def test_EvalString_variables(eval_context, expression, expected: Dict[str, Set[str]]):
+    """Test method `EvalString.variables()`.
+    """
+    expected.setdefault('constants', set())
+    all_required = expected['variables'].union(expected['constants'])
+    
     e = EvalString(expression, eval_context)
-    assert e.variables() == expected
+    assert e.variables() == expected['variables']
+    assert e.variables(include_const=True) == all_required

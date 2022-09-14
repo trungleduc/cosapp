@@ -1,7 +1,8 @@
 import pytest
-
 import numpy as np
+from typing import ContextManager, Dict, Any, Set
 
+from cosapp.base import System
 from cosapp.core.eval_str import AssignString
 from cosapp.ports.enum import PortType
 
@@ -11,7 +12,7 @@ from cosapp.ports.enum import PortType
     "x[-1]",
     "inwards.x[-1]",
     ])
-def test_AssignString__init__(eval_context, lhs):
+def test_AssignString__init__(eval_context: System, lhs: str):
     context = eval_context  # for convenience
     assert context is eval_context
     context.x[2] = 0.1
@@ -41,46 +42,48 @@ def test_AssignString__init__(eval_context, lhs):
     assert context.x[2] == value
 
 
-@pytest.mark.parametrize("lhs, rhs, exception", [
-    (0, 0, ValueError),
-    ("0", 0, ValueError),
-    ("0", "0", ValueError),
-    ("0", "a + b", ValueError),
-    ("a + b", "0", SyntaxError),
-    ("-", "0", SyntaxError),
-    ("x[", "0", SyntaxError),
-    ("a", "b +", SyntaxError),
-    ("a[:]", "b", TypeError),
-    ("_a", "b", NameError),
-    ("a", "-", SyntaxError),
-    ("a + b", "0", SyntaxError),
-    ("a + x", "0", SyntaxError),
-    ("x", "MyFunc(b)", NameError),  # note: when lhs is a vector, rhs is evaluated at construction
-    ("x", "_b", NameError),
-    ("x[1:]", "_b", NameError),
-    ("x", "cos()", (TypeError, ValueError)),  # note: actual exception may depend on numpy version
-    ("x", "cos(", SyntaxError),
-    ("x[1:]", "ones(3)", ValueError),
-    ("x", "ones(12)", ValueError),
-    ("x", "ones(2)", ValueError),
-    ("x[1:]", "[a, _b]", NameError),
-    ("a", "_b", NameError),
-    ("a", "MyFunc(b)", NameError),
-    ("a", "_", NameError),
-    ("x[1]", "MyFunc(b)", NameError),
-    ("x[9]", "0.5", IndexError),
-    ])
-def test_AssignString__init__error(eval_context, lhs, rhs, exception):
+@pytest.mark.parametrize("lhs, rhs, expected", [
+    (0, 0, pytest.raises(ValueError, match="left-hand side.* cannot be constant")),
+    ("0", 0, pytest.raises(ValueError, match="left-hand side.* cannot be constant")),
+    ("0", "0", pytest.raises(ValueError, match="left-hand side.* cannot be constant")),
+    ("0", "a + b", pytest.raises(ValueError, match="left-hand side.* cannot be constant")),
+    ("g", "a + b", pytest.raises(ValueError, match="left-hand side.* cannot be constant")),
+    ("a + b", "0", pytest.raises(SyntaxError)),
+    ("-", "0", pytest.raises(SyntaxError)),
+    ("x[", "0", pytest.raises(SyntaxError)),
+    ("a", "b +", pytest.raises(SyntaxError)),
+    ("a[:]", "b", pytest.raises(TypeError)),
+    ("_a", "b", pytest.raises(NameError)),
+    ("a", "-", pytest.raises(SyntaxError)),
+    ("a + b", "0", pytest.raises(SyntaxError)),
+    ("a + x", "0", pytest.raises(SyntaxError)),
+    ("x", "MyFunc(b)", pytest.raises(NameError, match='MyFunc')),  # note: when lhs is a vector, rhs is evaluated at construction
+    ("x", "_b", pytest.raises(NameError)),
+    ("x[1:]", "_b", pytest.raises(NameError)),
+    ("x", "cos()", pytest.raises((TypeError, ValueError))),  # note: actual exception may depend on numpy version
+    ("x", "cos(", pytest.raises(SyntaxError)),
+    ("x[1:]", "ones(3)", pytest.raises(ValueError)),
+    ("x", "ones(12)", pytest.raises(ValueError)),
+    ("x", "ones(2)", pytest.raises(ValueError)),
+    ("x[1:]", "[a, _b]", pytest.raises(NameError)),
+    ("a", "_b", pytest.raises(NameError)),
+    ("a", "MyFunc(b)", pytest.raises(NameError, match='MyFunc')),
+    ("a", "_", pytest.raises(NameError, match="_")),
+    ("x[1]", "MyFunc(b)", pytest.raises(NameError, match='MyFunc')),
+    ("x[9]", "0.5", pytest.raises(IndexError)),
+])
+def test_AssignString__init__error(eval_context: System, lhs: str, rhs: Any, expected: ContextManager):
     """Test expressions expected to raise an exception at instantiation"""
-    with pytest.raises(exception):
+    with expected:
         AssignString(lhs, rhs, eval_context)
+
 
 @pytest.mark.parametrize("lhs, rhs, exception", [
     ("a", [1], TypeError),
     ("a", "[1]", TypeError),
     ("a", "(1, 2)", TypeError),
-    ])
-def test_AssignString_exec_error(eval_context, lhs, rhs, exception):
+])
+def test_AssignString_exec_error(eval_context: System, lhs: str, rhs: Any, exception: Exception):
     """Test expressions expected to raise an exception at execution"""
     s = AssignString(lhs, rhs, eval_context)
     with pytest.raises(exception):
@@ -88,7 +91,7 @@ def test_AssignString_exec_error(eval_context, lhs, rhs, exception):
 
 
 @pytest.mark.parametrize("lhs", ["inwards.a", "a"])
-def test_AssignString_exec_a(eval_context, lhs):
+def test_AssignString_exec_a(eval_context: System, lhs: str):
     context = eval_context  # for convenience
     assert context is eval_context
     context.a = 0.123
@@ -131,8 +134,8 @@ def test_AssignString_exec_a(eval_context, lhs):
     # integer-valued rhs: should not change x.dtype
     ([0, 2, 1], {}, [0, 2, 1]),
     (np.ones(3, dtype=int), {}, [1, 1, 1]),
-    ])
-def test_AssignString_exec_full_array(eval_context, setup, lhs, rhs, expected):
+])
+def test_AssignString_exec_full_array(eval_context: System, setup: Dict[str, Any], lhs: str, rhs: Any, expected: Dict[str, Any]):
     context = eval_context  # for convenience
     assert context is eval_context
     context.x = np.r_[0.1, 0.2, 0.3]
@@ -164,7 +167,7 @@ def test_AssignString_exec_full_array(eval_context, setup, lhs, rhs, expected):
     assert context.x == pytest.approx(expected)
 
 
-def test_AssignString_array_copy(eval_context):
+def test_AssignString_array_copy(eval_context: System):
     """
     Check that an AssignString of the kind `array1 = array2`
     does not make array1 a reference to array2, but assigns a copy instead.
@@ -196,7 +199,7 @@ def test_AssignString_array_copy(eval_context):
     ("x[:-1]", "a + b", {'a': 0.99, 'b': 3.14}, [4.13, 4.13, 0]),
     ("x[::2]", np.r_[-2.6, 0.66], {}, [-2.6, 0, 0.66]),
 ])
-def test_AssignString_exec_masked_array(eval_context, setup, lhs, rhs, expected):
+def test_AssignString_exec_masked_array(eval_context: System, setup, lhs, rhs, expected):
     context = eval_context  # for convenience
     assert context is eval_context
     context.x = np.zeros(3)
@@ -224,7 +227,7 @@ def test_AssignString_exec_masked_array(eval_context, setup, lhs, rhs, expected)
     assert context.x == pytest.approx(expected)
 
 
-def test_AssignString_rhs(eval_context):
+def test_AssignString_rhs(eval_context: System):
     context = eval_context
     s = AssignString("sub.in_.q", 0, context)
     assert s.rhs == "0"
@@ -259,14 +262,39 @@ def test_AssignString_rhs(eval_context):
     ("x[1]", "1 + a - a", False),
     ("x", "[1, 2, 3]", True),
     ("x", "[1, 2, a]", False),
+    ("x", "[1, 2, g]", True),
 ])
-def test_AssignString_constant(eval_context, lhs, rhs, expected):
+def test_AssignString_constant(eval_context: System, lhs: str, rhs: Any, expected: bool):
     """Test whether rhs of assignment is a constant expression"""
     s = AssignString(lhs, rhs, eval_context)
     assert s.constant == expected
 
 
-def test_AssignString_exec_changed_full_array(eval_context):
+def test_AssignString_subsystem_constant():
+    """Test expressions involving sub-system constants
+    """
+    class SystemWithConstants(System):
+        def setup(self, constants: dict={}):
+            for name, value in constants.items():
+                self.add_property(name, value)
+
+    top = System('top')
+    mid = top.add_child(SystemWithConstants('mid', constants={'g': 9.81}))
+    sub = mid.add_child(SystemWithConstants('sub', constants={'c': 0.12}))
+
+    expected = pytest.raises(ValueError, match="left-hand side.* cannot be constant")
+
+    with expected:
+        AssignString('c', 0, sub)
+
+    with expected:
+        AssignString('sub.c', 0, mid)
+
+    with expected:
+        AssignString('mid.sub.c', 0, top)
+
+
+def test_AssignString_exec_changed_full_array(eval_context: System):
     context = eval_context  # for convenience
     assert context is eval_context
     context.x = np.zeros(3)
@@ -303,7 +331,7 @@ def test_AssignString_exec_changed_full_array(eval_context):
     assert value == pytest.approx(context.x)
 
 
-def test_AssignString_exec_changed_masked_array(eval_context):
+def test_AssignString_exec_changed_masked_array(eval_context: System):
     context = eval_context  # for convenience
     assert context is eval_context
     context.x = np.zeros(3)
@@ -371,11 +399,12 @@ def test_AssignString_exec_changed_masked_array(eval_context):
     ("1 + 4", 5),
     ("1.23 / 10", 1.23 / 10),
     ("cos(pi)", np.cos(np.pi)),
+    ("2 * g", 2 * 9.80665),
     ("26 * pi / 180", 26 * np.pi / 180),
     ("exp(-1.5)", np.exp(-1.5)),
     ("log(2)", np.log(2)),
 ])
-def test_AssignString_constant_evaluation(eval_context, rhs, value):
+def test_AssignString_constant_evaluation(eval_context: System, rhs, value):
     """Test that constant expressions are evaluated before being stored"""
     s = AssignString("a", rhs, eval_context)
     assert s.constant
@@ -393,7 +422,7 @@ def test_AssignString_constant_evaluation(eval_context, rhs, value):
     #     {'x', 'sub.z', 'out.q', 'B52.in_.q'}, {'x', 'out.q'},
     # ),
 ])
-def test_AssignString_variables(eval_context, lhs, rhs, variables, lhs_vars):
+def test_AssignString_variables(eval_context: System, lhs: str, rhs, variables: Set[str], lhs_vars: Set[str]):
     s = AssignString(lhs, rhs, eval_context)
     assert s.lhs_variables == lhs_vars
     assert s.variables() == variables
