@@ -1,4 +1,5 @@
 """This module define the basic class encapsulating a variable attributes."""
+from __future__ import annotations
 import abc
 import array
 import numpy
@@ -110,7 +111,7 @@ class BaseVariable(abc.ABC):
         self._scope = scope  # type: Scope
 
     @abc.abstractmethod
-    def copy(self, port: "BasePort", name: Optional[str] = None) -> "BaseVariable":
+    def copy(self, port: "cosapp.ports.port.BasePort", name: Optional[str] = None) -> BaseVariable:
         pass
 
     @abc.abstractmethod

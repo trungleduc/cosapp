@@ -8,6 +8,7 @@ from cosapp.base import Port, System
 from cosapp.ports.port import PortType
 from cosapp.utils.distributions import Distribution, Uniform
 from cosapp.utils.testing import get_args, assert_keys
+from typing import Type
 
 
 @pytest.mark.parametrize("direction", PortType)
@@ -121,28 +122,34 @@ from cosapp.utils.testing import get_args, assert_keys
         dict(name=3.14), dict(error=TypeError)
     ),
 ])
-def test_Port__init__(DummyPort, direction, case_data, expected):
+def test_Port__init__(PortClassFactory, direction, case_data, expected: dict):
     settings = copy.deepcopy(case_data)
-    error = expected.get("error", None)
     name = settings.pop("name", "dummy")
     init = settings.pop("init", dict())
+    # Generate test port class
+    DummyPort: Type[Port] = PortClassFactory(
+        classname="DummyPort",
+        variables=settings.pop('variables', []),
+    )
+    error = expected.get("error", None)
+
     if error is None:
         port = DummyPort(name, direction, init, **settings)
         assert port.name == name
         assert port.direction is direction
         assert port.owner is settings.get("owner", None)
         # check variable initialization (if any)
-        if "values" not in expected:
-            expected["values"] = init
-        for var, value in expected["values"].items():
-            assert getattr(port, var) == value
+        expected.setdefault("values", init)
+        for varname, value in expected["values"].items():
+            assert getattr(port, varname) == value, varname
         # check variable details
         expected_details = expected.get("details", dict())
-        for var, details in expected_details.items():
-            actual = port.get_details(var)
+        for varname, details in expected_details.items():
+            actual = port.get_details(varname)
             assert isinstance(actual.distribution, (type(None), Distribution))
             for name, value in details.items():
                 assert getattr(actual, name) == value
+
     else:
         pattern = expected.get("match", None)
         with pytest.raises(error, match=pattern):
@@ -150,52 +157,56 @@ def test_Port__init__(DummyPort, direction, case_data, expected):
 
 
 @pytest.mark.parametrize("direction", PortType)
-def test_Port_setup(DummyPort, direction):
-    p = DummyPort("dummy", direction,
-        variables = [
+def test_Port_setup(PortClassFactory, direction):
+    DummyPort: Type[Port] = PortClassFactory(
+        classname="DummyPort",
+        variables=[
             get_args("x", 22.0),
             get_args("y", 10.0),
             get_args("z", 3.14),
-        ])
+        ],
+    )
+    p = DummyPort("dummy", direction)
     assert p.x == 22
     assert p.y == 10
     assert p.z == 3.14
 
 
 @pytest.mark.parametrize("direction", PortType)
-def test_Port_owner(DummyPort, direction):
+def test_Port_owner(PortFactory, direction):
     s = System("foo")
-    p = DummyPort("dummy", direction,
-        variables = get_args("x", 22.0),
-        owner = s,
-        )
+    p = PortFactory("dummy", direction,
+        variables=get_args("x", 22.0),
+        owner=s,
+    )
     assert p.x == 22
     assert p.owner is s
 
 
 @pytest.mark.parametrize("direction", PortType)
-def test_Port_add_variable(DummyPort, direction):
-    p = DummyPort("dummy", direction, {"var1": 0.0, "var2": 100.1},
-        variables = [get_args("var1"), get_args("var2")],
-        )
+def test_Port_add_variable(PortFactory, direction):
+    p = PortFactory("dummy", direction,
+        variables=[get_args("var1"), get_args("var2")],
+    )
     with pytest.raises(AttributeError):
         p.add_variable("foo", 3.14)
 
 
 @pytest.mark.parametrize("direction", PortType)
-def test_Port_remove_variable(DummyPort, direction):
-    p = DummyPort("dummy", direction, {"var1": 0.0, "var2": 100.1},
-        variables = [get_args("var1"), get_args("var2")],
-        )
+def test_Port_remove_variable(PortFactory, direction):
+    p = PortFactory(
+        "dummy", direction,
+        variables=[get_args("var1"), get_args("var2")],
+    )
     with pytest.raises(AttributeError):
         p.remove_variable("var1")
 
 
 @pytest.mark.parametrize("direction", PortType)
 @pytest.mark.parametrize("copy_dir", PortType)
-def test_Port_copy(DummyPort, direction, copy_dir):
-    # p = DummyPort("p", PortType.IN)
-    p = DummyPort("dummy", direction,
+def test_Port_copy(PortFactory, direction, copy_dir):
+    p: Port = PortFactory(
+        "dummy", direction,
         variables = [
             get_args("Pt", 101325.0, unit="Pa"),
             get_args("W", 1.0,
@@ -207,6 +218,7 @@ def test_Port_copy(DummyPort, direction, copy_dir):
         ],
     )
     c = p.copy()
+    assert isinstance(c, type(p))
     assert c.name == p.name
     assert c.Pt == 101325
     assert c.W == 1
@@ -233,10 +245,10 @@ def test_Port_morph():
 
 
 @pytest.mark.parametrize("direction", PortType)
-@pytest.mark.parametrize("copy_dir", PortType)
-def test_Port_to_dict_with_def(DummyPort, direction, copy_dir):
-    p = DummyPort("dummy", direction,
-        variables = [
+def test_Port_to_dict_with_def(PortClassFactory, direction):
+    DummyPort: Type[Port] = PortClassFactory(
+        classname="DummyPort",
+        variables=[
             get_args("Pt", 101325.0, unit="Pa"),
             get_args("W", 1.0,
                 unit="kg/s",
@@ -246,9 +258,14 @@ def test_Port_to_dict_with_def(DummyPort, direction, copy_dir):
             ),
         ],
     )
+    p = DummyPort("dummy", direction)
     port_dict = p.to_dict(True)
     assert_keys(port_dict, "dummy")
-    assert  port_dict["dummy"] ==  {'__class__': 'DummyPort.<locals>.Factory.<locals>.PrototypePort', 'Pt': 101325.0, 'W': 1.0}
+    assert port_dict["dummy"] ==  {
+        '__class__': 'DummyPort',
+        'Pt': 101325.0,
+        'W': 1.0,
+    }
 
 
 @pytest.mark.parametrize("source_direction", PortType)

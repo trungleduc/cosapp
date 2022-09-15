@@ -1,6 +1,3 @@
-"""
-Classes containing all `System` variables.
-"""
 import logging
 import copy
 from collections import OrderedDict
@@ -511,10 +508,11 @@ class BasePort(visitor.Component):
         else:
             return self._variables[name].get_validity_comment(status)
 
-    def copy(self,
+    def copy(
+        self,
         name: Optional[str] = None,
         direction: Optional[PortType] = None,
-    ) -> "BasePort":
+    ):
         """Duplicates the port.
 
         Parameters
@@ -795,14 +793,13 @@ class Port(BasePort):
         variables : Dict[str, Any], optional
             Dictionary of variables with their value and details; default: None = default value
         """
-        check_arg(variables, "variables", (type(None), dict))
-
         super().__init__(name, direction)
         self._locked = False  # type: bool
 
         self.setup()
 
         if variables is not None:
+            check_arg(variables, "variables", dict)
             for name, value in variables.items():
                 variable_value = value
                 if isinstance(value, dict):
@@ -911,10 +908,11 @@ class Port(BasePort):
             scope=scope,
         )
 
-    def copy(self, 
+    def copy(
+        self, 
         name: Optional[str] = None,
         direction: Optional[PortType] = None,
-    ) -> "BasePort":
+    ):
         """Duplicates the port.
 
         Parameters
@@ -929,12 +927,12 @@ class Port(BasePort):
         Port
             The copy of the current port
         """
-        new_name = self.name if name is None else name
-        new_direction = self.direction if direction is None else direction
-
-        new_port = type(self)(new_name, new_direction)
+        cls = type(self)
+        new_port = cls(
+            name or self.name,
+            direction or self.direction,
+        )
         new_port.set_from(self, copy.copy)
-
         return new_port
 
     def set_from(self,

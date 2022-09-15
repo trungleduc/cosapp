@@ -74,6 +74,8 @@ class RungeKutta(ExplicitTimeDriver):
         Time integration of transient variables over time step `dt` by Runge-Kutta scheme.
         """
         transients = self._transients
+        if len(transients) == len(self._rates) == 0:
+            return
         buffer = self.__buffer
         steps = self.__fracs * dt
         weights = self.__coefs * dt

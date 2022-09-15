@@ -4,6 +4,7 @@ import numpy as np
 from cosapp.systems import System
 from cosapp.recorders import DataFrameRecorder
 from cosapp.drivers import RungeKutta
+from typing import Tuple
 
 
 class PointDynamics(System):
@@ -69,12 +70,12 @@ class BouncingBall(System):
 
 
 @pytest.fixture
-def ball():
+def ball() -> BouncingBall:
     return BouncingBall('ball')
 
 
 @pytest.fixture
-def ball_case(ball):
+def ball_case(ball: BouncingBall) -> Tuple[BouncingBall, RungeKutta]:
     """Bouncing ball + driver test case"""
     driver = ball.add_driver(RungeKutta(order=3))
     driver.time_interval = (0, 4)
@@ -96,7 +97,7 @@ def ball_case(ball):
     return ball, driver
 
 
-def test_BouncingBall(ball_case):
+def test_BouncingBall(ball_case: Tuple[BouncingBall, RungeKutta]):
     ball, driver = ball_case
 
     ball.run_drivers()
@@ -113,7 +114,7 @@ def test_BouncingBall(ball_case):
     )
 
 
-def test_BouncingBall_final(ball_case):
+def test_BouncingBall_final(ball_case: Tuple[BouncingBall, RungeKutta]):
     """Bouncing ball case with final rebound event.
     """
     ball, driver = ball_case
@@ -130,7 +131,7 @@ def test_BouncingBall_final(ball_case):
     assert driver.recorded_events[0].time == pytest.approx(1.457205)
 
 
-def test_BouncingBall_stop(ball):
+def test_BouncingBall_stop(ball: BouncingBall):
     """Bouncing ball case with stop criterion based on rebound event.
     """
     driver = ball.add_driver(RungeKutta(order=3))

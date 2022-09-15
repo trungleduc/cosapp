@@ -1,22 +1,22 @@
 import pytest
 
-from cosapp.ports import Port
+from cosapp.base import Port
+from typing import Tuple, List, Dict, Any, Type
 
-# <codecell>
+
+Args, Kwargs = Tuple[Any], Dict[str, Any]
+
 
 @pytest.fixture(scope="function")
-def DummyPort():
-    """Factory creating a dummy port with custom attributes"""
-    def Factory(name, direction, init_values=None, **options):
-        # options listed below should be (args, kwargs) or a list thereof
+def PortClassFactory():
+    """Factory creating a new port class with custom attributes
+    """
+    def Factory(classname, variables: List[Tuple[Args, Kwargs]], base: Type[Port]=Port):
+        # variables should be (args, kwargs) or a list thereof
         method_dict = {
             # correspondance method / option
-            # for example: `add_variable` <-> `variables`
-            "add_" + option[:-1] : options.pop(option, None)
-            for option in ["variables"]
+            "add_variable": variables,
         }
-        base = options.pop("base", Port)
-        owner = options.pop("owner", None)
         class PrototypePort(base):
             def setup(self, **options):
                 super().setup(**options)
@@ -27,7 +27,22 @@ def DummyPort():
                         values = [values]
                     for args, kwargs in values:  # expects a list of (tuple, dict)
                         getattr(self, method)(*args, **kwargs)
-                if owner is not None:
-                    self.owner = owner
-        return PrototypePort(name, direction, init_values, **options)
+        return type(classname, (PrototypePort,), {})
+    return Factory
+
+
+@pytest.fixture(scope="function")
+def PortFactory(PortClassFactory):
+    """Factory creating a dummy port with custom attributes
+    """
+    def Factory(name, direction, init_values=None, owner=None, **options):
+        PortClass: Type[Port] = PortClassFactory(
+            classname="PrototypePort",
+            variables=options.pop('variables', []),
+            base=options.pop('base', Port),
+        )
+        port = PortClass(name, direction, init_values, **options)
+        if owner is not None:
+            port.owner = owner
+        return port
     return Factory

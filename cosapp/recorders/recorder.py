@@ -1,4 +1,5 @@
 """Base class for recording data."""
+from __future__ import annotations
 import abc
 import copy
 import pandas
@@ -61,7 +62,10 @@ class BaseRecorder(abc.ABC):
     """
 
     SPECIALS = SpecialColumns(
-        section="Section", status="Status", code="Error code", reference="Reference"
+        section="Section",
+        status="Status",
+        code="Error code",
+        reference="Reference",
     )
 
     paused = False  # type: bool
@@ -91,7 +95,7 @@ class BaseRecorder(abc.ABC):
         self.precision = precision
         self._raw_output = raw_output  # type: bool
         self.__variables = None  # type: Optional[List[str]]
-        self.__expressions = None  # type: Optional[List[str]]
+        self.__expressions = None  # type: EvalString
         self._watch_object = None  # type: Optional[cosapp.core.module.Module]
         self._owner = None  # type: Optional[str]
 
@@ -103,7 +107,7 @@ class BaseRecorder(abc.ABC):
         self.cleared = Signal(name="cosapp.recorders.recorder.BaseRecorder.cleared")
 
     @classmethod
-    def extend(cls, recorder, includes: SearchPattern=[], excludes: SearchPattern=[]) -> "BaseRecorder":
+    def extend(cls, recorder, includes: SearchPattern=[], excludes: SearchPattern=[]) -> BaseRecorder:
         """
         Factory returning a new recorder, with similar attributes as
         `recorder`, but extended `includes` and `excludes` fields.
@@ -128,7 +132,7 @@ class BaseRecorder(abc.ABC):
         return new
 
     @property
-    def watched_object(self) -> "Optional[cosapp.core.module.Module]":
+    def watched_object(self) -> Optional["cosapp.core.module.Module"]:
         """Module : The object from which data are read."""
         return self._watch_object
 
@@ -254,15 +258,15 @@ class BaseRecorder(abc.ABC):
                     evaluables.append(expression)
         
         if self._numerical_only:
-            filter = lambda x: is_numerical(x)
+            criterion = is_numerical
         else:
-            filter = lambda x: True
+            criterion = lambda x: True
         
         variables = find_variables(
             context,
             includes,
             self.__excludes,
-            advanced_filter=filter,
+            advanced_filter=criterion,
         )
         variables.extend(evaluables)
         self.__variables = variables = sorted(variables)

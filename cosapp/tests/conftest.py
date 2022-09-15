@@ -33,6 +33,7 @@ def DummySystemFactory():
         "inputs", "outputs",
         "inwards", "outwards",
         "transients", "rates",
+        "properties",
     )
     extra = (
         "unknowns", "equations",
