@@ -1,5 +1,26 @@
 # History
 
+## 0.12.3 (2022-09-21)
+
+### New features & API changes
+
+* Improved user experience:
+  * Auto-completion for dynamically added attributes of systems (ports, subsystems, inwards, outwards, events...) and drivers (sub-drivers) (MRs [#164](https://gitlab.com/cosapp/cosapp/-/merge_requests/164) and [#166](https://gitlab.com/cosapp/cosapp/-/merge_requests/166));
+  * Improved representation of mathematical problems, in particular for loop equations and multi-point design problems (MRs [#159](https://gitlab.com/cosapp/cosapp/-/merge_requests/159), [#160](https://gitlab.com/cosapp/cosapp/-/merge_requests/160) and [#163](https://gitlab.com/cosapp/cosapp/-/merge_requests/163)).
+* New method `System.new_problem` to facilitate the creation of dynamic design methods, *e.g.* (MR [#162](https://gitlab.com/cosapp/cosapp/-/merge_requests/162)).
+
+### Documentation
+
+* Updated tutorials (MRs [#169](https://gitlab.com/cosapp/cosapp/-/merge_requests/169) and [#170](https://gitlab.com/cosapp/cosapp/-/merge_requests/170)).
+
+### Bug fixes and code quality
+
+* Bug fix on unknown dealiasing (MR [#157](https://gitlab.com/cosapp/cosapp/-/merge_requests/157)).
+* Bug fix on port variable export (MR [#158](https://gitlab.com/cosapp/cosapp/-/merge_requests/158)).
+* Bug fix on system serialization (MR [#161](https://gitlab.com/cosapp/cosapp/-/merge_requests/161)).
+* Bug fix on subsystem read-only constants (MR [#167](https://gitlab.com/cosapp/cosapp/-/merge_requests/167)).
+* Various code quality improvements (MRs [#154](https://gitlab.com/cosapp/cosapp/-/merge_requests/154), [#155](https://gitlab.com/cosapp/cosapp/-/merge_requests/155), [#162](https://gitlab.com/cosapp/cosapp/-/merge_requests/162), [#168](https://gitlab.com/cosapp/cosapp/-/merge_requests/168)).
+
 ## 0.12.2 (2022-05-26)
 
 ### New features & API changes
