@@ -24,6 +24,11 @@ class SystemWithProps(System):
         self.add_property('c', SomeClass())
 
 
+class SystemWithNone(System):
+    def setup(self) -> None:
+        self.add_inward('x', None)
+
+
 def test_System_load(test_library):
     # Load super simple module
     config = StringIO(
@@ -555,6 +560,20 @@ def test_System_load_from_dict(test_library):
     name, param = d.popitem()
     with pytest.raises(AttributeError):
         s = System.load_from_dict(name, param)
+
+
+def test_System_serialize_with_None(tmp_path):
+    original = SystemWithNone('orig')
+    filename = tmp_path/"original.json"
+
+    with open(filename, "w") as fp:
+        original.save(fp)
+
+    loaded = System.load(filename, name='loaded')
+
+    assert isinstance(loaded, type(original))
+    assert loaded.name == 'loaded'
+    assert loaded.x is None
 
 
 def test_System_to_dict(test_library, config):
