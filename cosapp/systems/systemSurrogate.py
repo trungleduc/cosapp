@@ -361,16 +361,15 @@ def get_dependent_connections(system: "cosapp.systems.System") -> Dict[str, Port
     Keys are absolute paths to connected inputs and all outputs.
     Values are owner port direction.
     """
-    logger.debug(f"Starting recursive search of connected inputs and all outputs on {system.name}")
+    from cosapp.base import System
 
-    def get_connections(system, head_system) -> Dict[str, PortType]:
+    def get_connections(system: System, head_system: System) -> Dict[str, PortType]:
         """Recursive inner version of `get_dependent_connections`"""
         result = dict()
         prefix = ""
         if system is not head_system:
             prefix = f"{head_system.get_path_to_child(system)}."
-            connectors = system.parent.systems_connectors.get(system.name, [])
-            for connector in connectors:
+            for connector in system.incoming_connectors():
                 sink = connector.sink
                 logger.debug(f"Detecting connector {connector} with sink {sink.name!r}")
                 if sink.is_input:
@@ -396,6 +395,9 @@ def get_dependent_connections(system: "cosapp.systems.System") -> Dict[str, Port
             result.update(get_connections(child, head_system))
         return result
 
+    logger.debug(
+        f"Recursive search of connected inputs and all outputs on {system.name}"
+    )
     return get_connections(system, system)
 
 

@@ -159,10 +159,10 @@ class System(Module, TimeObserver):
     """
 
     __slots__ = (
-        '_context_lock', '__sys_connectors', '_is_clean', '_locked', '_math',
+        '_context_lock', '_is_clean', '_locked', '_math',
         'design_methods', 'drivers', 'inputs', 'outputs', 'name2variable',
         '__readonly', '__events', '_meta', '__runner', '__input_mapping',
-        '__loop_problem',
+        '__loop_problem', '__child_connectors', '__pulling_connectors',
     )
 
     INWARDS = CommonPorts.INWARDS.value  # type: ClassVar[str]
@@ -230,7 +230,8 @@ class System(Module, TimeObserver):
         self.outputs = dict()  # type: Dict[str, BasePort]
         self.__events = dict()  # type: Dict[str, Event]
         # Connectors are grouped in a dictionary where the key is the sink system i.e. the receiving system
-        self.__sys_connectors = dict()  # type: Dict[str, List[Connector]]
+        self.__child_connectors = dict()  # type: Dict[str, List[SystemConnector]]
+        self.__pulling_connectors = list()  # type: List[SystemConnector]
         
         self._locked = False  # type: bool
         self._is_clean = dict.fromkeys(PortType, False)
@@ -1304,9 +1305,9 @@ class System(Module, TimeObserver):
             yield from elem.events()
 
     @property
-    def systems_connectors(self) -> Dict[str, List[Connector]]:
-        """Dict[str, List[Connector]] : Connectors within system, referenced by sub-system names."""
-        return MappingProxyType(self.__sys_connectors)
+    def child_connectors(self) -> Dict[str, List[Connector]]:
+        """Dict[str, List[Connector]] : Connectors between sub-systems, referenced by system names."""
+        return MappingProxyType(self.__child_connectors)
 
     def connectors(self) -> Dict[str, Connector]:
         """Constructs a dictionary of all connectors within system,
@@ -1317,15 +1318,16 @@ class System(Module, TimeObserver):
 
     def all_connectors(self) -> Iterator[Connector]:
         """Iterator yielding all connectors within system."""
-        for connectors in self.__sys_connectors.values():
+        yield from self.__pulling_connectors
+        for connectors in self.__child_connectors.values():
             yield from connectors
 
     def incoming_connectors(self) -> Iterator[Connector]:
         """Iterator yielding all connectors targetting system."""
-        yield from self.__sys_connectors.get(self.name, [])
-        parent = self.parent
+        yield from self.__pulling_connectors
+        parent: System = self.parent
         if parent:
-            yield from parent.__sys_connectors.get(self.name, [])
+            yield from parent.__child_connectors.get(self.name, [])
 
     def get_unsolved_problem(self) -> MathematicalProblem:
         """Returns the unsolved mathematical problem.
@@ -1368,7 +1370,7 @@ class System(Module, TimeObserver):
                 continue
 
             child_problem = child.get_unsolved_problem()
-            connectors = self.__sys_connectors.get(child.name, [])
+            connectors = self.__child_connectors.get(child.name, [])
             transfer_items = [
                 (child_problem.unknowns, transfer_unknown),
                 (child_problem.transients, transfer_transient),
@@ -1482,39 +1484,48 @@ class System(Module, TimeObserver):
 
         return child
 
-    def pop_child(self, name: str) -> Optional[System]:
-        """Remove the `System` called `name` from the current top `System`.
+    def pop_child(self, name: str) -> System:
+        """Remove the subsystem called `name`.
 
         Parameters
         ----------
         name: str
-            Name of the `System` to remove
+            Name of the subsystem to be removed
 
         Returns
         -------
-        `System` or None
-            The removed `System` or None if no match found
+        `System`
+            The removed subsystem
+
+        Raises
+        ------
+        `AttributeError` if no match is found
         """
-        child = super().pop_child(name)
-        systems_connectors = self.__sys_connectors
+        popped: System = super().pop_child(name)
         
-        # Remove the connection to the system
-        systems_connectors.pop(name, None)
+        # Remove all connections to and from popped child
+        child_connectors = self.__child_connectors
+        child_connectors.pop(popped.name, None)
 
-        for key, connectors in systems_connectors.items():
-            systems_connectors[key] = list(
-                filter(lambda c: c.source.owner is not child, connectors)
+        is_valid = lambda connector: connector.source.owner is not popped
+
+        for key, connectors in child_connectors.items():
+            child_connectors[key] = list(
+                filter(is_valid, connectors)
             )
+        self.__pulling_connectors = list(
+            filter(is_valid, self.__pulling_connectors)
+        )
 
-        # Remove the System from the name mapping
-        keys = [name]
-        rel2absname = lambda relname: f"{name}.{relname}"
-        mapping_generator = map(rel2absname, iter(child.name2variable))
-        keys.extend(mapping_generator)
-        self.pop_name2variable(keys)
+        # Remove references to popped child from name mapping
+        popped_attr = lambda key: key.startswith(f"{name}.")
+        popped_keys = [name] + list(
+            filter(popped_attr, self.name2variable.keys())
+        )
+        self.pop_name2variable(popped_keys)
         self.__reset_input_mapping()
 
-        return child
+        return popped
 
     def add_driver(self, driver: AnyDriver) -> AnyDriver:
         """Add a driver to this system.
@@ -2106,16 +2117,16 @@ class System(Module, TimeObserver):
                         logger.debug(f"Skip {self.name}.compute_before - Clean inputs")
 
                     if not self.is_clean():
-                        for child in self.exec_order:
+                        for child in self.children.values():
                             # Update connectors
-                            for connector in self.__sys_connectors.get(child, []):
+                            for connector in self.__child_connectors.get(child.name, []):
                                 connector.transfer()
                             # Execute the child
-                            logger.debug(f"Call {self.name}.{child}.run_once()")
-                            self.children[child].run_once()
+                            logger.debug(f"Call {self.name}.{child.name}.run_once()")
+                            child.run_once()
 
-                        # Pull values from inside Modules to top shelve border
-                        for connector in self.__sys_connectors.get(self.name, []):
+                        # Pull values from subsystems
+                        for connector in self.__pulling_connectors:
                             connector.transfer()
                     else:
                         logger.debug(f"Skip {self.name} children execution - Clean interfaces")
@@ -2184,7 +2195,7 @@ class System(Module, TimeObserver):
                         logger.debug(f"Skip {self.name}.compute_before - Clean inputs")
 
                     if not self.is_clean():
-                        sys_connectors = self.__sys_connectors
+                        sys_connectors = self.__child_connectors
                         for child in self.children.values():
                             # Update connectors
                             for connector in sys_connectors.get(child.name, []):
@@ -2192,8 +2203,8 @@ class System(Module, TimeObserver):
                             # Execute the child
                             child.run_drivers()
 
-                        # Pull values from inside Modules to top shelve border
-                        for connector in sys_connectors.get(self.name, []):
+                        # Pull values from subsystems
+                        for connector in self.__pulling_connectors:
                             connector.transfer()
                     else:
                         logger.debug(f"Skip {self.name} children execution - Clean interfaces")
@@ -2494,12 +2505,12 @@ class System(Module, TimeObserver):
             )
             return
 
-        systems_connectors = self.__sys_connectors
+        child_connectors = self.__child_connectors
 
         def contextual_name(port: BasePort) -> str:
             return port.name if port.owner is self else port.contextual_name
 
-        def create_connector(sink: BasePort, source: BasePort, mapping: Dict[str, str]):
+        def create_connector(sink: BasePort, source: BasePort, mapping: Dict[str, str]) -> None:
             # Additional validation for sink Port
             # - Source should be Port (the opposite case is possible == connect sensor)
             # - If mapping does not cover all variables, print a log message
@@ -2545,9 +2556,13 @@ class System(Module, TimeObserver):
                 # Check if connector already exists
                 connector = connectors[new_connector.name]
             except KeyError:
-                target = new_connector.sink.owner.name
-                systems_connectors.setdefault(target, [])
-                systems_connectors[target].append(new_connector)
+                # New connector
+                if sink.owner is self:
+                    self.__pulling_connectors.append(new_connector)
+                else:
+                    target = new_connector.sink.owner.name
+                    child_connectors.setdefault(target, [])
+                    child_connectors[target].append(new_connector)
             else:
                 # Sink and source are already connected: update connector
                 connector.update_mapping(new_connector.mapping)
@@ -2623,10 +2638,10 @@ class System(Module, TimeObserver):
                 for p1_var, p2_var in mapping.items():
                     connected = False
                     # Check if the variable is connected
-                    for c1 in filter(lambda c: c.sink is port1, systems_connectors.get(port1.owner.name, [])):
+                    for c1 in filter(lambda c: c.sink is port1, child_connectors.get(port1.owner.name, [])):
                         if p1_var in c1.sink_variables():  # Already connected
                             # Check that the other variable is not connected
-                            for c2 in filter(lambda c: c.sink is port2, systems_connectors.get(port2.owner.name, [])):
+                            for c2 in filter(lambda c: c.sink is port2, child_connectors.get(port2.owner.name, [])):
                                 if p2_var in c2.source_variables():
                                     raise ConnectorError("{}.{} is already connected to {}.{}".format(
                                             port1.contextual_name, p1_var, 
@@ -2642,7 +2657,7 @@ class System(Module, TimeObserver):
                         continue
 
                     # Check if the other variable is connected
-                    for c2 in filter(lambda c: c.sink is port2, systems_connectors.get(port2.owner.name, [])):
+                    for c2 in filter(lambda c: c.sink is port2, child_connectors.get(port2.owner.name, [])):
                         if p2_var in c2.sink_variables():
                             # We know that p1_var is not connected
                             # Connect the variable
@@ -2681,21 +2696,21 @@ class System(Module, TimeObserver):
     def open_loops(self):
         """Open closed loops in children relations."""
         logger.debug(f"Call {self.name}.open_loops")
-        connectors_to_open = list()  # type: List[Connector]
-        systems_connectors = self.__sys_connectors
+        connectors_to_open = list()  # type: List[SystemConnector]
+        child_connectors = self.__child_connectors
         self.__input_mapping = None
         name2var = self.name2variable
         loop = self.__loop_problem
         loop.clear()
 
         # Add top system in the execution loop so connection to it won't be opened
-        execution_loop = [self, ]  # type: List[System]
+        execution_loop = [self]  # type: List[System]
 
-        for name, child in self.children.items():
+        for child in self.children.values():
             execution_loop.append(child)
             child.open_loops()
 
-            for connector in systems_connectors.get(name, []):
+            for connector in child_connectors.get(child.name, []):
                 if connector.source.owner not in execution_loop:
                     connectors_to_open.append(connector)
 
@@ -2916,7 +2931,8 @@ class System(Module, TimeObserver):
             top_system.name2variable.pop(name)
         # Remove children and connectors --> the source of truth is the json file
         top_system.children.clear()
-        top_system.__sys_connectors.clear()
+        top_system.__child_connectors.clear()
+        top_system.__pulling_connectors.clear()
 
         top_system.__readonly = parameters.get('properties', {}).copy()
 
@@ -2978,7 +2994,7 @@ class System(Module, TimeObserver):
         """
         Public API to export system to a dictionary
         """
-        return self.__to_dict(False)
+        return self.__to_dict(with_struct=False)
 
     def __json__(self) -> Dict[str, Dict[str, Any]]:
         """JSONable dictionary representing a variable.
