@@ -627,11 +627,11 @@ def test_System_to_dict(test_library, config):
     d = s.to_dict()
     entry = d["p1"]["connections"]
     assert entry == [
+        ('flnum_out', 'p12.flnum_out'),
+        ('outwards', 'p12.outwards', {'delta_p12': 'delta_p'}),
         ('p11.flnum_in', 'flnum_in'),
         ('p11.inwards', 'inwards', {'K': 'K11'}),
         ('p12.flnum_in', 'p11.flnum_out'),
-        ('flnum_out', 'p12.flnum_out'),
-        ('outwards', 'p12.outwards', {'delta_p12': 'delta_p'}),
     ]
 
 
@@ -685,16 +685,16 @@ def test_System_tojson(test_library):
     "class": "pressurelossvarious.PressureLossSys",
     "connections": [
       [
+        "flnum_out",
+        "p12.flnum_out"
+      ],
+      [
         "p11.flnum_in",
         "flnum_in"
       ],
       [
         "p12.flnum_in",
         "p11.flnum_out"
-      ],
-      [
-        "flnum_out",
-        "p12.flnum_out"
       ]
     ],
     "exec_order": [

@@ -69,17 +69,23 @@ def _get_tree_dict(
 
 def _get_connections(system: System, include_orphan_vars: bool) -> Dict[str, str]:
     """Get a dictionary representation of the system connections. Structure is {'_in': '_out'}."""
-    connections = OrderedDict()
-    def add_prefix(name, s):
-        return s if s.startswith(name) else f"{name}.{s}"
+    connections = dict()
+
+    def contextual_name(port: BasePort):
+        return port.name if port.owner is system else port.contextual_name
+
+    def add_prefix(name: str, varname: str):
+        prefix = f"{name}."
+        return varname if varname.startswith(prefix) else f"{prefix}{varname}"
 
     # Gather connections for current system
-    for c in system.all_connectors():
-        if not include_orphan_vars and isinstance(c.sink, ExtensiblePort):
+    for connector in system.all_connectors():
+        if not include_orphan_vars and isinstance(connector.sink, ExtensiblePort):
             continue
-
-        for target, origin in c.mapping.items():
-            connections[f"{c.sink.contextual_name}.{target}"] = f"{c.source.contextual_name}.{origin}"
+        sink_name = contextual_name(connector.sink)
+        source_name = contextual_name(connector.source)
+        for target, origin in connector.mapping.items():
+            connections[f"{sink_name}.{target}"] = f"{source_name}.{origin}"
 
     # Recursively gather children's connections
     for name, child in system.children.items():
@@ -90,26 +96,26 @@ def _get_connections(system: System, include_orphan_vars: bool) -> Dict[str, str
     return connections
 
 
-def _get_viewer_data(system: System, include_orphan_vars: bool) -> Dict:
+def _get_viewer_data(system: System, include_orphan_vars: bool) -> Dict[str, str]:
     """Get the data needed by the N2 viewer as a dictionary."""
     if isinstance(system, System):
-        root_group = system
+        head = system
     else:
         raise TypeError('get_model_viewer_data only accepts System')
 
     if not include_orphan_vars:
         logger.warning('The system may contain inwards or outwards.')
 
-    data_dict = {}
-    data_dict['tree'] = _get_tree_dict(root_group, include_orphan_vars)
-    connections_list = []
-    connections = _get_connections(root_group, include_orphan_vars)
-    for in_abs, out_abs in connections.items():
-        if out_abs is None:
-            continue
-        connections_list.append(OrderedDict(src=out_abs, tgt=in_abs))
-    data_dict['connections_list'] = connections_list
-
+    tree_data =_get_tree_dict(head, include_orphan_vars)
+    connections = _get_connections(head, include_orphan_vars)
+    data_dict = {
+        'tree': tree_data,
+        'connections_list' : [
+            dict(src=origin, tgt=target)
+            for target, origin in connections.items()
+            if origin is not None
+        ],
+    }
     return data_dict
 
 
@@ -120,7 +126,7 @@ def view_model(
     embeddable=False,
     draw_potential_connections=False,
     include_orphan_vars=True,
-):
+) -> None:
     """
     Generates an HTML file containing a tree viewer. Optionally pops up a web browser to
     view the file.
@@ -148,90 +154,77 @@ def view_model(
     include_orphan_vars : bool, optional
     If True, display inwards and outwards on the N2 diagram. Defaults to True.
     """
-    html_begin_tags = """<!DOCTYPE html>
+    def add_html_tags(content: str) -> str:
+        """Format `content` into standalone HTML content."""
+        html_begin_tags = """<!DOCTYPE html>
 <html>
     <head>
         <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
     </head>
     <body>\n"""
-    html_end_tags = """
+        html_end_tags = """
     </body>
 </html>"""
+        return html_begin_tags + content + html_end_tags
 
-    code_dir = os.path.dirname(os.path.abspath(__file__))
-    vis_dir = os.path.join(code_dir, "visualization")
-    libs_dir = os.path.join(vis_dir, "libs")
-    src_dir = os.path.join(vis_dir, "src")
-    style_dir = os.path.join(vis_dir, "style")
+    cur_dir = os.path.dirname(os.path.abspath(__file__))
+    viz_dir = os.path.join(cur_dir, "visualization")
+    lib_dir = os.path.join(viz_dir, "libs")
+    src_dir = os.path.join(viz_dir, "src")
+    sty_dir = os.path.join(viz_dir, "style")
 
-    #grab the libraries
-    with open(os.path.join(libs_dir, "awesomplete.js"), "r") as f:
-        awesomplete = f.read()
-    with open(os.path.join(libs_dir, "d3.v4.min.js"), "r") as f:
-        d3 = f.read()
-    with open(os.path.join(libs_dir, "vkBeautify.js"), "r") as f:
-        vk_beautify = f.read()
+    def get_content(path: str, filename: str, binary=False) -> str:
+        fullpath = os.path.join(path, filename)
+        if binary:
+            with open(fullpath, "rb") as fp:
+                return str(base64.b64encode(fp.read()).decode("ascii"))
+        else:
+            with open(fullpath, "r") as fp:
+                return fp.read()
 
-    #grab the src
-    with open(os.path.join(src_dir, "constants.js"), "r") as f:
-        constants = f.read()
-    with open(os.path.join(src_dir, "draw.js"), "r") as f:
-        draw = f.read()
-    with open(os.path.join(src_dir, "legend.js"), "r") as f:
-        legend = f.read()
-    with open(os.path.join(src_dir, "modal.js"), "r") as f:
-        modal = f.read()
-    with open(os.path.join(src_dir, "ptN2.js"), "r") as f:
-        pt_n2 = f.read()
-    with open(os.path.join(src_dir, "search.js"), "r") as f:
-        search = f.read()
-    with open(os.path.join(src_dir, "svg.js"), "r") as f:
-        svg = f.read()
+    def get_lib(filename: str, binary=False) -> str:
+        return get_content(lib_dir, filename, binary)
 
-    #grab the style
-    with open(os.path.join(style_dir, "awesomplete.css"), "r") as f:
-        awesomplete_style = f.read()
-    with open(os.path.join(style_dir, "partition_tree.css"), "r") as f:
-        partition_tree_style = f.read()
-    with open(os.path.join(style_dir, "fontello.woff"), "rb") as f:
-        encoded_font = str(base64.b64encode(f.read()).decode("ascii"))
+    def get_src(filename: str, binary=False) -> str:
+        return get_content(src_dir, filename, binary)
 
-    #grab the index.html
-    with open(os.path.join(vis_dir, "index.html"), "r") as f:
-        index = f.read()
+    def get_style(filename: str, binary=False) -> str:
+        return get_content(sty_dir, filename, binary)
 
-    #grab the model viewer data
+    # Get index.html
+    index = get_content(viz_dir, "index.html")
+
+    # Get model viewer data
     data = _get_viewer_data(problem_or_filename, include_orphan_vars)
     model_viewer_data = f"var modelData = {json.dumps(data)}"
 
-    #add the necessary HTML tags if we aren't embedding
+    # Put all style and JS into index
+    index = index.replace("{{awesomplete_style}}", get_style("awesomplete.css"))
+    index = index.replace("{{partition_tree_style}}", get_style("partition_tree.css"))
+    index = index.replace("{{fontello}}", get_style("fontello.woff", binary=True))
+    index = index.replace("{{d3_lib}}", get_lib("d3.v4.min.js"))
+    index = index.replace("{{awesomplete_lib}}", get_lib("awesomplete.js"))
+    index = index.replace("{{vk_beautify_lib}}", get_lib("vkBeautify.js"))
+    index = index.replace("{{model_data}}", model_viewer_data)
+    index = index.replace("{{constants_lib}}", get_src("constants.js"))
+    index = index.replace("{{modal_lib}}", get_src("modal.js"))
+    index = index.replace("{{svg_lib}}", get_src("svg.js"))
+    index = index.replace("{{search_lib}}", get_src("search.js"))
+    index = index.replace("{{legend_lib}}", get_src("legend.js"))
+    index = index.replace("{{draw_lib}}", get_src("draw.js"))
+    index = index.replace("{{ptn2_lib}}", get_src("ptN2.js"))
+    index = index.replace(
+        "{{draw_potential_connections}}",
+        'true' if draw_potential_connections else 'false',
+    )
+
     if not embeddable:
-        index = html_begin_tags + index + html_end_tags
+        index = add_html_tags(index)
 
-    #put all style and JS into index
-    index = index.replace('{{awesomplete_style}}', awesomplete_style)
-    index = index.replace('{{partition_tree_style}}', partition_tree_style)
-    index = index.replace('{{fontello}}', encoded_font)
-    index = index.replace('{{d3_lib}}', d3)
-    index = index.replace('{{awesomplete_lib}}', awesomplete)
-    index = index.replace('{{vk_beautify_lib}}', vk_beautify)
-    index = index.replace('{{model_data}}', model_viewer_data)
-    index = index.replace('{{constants_lib}}', constants)
-    index = index.replace('{{modal_lib}}', modal)
-    index = index.replace('{{svg_lib}}', svg)
-    index = index.replace('{{search_lib}}', search)
-    index = index.replace('{{legend_lib}}', legend)
-    index = index.replace('{{draw_lib}}', draw)
-    index = index.replace('{{ptn2_lib}}', pt_n2)
-    if draw_potential_connections:
-        index = index.replace('{{draw_potential_connections}}', 'true')
-    else:
-        index = index.replace('{{draw_potential_connections}}', 'false')
+    with open(outfile, 'w') as fp:
+        fp.write(index)
 
-    with open(outfile, 'w') as f:
-        f.write(index)
-
-    #open it up in the browser
+    # Open in browser, if required
     if show_browser:
         from cosapp.tools.problem_viewer.webview import webview
         webview(outfile)

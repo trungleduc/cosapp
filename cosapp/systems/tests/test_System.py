@@ -6,6 +6,7 @@ import re
 from io import StringIO
 from collections import OrderedDict
 
+import itertools
 import numpy as np
 import math
 
@@ -2578,7 +2579,8 @@ def test_System_connect_ports(caplog, DummyFactory):
     group.connect(s1.out, s2.in_)
     # Retrieve connector dict after connection
     connectors = group.connectors()
-    assert all(isinstance(c, Connector) for c in connectors.values())
+    is_connector = lambda c: isinstance(c, Connector)
+    assert all(map(is_connector, connectors.values()))
     assert_keys(connectors, "s1.out -> s2.in_")
     connector = connectors["s1.out -> s2.in_"]
     assert connector.source is s1.out
@@ -2595,7 +2597,7 @@ def test_System_connect_ports(caplog, DummyFactory):
     group.add_child(s2)
     group.connect(s1.out, s2.in_, "Pt")
     connectors = group.connectors()
-    assert all(isinstance(c, Connector) for c in connectors.values())
+    assert all(map(is_connector, connectors.values()))
     assert_keys(connectors, "s1.out -> s2.in_")
     connector = connectors["s1.out -> s2.in_"]
     assert connector.source is s1.out
@@ -2618,7 +2620,7 @@ def test_System_connect_ports(caplog, DummyFactory):
     group.add_child(s2)
     group.connect(s1.out, s2.in_, {"Pt": "Pt", "W": "W"})
     connectors = group.connectors()
-    assert all(isinstance(c, Connector) for c in connectors.values())
+    assert all(map(is_connector, connectors.values()))
     assert_keys(connectors, "s1.out -> s2.in_")
     connector = connectors["s1.out -> s2.in_"]
     assert connector.source is s1.out
@@ -2637,7 +2639,7 @@ def test_System_connect_ports(caplog, DummyFactory):
 
     group.connect(group.hat_in, s1.in_)
     connectors = group.connectors()
-    assert all(isinstance(c, Connector) for c in connectors.values())
+    assert all(map(is_connector, connectors.values()))
     assert set(connectors) == {"hat_in -> s1.in_"}
     connector = connectors["hat_in -> s1.in_"]
     assert connector.source is group.hat_in
@@ -2648,7 +2650,7 @@ def test_System_connect_ports(caplog, DummyFactory):
     group.connect(s1.out, group.hat_out)
     connectors = group.connectors()
     assert len(s1.connectors()) == 0
-    assert all(isinstance(c, Connector) for c in connectors.values())
+    assert all(map(is_connector, connectors.values()))
     assert set(connectors) == {
         "hat_in -> s1.in_",
         "s1.out -> hat_out",
@@ -2671,7 +2673,7 @@ def test_System_connect_ports(caplog, DummyFactory):
 
     group.connect(s1.in_, group.hat_in)
     connectors = group.connectors()
-    assert all(isinstance(c, Connector) for c in connectors.values())
+    assert all(map(is_connector, connectors.values()))
     assert set(connectors) == {"hat_in -> s1.in_"}
     connector = connectors["hat_in -> s1.in_"]
     assert connector.source is group.hat_in
@@ -2682,7 +2684,7 @@ def test_System_connect_ports(caplog, DummyFactory):
     group.connect(group.hat_out, s1.out)
     connectors = group.connectors()
     assert len(s1.connectors()) == 0
-    assert all(isinstance(c, Connector) for c in connectors.values())
+    assert all(map(is_connector, connectors.values()))
     assert set(connectors) == {
         "hat_in -> s1.in_",
         "s1.out -> hat_out",
@@ -2724,6 +2726,34 @@ def test_System_connect_ports(caplog, DummyFactory):
         top.connect(s1.out, s1.in_)
 
 
+@pytest.mark.parametrize("order", itertools.permutations(['top', 'b']))
+def test_System_connect_same_name(order):
+    """Check that no confusion exists in connectors
+    when a subsystem and its parent have the same name.
+    """
+    class Bogus(System):
+        def setup(self):
+            self.add_input(PtWPort, 'fl_in')
+            self.add_output(PtWPort, 'fl_out')
+    
+    top = System("top")
+    a = Bogus("top")  # same name as parent
+    b = Bogus("b")
+    top.add_child(a)
+    top.add_child(b, pulling='fl_out')  # connector to `top.fl_out`
+    top.connect(a.fl_in, b.fl_out)  # connector to `top.top.fl_out`
+    top.exec_order = order
+
+    assert set(top.child_connectors) == {'top'}
+    assert set(top.connectors()) == {
+        'b.fl_out -> fl_out',
+        'b.fl_out -> top.fl_in',
+    }
+
+    with no_exception():
+        top.open_loops()
+
+
 def test_System_connect_hybrid(DummyFactory):
     # TODO Port to ExtensiblePort and ExtensiblePort to Port
     class CopyCatPort(Port):
@@ -2740,7 +2770,8 @@ def test_System_connect_hybrid(DummyFactory):
 
     connectors = group.connectors()
     assert len(s1.connectors()) == 0
-    assert all(isinstance(c, Connector) for c in connectors.values())
+    is_connector = lambda c: isinstance(c, Connector)
+    assert all(map(is_connector, connectors.values()))
     assert set(connectors) == {"s1.out -> s2.in_"}
     connector = connectors["s1.out -> s2.in_"]
     assert connector.source is s1.out
@@ -2762,7 +2793,7 @@ def test_System_connect_hybrid(DummyFactory):
 
     connectors = group.connectors()
     assert len(s1.connectors()) == 0
-    assert all(isinstance(c, Connector) for c in connectors.values())
+    assert all(map(is_connector, connectors.values()))
     assert set(connectors) == {"s1.out -> s2.in_"}
     connector = connectors["s1.out -> s2.in_"]
     assert connector.source is s1.out
