@@ -109,7 +109,7 @@ class RunSingleCase(IterativeCase):
         processed = raw.copy(prune=False)
 
         # Add owner off-design problem to `processed.offdesign`
-        owner_problem = self.owner.get_unsolved_problem()
+        owner_problem = self.owner.assembled_problem()
         processed.offdesign.extend(owner_problem)
 
         # Resolve unknown aliasing in `processed`

@@ -140,7 +140,7 @@ class RunOnce(Driver):
         MathematicalProblem
             The full mathematical problem to solve for the case
         """
-        return self.owner.get_unsolved_problem()
+        return self.owner.assembled_problem()
 
     def setup_run(self):
         """Method called once before starting any simulation."""

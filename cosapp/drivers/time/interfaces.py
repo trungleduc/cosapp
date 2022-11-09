@@ -398,8 +398,7 @@ class ExplicitTimeDriver(Driver):
 
     def transition(self) -> None:
         """Execute owner system transition and reinitialize sub-drivers"""
-        for system in self.owner.tree():
-            system.transition()
+        self.owner.tree_transition()
         # Reinitialize sub-drivers after system transition
         for driver in self.children.values():
             driver.call_setup_run()
@@ -447,9 +446,10 @@ class ExplicitTimeDriver(Driver):
             transient.reset()
 
     def _update_children(self) -> None:
-        if len(self.children) > 0:
-            for name in self.exec_order:
-                self.children[name].run_once()
+        """Execute sub-drivers, if any, or owner's subsystem drivers"""
+        if self.children:
+            for driver in self.children.values():
+                driver.run_once()
         else:
             self.owner.run_children_drivers()
 

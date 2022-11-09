@@ -6,7 +6,6 @@ from cosapp.drivers.utils import UnknownAnalyzer
 from cosapp.base import System
 from cosapp.core.numerics.basics import MathematicalProblem
 from cosapp.utils.testing import get_args
-from typing import Type
 
 
 dummy_specs = dict(
@@ -87,7 +86,6 @@ def test_UnknownAnalyzer__init__(system, expected):
     with expected:
         handler = UnknownAnalyzer(system)
         assert handler.system is system
-        assert handler.data == dict()
 
 
 def test_UnknownAnalyzer_input_mapping(dummy: System):
@@ -95,8 +93,7 @@ def test_UnknownAnalyzer_input_mapping(dummy: System):
     """
     handler = UnknownAnalyzer(dummy)
     assert handler.system is dummy
-    assert set(handler.input_mapping) == set(dummy.input_mapping)
-    assert set(handler.input_mapping.values()) == set(dummy.input_mapping.values())
+    assert handler.input_mapping == dummy.input_mapping
     assert set(handler.input_mapping) == {
         'x', 'inwards.x',
         'u', 'inwards.u',
@@ -155,7 +152,7 @@ def test_UnknownAnalyzer_filter_problem_2(top_offdesign: System):
     handler = UnknownAnalyzer(top)
     assert handler.system is top
 
-    problem = top.get_unsolved_problem()
+    problem = top.assembled_problem()
     filtered = handler.filter_problem(problem)
     assert set(filtered.unknowns) == {
         'U',

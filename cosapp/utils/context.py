@@ -1,18 +1,16 @@
-from typing import Any
-
-
 class ContextLock:
-    """Simple locker to track an execution task is going on."""
+    """Simple on/off context manager to handle locking mechanisms."""
 
     def __init__(self):
-        self.__locked = False
+        self.__active = False
 
     def __enter__(self):
-        self.__locked = True
+        self.__active = True
 
-    def __exit__(self, exc_type, exc_value, traceback):
-        self.__locked = False
+    def __exit__(self, *args, **kwargs):
+        self.__active = False
 
-    def is_locked(self) -> bool:
-        """Is the context lock locked?"""
-        return self.__locked
+    @property
+    def is_active(self) -> bool:
+        """bool: Is context activated?"""
+        return self.__active

@@ -195,7 +195,7 @@ def test_system121(system121: System):
 
     # test iterative loop detection
     assert len(s.residues) == 0
-    problem = s.get_unsolved_problem()
+    problem = s.assembled_problem()
     assert set(problem.residues) == {"mx: epsilon == 0"}
 
     assert s.p4.flnum_out.Pt == pytest.approx(77500, rel=1e-6)

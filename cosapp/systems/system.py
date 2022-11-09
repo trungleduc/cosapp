@@ -159,10 +159,11 @@ class System(Module, TimeObserver):
     """
 
     __slots__ = (
-        '_context_lock', '_is_clean', '_locked', '_math',
+        '__context_lock', '_is_clean', '_locked', '_math',
         'design_methods', 'drivers', 'inputs', 'outputs', 'name2variable',
         '__readonly', '__events', '_meta', '__runner', '__input_mapping',
         '__loop_problem', '__child_connectors', '__pulling_connectors',
+        '__free_problem',
     )
 
     INWARDS = CommonPorts.INWARDS.value  # type: ClassVar[str]
@@ -225,7 +226,8 @@ class System(Module, TimeObserver):
         self.design_methods = dict()  # type: Dict[str, MathematicalProblem]
         self.__readonly = dict()  # type: Dict[str, Any]
 
-        self._context_lock = ContextLock()  # type: ContextLock
+        self.__context_lock = ContextLock()
+        self.__free_problem = ContextLock()
         self.inputs = collections.OrderedDict()  # type: Dict[str, BasePort]
         self.outputs = dict()  # type: Dict[str, BasePort]
         self.__events = dict()  # type: Dict[str, Event]
@@ -1269,7 +1271,7 @@ class System(Module, TimeObserver):
         bool
             In execution status
         """
-        return self._context_lock.is_locked()
+        return self.__context_lock.is_active
 
     @property
     def residues(self):
@@ -1329,13 +1331,27 @@ class System(Module, TimeObserver):
         if parent:
             yield from parent.__child_connectors.get(self.name, [])
 
-    def get_unsolved_problem(self) -> MathematicalProblem:
-        """Returns the unsolved mathematical problem.
+    @property
+    def problem(self) -> MathematicalProblem:
+        """MathematicalProblem: locally defined off-design mathematical problem,
+        without considering sub-system tree.
+
+        Raises:
+        -------
+        `AttributeError` unless system is being modified by a driver.
+        """
+        if not self.__free_problem.is_active:
+            raise AttributeError("Can't access attribute `problem`")
+        return self._math
+
+    def assembled_problem(self) -> MathematicalProblem:
+        """Returns the consolidated mathematical problem, assembled from
+        entire system tree, and accounting for cyclic dependency loops.
 
         Returns
         -------
         MathematicalProblem
-            The unsolved mathematical problem
+            The assembled mathematical problem.
         """
         problem = self.new_problem('off-design')
 
@@ -1369,7 +1385,7 @@ class System(Module, TimeObserver):
             if child.is_standalone():
                 continue
 
-            child_problem = child.get_unsolved_problem()
+            child_problem = child.assembled_problem()
             connectors = self.__child_connectors.get(child.name, [])
             transfer_items = [
                 (child_problem.unknowns, transfer_unknown),
@@ -1418,6 +1434,22 @@ class System(Module, TimeObserver):
             problem.extend(child_problem, copy=False)
 
         return problem.extend(self.__loop_problem)
+
+    def get_unsolved_problem(self) -> MathematicalProblem:
+        """Returns the consolidated mathematical problem, assembled from
+        entire system tree, and accounting for cyclic dependency loops.
+
+        Deprecated; use `assembled_problem` instead.
+
+        Returns
+        -------
+        MathematicalProblem
+            The assembled mathematical problem.
+        """
+        warnings.warn(
+            "Method `get_unsolved_problem` is deprecated; use `assembled_problem` instead."
+        )
+        return self.assembled_problem()
 
     def add_child(self,
         child: AnySystem,
@@ -2091,6 +2123,11 @@ class System(Module, TimeObserver):
         """
         pass
 
+    def tree_transition(self):
+        for system in self.tree():
+            with system.__free_problem:
+                system.transition()
+
     def run_once(self) -> None:
         """Run the system once.
 
@@ -2111,7 +2148,7 @@ class System(Module, TimeObserver):
 
                     if not self.is_clean(PortType.IN):
                         logger.debug(f"Call {self.name}.compute_before")
-                        with self._context_lock:
+                        with self.__context_lock:
                             self.compute_before()
                     else:
                         logger.debug(f"Skip {self.name}.compute_before - Clean inputs")
@@ -2134,7 +2171,7 @@ class System(Module, TimeObserver):
                     if not self.is_clean(PortType.IN):
                         logger.debug(f"Call {self.name}.compute")
                         self._compute_calls += 1
-                        with self._context_lock:
+                        with self.__context_lock:
                             self.__runner.compute()
                     else:
                         logger.debug(f"Skip {self.name}.compute - Clean inputs")
@@ -2189,7 +2226,7 @@ class System(Module, TimeObserver):
 
                     if not self.is_clean(PortType.IN):
                         logger.debug(f"Call {self.name}.compute_before")
-                        with self._context_lock:
+                        with self.__context_lock:
                             self.compute_before()
                     else:
                         logger.debug(f"Skip {self.name}.compute_before - Clean inputs")
@@ -2211,7 +2248,7 @@ class System(Module, TimeObserver):
 
                     if not self.is_clean(PortType.IN):
                         self._compute_calls += 1
-                        with self._context_lock:
+                        with self.__context_lock:
                             self.__runner.compute()
                     else:
                         logger.debug(f"Skip {self.name}.compute - Clean inputs")
