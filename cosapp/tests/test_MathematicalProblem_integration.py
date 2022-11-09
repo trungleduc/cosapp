@@ -295,7 +295,7 @@ def test_MathematicalProblem_repr_3(s1: System, caplog):
 def test_MathematicalProblem_repr_4(s2: System):
     """Test representation of a math problem with targets.
     """
-    problem = s2.get_unsolved_problem()
+    problem = s2.assembled_problem()
     assert repr(problem) == "\n".join([
         "Equations",
         "  sub.z == 0.12 (target)",

@@ -320,7 +320,7 @@ class TimeVarManager:
     def update_transients(self) -> None:
         """Update the transient variable dictionary (see property `transients` for details)"""
         context = self.__context
-        problem = context.get_unsolved_problem()
+        problem = context.assembled_problem()
         context_transients = problem.transients
         ders = dict()
         reference2name = dict()
@@ -564,7 +564,7 @@ class SystemInterpolator:
         check_arg(driver, 'driver', ExplicitTimeDriver)
         self.__owner = driver
         self.__system = system = driver.owner
-        problem = system.get_unsolved_problem()
+        problem = system.assembled_problem()
         self.__transients = transients = problem.transients
         self.__interp = dict.fromkeys(transients, None)
 

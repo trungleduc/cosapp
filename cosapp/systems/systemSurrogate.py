@@ -385,7 +385,7 @@ def get_dependent_connections(system: "cosapp.systems.System") -> Dict[str, Port
                 result[key] = PortType.OUT
                 logger.debug(f"Add {key} to list of outputs")
         if system.is_standalone():
-            unknowns = system.get_unsolved_problem().unknowns
+            unknowns = system.assembled_problem().unknowns
             for unknown in unknowns:
                 key = f"{prefix}{unknown}"
                 result[key] = PortType.IN
@@ -403,7 +403,7 @@ def get_dependent_connections(system: "cosapp.systems.System") -> Dict[str, Port
 
 def get_unknowns_transients(system: "cosapp.systems.System") -> set:
     res = set()
-    problem = system.get_unsolved_problem()
+    problem = system.assembled_problem()
     for collection in (problem.unknowns, problem.transients):
         res.update(collection)
     return res
