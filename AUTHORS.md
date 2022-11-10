@@ -20,3 +20,4 @@
 * [Haris Musaefendic](https://gitlab.com/musaefendic)
 * [Román Lapuente](https://gitlab.com/roman.lapuente)
 * [Peter Cairns](https://gitlab.com/petercairns_akka)
+* [Virginie Zell](https://gitlab.com/VirginieZ)
