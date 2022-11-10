@@ -1,6 +1,6 @@
 import copy
 import numpy
-import pandas
+import csv
 from io import StringIO
 from numbers import Number
 from typing import (
@@ -450,37 +450,46 @@ class NonLinearSolver(AbstractSolver):
             emit_record = False
 
             message = ""
-            for i, info in enumerate(self.__trace):
+            unknown_trace = None
+            residue_trace = None
+            residue_names = self.problem.residues_names
+            unknown_names = self.problem.unknowns_names
+            for i, record in enumerate(self.__trace):
                 if i == 0:
-                    unknowns_trace = info["x"]
-                    residues_trace = info["residues"]
+                    unknown_trace = record["x"]
+                    residue_trace = record["residues"]
                 else:
-                    unknowns_trace = numpy.vstack((unknowns_trace, info["x"]))
-                    residues_trace = numpy.vstack((residues_trace, info["residues"]))
-
-                if "jac" in info:
+                    unknown_trace = numpy.vstack((unknown_trace, record["x"]))
+                    residue_trace = numpy.vstack((residue_trace, record["residues"]))
+                try:
+                    jac_record = record["jac"]
+                except KeyError:
+                    continue
+                else:
                     message += f"Iteration {i}\n"
-                    container = StringIO()
-                    numpy.savetxt(container, info["jac"], delimiter=",")
-                    jacobian = container.getvalue()
-                    unknowns = ", ".join(self.problem.unknowns_names)
+                    with StringIO() as container:
+                        numpy.savetxt(container, jac_record, delimiter=",")
+                        jacobian = container.getvalue()
+                    unknowns = ", ".join(unknown_names)
                     message += f"New Jacobian matrix:\n,{unknowns}\n"
-                    for residue, line in zip(self.problem.residues_names, jacobian.splitlines()):
+                    for residue, line in zip(residue_names, jacobian.splitlines()):
                         message += f"{residue}, {line}\n"
 
-            if len(self.__trace) > 0:
-                if len(self.__trace) == 1:
-                    size = self.problem.shape[0]
-                    unknowns_trace = unknowns_trace.reshape((1, size))
-                    residues_trace = residues_trace.reshape((1, size))
-                unknowns_df = pandas.DataFrame(unknowns_trace, columns=self.problem.unknowns_names)
-                container = StringIO()
-                unknowns_df.to_csv(container, line_terminator="\n")
-                message += f"Unknowns\n{container.getvalue()}\n"
-                residues_df = pandas.DataFrame(residues_trace, columns=self.problem.residues_names)
-                container = StringIO()
-                residues_df.to_csv(container, line_terminator="\n")
-                message += f"Residues\n{container.getvalue()}\n"
+            def format_record(records: numpy.ndarray, headers: List[str]) -> str:
+                records = numpy.atleast_2d(records)
+                with StringIO() as stream:
+                    writer = csv.writer(stream, delimiter=",", lineterminator="\n")
+                    writer.writerows([headers, *records])
+                    return stream.getvalue()
+
+            if unknown_trace is not None:
+                message += "Unknowns\n{}\n".format(
+                    format_record(unknown_trace, unknown_names)
+                )
+            if residue_trace is not None:
+                message += "Residues\n{}\n".format(
+                    format_record(residue_trace, residue_names)
+                )
 
             handler.log(
                 LogLevel.FULL_DEBUG,
