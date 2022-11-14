@@ -18,7 +18,6 @@ from cosapp.drivers.time.utils import (
 from cosapp.drivers.time.scenario import Scenario
 from cosapp.multimode.discreteStepper import DiscreteStepper
 from cosapp.multimode.event import Event
-from cosapp.recorders.recorder import BaseRecorder
 from cosapp.recorders import DataFrameRecorder
 from cosapp.utils.helpers import check_arg
 from cosapp.utils.logging import LogFormat, LogLevel
@@ -286,8 +285,12 @@ class ExplicitTimeDriver(Driver):
         manager = self.__var_manager
         owner_transients = manager.problem.transients
         self.__recorded_events = []
+        get_data = lambda var: [
+            copy.copy(var.value),
+            copy.copy(var.d_dt),
+        ]
         tr_data = dict(
-            (key, [var.value, var.d_dt, None, None])
+            (key, [*get_data(var), None, None])
             for key, var in owner_transients.items()
         )
 
@@ -301,7 +304,7 @@ class ExplicitTimeDriver(Driver):
             # Store transient values and derivatives @ t + dt
             for key, var in owner_transients.items():
                 data = tr_data[key]
-                data[2:4] = [var.value, var.d_dt]
+                data[2:4] = get_data(var)
             
             if stepper.event_detected():
                 stepper.set_data(
@@ -356,7 +359,7 @@ class ExplicitTimeDriver(Driver):
 
             record_dt(dt)
             for data in tr_data.values():
-                data[0:2] = copy.copy(data[2:4])
+                data[0:2] = data[2:4]
 
             return next_t, must_stop
 
