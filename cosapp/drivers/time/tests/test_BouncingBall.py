@@ -35,6 +35,8 @@ class PointFriction(System):
 
 
 class PointMass(System):
+    """Free fall model with friction.
+    """
     def setup(self):
         self.add_child(PointFriction('friction'), pulling=['cf', 'v'])
         self.add_child(PointDynamics('dynamics'), pulling={
@@ -53,11 +55,11 @@ class PointMass(System):
         self.exec_order = ['friction', 'dynamics']
 
 
-class BouncingBall(System):
+class BouncingBall(PointMass):
+    """Bouncing ball model, combining a free fall model with a rebound event.
+    """
     def setup(self):
-        self.add_child(PointMass('point'), pulling=[
-            'mass', 'x', 'v', 'a', 'cf', 'g',
-        ])
+        super().setup()
         self.add_event('rebound', trigger="x[2] <= 0")
 
     def transition(self):
@@ -82,18 +84,18 @@ def ball_case(ball: BouncingBall) -> Tuple[BouncingBall, RungeKutta]:
     driver.dt = 0.01
 
     # Add a recorder to capture time evolution in a dataframe
-    driver.add_recorder(DataFrameRecorder(includes=['x', 'v', 'a']), period=0.05)
-
-    # Initial conditions
-    x0 = [0, 0, 0]
-    v0 = [8, 0, 9.5]
-
+    driver.add_recorder(
+        DataFrameRecorder(includes=['x', 'v', 'a']),
+        period=0.05,
+    )
     # Define a simulation scenario
     driver.set_scenario(
-        init = {'x': np.array(x0), 'v': np.array(v0)},
+        init = {
+            'x': np.array([0, 0, 0]),
+            'v': np.array([8, 0, 9.5]),
+        },
         values = {'mass': 1.5, 'cf': 0.2},
     )
-
     return ball, driver
 
 
@@ -126,7 +128,7 @@ def test_BouncingBall_final(ball_case: Tuple[BouncingBall, RungeKutta]):
     data = driver.recorder.export_data()
     x = np.asarray(data['x'].tolist())
     assert min(x[:, 2]) > -1e-13
-    assert ball.x[2] == pytest.approx(0)
+    assert ball.x == pytest.approx([6.41626970, 0, 0])
     assert len(driver.recorded_events) == 1
     assert driver.recorded_events[0].time == pytest.approx(1.457205)
 
@@ -139,15 +141,16 @@ def test_BouncingBall_stop(ball: BouncingBall):
     driver.dt = 0.01
 
     # Add a recorder to capture time evolution in a dataframe
-    driver.add_recorder(DataFrameRecorder(includes=['x', 'v', 'a']), period=0.05)
-
-    # Initial conditions
-    x0 = [0, 0, 0]
-    v0 = [8, 0, 9.5]
-
+    driver.add_recorder(
+        DataFrameRecorder(includes=['x', 'v', 'a']),
+        period=0.05,
+    )
     # Define a simulation scenario
     driver.set_scenario(
-        init = {'x': np.array(x0), 'v': np.array(v0)},
+        init = {
+            'x': np.array([0, 0, 0]),
+            'v': np.array([8, 0, 9.5]),
+        },
         values = {'mass': 1.5, 'cf': 0.2},
         stop = ball.rebound,
     )
@@ -164,3 +167,53 @@ def test_BouncingBall_stop(ball: BouncingBall):
     assert record.time == pytest.approx(1.457205)
     assert record.events[0] is ball.rebound
     assert record.events[1] is driver.scenario.stop
+
+
+def test_BouncingBall_frictionless(ball: BouncingBall):
+    """Bouncing ball case with stop criterion based on rebound event.
+    Check analytical solution for frictionless motion.
+    Order 2 Runge-Kutta solution is expected to be exact.
+    """
+    driver = ball.add_driver(RungeKutta(order=2))
+    driver.time_interval = (0, 4)
+    driver.dt = 0.01
+    # Add a recorder to capture time evolution in a dataframe
+    driver.add_recorder(
+        DataFrameRecorder(includes=['x', 'v', 'a']),
+        period=0.05,
+    )
+    # Initial conditions
+    x0 = np.r_[0, 0, 2]
+    v0 = np.r_[8, 0, 9.5]
+
+    # Define a simulation scenario
+    driver.set_scenario(
+        init = {'x': np.array(x0), 'v': np.array(v0)},
+        values = {'mass': 1.0, 'cf': 0.0},
+        stop = ball.rebound,
+    )
+
+    ball.run_drivers()
+
+    # Retrieve recorded data
+    data = driver.recorder.export_data()
+    x = np.asarray(data['x'].tolist())
+    v = np.asarray(data['v'].tolist())
+    g = ball.g
+
+    # Analytical solution
+    t_rebound = -v0[2] / g[2] * (1 + np.sqrt(1 - 2 * g[2] * x0[2] / v0[2]**2))
+    v_exact = lambda t: v0 + g * t
+    x_exact = lambda t: x0 + (v0 + 0.5 * g * t) * t
+
+    assert min(x[:, 2]) > -1e-14
+    assert len(driver.recorded_events) == 1
+    record = driver.recorded_events[-1]
+    assert len(record.events) == 2
+    assert record.time == pytest.approx(t_rebound, rel=1e-15)
+    assert record.events[0] is ball.rebound
+    assert record.events[1] is driver.scenario.stop
+
+    # Check rebound point (before transition, hence -2 index)
+    assert v[-2, :] == pytest.approx(v_exact(t_rebound), rel=1e-14)
+    assert x[-2, :] == pytest.approx(x_exact(t_rebound), rel=1e-14)
