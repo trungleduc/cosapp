@@ -131,7 +131,8 @@ class EvalString:
             return mapping
         
         def add_symbols(
-            module: object, names: Optional[Iterable[str]] = None
+            module: object,
+            names: Optional[Iterable[str]]=None,
         ) -> None:
             """
             Map attribute names from the given module into the global dict.
@@ -143,6 +144,7 @@ class EvalString:
             names : iter of str, optional
                 If supplied, only map attrs that match the given names
             """
+            # nonlocal mapping
             if names is None:
                 names = dir(module)
             for name in names:
@@ -168,8 +170,7 @@ class EvalString:
                 "float64",
                 "complex64",
                 "complex128",
-                # Array functions
-                "abs",
+                # Array creation
                 "array",
                 "asarray",
                 "arange",
@@ -178,9 +179,10 @@ class EvalString:
                 "zeros",
                 "full",
                 "full_like",
-                "linspace",  # Array creation
+                "linspace",
+                # Constants
                 "e",
-                "pi",  # Constants
+                "pi",
                 "inf",
                 "isinf",
                 "isnan",  # Logic
@@ -188,7 +190,9 @@ class EvalString:
                 "log10",
                 "log1p",
                 "power",
-                "sqrt",  # Math operations
+                # Math operations
+                "abs",
+                "sqrt",
                 "cbrt",
                 "exp",
                 "expm1",
@@ -198,25 +202,33 @@ class EvalString:
                 "minimum",
                 "round",
                 "sum",
-                "dot",
-                "prod",  # Reductions
+                # Reductions
+                "prod",
                 "tensordot",
-                "matmul",  # Linear algebra
+                # Linear algebra
+                "matmul",
                 "cross",
                 "outer",
                 "inner",
                 "kron",
+                "dot",
+                # Trigo
                 "sin",
                 "cos",
                 "tan",
-                ("arcsin", "asin"),  # Trig
+                ("arcsin", "asin"),
                 ("arccos", "acos"),
                 ("arctan", "atan"),
+                ("arctan2", "atan2"),
+                "degrees",
+                "radians",
+                # Hyperbolic trigo
                 "sinh",
                 "cosh",
                 "tanh",
-                ("arcsinh", "asinh"),  # Hyperbolic trig
+                ("arcsinh", "asinh"),
                 ("arccosh", "acosh"),
+                ("arctanh", "atanh"),
             ],
         )
         add_symbols(numpy.linalg, names=["norm"])
@@ -386,8 +398,8 @@ class EvalString:
 
 
 class AssignString:
-    """Create an executable assignment of the kind 'lhs = rhs' from two evaluable expressions lhs and rhs."""
-
+    """Create an executable assignment of the kind 'lhs = rhs' from two evaluable expressions lhs and rhs.
+    """
     def __init__(self, lhs: str, rhs: Any, context: "System") -> None:
         lhs = EvalString(lhs, context)
         if lhs.constant:
@@ -409,7 +421,7 @@ class AssignString:
         self.__locals = lhs.locals.copy()
         self.__locals.update({"rhs_value": value, context.name: context})
         assignment = f"{context.name}.{lhs!s} = rhs_value"
-        self.__code = compile(assignment, "<string>", "exec")  # assignment bytecode
+        self.__code = compile(assignment, "<string>", "single")  # assignment bytecode
         self.rhs = rhs
 
     @property
