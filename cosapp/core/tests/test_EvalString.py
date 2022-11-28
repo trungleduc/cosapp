@@ -22,36 +22,40 @@ def test_EvalString__init__(eval_context):
     assert e.locals['a'] == eval_context.a
 
 
-@pytest.mark.parametrize("f", [
+def test_EvalString_functions(ufunc_test_data):
+    """Check that all tested symbols are actually implemented"""
+    tested = set(ufunc_test_data)
+    available = set(EvalString.available_symbols())
+    available.remove('__builtins__')
+    assert tested <= available
+
+
+@pytest.mark.parametrize("fname", [
         func_name for func_name in EvalString.available_symbols()
         if not func_name.startswith('u')
 ])
-def test_EvalString_exec_comp_value(f, ufunc_test_data):
+def test_EvalString_exec_comp_value(fname, ufunc_test_data):
     class Test(System):
         def setup(self, **kwargs):
-            for arg_name, arg_value in kwargs.items():
-                self.add_inward(arg_name, **arg_value)
+            for name, value in kwargs.items():
+                self.add_inward(name, value=value)
 
-    test_data = ufunc_test_data[f]
+    try:
+        test_data = ufunc_test_data[fname]
+    except KeyError:
+        pytest.fail(reason=f"function {fname!r} is not tested")
 
-    if 'check_func' in test_data:
-        check_args = []
-        try:
-            check_args.append(test_data['args']['x']['value'])
-        except:
-            pass
-        try:
-            check_args.append(test_data['args']['y']['value'])
-        except:
-            pass
-        expected = test_data['check_func'](*check_args)
-    else:
+    try:
+        func = test_data['func']
+    except KeyError:
         expected = test_data['check_val']
+    else:
+        expected = func(*test_data['args'].values())
 
     with warnings.catch_warnings():
         warnings.simplefilter('error')  # 'default', 'ignore', or 'error'
         s = Test('tmp', **test_data.get('args', {}))
-        eval_str = EvalString(test_data['str'], s)
+        eval_str = EvalString(test_data['expr'], s)
 
     assert eval_str.eval() == pytest.approx(expected, rel=1e-14)
 
@@ -117,6 +121,8 @@ def test_EvalString_residue_as_context(self):
     ("2**3+2", pytest.approx(2 ** 3 + 2, rel=1e-14)),
     ("2**9", pytest.approx(2 ** 9, rel=1e-14)),
     ("{1, 2, 3, 3, 2, }", {1, 2, 3}),
+    ("acos(-1)", pytest.approx(np.pi, rel=1e-14)),
+    ("arccos(-1)", pytest.approx(np.pi, rel=1e-14)),
 ])
 def test_EvalString_constant_expr(eval_context, expression, expected):
     """Test expressions expected to be interpreted as constant"""
