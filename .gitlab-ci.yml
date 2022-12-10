@@ -57,13 +57,6 @@ variables:
     - ".linux_common_env"
   stage: deploy
 
-linux_py37:
-    extends: 
-     - ".linux_env"
-     - ".test_script"
-    variables:
-      PYTHON_VERSION: "3.7" 
-
 linux_py38:
     extends: 
      - ".linux_env"
@@ -72,10 +65,17 @@ linux_py38:
       PYTHON_VERSION: "3.8" 
 
 linux_py39:
+    extends: 
+     - ".linux_env"
+     - ".test_script"
+    variables:
+      PYTHON_VERSION: "3.9" 
+
+linux_py310:
   extends: 
     - ".linux_env"
   variables:
-    PYTHON_VERSION: "3.9" 
+    PYTHON_VERSION: "3.10" 
   script:
     - mamba create -y -n cosapp python=$PYTHON_VERSION
     - source activate cosapp
@@ -147,7 +147,7 @@ build_pkg:
     - ".linux_env"
   variables:
     JOB_DEP: conda-build conda-verify
-    PYTHON_VERSION : "3.9"
+    PYTHON_VERSION : "3.10"
   script:
     - mamba create -y -n cosapp python=$PYTHON_VERSION
     - source activate cosapp
