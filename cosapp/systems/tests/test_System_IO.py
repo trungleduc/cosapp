@@ -29,6 +29,14 @@ class SystemWithNone(System):
         self.add_inward('x', None)
 
 
+class SystemWithKwargs(System):
+    def setup(self, n: int, r=None) -> None:
+        self.add_property('n', n)
+        self.add_inward('v', np.ones(n))
+        if r is not None:
+            self.add_inward('r', r)
+
+
 def test_System_load(test_library):
     # Load super simple module
     config = StringIO(
@@ -825,3 +833,34 @@ def test_System_property_serialization(tmp_path):
     assert loaded.sub.g == original.sub.g
     assert isinstance(loaded.sub.c, SomeClass)
     assert np.array_equal(loaded.sub.c.x, original.sub.c.x)
+
+
+def test_System_ctor_args_serialization(tmp_path):
+    """Test serialization of systems containing ctor parameters.
+    """
+    original = System('original')
+    original.add_child(SystemWithKwargs('s1', n=3))
+    original.add_child(SystemWithKwargs('s2', n=6, r=0.1))
+    assert original.s1.n == 3
+    assert original.s2.n == 6
+    assert original.s2.r == 0.1
+    assert not hasattr(original.s1, 'r')
+    original.s1.v[:] = np.arange(3, dtype=float)
+    original.s2.v[:] = np.linspace(0, 1, original.s2.n)
+
+    filepath = tmp_path / 'original.json'
+
+    original.save(filepath)
+    loaded = System.load(filepath, name='loaded')
+
+    assert loaded.name == 'loaded'
+    assert isinstance(loaded.s1, type(original.s1))
+    assert isinstance(loaded.s2, type(original.s2))
+    assert loaded.s1.n == 3
+    assert loaded.s2.n == 6
+    assert loaded.s2.r == 0.1
+    assert not hasattr(loaded.s1, 'r')
+    assert loaded.s1.v is not original.s1.v
+    assert loaded.s2.v is not original.s2.v
+    assert loaded.s1.v == pytest.approx([0, 1, 2], abs=0)
+    assert loaded.s2.v == pytest.approx([0, 0.2, 0.4, 0.6, 0.8, 1], abs=1e-15)
