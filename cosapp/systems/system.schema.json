@@ -18,6 +18,9 @@
         "properties": {
           "$ref": "#/definitions/variable_schema"
         },
+        "setup_args": {
+          "$ref": "#/definitions/variable_schema"
+        },
         "inputs": {
           "$ref": "#/definitions/variable_schema"
         },

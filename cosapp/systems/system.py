@@ -225,6 +225,7 @@ class System(Module, TimeObserver):
         self.drivers = collections.OrderedDict()  # type: Dict[str, Driver]
         self.design_methods = dict()  # type: Dict[str, MathematicalProblem]
         self.__readonly = dict()  # type: Dict[str, Any]
+        self.__ctor_kwargs = kwargs.copy()
 
         self.__context_lock = ContextLock()
         self.__free_problem = ContextLock()
@@ -2957,13 +2958,14 @@ class System(Module, TimeObserver):
             return system_class
 
         system_type = parameters.get('class', 'System')
+        ctor_kwargs = parameters.get('setup_args', {})
 
         if system_type == 'System':
             system_class = System
         else:
             system_class = get_system_class(system_type)
 
-        top_system = system_class(name=name)
+        top_system = system_class(name=name, **ctor_kwargs)
         for name in top_system.children:
             top_system.name2variable.pop(name)
         # Remove children and connectors --> the source of truth is the json file
@@ -3074,6 +3076,10 @@ class System(Module, TimeObserver):
             data['class'] = 'System'  # Trick to allow container `System` without special type
         else:
             data['class'] = f"{self.__module__}.{self.__class__.__qualname__}"
+
+        ctor_kwargs = self.__ctor_kwargs
+        if ctor_kwargs:
+            data["setup_args"] = ctor_kwargs
 
         properties = self.__readonly
         if properties:
