@@ -267,6 +267,7 @@ class BaseRecorder(abc.ABC):
             includes,
             self.__excludes,
             advanced_filter=criterion,
+            include_const=True,
         )
         variables.extend(evaluables)
         self.__variables = variables = sorted(variables)

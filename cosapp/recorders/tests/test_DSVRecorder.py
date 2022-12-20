@@ -3,6 +3,14 @@ import pytest
 from cosapp.recorders.recorder import BaseRecorder
 from cosapp.recorders import DSVRecorder
 from cosapp.tests.library.systems.vectors import AllTypesSystem
+from numbers import Integral
+
+
+def get_format_func(precision) -> callable:
+    return lambda value: (
+        str(value) if isinstance(value, Integral)
+        else "{0:.{1}e}".format(value, precision)
+    )
 
 
 def test_DSVRecorder___init__default(tmp_path):
@@ -77,7 +85,8 @@ def test_DSVRecorder_start(tmp_path):
 
     assert len(content) == 1
     headers = content[0].strip().split(rec.delimiter)
-    assert len(headers) == (16 + len(BaseRecorder.SPECIALS))
+    n_fields = 17
+    assert len(headers) == (n_fields + len(BaseRecorder.SPECIALS))
     assert headers == [
         *BaseRecorder.SPECIALS,
         "a[0] [kg]",
@@ -93,6 +102,7 @@ def test_DSVRecorder_start(tmp_path):
         "in_.x[0] [-]",
         "in_.x[1] [-]",
         "in_.x[2] [-]",
+        "n [-]",  # read only property
         "out.x[0] [-]",
         "out.x[1] [-]",
         "out.x[2] [-]",
@@ -105,7 +115,7 @@ def test_DSVRecorder_start(tmp_path):
     content = frecorder.read_text().strip().split("\n")
     assert len(content) == 1
     headers = content[0].strip().split(rec.delimiter)
-    assert len(headers) == (16 + len(BaseRecorder.SPECIALS))
+    assert len(headers) == (n_fields + len(BaseRecorder.SPECIALS))
     assert headers == [
         *BaseRecorder.SPECIALS,
         "a[0]",
@@ -121,6 +131,7 @@ def test_DSVRecorder_start(tmp_path):
         "in_.x[0]",
         "in_.x[1]",
         "in_.x[2]",
+        "n",  # read only property
         "out.x[0]",
         "out.x[1]",
         "out.x[2]",
@@ -130,7 +141,7 @@ def test_DSVRecorder_start(tmp_path):
     content = frecorder.read_text().strip().split("\n")
     assert len(content) == 2
     headers = content[0].strip().split(rec.delimiter)
-    assert len(headers) == (16 + len(BaseRecorder.SPECIALS))
+    assert len(headers) == (n_fields + len(BaseRecorder.SPECIALS))
     assert headers == [
         *BaseRecorder.SPECIALS,
         "a[0]",
@@ -146,25 +157,26 @@ def test_DSVRecorder_start(tmp_path):
         "in_.x[0]",
         "in_.x[1]",
         "in_.x[2]",
+        "n",  # read only property
         "out.x[0]",
         "out.x[1]",
         "out.x[2]",
     ]
     data = content[1].strip().split(rec.delimiter)
-    assert len(data) == (16 + len(BaseRecorder.SPECIALS))
+    assert len(data) == (n_fields + len(BaseRecorder.SPECIALS))
 
     rec.record_state(1)
     content = frecorder.read_text().strip().split("\n")
     assert len(content) == 3
     data = content[2].strip().split(rec.delimiter)
-    assert len(data) == 16 + len(BaseRecorder.SPECIALS)
+    assert len(data) == n_fields + len(BaseRecorder.SPECIALS)
 
     rec.start()
     rec.record_state(0)
     content = frecorder.read_text().strip().split("\n")
     assert len(content) == 2
     headers = content[0].strip().split(rec.delimiter)
-    assert len(headers) == (16 + len(BaseRecorder.SPECIALS))
+    assert len(headers) == (n_fields + len(BaseRecorder.SPECIALS))
     assert headers == [
         *BaseRecorder.SPECIALS,
         "a[0]",
@@ -180,13 +192,14 @@ def test_DSVRecorder_start(tmp_path):
         "in_.x[0]",
         "in_.x[1]",
         "in_.x[2]",
+        "n",  # read only property
         "out.x[0]",
         "out.x[1]",
         "out.x[2]",
     ]
 
     data = content[1].strip().split(rec.delimiter)
-    assert len(data) == (16 + len(BaseRecorder.SPECIALS))
+    assert len(data) == (n_fields + len(BaseRecorder.SPECIALS))
 
     # Test hold
     rec.hold = True
@@ -195,7 +208,7 @@ def test_DSVRecorder_start(tmp_path):
     content = frecorder.read_text().strip().split("\n")
     assert len(content) == 3
     data = content[2].strip().split(rec.delimiter)
-    assert len(data) == (16 + len(BaseRecorder.SPECIALS))
+    assert len(data) == (n_fields + len(BaseRecorder.SPECIALS))
 
 
 def test_DSVRecorder_record_iteration(tmp_path):
@@ -210,24 +223,28 @@ def test_DSVRecorder_record_iteration(tmp_path):
 
     rec.record_state(0)
     precision = 9
-    fmt = lambda value: "{0:.{1}e}".format(value, precision)
-    line = ["", "", "0", "0"] + [fmt(1.0)] * 3
+    fmt = get_format_func(precision)
+    line = ["", "", "0", "0"]
+    line.extend([fmt(1.0)] * 3)
     line.extend([fmt(0.0)] * 3)
     line.extend([fmt(23)] * 2)
     line.extend(["sammy"] * 2)
-    line.extend([fmt(1.0), fmt(2.0), fmt(3.0)] * 2)
+    line.extend([fmt(1.0), fmt(2.0), fmt(3.0)])
+    line.append(fmt(3))
+    line.extend([fmt(1.0), fmt(2.0), fmt(3.0)])
 
     content = frecorder.read_text().strip().split("\n")
     assert len(content) == 1
     headers = content[0].strip().split(rec.delimiter)
-    assert len(headers) == (16 + len(BaseRecorder.SPECIALS))
+    n_fields = 17
+    assert len(headers) == (n_fields + len(BaseRecorder.SPECIALS))
     assert headers == line
 
     rec.record_state(1)
     content = frecorder.read_text().strip().split("\n")
     assert len(content) == 2
     data = content[1].strip().split(rec.delimiter)
-    assert len(data) == (16 + len(BaseRecorder.SPECIALS))
+    assert len(data) == (n_fields + len(BaseRecorder.SPECIALS))
 
 
 def test_DSVRecorder_record_precision(tmp_path):
@@ -241,17 +258,20 @@ def test_DSVRecorder_record_precision(tmp_path):
 
     rec.record_state(0)
     precision = 4
-    fmt = lambda value: "{0:.{1}e}".format(value, precision)
+    fmt = get_format_func(precision)
     line = ["", "", "0", "0"] + [fmt(1.0)] * 3
     line.extend([fmt(0.0)] * 3)
     line.extend([fmt(23)] * 2)
     line.extend(["sammy"] * 2)
-    line.extend([fmt(1.0), fmt(2.0), fmt(3.0)] * 2)
+    line.extend([fmt(1.0), fmt(2.0), fmt(3.0)])
+    line.append(fmt(3))
+    line.extend([fmt(1.0), fmt(2.0), fmt(3.0)])
 
     content = frecorder.read_text().strip().split("\n")
     assert len(content) == 1
     headers = content[0].strip().split(rec.delimiter)
-    assert len(headers) == (16 + len(BaseRecorder.SPECIALS))
+    n_fields = 17
+    assert len(headers) == (n_fields + len(BaseRecorder.SPECIALS))
     assert headers == line
 
 
@@ -268,17 +288,18 @@ def test_DSVRecorder_exit(tmp_path):
     content = frecorder.read_text().strip().split("\n")
     assert len(content) == 2
     headers = content[0].strip().split(rec.delimiter)
-    assert len(headers) == (16 + len(BaseRecorder.SPECIALS))
+    n_fields = 17
+    assert len(headers) == (n_fields + len(BaseRecorder.SPECIALS))
     data = content[1].strip().split(rec.delimiter)
-    assert len(data) == (16 + len(BaseRecorder.SPECIALS))
+    assert len(data) == (n_fields + len(BaseRecorder.SPECIALS))
 
     rec.exit()
     content = frecorder.read_text().strip().split("\n")
     assert len(content) == 2
     headers = content[0].strip().split(rec.delimiter)
-    assert len(headers) == (16 + len(BaseRecorder.SPECIALS))
+    assert len(headers) == (n_fields + len(BaseRecorder.SPECIALS))
     data = content[1].strip().split(rec.delimiter)
-    assert len(data) == (16 + len(BaseRecorder.SPECIALS))
+    assert len(data) == (n_fields + len(BaseRecorder.SPECIALS))
 
     # Test buffer
     rec = DSVRecorder(name, raw_output=True, use_buffer=True)
@@ -289,12 +310,12 @@ def test_DSVRecorder_exit(tmp_path):
     content = frecorder.read_text().strip().split("\n")
     assert len(content) == 1
     headers = content[0].strip().split(rec.delimiter)
-    assert len(headers) == (16 + len(BaseRecorder.SPECIALS))
+    assert len(headers) == (n_fields + len(BaseRecorder.SPECIALS))
 
     rec.exit()
     content = frecorder.read_text().strip().split("\n")
     assert len(content) == 2
     headers = content[0].strip().split(rec.delimiter)
-    assert len(headers) == (16 + len(BaseRecorder.SPECIALS))
+    assert len(headers) == (n_fields + len(BaseRecorder.SPECIALS))
     data = content[1].strip().split(rec.delimiter)
-    assert len(data) == (16 + len(BaseRecorder.SPECIALS))
+    assert len(data) == (n_fields + len(BaseRecorder.SPECIALS))

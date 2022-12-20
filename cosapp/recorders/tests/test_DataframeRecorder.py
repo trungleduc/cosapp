@@ -103,12 +103,15 @@ def test_DataframeRecorder_record_properties(SystemWithProps):
     s = SystemWithProps('s')
     driver = s.add_driver(EulerExplicit(dt=0.1, time_interval=(0, 1)))
 
-    driver.set_scenario(values={
-        'in_.x': 'cos(pi * t)',
-        'in_.y': '1 + 0.5 * sin(2 * pi * t)',
-    })
-
-    driver.add_recorder(DataFrameRecorder(includes=['a', '*_ratio']))
+    driver.set_scenario(
+        values={
+            'in_.x': 'cos(pi * t)',
+            'in_.y': '1 + 0.5 * sin(2 * pi * t)',
+        },
+    )
+    driver.add_recorder(
+        DataFrameRecorder(includes=['a', '*_ratio'])
+    )
 
     s.run_drivers()
     df = driver.recorder.export_data()
@@ -118,6 +121,7 @@ def test_DataframeRecorder_record_properties(SystemWithProps):
     
     time = np.asarray(df['time'])
     out_xy_ratio = np.asarray(df['out.xy_ratio'])
+    assert time == pytest.approx(np.linspace(0, 1, 11))
     assert out_xy_ratio == pytest.approx(np.cos(np.pi * time) / (2 + np.sin(2 * np.pi * time)))
     assert np.asarray(df['a']) == pytest.approx(0.1 * out_xy_ratio)
     assert np.asarray(df['bogus_ratio']) == pytest.approx(2 * np.cos(np.pi * time))
@@ -128,14 +132,17 @@ def test_DataframeRecorder_record_expressions(SystemWithProps):
     s = SystemWithProps('s')
     driver = s.add_driver(EulerExplicit(dt=0.1, time_interval=(0, 1)))
 
-    driver.set_scenario(values={
-        'in_.x': 'cos(pi * t)',
-        'in_.y': '1 + 0.5 * sin(2 * pi * t)',
-    })
-
-    driver.add_recorder(DataFrameRecorder(
-        includes=['a', 'bogus*', '-2 * a + out.y', 'sin(pi * t)'],
-    ))
+    driver.set_scenario(
+        values={
+            'in_.x': 'cos(pi * t)',
+            'in_.y': '1 + 0.5 * sin(2 * pi * t)',
+        },
+    )
+    driver.add_recorder(
+        DataFrameRecorder(
+            includes=['a', 'bogus*', '-2 * a + out.y', 'sin(pi * t)'],
+        )
+    )
 
     s.run_drivers()
     df = driver.recorder.export_data()
@@ -144,6 +151,7 @@ def test_DataframeRecorder_record_expressions(SystemWithProps):
     assert set(df.columns) == set(headers)
     
     time = np.asarray(df['time'])
+    assert time == pytest.approx(np.linspace(0, 1, 11))
     exact = {
         'a': lambda t: 0.1 * np.cos(np.pi * t) / (2 + np.sin(2 * np.pi * t)),
         'out.y': lambda t: 2 + np.sin(2 * np.pi * t),

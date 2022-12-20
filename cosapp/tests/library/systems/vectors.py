@@ -51,7 +51,7 @@ class Merger1d(System):
 class AllTypesSystem(System):
     def setup(self, **kwargs):
         dim = 3
-        self.add_property("dimension", dim)
+        self.add_property("n", dim)
         self.add_input(V1dPort, "in_")
         self.add_inward("a", np.ones(dim), unit="kg")
         self.add_inward("b", np.zeros(dim), unit="N")
