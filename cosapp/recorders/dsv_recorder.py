@@ -4,6 +4,7 @@ import numpy
 import pandas
 from typing import Any, List, Optional
 from collections.abc import Collection
+from numbers import Integral
 
 from cosapp.recorders.recorder import BaseRecorder, SearchPattern
 from cosapp.utils.helpers import is_numerical, check_arg
@@ -174,6 +175,8 @@ class DSVRecorder(BaseRecorder):
         def fmt(value, check=True):
             if check and not is_numerical(value):
                 return str(value)
+            if isinstance(value, Integral):
+                return str(value)
             return "{0:.{1}e}".format(value, precision)
 
         line = []
@@ -182,9 +185,9 @@ class DSVRecorder(BaseRecorder):
                 if numpy.issubdtype(value.dtype, numpy.number):
                     line.extend(fmt(v, check=False) for v in value.flat)
                 else:
-                    line.extend(str(v) for v in value.flat)
+                    line.extend(map(str, value.flat))
             elif isinstance(value, Collection) and not isinstance(value, str):
-                line.extend(fmt(v) for v in value)
+                line.extend(map(fmt, value))
             else:
                 line.append(fmt(value))
 

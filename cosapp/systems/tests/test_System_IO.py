@@ -105,7 +105,7 @@ def test_System_load(test_library):
             "alltype": {
             "class": "vectors.AllTypesSystem",
             "properties": {
-                "dimension": 3
+                "n": 3
             }
             }}"""
     )
@@ -117,8 +117,8 @@ def test_System_load(test_library):
     assert s.parent is None
     assert len(s.children) == 0
 
-    assert s.properties ==  {"dimension": 3}
-    assert s.dimension == 3
+    assert s.properties ==  {"n": 3}
+    assert s.n == 3
 
     assert_keys(s.inputs, "inwards", "modevars_in", "in_")
     assert isinstance(s.inputs["inwards"], ExtensiblePort)
@@ -760,8 +760,8 @@ def test_System_AllTypesSystem_serialization():
     assert s.parent is None
     assert len(s.children) == 0
 
-    assert s.properties == {"dimension": 3}
-    assert s.dimension == 3
+    assert s.properties == {"n": 3}
+    assert s.n == 3
 
     assert_keys(s.inputs, "inwards", "modevars_in", "in_")
     assert isinstance(s.inputs["inwards"], ExtensiblePort)

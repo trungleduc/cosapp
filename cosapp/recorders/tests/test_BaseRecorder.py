@@ -143,7 +143,7 @@ def test_BaseRecorder_watched_object(AllTypesSystem, SystemWithProps):
     a = AllTypesSystem('a')
     recorder.watched_object = a
     assert recorder.watched_object is a
-    assert set(recorder.field_names()) == set('abcde')
+    assert set(recorder.field_names()) == set('abcdeg')
 
     with pytest.raises(TypeError, match="Recorder must be attached to a System or a Driver"):
         recorder.watched_object = 'dummy'
@@ -179,7 +179,7 @@ def test_BaseRecorder_field_names(AllTypesSystem):
     s = AllTypesSystem('s')
     recorder.watched_object = s
     assert set(recorder.field_names()) == {
-        'a', 'b', 'c', 'e', 'd',
+        'a', 'b', 'c', 'e', 'd', 'g',
         'in_.x', 'out.x', 'm_in', 'm_out',
     }
 
@@ -189,28 +189,31 @@ def test_BaseRecorder_field_names(AllTypesSystem):
     t.add_child(s)
     recorder.watched_object = t
     assert set(recorder.field_names()) == {
-        'a', 'b', 'c', 'e', 'd', 'in_.x', 'out.x', 'm_in', 'm_out',
-        's.a', 's.b', 's.c', 's.d', 's.e', 's.in_.x', 's.out.x', 's.m_in', 's.m_out',
+        'a', 'b', 'c', 'e', 'd', 'g', 'in_.x', 'out.x', 'm_in', 'm_out',
+        's.a', 's.b', 's.c', 's.d', 's.e', 's.g', 's.in_.x', 's.out.x', 's.m_in', 's.m_out',
     }
 
 
 @pytest.mark.parametrize("includes, expected", [
-    ('sub.a', ['sub.a']),
-    ('sub.d', ['sub.d']),
-    ('sub.inwards.a', ['sub.a']),
-    ('inwards.a', ['a']),
-    ('sub.outwards.d', ['sub.d']),
-    ('outwards.d', ['d']),
-    ('sub.?', ['sub.a', 'sub.b', 'sub.c', 'sub.e', 'sub.d']),
-    ('sub.*', ['sub.in_.x', 'sub.a', 'sub.b', 'sub.c', 'sub.e', 'sub.d', 'sub.out.x', 'sub.m_in', 'sub.m_out']),
-    (['sub.*', '*d', 'a'], [
-        'a', 'd',
-        'sub.a', 'sub.b', 'sub.c', 'sub.e', 'sub.d',
+    ('sub.a', {'sub.a'}),
+    ('sub.d', {'sub.d'}),
+    ('sub.inwards.a', {'sub.a'}),
+    ('inwards.a', {'a'}),
+    ('sub.outwards.d', {'sub.d'}),
+    ('outwards.d', {'d'}),
+    ('sub.?', {'sub.a', 'sub.b', 'sub.c', 'sub.e', 'sub.d', 'sub.g'}),
+    ('sub.*', {
+        'sub.a', 'sub.b', 'sub.c', 'sub.e', 'sub.d', 'sub.g',
         'sub.in_.x', 'sub.out.x', 'sub.m_in', 'sub.m_out',
-    ]),
-    (['*d', '*out*'], ['d', 'sub.d', 'm_out', 'out.x', 'sub.out.x', 'sub.m_out']),
-    ('banana', []),
-    ('beep', []),  # event
+    }),
+    (['sub.*', '*d', 'a'], {
+        'a', 'd',
+        'sub.a', 'sub.b', 'sub.c', 'sub.e', 'sub.d', 'sub.g',
+        'sub.in_.x', 'sub.out.x', 'sub.m_in', 'sub.m_out',
+    }),
+    (['*d', '*out*'], {'d', 'sub.d', 'm_out', 'out.x', 'sub.out.x', 'sub.m_out'}),
+    ('banana', set()),
+    ('beep', set()),  # event
 ])
 def test_BaseRecorder_field_names__includes(AllTypesSystem, includes, expected):
     sub = AllTypesSystem('sub')
@@ -219,52 +222,57 @@ def test_BaseRecorder_field_names__includes(AllTypesSystem, includes, expected):
     recorder = BaseRecorder(includes=includes)
     recorder.watched_object = top
     assert recorder.watched_object is top
-    assert set(recorder.field_names()) == set(expected)  # test lists regardless of order
+    assert set(recorder.field_names()) == expected  # test list regardless of order
 
 
 @pytest.mark.parametrize("excludes, expected", [
-    ('*', []),
-    ('sub.a', [
-        'in_.x', 'out.x', 'a', 'b', 'c', 'e', 'd', 'm_in', 'm_out',
-        'sub.b', 'sub.c', 'sub.d', 'sub.e',
+    ('*', set()),
+    ('sub.a', {
+        'in_.x', 'out.x', 'a', 'b', 'c', 'e', 'd', 'g', 'm_in', 'm_out',
+        'sub.b', 'sub.c', 'sub.d', 'sub.e', 'sub.g',
         'sub.in_.x', 'sub.out.x', 'sub.m_in', 'sub.m_out',
-    ]),
-    ('sub.inwards.a', [
-        'in_.x', 'out.x', 'a', 'b', 'c', 'e', 'd', 'm_in', 'm_out',
-        'sub.b', 'sub.c', 'sub.d', 'sub.e',
+    }),
+    ('sub.inwards.a', {
+        'in_.x', 'out.x', 'a', 'b', 'c', 'e', 'd', 'g', 'm_in', 'm_out',
+        'sub.b', 'sub.c', 'sub.d', 'sub.e', 'sub.g',
         'sub.in_.x', 'sub.out.x', 'sub.m_in', 'sub.m_out',
-    ]),
-    ('inwards.a', [
-        'in_.x', 'out.x', 'b', 'c', 'e', 'd', 'm_in', 'm_out',
-        'sub.a', 'sub.b', 'sub.c', 'sub.d', 'sub.e',
+    }),
+    ('inwards.a', {
+        'in_.x', 'out.x', 'b', 'c', 'e', 'd', 'g', 'm_in', 'm_out',
+        'sub.a', 'sub.b', 'sub.c', 'sub.d', 'sub.e', 'sub.g',
         'sub.in_.x', 'sub.out.x', 'sub.m_in', 'sub.m_out',
-    ]),
-    ('sub.d', [
-        'in_.x', 'out.x', 'a', 'b', 'c', 'e', 'd', 'm_in', 'm_out',
+    }),
+    ('sub.d', {
+        'in_.x', 'out.x', 'a', 'b', 'c', 'e', 'd', 'g', 'm_in', 'm_out',
+        'sub.a', 'sub.b', 'sub.c', 'sub.e', 'sub.g',
+        'sub.in_.x', 'sub.out.x', 'sub.m_in', 'sub.m_out',
+    }),
+    ('sub.outwards.d', {
+        'in_.x', 'out.x', 'a', 'b', 'c', 'e', 'd', 'g', 'm_in', 'm_out',
+        'sub.a', 'sub.b', 'sub.c', 'sub.e', 'sub.g',
+        'sub.in_.x', 'sub.out.x', 'sub.m_in', 'sub.m_out',
+    }),
+    (['sub.outwards.d', '*.g'], {
+        'in_.x', 'out.x', 'a', 'b', 'c', 'e', 'd', 'g', 'm_in', 'm_out',
         'sub.a', 'sub.b', 'sub.c', 'sub.e',
         'sub.in_.x', 'sub.out.x', 'sub.m_in', 'sub.m_out',
-    ]),
-    ('sub.outwards.d', [
-        'in_.x', 'out.x', 'a', 'b', 'c', 'e', 'd', 'm_in', 'm_out',
-        'sub.a', 'sub.b', 'sub.c', 'sub.e',
+    }),
+    ('outwards.d', {
+        'in_.x', 'out.x', 'a', 'b', 'c', 'e', 'g', 'm_in', 'm_out',
+        'sub.a', 'sub.b', 'sub.c', 'sub.d', 'sub.e', 'sub.g',
         'sub.in_.x', 'sub.out.x', 'sub.m_in', 'sub.m_out',
-    ]),
-    ('outwards.d', [
-        'in_.x', 'out.x', 'a', 'b', 'c', 'e', 'm_in', 'm_out',
-        'sub.a', 'sub.b', 'sub.c', 'sub.d', 'sub.e',
+    }),
+    ('sub.?', {
+        'a', 'b', 'c', 'e', 'd', 'g', 'in_.x', 'out.x', 'm_in', 'm_out',
         'sub.in_.x', 'sub.out.x', 'sub.m_in', 'sub.m_out',
-    ]),
-    ('sub.?', [
-        'a', 'b', 'c', 'e', 'd', 'in_.x', 'out.x', 'm_in', 'm_out',
-        'sub.in_.x', 'sub.out.x', 'sub.m_in', 'sub.m_out',
-    ]),
-    ('sub.*', ['a', 'b', 'c', 'e', 'd', 'in_.x', 'out.x', 'm_in', 'm_out']),
-    (['sub.*', '*d', 'a', 'm_*'], ['b', 'c', 'e', 'in_.x', 'out.x']),
-    ('banana', [
-        'a', 'b', 'c', 'e', 'd', 'in_.x', 'out.x', 'm_in', 'm_out',
-        'sub.in_.x', 'sub.a', 'sub.b', 'sub.c', 'sub.e',
+    }),
+    ('sub.*', {'a', 'b', 'c', 'e', 'd', 'g', 'in_.x', 'out.x', 'm_in', 'm_out'}),
+    (['sub.*', '*d', 'a', 'm_*'], {'b', 'c', 'e', 'g', 'in_.x', 'out.x'}),
+    ('banana', {
+        'a', 'b', 'c', 'e', 'd', 'g', 'in_.x', 'out.x', 'm_in', 'm_out',
+        'sub.in_.x', 'sub.a', 'sub.b', 'sub.c', 'sub.e', 'sub.g',
         'sub.d', 'sub.out.x', 'sub.m_in', 'sub.m_out',
-    ]),
+    }),
 ])
 def test_BaseRecorder_field_names__excludes(AllTypesSystem, excludes, expected):
     s = AllTypesSystem('sub')
@@ -273,30 +281,30 @@ def test_BaseRecorder_field_names__excludes(AllTypesSystem, excludes, expected):
     recorder = BaseRecorder(excludes=excludes)
     recorder.watched_object = t
     assert recorder.watched_object is t
-    assert set(recorder.field_names()) == set(expected)  # test lists regardless of order
+    assert set(recorder.field_names()) == expected  # test list regardless of order
 
 
 @pytest.mark.parametrize("ctor, expected", [
-    (dict(includes='?'), list('abcde')),
-    (dict(includes='?', excludes='a'), list('bcde')),
-    (dict(includes=['a', 'b'], excludes='a'), ['b']),
+    (dict(includes='?'), set('abcdeg')),
+    (dict(includes='?', excludes='a'), set('bcdeg')),
+    (dict(includes=['a', 'b'], excludes='a'), {'b'}),
     (
         dict(includes=['a', '*_ratio']),
-        ['a', 'sub.in_.xy_ratio', 'sub.out.xy_ratio', 'sub.bogus_ratio'],
+        {'a', 'sub.in_.xy_ratio', 'sub.out.xy_ratio', 'sub.bogus_ratio'},
     ),
     (
         dict(includes=['a', '*_ratio'], excludes=['*bogus*']),
-        ['a', 'sub.in_.xy_ratio', 'sub.out.xy_ratio'],
+        {'a', 'sub.in_.xy_ratio', 'sub.out.xy_ratio'},
     ),
-    (dict(includes=['sub.a']), ['sub.a']),
-    (dict(includes=['abs(sub.a)']), ['abs(sub.a)']),
-    (dict(includes=['abs(beep)']), []),  # expression involving event 'value'
-    (dict(includes=['beep.present']), ['beep.present']),  # stupid, but OK(?)
-    (dict(includes=['sub.a'], excludes='sub.?'), []),
-    (dict(includes=['a[-1]'], excludes='?'), ['a[-1]']),
-    (dict(includes=['a[-1]', '2 * a + sub.out.y']), ['a[-1]', '2 * a + sub.out.y']),
-    (dict(includes=['sub.a +']), []),    # expressions with syntax errors should be filtered out
-    (dict(includes=['2 * sub.?']), []),  # can't combine mathematical expression and search pattern
+    (dict(includes=['sub.a']), {'sub.a'}),
+    (dict(includes=['abs(sub.a)']), {'abs(sub.a)'}),
+    (dict(includes=['abs(beep)']), set()),  # expression involving event 'value'
+    (dict(includes=['beep.present']), {'beep.present'}),  # stupid, but OK(?)
+    (dict(includes=['sub.a'], excludes='sub.?'), set()),
+    (dict(includes=['a[-1]'], excludes='?'), {'a[-1]'}),
+    (dict(includes=['a[-1]', '2 * a + sub.out.y']), {'a[-1]', '2 * a + sub.out.y'}),
+    (dict(includes=['sub.a +']), set()),    # expressions with syntax errors should be filtered out
+    (dict(includes=['2 * sub.?']), set()),  # can't combine mathematical expression and search pattern
 ])
 def test_BaseRecorder_field_names_expressions(AllTypesSystem, SystemWithProps, ctor, expected):
     """Test inclusion and exclusion patterns involving properties and evaluable expressions"""
@@ -307,36 +315,36 @@ def test_BaseRecorder_field_names_expressions(AllTypesSystem, SystemWithProps, c
     recorder.watched_object = top
     assert recorder.watched_object is top
 
-    assert set(recorder.field_names()) == set(expected)
+    assert set(recorder.field_names()) == expected
     # Test `in` operator:
     assert all(field in recorder for field in expected)
 
 
 @pytest.mark.parametrize("info, expected", [
-    (dict(includes=None, excludes=None), list('bcde')),
-    (dict(includes='?'), list('bcde')),
-    (dict(includes='a'), list('bcde')),
-    (dict(includes=['x', 'y'], excludes='b'), list('cde')),
+    (dict(includes=None, excludes=None), set('bcdeg')),
+    (dict(includes='?'), set('bcdeg')),
+    (dict(includes='a'), set('bcdeg')),
+    (dict(includes=['x', 'y'], excludes='b'), set('cdeg')),
     (
         dict(includes='sub.*', excludes='*_ratio'),
-        list('bcde') + ['sub.a', 'sub.in_.x', 'sub.in_.y', 'sub.out.x', 'sub.out.y'],
+        set('bcdeg') | {'sub.a', 'sub.in_.x', 'sub.in_.y', 'sub.out.x', 'sub.out.y'},
     ),
     (
         dict(includes='*_ratio'),
-        list('bcde') + ['sub.in_.xy_ratio', 'sub.out.xy_ratio', 'sub.bogus_ratio'],
+        set('bcdeg') | {'sub.in_.xy_ratio', 'sub.out.xy_ratio', 'sub.bogus_ratio'},
     ),
     (
         dict(includes=['*_ratio'], excludes=['*bogus*']),
-        list('bcde') + ['sub.in_.xy_ratio', 'sub.out.xy_ratio'],
+        set('bcdeg') | {'sub.in_.xy_ratio', 'sub.out.xy_ratio'},
     ),
-    (dict(includes=['sub.a']), list('bcde') + ['sub.a']),
-    (dict(includes=['sub.?'], excludes='sub.a'), list('bcde')),
-    (dict(includes=['sub.?'], excludes='sub.b'), list('bcde') + ['sub.a']),
-    (dict(includes=['a[-1]']), list('bcde') + ['a[-1]']),
-    (dict(includes=['a[-1]'], excludes='?'), ['a[-1]']),
-    (dict(includes=['a[-1]', '2 * a + sub.out.y'], excludes='?'), ['a[-1]', '2 * a + sub.out.y']),
+    (dict(includes=['sub.a']), set('bcdeg') | {'sub.a'}),
+    (dict(includes=['sub.?'], excludes='sub.a'), set('bcdeg')),
+    (dict(includes=['sub.?'], excludes='sub.b'), set('bcdeg') | {'sub.a'}),
+    (dict(includes=['a[-1]']), set('bcdeg') | {'a[-1]'}),
+    (dict(includes=['a[-1]'], excludes='?'), {'a[-1]'}),
+    (dict(includes=['a[-1]', '2 * a + sub.out.y'], excludes='?'), {'a[-1]', '2 * a + sub.out.y'}),
 ])
-def test_BaseRecorder_extend(AllTypesSystem, SystemWithProps, info, expected):
+def test_BaseRecorder_extend(AllTypesSystem, SystemWithProps, info, expected: set):
     """Test factory `extend`"""
     top = AllTypesSystem('top')
     sub = SystemWithProps('sub')
@@ -345,13 +353,13 @@ def test_BaseRecorder_extend(AllTypesSystem, SystemWithProps, info, expected):
     recorder = BaseRecorder(includes='?', excludes='a')
     recorder.watched_object = top
     assert recorder.watched_object is top
-    assert set(recorder.field_names()) == set('bcde')
+    assert set(recorder.field_names()) == set('bcdeg')
 
     # Create extended recorder
     newrec = BaseRecorder.extend(recorder, **info)
     assert isinstance(newrec, BaseRecorder)
     assert newrec.watched_object is top
-    assert set(newrec.field_names()) == set(expected)
+    assert set(newrec.field_names()) == expected
     for attr in (
         'section',
         'precision',
