@@ -56,6 +56,8 @@ class Interpolator:
         if shape[1] == 2:
             # data given as [[x0, y0], ..., [xn, yn]]
             data = data.T
+        if data.shape[1] < 2:
+            raise ValueError(f"data must contain at least two points")
         # sort data to ensure increasing x
         self.__data = data[:, data[0].argsort()]
         self.__data.setflags(write=0)

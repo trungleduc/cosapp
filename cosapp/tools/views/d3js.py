@@ -210,7 +210,7 @@ def to_d3(system: System, show: bool = True, size=435) -> None:
         HTML formatted representation
     """
 
-    filename = f"{system.name}.html"
+    filename = f"{system.name}_d3.html"
     rendered_html = d3_html(system, embeddable=False)
     with open(filename, mode="w", encoding="utf-8") as f:
         f.write(rendered_html)
