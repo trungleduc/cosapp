@@ -333,31 +333,28 @@ class Module(LoggerContext, VisitedComponent, metaclass=abc.ABCMeta):
         return child
 
     def pop_child(self, name: str) -> Module:
-        """Remove the `Module` called `name` from the current top `Module`.
+        """Remove submodule `name` from current module.
 
         Parameters
         ----------
         name: str
-            Name of the `Module` to remove.
+            Name of submodule to be removed.
 
         Returns
         -------
-        `Module` or None
-            The removed `Module`.
+        `Module`
+            The removed module.
 
         Raises
         ------
         `AttributeError` if no match is found.
         """
-        children = self.children
-
-        if name not in children:
-            message = f"Component {name} is not a child of {self}."
-            logger.error(message)
-            raise AttributeError(message)
+        try:
+            child = self.children.pop(name)
+        except KeyError:
+            raise AttributeError(f"Component {name} is not a child of {self}.")
 
         self._pop_member(name)
-        child = children.pop(name)
         child.parent = None
 
         return child
