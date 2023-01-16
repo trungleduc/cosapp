@@ -63,7 +63,10 @@ class BaseRenderer(metaclass=abc.ABCMeta):
             </body>
             </html>
         """
-        return {"html_begin_tags": html_begin_tags, "html_end_tags": html_end_tags}
+        return {
+            "html_begin_tags": html_begin_tags,
+            "html_end_tags": html_end_tags,
+        }
 
     @classmethod
     @abc.abstractclassmethod

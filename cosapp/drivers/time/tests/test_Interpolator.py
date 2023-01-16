@@ -17,7 +17,7 @@ def data():
     ([(0, 0), (1, 1), (10, -17)], dict(data=[[0, 1, 10], [0, 1, -17]])),
     ([[0], [1, 1], [10, -17]], dict(error=ValueError)),
     ([[0, 1, 2], [1, 2, 5, -17]], dict(error=ValueError)),
-    ([[0, 0]], dict(error=ValueError)),
+    ([[0, 0]], dict(error=ValueError, match="at least two points")),
     ("foobar", dict(error=ValueError)),
     (dict(x=[0, 1], y=[1, 0.3]), dict(error=TypeError)),
 ])

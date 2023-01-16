@@ -28,6 +28,23 @@ class VisJsRenderer(BaseRenderer):
     def __init__(self, system: System, embeddable=False):
         super().__init__(system, embeddable)
 
+    @staticmethod
+    def get_system_label(system: System):
+        label = system.name
+        lmax = 7
+        if len(label) > lmax:
+            dots = "\u2026"  # single character
+            label = label[:lmax-1] + dots
+        return label
+
+    def get_system_title(self, system: System):
+        head = self.system
+        if system is head:
+            name = head.name
+        else:
+            name = head.get_path_to_child(system)
+        return f"{name} - {system.__class__.__name__}"
+
     def get_data(self, focus_system: Optional[System] = None) -> Dict:
         """Convert the `System` in a dictionary with 4 keys: title, nodes, edges and groups.
 
@@ -207,8 +224,9 @@ class VisJsRenderer(BaseRenderer):
             # Add hidden node for the top system
             nodes.append(
                 dict(
-                    label=f"{system.name}",
-                    title=f"{system.name} - {system.__class__.__name__}",
+                    name=system.name,
+                    label=self.get_system_label(system),
+                    title=self.get_system_title(system),
                     id=id_init,
                     level=0,
                     hidden=True,
@@ -287,10 +305,13 @@ class VisJsRenderer(BaseRenderer):
                         ref["level"] += 0.2 * driver_depth(c)
 
                 else:
+                    # c is a System
                     ref = dict(
-                        label=f"{c.name}",
-                        title=f"{c.full_name(trim_root=True)} - {type(c).__name__}", 
+                        name=c.name,
+                        label=self.get_system_label(c),
+                        title=self.get_system_title(c),
                         id=id,
+                        widthConstraint={'maximum': '10px'},
                     )
 
                     if c.children:  # Component containing component => Cluster
@@ -300,7 +321,7 @@ class VisJsRenderer(BaseRenderer):
                         for child in c.children.values():
                             edges.append({"from": id, "to": cmpt2id[child], "hidden": True})
 
-                    ref["group"] = f"{c.parent.full_name()}"
+                    ref["group"] = c.parent.full_name()
 
                 group = ref["group"]
                 ref.setdefault("level", 0)
@@ -313,7 +334,12 @@ class VisJsRenderer(BaseRenderer):
             # Sort the groups by system to ensure that levels are clustered bottom-up
             groups.sort(reverse=True)
 
-            data = {"title": system.name, "nodes": nodes, "edges": edges, "groups": groups}
+            data = {
+                "title": self.get_system_label(system),
+                "nodes": nodes,
+                "edges": edges,
+                "groups": groups,
+            }
 
             if focus_system is not None:
                 data["center_id"] = cmpt2id[focus_system]

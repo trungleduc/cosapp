@@ -95,9 +95,9 @@
 </style>
 
 <p>
-<a class="button primary small" onclick="clusterBySystem()" href="#">Cluster by system</a>
-<a class="button secondary small" onclick="SetHierarchicalLayout()" href="#">View by system level</a>
-<a class="button outline small" onclick="resetAllClusters()" href="#">Reset network</a>
+<a class="button primary small" onclick="clusterBySystem()" href="#">Clustered View</a>
+<a class="button secondary small" onclick="SetHierarchicalLayout()" href="#">Hierarchical View</a>
+<a class="button outline small" onclick="resetAllClusters()" href="#">Exploded View</a>
 </p>
 
 <div id="mynetwork"></div>
@@ -143,13 +143,14 @@
         },
         layout:{
             hierarchical: false,
-            randomSeed: 8},
-    //    physics: true
+            randomSeed: 8,
+            //    physics: true
+        },
     };
 
     // initialize your network!
     var network = undefined;
-    resetAllClusters();
+    clusterBySystem();
 
     function generateNetwork(data_, options_, hierarchicalLayout){
       if(network !== undefined) network.destroy();
@@ -164,13 +165,7 @@
                 if (network_.isCluster(params.nodes[0]) === false) {
                     clusterFromSelection(params.nodes[0])
                 }
-            }
-        });
-
-        // Suppress cluster when click on
-        network_.on("selectNode", function(params) {
-            if (params.nodes.length === 1) {
-                if (network_.isCluster(params.nodes[0]) === true) {
+                else {
                     network_.openCluster(params.nodes[0]);
                 }
             }
@@ -194,17 +189,18 @@
             processProperties: function (clusterOptions, childNodes, childEdges) {
                 var hidden_node = data.nodes.get({
                     filter: function(node){
-                        return node.label === system_name;
+                        return node.name === system_name;
                     }
                 });
                 clusterOptions.title = hidden_node[0].title;
+                clusterOptions.label = hidden_node[0].label;
                 return clusterOptions;
             },
             clusterNodeProperties: {
                 id: 'cluster:' + system,
                 borderWidth: 3,
                 shape: 'database',
-                label: system_name,
+                name: system_name,
                 group: group_name,
                 allowSingleNodeCluster : true
             }
