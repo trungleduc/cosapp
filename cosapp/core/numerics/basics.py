@@ -206,6 +206,9 @@ class MathematicalProblem:
         """(int, int) : Number of unknowns and equations."""
         return (self.n_unknowns, self.n_equations)
 
+    def is_empty(self) -> bool:
+        return self.shape == (0, 0)
+
     @property
     def unknowns(self) -> Dict[str, Unknown]:
         """Dict[str, Unknown] : Unknown numerical features defined for this system."""

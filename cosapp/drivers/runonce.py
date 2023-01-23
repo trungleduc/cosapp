@@ -44,10 +44,8 @@ class RunOnce(Driver):
         """
         super().__init__(name, owner, **kwargs)
         
-        self.initial_values = dict()  # type: Dict[str, float]
-            # desc="Initial guess for the iteratives."
-        self.solution = dict()  # type: Dict[str, float]
-            # desc="Dictionary (name, value) of the latest solution reached."
+        self.initial_values: Dict[str, Boundary] = dict()  # Initial guess for the iteratives
+        self.solution: Dict[str, float] = dict()  # Dictionary (name, value) of the latest solution reached
 
     def set_init(self, modifications: Dict[str, Any]) -> None:
         """Define initial values for one or more variables.
@@ -77,15 +75,15 @@ class RunOnce(Driver):
         for variable, value in modifications.items():
             boundary = Boundary(self.owner, variable, default=value)
 
-            if boundary.name in self.initial_values:
-                old_boundary = self.initial_values[boundary.name]
-                old_boundary.set_default_value(boundary.default_value, boundary.mask)
-                self.initial_values[boundary.name] = old_boundary
-            else:
-                self.initial_values[boundary.name] = boundary
+            # Check if boundary.name already exists
+            actual = self.initial_values.setdefault(boundary.name, boundary)
 
-            # Set the System with the init value - useful if this driver is not inside a solver
-            self.initial_values[boundary.name].set_to_default()
+            if actual is not boundary:
+                # Update already existing boundary with new default value and mask
+                actual.set_default_value(boundary.default_value, boundary.mask)
+
+            # Set owner system with the init value - useful if this driver is not inside a solver
+            actual.set_to_default()
 
             # Setting a new initial value implies, we will use the init and so the solution is cleared
             self.solution.clear()
@@ -150,7 +148,7 @@ class RunOnce(Driver):
         if not owner.is_standalone() and owner.parent is None:
             owner.open_loops()  # Force loops opening to test if the owner needs a solver
 
-            if self.get_problem().shape != (0, 0):
+            if not self.get_problem().is_empty():
                 logger.warning(
                     "Required iterations detected, not taken into account in {} driver.".format(
                         type(self).__qualname__

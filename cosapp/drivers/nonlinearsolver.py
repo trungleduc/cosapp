@@ -266,7 +266,7 @@ class NonLinearSolver(AbstractSolver):
         logger.debug(
             "\n".join([
                 "Mathematical problem:",
-                f"{'<empty>' if self.problem.shape == (0, 0) else self.problem}",
+                f"{'<empty>' if self.problem.is_empty() else self.problem}",
             ])
         )
 

@@ -126,7 +126,7 @@ class RunSingleCase(IterativeCase):
         """
         # Unknowns & residues are duplicated to avoid side effects between points
         # Existing unknowns and equations are silently overwritten.
-        if offdesign.shape != (0, 0):
+        if not offdesign.is_empty():
             self.__processed.offdesign.extend(offdesign, copy=True, overwrite=True)
             self.merge_problems()
         return self.problem

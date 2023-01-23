@@ -63,6 +63,7 @@ def test_MathematicalProblem__init__():
     assert len(m.residues) == 0
     assert len(m.transients) == 0
     assert len(m.deferred_residues) == 0
+    assert m.is_empty()
 
 
 def test_MathematicalProblem_name(test_objects: Tuple[System, MathematicalProblem]):
@@ -827,6 +828,9 @@ def test_MathematicalProblem_extend_pulled_target(caplog):
 
 def test_MathematicalProblem_clear(test_objects: Tuple[System, MathematicalProblem]):
     s, m = test_objects
+    assert m.is_empty()
+    assert m.context is s
+
     m.add_equation([
         dict(equation="g == 0"),
         dict(equation="h == array([22., 4.2])", name="h equation", reference=24.)
@@ -836,7 +840,7 @@ def test_MathematicalProblem_clear(test_objects: Tuple[System, MathematicalProbl
         dict(name="c", max_abs_step=1e-2)
     ])
 
-    assert m.context is s
+    assert not m.is_empty()
     assert list(m.unknowns) == ['a', 'c']
     assert list(m.residues) == ['g == 0', 'h equation']
     assert len(m.transients) == 0
@@ -857,18 +861,22 @@ def test_MathematicalProblem_clear(test_objects: Tuple[System, MathematicalProbl
     assert list(m.transients) == ['d']
     assert list(m.rates) == []
     assert list(m.deferred_residues) == []
+    assert not m.is_empty()
 
     m.add_rate('a', source='b[0]')
     assert list(m.transients) == ['d']
     assert list(m.rates) == ['a']
     assert list(m.deferred_residues) == []
+    assert not m.is_empty()
 
     m.add_target('g')
     assert list(m.transients) == ['d']
     assert list(m.rates) == ['a']
     assert [deferred.target for deferred in m.deferred_residues.values()] == ['g']
+    assert not m.is_empty()
 
     m.clear()
+    assert m.is_empty()
     assert m.context is s
     assert len(m.unknowns) == 0
     assert len(m.residues) == 0

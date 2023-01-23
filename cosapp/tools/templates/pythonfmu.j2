@@ -53,7 +53,7 @@ class {{ class_name }}FMU(Fmi2Slave):
         self.__master.open_loops()
 
         # Add the drivers
-        has_iterative = {% if local %}True{% else %}self.__master.assembled_problem().shape != (0, 0){% endif %}
+        has_iterative = {% if local %}True{% else %}not self.__master.assembled_problem().is_empty(){% endif %}
 
         self.__driver.children.clear()
         if has_iterative:
