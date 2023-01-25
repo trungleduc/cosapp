@@ -5,10 +5,17 @@ from cosapp.core._version import __version__
 
 from cosapp.core.config import CoSAppConfiguration
 from cosapp.core.numerics.basics import MathematicalProblem
-from cosapp.core.connectors import Connector, DeepCopyConnector
+from cosapp.core.connectors import (
+    Connector,
+    PlainConnector,
+    CopyConnector,
+    DeepCopyConnector,
+)
 
 __all__ = [
     "MathematicalProblem",
     "Connector",
+    "PlainConnector",
+    "CopyConnector",
     "DeepCopyConnector",
 ]
