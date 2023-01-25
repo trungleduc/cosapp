@@ -2,8 +2,7 @@ import numpy, scipy.interpolate
 import enum
 import logging
 import warnings
-from types import MappingProxyType
-from typing import Any, Dict, List, Tuple, Optional, Callable
+from typing import Any, Dict, List, Tuple, Callable
 
 from cosapp.systems import System
 from cosapp.drivers.driver import Driver
@@ -91,25 +90,24 @@ class TimeAssignString:
         Boundary.parse(context, lhs)  # checks that variable is valid
         fname = f"BC{id(rhs)}"
         assignment = f"{context.name}.{lhs} = {fname}(t)"
-        self.__context = context
         self.__locals = {fname: rhs, context.name: context, 't': 0}
-        self.__code = compile(assignment, "<string>", "exec")  # type: CodeType
+        self.__code = compile(assignment, "<string>", "single")  # type: CodeType
         self.__str = f"{lhs} = {type(rhs).__name__}(t)"
+        self.__rhs = rhs
 
-    def exec(self, t: Optional[float] = None) -> None:
+    def exec(self, t: float) -> None:
         """Evaluates rhs(t), and executes assignment lhs <- rhs(t).
-        If time `t` is not specified, uses context time.
         """
-        self.__locals['t'] = self.__context.time if t is None else t
+        self.__locals['t'] = t
         exec(self.__code, {}, self.__locals)
 
     def __str__(self) -> str:
         return self.__str
 
     @property
-    def locals(self) -> Dict[str, Any]:
-        """Dict[str, Any]: Context attributes required to evaluate the string expression."""
-        return MappingProxyType(self.__locals)
+    def rhs(self) -> Callable[[float], Any]:
+        """Callable: assignment right-hand side function"""
+        return self.__rhs
     
     @property
     def constant(self):
@@ -132,10 +130,11 @@ class InterpolAssignString(TimeAssignString):
                 f"; got {type(rhs)}"
             )
         super().__init__(lhs, rhs, context)
+        self.__context = context
 
     def exec(self) -> None:
-        """Evaluates rhs, and executes assignment lhs <- rhs."""
-        super().exec()
+        """Evaluates rhs at context time, and executes assignment lhs <- rhs."""
+        super().exec(self.__context.time)
 
 
 class Scenario:
@@ -190,7 +189,7 @@ class Scenario:
 
     @owner.setter
     def owner(self, driver: Driver) -> None:
-        check_arg(driver, "owner", Driver, lambda driver: hasattr(driver, "owner"))
+        check_arg(driver, "owner", Driver)
         self.__owner = driver
         self.__context = context = driver.owner  # type: System
         if context is None:

@@ -18,11 +18,7 @@ def test_InterpolAssignString__init__(ode, data):
     interpolator = Interpolator(data)
     bc = InterpolAssignString('df', interpolator, ode)
     assert str(bc) == "df = Interpolator(t)"
-    bc_locals = bc.locals
-    assert len(bc_locals.keys()) == 3
-    assert "t" in bc_locals
-    assert "ode" in bc_locals
-    assert bc_locals["ode"] is ode
+    assert bc.rhs is interpolator
 
 
 def test_InterpolAssignString_error(ode, data):
@@ -56,4 +52,3 @@ def test_InterpolAssignString_exec(ode, data, clock):
     for clock.time in (0, 0.8, 1, 2, 3.4):
         bc.exec()
         assert ode.df == interpolator(clock.time)
-        assert bc.locals['t'] == ode.time
