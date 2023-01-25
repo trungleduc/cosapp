@@ -6,7 +6,7 @@ import copy
 import logging
 import weakref
 from types import MappingProxyType
-from typing import Callable, Dict, Iterable, Iterator, List, Optional, Tuple, Union, Any
+from typing import Callable, Dict, Iterable, Iterator, List, Optional, Tuple, Union, Any, Type
 
 from cosapp.ports import units
 from cosapp.ports.port import BasePort, Port
@@ -407,15 +407,13 @@ class Connector(BaseConnector):
             self._unit_conversions[key] = constants
 
             # Get transfer function
-            transfer = copy.copy  # fallback
             try:
                 factor, offset = self._unit_conversions[key]
             except:
                 pass
             else:
-                if factor != 1 or offset != 0:
-                    transfer = lambda value: factor * (value + offset)
-            self._transfer_func[key] = transfer
+                if (factor, offset) != (1, 0):
+                    self._transfer_func[key] = lambda value: factor * (value + offset)
 
         if name is None:
             for name in mapping:
@@ -424,26 +422,49 @@ class Connector(BaseConnector):
             update_one_connection(name)
 
     def transfer(self) -> None:
-        fallback = copy.copy
         source, sink = self.source, self.sink
 
         for target, origin in self._mapping.items():
             # get/setattr faster for Port
             value = getattr(source, origin)
-            transfer = self._transfer_func[target]
-            try:
-                setattr(sink, target, transfer(value))
-            except TypeError:
-                setattr(sink, target, fallback(value))
+            transfer = self._transfer_func.get(target, copy.copy)
+            setattr(sink, target, transfer(value))
 
 
-class DeepCopyConnector(BaseConnector):
-    """Deep copy connector.
-    See `BaseConnector` for base class details.
+def MakeDirectConnector(classname: str, transform: Optional[Callable]=None, **kwargs) -> Type[BaseConnector]:
+    """Connector factory using a simple transfer function, with no unit conversion.
     """
-    def transfer(self) -> None:
-        source, sink = self.source, self.sink
+    if transform is None:
+        transfer_attr = lambda sink, name, value: setattr(sink, name, value)
+    else:
+        transfer_attr = lambda sink, name, value: setattr(sink, name, transform(value))
 
-        for target, origin in self._mapping.items():
-            value = getattr(source, origin)
-            setattr(sink, target, copy.deepcopy(value))
+    class DirectConnector(BaseConnector):
+        """Connector with simple transfer function"""
+        def transfer(self) -> None:
+            source, sink = self.source, self.sink
+
+            for target, origin in self._mapping.items():
+                value = getattr(source, origin)
+                transfer_attr(sink, target, value)
+
+    return type(classname, (DirectConnector,), kwargs)
+
+
+PlainConnector = MakeDirectConnector(
+    "PlainConnector",
+    __doc__ = (
+        "Plain assignment connector, with no unit conversion."
+        " Warning: may generate common references between sink and source variables."
+    ),
+)
+
+CopyConnector = MakeDirectConnector(
+    "CopyConnector", copy.copy,
+    __doc__ = "Shallow copy connector, with no unit conversion.",
+)
+
+DeepCopyConnector = MakeDirectConnector(
+    "DeepCopyConnector", copy.deepcopy,
+    __doc__ = "Deep copy connector, with no unit conversion.",
+)
