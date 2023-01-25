@@ -3,7 +3,7 @@ import numpy as np
 
 from cosapp.base import System, Port
 from cosapp.ports.port import PortType
-from cosapp.core.connectors import (
+from cosapp.ports.connectors import (
     BaseConnector,
     PlainConnector,
     CopyConnector,

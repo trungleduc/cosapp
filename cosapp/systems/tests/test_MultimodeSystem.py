@@ -4,7 +4,7 @@ from contextlib import nullcontext as does_not_raise
 
 from cosapp.base import System, Port
 from cosapp.multimode.event import Event
-from cosapp.core.connectors import ConnectorError, BaseConnector
+from cosapp.ports.connectors import ConnectorError, BaseConnector
 from cosapp.ports.mode_variable import ModeVariable
 from cosapp.utils.testing import assert_keys, get_args
 

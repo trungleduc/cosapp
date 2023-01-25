@@ -28,7 +28,6 @@ import pandas
 
 from cosapp.patterns.visitor import Visitor
 from cosapp.core.module import Module, CommonPorts
-from cosapp.core.connectors import BaseConnector, Connector, ConnectorError
 from cosapp.core.eval_str import EvalString
 from cosapp.core.variableref import VariableReference
 from cosapp.core.numerics.basics import MathematicalProblem
@@ -37,6 +36,7 @@ from cosapp.core.time import TimeObserver
 from cosapp.ports.enum import PortType, Scope, Validity
 from cosapp.ports.port import BasePort, ExtensiblePort, ModeVarPort, Port
 from cosapp.ports.variable import RangeValue, Types, Variable
+from cosapp.ports.connectors import BaseConnector, Connector, ConnectorError
 from cosapp.utils.distributions import Distribution
 from cosapp.utils.context import ContextLock
 from cosapp.utils.helpers import check_arg, is_number, is_numerical

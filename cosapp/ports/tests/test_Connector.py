@@ -1,8 +1,8 @@
 import pytest
 import logging
 
-from cosapp.core import connectors
-from cosapp.core.connectors import Connector, ConnectorError
+from cosapp.ports import connectors
+from cosapp.ports.connectors import Connector, ConnectorError
 from cosapp.ports.port import PortType, Port
 from cosapp.systems import System
 from cosapp.ports.units import UnitError
