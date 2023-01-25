@@ -18,7 +18,6 @@ Modules
    cosapp.core.signal.slot
 
    cosapp.core.config
-   cosapp.core.connectors
    cosapp.core.eval_str
    cosapp.core.module
    cosapp.core.time
@@ -29,6 +28,7 @@ Modules
 
    cosapp.ports.port
    cosapp.ports.enum
+   cosapp.ports.connectors
    cosapp.ports.exceptions
    cosapp.ports.variable
    cosapp.ports.multimode_variable
@@ -134,10 +134,10 @@ Inheritance
     cosapp.ports.port
     :parts: 1
 
-- cosapp.core.connectors
+- cosapp.ports.connectors
 
 .. mermaid-inheritance::
-    cosapp.core.connectors
+    cosapp.ports.connectors
     :parts: 1
 
 - cosapp.recorders

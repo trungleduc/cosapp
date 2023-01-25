@@ -1,6 +1,6 @@
 import inspect
 from cosapp.patterns import Proxy
-from cosapp.core.connectors import BaseConnector
+from cosapp.ports.connectors import BaseConnector
 from cosapp.ports.enum import PortType
 from typing import Dict, Any
 

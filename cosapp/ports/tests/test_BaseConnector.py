@@ -2,7 +2,7 @@ import pytest
 from unittest import mock
 from types import MappingProxyType
 
-from cosapp.core.connectors import BaseConnector, ConnectorError
+from cosapp.ports.connectors import BaseConnector, ConnectorError
 from cosapp.ports.port import PortType, Port
 from cosapp.systems import System
 

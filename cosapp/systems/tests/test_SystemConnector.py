@@ -2,9 +2,9 @@ import pytest
 from contextlib import nullcontext as does_not_raise
 
 from cosapp.patterns import Proxy
-from cosapp.core.connectors import BaseConnector, Connector
-from cosapp.systems.systemConnector import SystemConnector
+from cosapp.ports.connectors import BaseConnector, Connector
 from cosapp.ports.port import PortType, Port
+from cosapp.systems.systemConnector import SystemConnector
 from cosapp.systems import System
 
 

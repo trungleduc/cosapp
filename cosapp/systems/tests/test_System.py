@@ -13,12 +13,12 @@ import math
 from cosapp.utils.testing import assert_keys, get_args, no_exception
 from cosapp.utils.logging import LogFormat, LogLevel
 from cosapp.core.signal import Slot
-from cosapp.core.connectors import BaseConnector, Connector, ConnectorError
 from cosapp.core.numerics.basics import MathematicalProblem
 from cosapp.core.numerics.boundary import Unknown
 from cosapp.core.numerics.residues import Residue
 from cosapp.ports.port import BasePort, Port, PortType, Scope, Validity
 from cosapp.ports.units import UnitError
+from cosapp.ports.connectors import BaseConnector, Connector, ConnectorError
 from cosapp.drivers import Driver, RunOnce, NonLinearSolver
 from cosapp.systems import system as system_module
 from cosapp.systems import System
