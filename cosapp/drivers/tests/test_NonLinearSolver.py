@@ -973,7 +973,7 @@ def test_NonLinearSolver_vector1d_system():
 
     # Test transfer value
     s.in_.x *= 3.0
-    assert np.array_equal(s.in_.x, s.out.x) == False
+    assert not np.array_equal(s.in_.x, s.out.x)
     s.run_drivers()
     assert np.array_equal(s.in_.x, s.out.x)
 

@@ -2908,36 +2908,37 @@ class System(Module, TimeObserver):
         # work as first the object is instantiated. Then its children are removed to create them (and the associated
         # connections from the JSON file.
 
-        def get_system_class(system_type):
-            check_arg(system_type, 'Class name', str)
-            cls_name = system_type.rsplit('.', maxsplit=1)
+        def get_system_class(class_name: str):
+            if class_name == "System":
+                return System
+            check_arg(class_name, 'class_name', str, stack_shift=1)
+            try:
+                component_module, class_name = class_name.rsplit('.', maxsplit=1)
+            except ValueError:
+                component_module = ""
             system_class = None
-            found_module = ''
-            component_module = ''
-            if len(cls_name) == 2:
-                component_module, cls_name = cls_name
-            elif len(cls_name) == 1:
-                cls_name = cls_name[0]
+            found_module = ""
+            component_libs = System._components_librairies
 
-            for lib in System._components_librairies:
+            for lib_name in component_libs:
                 try:
-                    if len(component_module) > 0:
-                        mod_name = f"{lib}.{component_module}"
+                    if component_module:
+                        mod_name = f"{lib_name}.{component_module}"
                         if mod_name.startswith('.'):
                             mod_name = mod_name[1:]
-                        lib_modules = importlib.import_module(mod_name)
-                    elif len(lib) > 0:
-                        lib_modules = importlib.import_module(lib)
+                        lib_module = importlib.import_module(mod_name)
+                    elif lib_name:
+                        lib_module = importlib.import_module(lib_name)
                     else:
                         raise ImportError
                 except ImportError:
-                    # Try the next possible Python package to find the module
+                    # Try next possible Python package to find module
                     continue
                 else:
                     # Found an existing module
-                    found_module = lib_modules.__file__
+                    found_module = lib_module.__file__
                     try:
-                        system_class = getattr(lib_modules, cls_name)
+                        system_class = getattr(lib_module, class_name)
                     except AttributeError:
                         # Class not in module
                         continue
@@ -2945,26 +2946,20 @@ class System(Module, TimeObserver):
                         break
 
             if system_class is None:
-                if len(found_module) == 0:
-                    message = "System {} is not in one of the listed component librairies:\n{}".format(
-                        cls_name, System._components_librairies)
-                else:
-                    message = f"Class {cls_name} was not found in module: \n{found_module}"
-                raise AttributeError(message)
+                raise AttributeError(
+                    f"Class {class_name!r} was not found in module: \n{found_module}"
+                    if found_module else
+                    f"Class {class_name!r} is not in one of the listed component librairies:\n{component_libs}"
+                )
             elif not issubclass(system_class, System):
                 raise AttributeError(
-                    f"Class '{system_class.__name__}' does not inherit from base class 'System'")
-
+                    f"Class {system_class.__name__!r} does not inherit from base class 'System'"
+                )
             return system_class
 
-        system_type = parameters.get('class', 'System')
+        class_name = parameters.get('class', 'System')
         ctor_kwargs = parameters.get('setup_args', {})
-
-        if system_type == 'System':
-            system_class = System
-        else:
-            system_class = get_system_class(system_type)
-
+        system_class = get_system_class(class_name)
         top_system = system_class(name=name, **ctor_kwargs)
         for name in top_system.children:
             top_system.name2variable.pop(name)

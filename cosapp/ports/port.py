@@ -389,8 +389,8 @@ class BasePort(visitor.Component):
             criterion = lambda name: False
         else:
             read_only = [
-                name for (name, details) in self._variables.items()
-                if details.scope > self.__clearance
+                name for (name, variable) in self._variables.items()
+                if variable.scope > self.__clearance
             ]
             criterion = lambda name: not self._owner.is_running() and name in read_only
         self.__out_of_scope = criterion

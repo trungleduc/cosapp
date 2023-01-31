@@ -13,7 +13,6 @@ from cosapp.core.numerics.boundary import AbstractTimeUnknown, TimeUnknown
 from cosapp.ports.port import ExtensiblePort
 from cosapp.systems.system import System
 from cosapp.utils.helpers import check_arg
-from cosapp.drivers import Driver
 from cosapp.drivers.time.scenario import TimeAssignString
 
 T = TypeVar('T')
@@ -288,7 +287,7 @@ class TimeVarManager:
         return self.__context
 
     @property
-    def problem(self) -> "MathematicalProblem":
+    def problem(self):
         """Mathematical problem handled by manager"""
         return self.__problem
 
@@ -584,10 +583,9 @@ class SystemInterpolator:
 
     @interp.setter
     def interp(self, interp: Dict[str, Callable]):
-        transients = self.__transients
         check_arg(
             interp, "interp", dict,
-            lambda d: set(d) == set(transients)
+            lambda d: set(d) == set(self.__transients)
         )
         context = self.system
         for key, func in interp.items():

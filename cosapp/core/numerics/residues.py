@@ -1,6 +1,6 @@
 from abc import abstractmethod
 from numbers import Number
-from typing import Any, Dict, Optional, Tuple, Set, Union
+from typing import Any, Dict, Optional, Tuple, FrozenSet, Union
 from collections.abc import Collection
 
 import numpy
@@ -366,8 +366,8 @@ class DeferredResidue:
         self.__vars = lhs.variables()
 
     @property
-    def variables(self) -> Set[str]:
-        """Set[str]: names of variables involved in residue"""
+    def variables(self) -> FrozenSet[str]:
+        """FrozenSet[str]: names of variables involved in residue"""
         return self.__vars
 
     def target_value(self) -> Any:

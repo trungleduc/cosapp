@@ -134,7 +134,6 @@ class TCPSystem(ExternalSystem):
         object.__setattr__(
             self, "_service", {"exec": str(), "script": str(), "arguments": list()}
         )
-
         # here _initialize will be called then user setup
         super().__init__(name, init_variables, **kwargs)
 
@@ -202,8 +201,11 @@ class TCPSystem(ExternalSystem):
         if sys.platform == "win32":
             command_for_shell_proc = ["cmd.exe", "/c"] + command_for_shell_proc
 
-        self._process = subprocess.Popen(command_for_shell_proc,
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        self._process = subprocess.Popen(
+            command_for_shell_proc,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
 
     def send_inputs(self) -> None:
         # TODO use this method to send inputs

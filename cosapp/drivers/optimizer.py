@@ -342,8 +342,8 @@ class Optimizer(AbstractSolver):
                     need_update = True
 
             if need_update:
-                for child in self.exec_order:
-                    self.children[child].run_once()
+                for driver in self.children.values():
+                    driver.run_once()
 
             return expression.eval()
 
