@@ -125,3 +125,29 @@ def check_arg(
         caller = get_caller()
         raise ValueError("argument {!r} was given invalid value {!r}\nIn {}, line #{}: \n{}".format(
             argname, arg, *get_context(caller)))
+
+
+def partition(iterable: Iterable[Any], predicate: Callable[[Any], bool]):
+    """Partition a collection into two lists, using filter function `predicate`.
+
+    Parameters:
+    -----------
+    - iterable: Iterable[Any]
+        Iterable collection of elements confronted to predicate.
+    - predicate: Callable[[Any], bool]
+        Boolean function used to partition the collection.
+
+    Returns:
+    --------
+    yays, nays: tuple[list, list]
+        Lists containing the elements for which predicate is `True` (yays) and `False` (nays).
+    """
+    yays, nays = [], []
+
+    for element in iterable:
+        if predicate(element):
+            yays.append(element)
+        else:
+            nays.append(element)
+    
+    return yays, nays

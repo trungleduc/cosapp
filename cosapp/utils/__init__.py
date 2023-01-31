@@ -2,9 +2,11 @@
 Classes and functions helper using third-party libraries to interact with CoSApp core.
 """
 
-from cosapp.utils.logging import LogLevel, set_log
+from .logging import LogLevel, set_log
+from .helpers import partition
 
 __all__ = [
     "LogLevel",
-    "set_log"
+    "set_log",
+    "partition",
 ]

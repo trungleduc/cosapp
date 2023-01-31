@@ -272,7 +272,7 @@ class ZeroCrossingEvent(EventState):
         check_arg(event, 'event', Event)
         expr = EvalString(zeroxing.expression, event.context)
         if expr.constant:
-            raise ValueError("Zero-crossing functions is constant")
+            raise ValueError(f"Zero-crossing function {expr} is constant")
         if not isinstance(expr.eval(), float):
             raise TypeError(
                 "Zero-crossing condition must be a float expression"
@@ -283,28 +283,29 @@ class ZeroCrossingEvent(EventState):
         self.reset()
 
     def reset(self) -> None:
-        self._prec = self._curr = None
+        self._prev = self._curr = None
         self._locked = False
 
     def value(self) -> float:
         """Evaluates and returns the zero-crossing function defining the event."""
         return self._expr.eval()
 
-    def zero_detected(self, prec, curr) -> bool:
-        return self._direction.zero_detected(prec, curr)
+    def zero_detected(self, next_value) -> bool:
+        """Is a zero detected between previous value and `next_value`?"""
+        return self._prev is not None and self._direction.zero_detected(self._prev, next_value)
 
     def must_emit(self) -> bool:
         """Checks whether the event is triggered in the current discrete step."""
         if self._curr is None and not self._event.present:
             self._curr = self.value()
-            return not self._locked and self._prec is not None and self.zero_detected(self._prec, self._curr)
+            return not self._locked and self.zero_detected(self._curr)
         return False
 
     def to_emit(self) -> bool:
         """Checks whether the event will have to be triggered in a new discrete step"""
         if not self._locked and self._curr is None and not self._event.present:
             next_value = self.value()
-            return self._prec is not None and self.zero_detected(self._prec, next_value)
+            return self.zero_detected(next_value)
         return False
         
     def lock(self) -> None:
@@ -318,8 +319,8 @@ class ZeroCrossingEvent(EventState):
     def tick(self):
         """Performs a tick and checks whether the event can be unlocked"""
         if self._locked:
-            self._locked = (self._curr == self._prec)
-        self._prec = self._curr
+            self._locked = (self._curr == self._prev)
+        self._prev = self._curr
         self._curr = None
 
     def is_primitive(self) -> bool:

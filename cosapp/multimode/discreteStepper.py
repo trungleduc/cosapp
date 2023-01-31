@@ -6,6 +6,7 @@ from math import inf
 
 from typing import NamedTuple, Iterator, List, Dict, Tuple
 from cosapp.multimode.event import Event
+from cosapp.utils import partition
 
 
 class TimedEvent(NamedTuple):
@@ -43,8 +44,9 @@ class DiscreteStepper():
         stop = self._owner.scenario.stop
         if stop is not None:
             self._state[stop] = False
-        self._primitives: List[Event] = list(filter(lambda e: e.is_primitive, self.events()))
-        self._nonprimitives: List[Event] = list(filter(lambda e: not e.is_primitive, self.events()))
+        primitives, non_primitives = partition(self.events(), lambda event: event.is_primitive)
+        self._primitives: List[Event] = primitives
+        self._nonprimitives: List[Event] = non_primitives
 
     def reset(self) -> None:
         """Update event list, and reset all events"""
@@ -83,13 +85,14 @@ class DiscreteStepper():
         """Returns the date at which a primitive event was triggered.
         This method may only be called once the list of all triggered events is known
         and the interpolation data has been set."""
+        sysview = self._sysview
         def f(t):
-            self._sysview.exec(t)
+            sysview.exec(t)
             return event.value()
         t1, t2 = self._interval
         t_event = scipy.optimize.brentq(f, t1, t2)
         # Reset system at original state
-        self._sysview.exec(t1)
+        sysview.exec(t1)
         return t_event
 
     def find_primal_event(self) -> TimedEvent:
@@ -115,9 +118,9 @@ class DiscreteStepper():
         whether at least one of these events is to be triggered."""
         return any(event.to_trigger() for event in self._primitives)
 
-    def _microstep(self) -> bool:
-        """Performs an evaluation microstep for non-primitive events and returns a Boolean indicating
-        whether one or several events were triggered in the current cascade.
+    def __microstep(self) -> bool:
+        """Performs an evaluation microstep for non-primitive events and returns a Boolean
+        indicating whether one or several events were triggered in the current cascade.
         This method should not be called at the first microstep of a discrete time step.
         """
         has_changed = False
@@ -128,12 +131,12 @@ class DiscreteStepper():
         return has_changed
 
     def first_discrete_step(self) -> TimedEvent:
-        """Performs the first discrete step and returns a `TimedEvent` indicating which primitive event
-        was triggered and at which date."""
+        """Performs the first discrete step and returns a `TimedEvent` indicating
+        which primitive event was triggered and at which date."""
         for event in self._primitives:
             event.step()
         occur = self.find_primal_event()
-        while self._microstep():
+        while self.__microstep():
             pass
         return occur
 
@@ -141,7 +144,7 @@ class DiscreteStepper():
         """Performs a discrete step other than the first one"""
         for event in self._primitives:
             self._state[event] = event.step()
-        while self._microstep():
+        while self.__microstep():
             pass
         return list(self.present_events())
 
