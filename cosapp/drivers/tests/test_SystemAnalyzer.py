@@ -1,4 +1,5 @@
 import pytest
+from unittest import mock
 from contextlib import nullcontext as does_not_raise
 
 from cosapp.drivers.utils import SystemAnalyzer
@@ -20,34 +21,31 @@ def test_SystemAnalyzer__init__(system, expected):
     with expected:
         handler = SystemAnalyzer(system)
         assert handler.system is system
-        assert handler.data == dict()
 
 
-def test_SystemAnalyzer_system(dummy):
+@mock.patch.object(SystemAnalyzer, 'clear')
+def test_SystemAnalyzer_system(clear_method: mock.MagicMock, dummy):
     """Test getter/setter for attribute `system`
     """
     handler = SystemAnalyzer()
     assert handler.system is None
-    assert handler.data == dict()
-    handler.data['foo'] = 'bar'
-    assert handler.data == dict(foo='bar')
 
-    # Check that changing system resets data
+    # Check that changing system triggers method `clear`
+    clear_method.reset_mock()
     handler.system = dummy
+    assert clear_method.called
     assert handler.system is dummy
-    assert handler.data == dict()
-    handler.data['foo'] = 'bar'
-    assert handler.data == dict(foo='bar')
 
-    # Check `system` setter does not reset data
-    # if system is unchanged
+    # Check `system` setter does not trigger `clear` if system is unchanged
+    clear_method.reset_mock()
     handler.system = dummy
+    assert not clear_method.called
     assert handler.system is dummy
-    assert handler.data == dict(foo='bar')
 
+    clear_method.reset_mock()
     handler.system = None
+    assert clear_method.called
     assert handler.system is None
-    assert handler.data == dict()
 
 
 @pytest.mark.parametrize("system, expected", [

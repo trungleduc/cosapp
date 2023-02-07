@@ -17,7 +17,7 @@ from cosapp.core.numerics.basics import MathematicalProblem, SolverResults
 from cosapp.core.numerics.boundary import Unknown
 from cosapp.drivers.abstractsolver import AbstractSolver
 from cosapp.drivers.optionaldriver import OptionalDriver
-from cosapp.drivers.utils import UnknownAnalyzer, ConstraintParser
+from cosapp.drivers.utils import ConstraintParser, dealias_problem
 from cosapp.recorders.recorder import BaseRecorder
 from cosapp.utils.options_dictionary import OptionsDictionary
 from cosapp.utils.helpers import check_arg
@@ -290,8 +290,7 @@ class Optimizer(AbstractSolver):
         super().setup_run()
         
         # Resolve unknown aliasing and connected unknowns
-        analyzer = UnknownAnalyzer(self.owner)
-        self.problem = analyzer.filter_problem(self._raw_problem)
+        self.problem = dealias_problem(self._raw_problem)
 
     def _fun_wrapper(self, expression: EvalString) -> Callable[[numpy.ndarray], float]:
         """Wrapper around objective and constraint expression to propagate the x values in the

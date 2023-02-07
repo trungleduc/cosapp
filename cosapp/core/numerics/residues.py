@@ -1,3 +1,4 @@
+from __future__ import annotations
 from abc import abstractmethod
 from numbers import Number
 from typing import Any, Dict, Optional, Tuple, FrozenSet, Union
@@ -107,7 +108,7 @@ class AbstractResidue:
         return self._value
 
     @abstractmethod
-    def copy(self) -> "AbstractResidue":
+    def copy(self) -> AbstractResidue:
         """Copy the object.
 
         Returns
@@ -290,7 +291,7 @@ class Residue(AbstractResidue):
         )
         return self._value
 
-    def copy(self) -> "Residue":
+    def copy(self) -> Residue:
         """Copy the residue object.
 
         Returns

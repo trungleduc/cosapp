@@ -14,6 +14,7 @@ from cosapp.core.variableref import VariableReference
 from cosapp.core.numerics.boundary import Boundary, Unknown, TimeUnknown, TimeDerivative
 from cosapp.core.numerics.residues import Residue, DeferredResidue
 from cosapp.utils.naming import natural_varname
+from cosapp.utils.helpers import check_arg
 
 logger = logging.getLogger(__name__)
 
@@ -101,10 +102,12 @@ class MathematicalProblem:
     context : cosapp.systems.System
         Context in which the mathematical problem will be evaluated.
     """
-    def __init__(self, name: str, context: 'Optional[cosapp.systems.System]') -> None:
+    def __init__(self, name: str, context: Optional["System"]) -> None:
+        from cosapp.systems import System
+        check_arg(context, 'context', (System, type(None)))
         # TODO add point label to associate set of equations with Single Case
         self._name = name  # type: str
-        self._context = context  # type: Optional[cosapp.systems.System]
+        self._context: System = context
         self._unknowns = OrderedDict()  # type: Dict[str, Unknown]
         self._residues = OrderedDict()  # type: Dict[str, Residue]
         self._transients = OrderedDict()  # type: Dict[str, TimeUnknown]
@@ -144,12 +147,12 @@ class MathematicalProblem:
         return self._name
 
     @property
-    def context(self) -> 'Optional[cosapp.systems.System]':
-        """cosapp.systems.System or None : Context in which the mathematical system is evaluated."""
+    def context(self) -> Optional['cosapp.systems.System']:
+        """cosapp.systems.System or None: Context in which mathematical objects are evaluated."""
         return self._context
 
     @context.setter
-    def context(self, context: 'Optional[cosapp.systems.System]'):
+    def context(self, context: Optional['cosapp.systems.System']):
         if self._context is None:
             self._context = context
         elif context is not self._context:
@@ -566,14 +569,15 @@ class MathematicalProblem:
         from cosapp.systems import System
         context: System = self.context
 
-        sys_paths: Dict[System, str] = dict()
+        sys_paths: Dict[int, str] = dict()
 
         def get_path(system: System) -> str:
             nonlocal sys_paths
+            key = id(system)
             try:
-                path = sys_paths[system]
+                path = sys_paths[key]
             except KeyError:
-                sys_paths[system] = path = context.get_path_to_child(system)
+                sys_paths[key] = path = context.get_path_to_child(system)
             return path
 
         def var_key_format(path: str, varname: str):

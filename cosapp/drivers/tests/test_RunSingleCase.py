@@ -19,28 +19,24 @@ from cosapp.utils.testing import assert_keys, assert_all_type
 
 # <codecell>
 
-def check_problem(problem, n_unknowns, n_residues):
+def check_problem(problem: MathematicalProblem, n_unknowns, n_equations):
     """Utility function used in tests below"""
     assert isinstance(problem, MathematicalProblem)
-    assert len(problem.unknowns) == n_unknowns
-    assert len(problem.residues) == n_residues
-    for name, residue in problem.residues.items():
-        error_msg = f"Problem {problem.name}, residue {name}"
-        assert isinstance(residue, Residue), error_msg
-        assert residue.context is problem.context, error_msg
+    assert problem.n_unknowns == n_unknowns
+    assert problem.n_equations == n_equations
 
 # <codecell>
 
 def test_RunSingleCase_setup():
-    d = RunSingleCase("case")
+    d = RunSingleCase("case", System('s'))
     assert len(d.children) == 0
     assert isinstance(d.case_values, list)
     assert len(d.case_values) == 0
     assert isinstance(d.initial_values, dict)
     assert len(d.initial_values) == 0
     assert d.problem is None
-    for problem in (d.design, d.offdesign):
-        check_problem(problem, 0, 0)
+    assert d.design.is_empty()
+    assert d.offdesign.is_empty()
 
 
 def test_RunSingleCase_setup_run(DummyFactory):
@@ -50,6 +46,7 @@ def test_RunSingleCase_setup_run(DummyFactory):
     mult = Dummy("mult")
     d = RunSingleCase("case")
     mult.add_driver(d)
+    assert d.owner is mult
 
     mult.K1 = 12.0
     mult.K2 = 42.0
@@ -240,7 +237,7 @@ def test_RunSingleCase_run_once(DummyFactory):
     assert s.mult.p_out.x == 20
 
 
-def test_RunSingleCase_owner(DummyFactory):
+def test_RunSingleCase_owner():
     case = RunSingleCase("case")
     assert case.owner is None
     assert case.problem is None
@@ -257,6 +254,8 @@ def test_RunSingleCase_owner(DummyFactory):
     a.add_driver(case)
     assert case.owner is a
     assert case.problem is None
+    assert case.offdesign.shape == (0, 0)
+    assert case.design.shape == (0, 0)
     case.design.add_unknown('x').add_equation('z == 0')
     case.add_unknown('y')
     assert case.problem is None
@@ -318,13 +317,13 @@ def test_RunSingleCase_add_working_equations(DummyFactory, hat_case):
 
     case.add_unknown("one.a").add_equation("out.x == [20, -2, 10]")
     check_problem(case.design, 0, 0)
-    check_problem(case.offdesign, 1, 1)
+    check_problem(case.offdesign, 3, 3)
     assert_keys(case.offdesign.unknowns, "one.a")
     assert_keys(case.offdesign.residues, "out.x == [20, -2, 10]")
 
     case.setup_run()
     check_problem(case.design, 0, 0)
-    check_problem(case.problem, 1, 1)
+    check_problem(case.problem, 3, 3)
     assert_keys(case.problem.unknowns, "one.a")
     assert_keys(case.problem.residues, "out.x == [20, -2, 10]")
     unknown = case.problem.unknowns["one.a"]
@@ -380,7 +379,7 @@ def test_RunSingleCase_add_design_equations(DummyFactory, hat_case):
     # Test full vector variable
     s, case = hat_case(RunSingleCase)
     case.design.add_unknown("one.a").add_equation("out.x == [20, -2, 10]")
-    check_problem(case.design, 1, 1)
+    check_problem(case.design, 3, 3)
     check_problem(case.offdesign, 0, 0)
     assert_keys(case.design.unknowns, "one.a")
     assert_keys(case.design.residues, "out.x == [20, -2, 10]")
