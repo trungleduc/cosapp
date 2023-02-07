@@ -16,15 +16,11 @@ class SystemAnalyzer:
     """Class containing data collected on a system,
     to be shared between different drivers.
     """
-    __slots__ = ('__system', '__data')
+    __slots__ = ('__system',)
 
     def __init__(self, system: Optional["cosapp.systems.System"] = None):
         self.__reset()
         self.system = system
-
-    @property
-    def data(self) -> Dict:
-        return self.__data
 
     @property
     def system(self) -> "cosapp.systems.System":
@@ -35,97 +31,113 @@ class SystemAnalyzer:
     def system(self, system) -> None:
         if system is self.__system:
             return
-        from cosapp.systems.system import System
+        from cosapp.base import System
         check_arg(system, 'system', (System, type(None)))
         self.__reset(system)
 
     def __reset(self, system=None) -> None:
         """Reset system and data, with no type check"""
         self.__system = system
-        self.__data = dict()
+        self.clear()
 
-    def clear_data(self) -> None:
-        self.__data.clear()
+    def clear(self) -> None:
+        """Hook function to clear internal data, if any.
+        Called at object instanciation.
+        """
+        pass
 
     def check_system(self) -> None:
-        if self.system is None:
+        """Check that object is associated to a system.
+        
+        Raises
+        ------
+        `ValueError` if object is not associated to a system.
+        """
+        if self.__system is None:
             raise ValueError("object is not associated to any system")
 
 
-class UnknownAnalyzer(SystemAnalyzer):
-    """Class used to resolve unknown aliasing
+def dealias_problem(problem: MathematicalProblem, name=None) -> MathematicalProblem:
+    """Resolve unknown aliasing in `problem` due to
+    pulling connectors (if any) in context system.
+
+    Parameters:
+    -----------
+    - problem [MathematicalProblem]:
+        Mathematical problem to be de-aliased.
+    - name [str, optional]:
+        Name of output `MathematicalProblem` object.
+    
+    Returns:
+    --------
+    MathematicalProblem:
+        New mathematical problem, with identical equations as source
+        problem, but de-aliased unknowns.
     """
-    def __init__(self, system: "cosapp.systems.System"):
-        super().__init__(system)
+    if problem.context is None:
+        raise ValueError(f"problem is not defined on a system")
+    if not name:
+        name = f"{problem.name}[filtered]"
+    from cosapp.base import System
+    context: System = problem.context
+    input_mapping = context.input_mapping
 
-    @property
-    def input_mapping(self):
-        return self.system.input_mapping
-
-    def filter_problem(self, problem: MathematicalProblem, name=None) -> MathematicalProblem:
-        self.check_system()
-        system = self.system
-        if problem.context is not system:
-            raise ValueError(f"problem is not defined on system {system.name!r}")
-        if not name:
-            name = f"{problem.name}[filtered]"
-        filtered = MathematicalProblem(name, problem.context)
-        # Add equations
-        filtered.extend(problem, unknowns=False)
-        # Add unknowns
-        input_mapping = self.input_mapping
-
-        def get_free_unknown(unknown: Unknown) -> Union[Unknown, None]:
-            """Checks if `unknown` is aliased by pulling.
-            If so, returns alias unknown; else, returns original unknown.
-            """
-            if unknown.context is system:
-                contextual_name = unknown.basename
-            else:
-                contextual_name = f"{system.get_path_to_child(unknown.context)}.{unknown.basename}"
+    def get_free_unknown(unknown: Unknown) -> Union[Unknown, None]:
+        """Checks if `unknown` is aliased by pulling.
+        If so, returns alias unknown; else, returns original unknown.
+        """
+        if unknown.context is context:
+            contextual_name = unknown.basename
+        else:
+            contextual_name = f"{context.get_path_to_child(unknown.context)}.{unknown.basename}"
+        try:
+            alias = input_mapping[contextual_name]
+        except KeyError:
+            logger.warning(f"Skip connected unknown {contextual_name!r}")
+            return None
+        aliased = (alias is not unknown.ref)
+        if aliased:
             try:
-                alias = input_mapping[contextual_name]
-            except KeyError:
-                logger.warning(f"Skip connected unknown {contextual_name!r}")
-                return None
-            aliased = (alias is not unknown.ref)
-            if aliased:
-                try:
-                    path = system.get_path_to_child(alias.context)
-                except ValueError:
-                    # `alias.context` is not in `system` tree
-                    logger.warning(
-                        f"Unknown {unknown.contextual_name()!r} is aliased by {alias.contextual_name!r}"
-                        f", defined outside the context of {system.name!r}"
-                        f"; it is likely to be overwritten after the computation."
-                    )
-                else:
-                    alias_contextual_name = f"{path}.{alias.name}" if path else alias.name
-                    unknown = unknown.transfer(system, alias_contextual_name)
-                    logger.info(f"Replace unknown {contextual_name!r} by {alias_contextual_name!r}")
-
-            return unknown
-        
-        for key, unknown in problem.unknowns.items():
-            free_unknown = get_free_unknown(unknown)
-            if free_unknown is None:
-                continue
-            aliased = (free_unknown is not unknown)
-            if aliased:
-                key = free_unknown.name
-                filtered.unknowns[key] = free_unknown
+                path = context.get_path_to_child(alias.context)
+            except ValueError:
+                # `alias.context` is not in `system` tree
+                logger.warning(
+                    f"Unknown {unknown.contextual_name()!r} is aliased by {alias.contextual_name!r}"
+                    f", defined outside the context of {context.name!r}"
+                    f"; it is likely to be overwritten after the computation."
+                )
             else:
-                filtered.unknowns[key] = unknown.copy()
+                alias_contextual_name = f"{path}.{alias.name}" if path else alias.name
+                unknown = unknown.transfer(context, alias_contextual_name)
+                logger.info(f"Replace unknown {contextual_name!r} by {alias_contextual_name!r}")
 
-        return filtered
+        return unknown
+    
+    # Create output
+    filtered = context.new_problem(name)
+    # Add equations
+    filtered.extend(problem, unknowns=False)
+    # Add unknowns
+    for key, unknown in problem.unknowns.items():
+        free_unknown = get_free_unknown(unknown)
+        if free_unknown is None:
+            continue
+        aliased = (free_unknown is not unknown)
+        if aliased:
+            key = free_unknown.name
+            filtered.unknowns[key] = free_unknown
+        else:
+            filtered.unknowns[key] = unknown.copy()
+
+    return filtered
 
 
-class DesignProblemHandler:
+class DesignProblemHandler(SystemAnalyzer):
     """Class managing tied design and off-design problems,
     including unknown aliasing.
     """
-    def __init__(self, system: "cosapp.systems.System"):
-        self.__handler = UnknownAnalyzer(system)
+    def clear(self) -> None:
+        """Reset inner problems"""
         self.design = self.new_problem('design')
         self.offdesign = self.new_problem('offdesign')
 
@@ -136,20 +148,6 @@ class DesignProblemHandler:
         return handler
 
     @property
-    def system(self) -> "cosapp.systems.System":
-        return self.__handler.system
-
-    @system.setter
-    def system(self, system) -> None:
-        self.__handler.system = system
-        for name in ('design', 'offdesign'):
-            problem = getattr(self, name)
-            try:
-                problem.context = system
-            except ValueError:
-                setattr(self, name, self.new_problem(name))
-
-    @property
     def problems(self) -> Tuple[MathematicalProblem, MathematicalProblem]:
         """Tuple[MathematicalProblem, MathematicalProblem]: design and off-design problems as a tuple"""
         return self.design, self.offdesign
@@ -157,20 +155,20 @@ class DesignProblemHandler:
     @problems.setter
     def problems(self, problems: Tuple[MathematicalProblem, MathematicalProblem]) -> None:
         """Setter for (design, offdesign) tuple"""
-        design, offdesign = problems
-        if design is None:
-            design = self.new_problem('design')
-        if offdesign is None:
-            offdesign = self.new_problem('offdesign')
-        if design.context is not offdesign.context:
-            raise ValueError("Design and off-design problems must be defined in the same context")
+        wrong_type = lambda problem: not isinstance(problem, MathematicalProblem)
+        if any(map(wrong_type, problems)):
+            raise TypeError(
+                f"expected `MathematicalProblem` instances; got {tuple(map(type, problems))}."
+            )
+        self.check_context(*problems)
         self.design, self.offdesign = problems
-        self.__handler.system = design.context
 
-    def clear(self) -> None:
-        """Reset inner problems"""
-        self.design.clear()
-        self.offdesign.clear()
+    def check_context(self, design: MathematicalProblem, offdesign: MathematicalProblem) -> None:
+        ok = design.context is offdesign.context is self.system
+        if not ok:
+            raise ValueError(
+                f"Design and off-design problems must be defined in the context of {self.system}."
+            )
 
     def new_problem(self, name: str) -> MathematicalProblem:
         """Create new `MathematicalProblem` instance"""
@@ -191,9 +189,8 @@ class DesignProblemHandler:
             as a tuple of `MathematicalProblem` objects.
         """
         if prune:
-            handler = self.__handler
-            design = handler.filter_problem(self.design, name='design')
-            offdesign = handler.filter_problem(self.offdesign, name='offdesign')
+            design = dealias_problem(self.design, name='design')
+            offdesign = dealias_problem(self.offdesign, name='offdesign')
         else:
             design = self.design.copy()
             offdesign = self.offdesign.copy()

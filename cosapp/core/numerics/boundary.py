@@ -1,5 +1,6 @@
+from __future__ import annotations
 from numbers import Number
-from typing import Any, Dict, Optional, Union, Tuple
+from typing import Any, Dict, Optional, Union, Tuple, Type
 from types import SimpleNamespace
 
 import abc
@@ -110,7 +111,7 @@ class Boundary:
 
     @property
     def context(self) -> "cosapp.systems.System":
-        """cosapp.systems.System : System in which the boundary is defined."""
+        """cosapp.systems.System : `System` in which the boundary is defined."""
         return self._context
 
     @property
@@ -407,7 +408,7 @@ class Unknown(Boundary):
         """
         return self.transfer(self.context, self.name)
 
-    def transfer(self, context: "cosapp.systems.System", name: str) -> "Unknown":
+    def transfer(self, context: "cosapp.systems.System", name: str) -> Unknown:
         """Transfer a copy of the unknown in a new context.
 
         Returns
@@ -610,7 +611,7 @@ class TimeUnknown(Boundary, AbstractTimeUnknown):
         return TimeUnknown(self.context, self.name, self.der, self.max_time_step_expr)
 
     @staticmethod
-    def der_type(expression: Any, context: "cosapp.systems.System") -> Tuple:
+    def der_type(expression: Any, context: "cosapp.systems.System") -> Tuple[EvalString, Any, Type]:
         """Static method to evaluate the type and default value of an expression used as time derivative"""
         if isinstance(expression, EvalString):
             eval_string = expression

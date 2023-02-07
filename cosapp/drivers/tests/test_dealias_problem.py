@@ -1,23 +1,10 @@
 import pytest
 import numpy as np
-from contextlib import nullcontext as does_not_raise
 
-from cosapp.drivers.utils import UnknownAnalyzer
+from cosapp.drivers.utils import dealias_problem
 from cosapp.base import System
-from cosapp.core.numerics.basics import MathematicalProblem
+from cosapp.core import MathematicalProblem
 from cosapp.utils.testing import get_args
-
-
-dummy_specs = dict(
-    inwards=[
-        get_args('x', 1.0),
-        get_args('u', np.ones(3)),
-    ],
-    outwards=[
-        get_args('y', 0.0),
-        get_args('v', np.zeros(3)),
-    ],
-)
 
 
 @pytest.fixture
@@ -26,7 +13,14 @@ def MockUpFactory(DummySystemFactory):
         """`options` includes equations, unknowns, targets, etc."""
         return DummySystemFactory(
             classname,
-            **dummy_specs,
+            inwards=[
+                get_args('x', 1.0),
+                get_args('u', np.ones(3)),
+            ],
+            outwards=[
+                get_args('y', 0.0),
+                get_args('v', np.zeros(3)),
+            ],
             **options,
         )
     return Factory
@@ -76,48 +70,9 @@ def top_offdesign(CompositeFactory) -> System:
     )
 
 
-@pytest.mark.parametrize("system, expected", [
-    (None, does_not_raise()),
-    (System('foo'), does_not_raise()),
-    (0, pytest.raises(TypeError)),
-    ('string', pytest.raises(TypeError)),
-])
-def test_UnknownAnalyzer__init__(system, expected):
-    with expected:
-        handler = UnknownAnalyzer(system)
-        assert handler.system is system
-
-
-def test_UnknownAnalyzer_input_mapping(dummy: System):
-    """Test method `input_mapping`.
+def test_dealias_problem_1(top: System):
+    """Test function `dealias_problem` with composite system `top`
     """
-    handler = UnknownAnalyzer(dummy)
-    assert handler.system is dummy
-    assert handler.input_mapping == dummy.input_mapping
-    assert set(handler.input_mapping) == {
-        'x', 'inwards.x',
-        'u', 'inwards.u',
-    }
-
-
-def test_UnknownAnalyzer_filter_problem_undefined(dummy):
-    """Test method `filter_problem` with undefined system
-    """
-    handler = UnknownAnalyzer(None)
-    assert handler.system is None
-
-    problem = MathematicalProblem('problem', dummy)
-    
-    with pytest.raises(ValueError):
-        handler.filter_problem(problem)
-
-
-def test_UnknownAnalyzer_filter_problem_1(top: System):
-    """Test method `filter_problem` with composite system `top`
-    """
-    handler = UnknownAnalyzer(top)
-    assert handler.system is top
-
     # Create mathematical problem to be filtered
     problem = MathematicalProblem('problem', top)
     problem.add_unknown(['mid.sub.x', 'mid.sub.u'])
@@ -134,7 +89,7 @@ def test_UnknownAnalyzer_filter_problem_1(top: System):
         'mid.sub.y == 0',
     }
 
-    filtered = handler.filter_problem(problem)
+    filtered = dealias_problem(problem)
     assert set(filtered.unknowns) == {
         'U',
         'mid.a',
@@ -145,15 +100,12 @@ def test_UnknownAnalyzer_filter_problem_1(top: System):
     }
 
 
-def test_UnknownAnalyzer_filter_problem_2(top_offdesign: System):
-    """Test method `filter_problem` with composite system `top`
+def test_dealias_problem_2(top_offdesign: System):
+    """Test function `dealias_problem` with composite system `top`
     """
     top = top_offdesign  # alias
-    handler = UnknownAnalyzer(top)
-    assert handler.system is top
-
     problem = top.assembled_problem()
-    filtered = handler.filter_problem(problem)
+    filtered = dealias_problem(problem)
     assert set(filtered.unknowns) == {
         'U',
         'mid.a',
