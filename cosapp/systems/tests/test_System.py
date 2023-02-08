@@ -532,7 +532,7 @@ def test_System_add_child():
         assert reference.value is obj, f"key = {key}"
 
 
-def test_System_add_child_pulling(caplog):
+def test_System_add_child_pulling(caplog, DummyFactory):
     caplog.set_level(logging.DEBUG)
 
     s = System("s")
@@ -627,11 +627,28 @@ def test_System_add_child_pulling(caplog):
     # Pulling from 2 children OUT to same OUT
     s = System("s")
     s.add_child(SubSystem("sub_a"), pulling={"out": "out"})
+
     with pytest.raises(ConnectorError):
         s.add_child(SubSystem("sub_b"), pulling={"out": "out"})
     assert "sub_b" not in s.children
+
     with pytest.raises(ConnectorError):
         s.add_child(SubSystem("sub_b"), pulling={"in_": "out"})
+    assert "sub_b" not in s.children
+
+    # Pulling with inconsistent units
+    s: System = DummyFactory(
+        name="s",
+        inwards=get_args("A", 0.0, unit="m**2"),
+        outwards=get_args("H", 2.0, unit="m"),
+    )
+
+    with pytest.raises(UnitError):
+        s.add_child(SubSystem("sub_a"), pulling={"sloss": "A"})
+    assert "sub_a" not in s.children
+
+    with pytest.raises(UnitError):
+        s.add_child(SubSystem("sub_b"), pulling={"tmp": "H"})
     assert "sub_b" not in s.children
 
     # Pulling from 1 child IN and 1 child OUT to same IN
