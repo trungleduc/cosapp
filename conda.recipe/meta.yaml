@@ -1,6 +1,6 @@
 {% set name = "cosapp" %}
 # This needs to be updated manually => otherwise the source file won't be found
-{% set version = "0.12.3" %}
+{% set version = "0.13.0" %}
 
 package:
   name: {{ name }}

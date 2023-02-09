@@ -1,5 +1,82 @@
 # History
 
+## 0.13.0 (2023-02-09)
+
+### Python 3.10 support
+
+The code is now tested for Python 3.8, 3.9 and 3.10.
+Support of Python 3.7 is thus officially dropped, although no version-specific Python code was introduced in this version of CoSApp.
+
+### New features & API changes
+
+* Module `connectors` moved from `cosapp.core` to `cosapp.ports` (MR [#189](https://gitlab.com/cosapp/cosapp/-/merge_requests/189)).
+* New "direct" (with no unit conversion) connector classes `PlainConnector`, `CopyConnector` and `DeepCopyConnector`, in `cosapp.ports.connectors` (MR [#188](https://gitlab.com/cosapp/cosapp/-/merge_requests/188)).
+* New method `MathematicalProblem.is_empty()`, equivalent to `shape == (0, 0)` (MR [#186](https://gitlab.com/cosapp/cosapp/-/merge_requests/186)).
+* Improved VisJs graph rendering, by limiting node size for long system names (MR [#184](https://gitlab.com/cosapp/cosapp/-/merge_requests/184)).
+* New utility functions `get_state` and `set_state` in `cosapp.utils`, for quick system data recovery (MR [#193](https://gitlab.com/cosapp/cosapp/-/merge_requests/193)):
+
+```python
+from cosapp.utils import get_state, set_state
+
+s = SomeSystem('s')
+# ... many design steps, say
+
+# Save state in local object
+designed = get_state(s)
+
+s.drivers.clear()
+s.add_driver(SomeDriver('driver'))
+
+try:
+    s.run_drivers()
+except:
+    # Recover previous state
+    set_state(s, designed)
+```
+
+* Functions `radians`, `degrees` and `arctan2`/`atan2` have been added to the scope of `EvalString` objects, and can therefore be used in equations, *e.g.* (MR [#178](https://gitlab.com/cosapp/cosapp/-/merge_requests/178)).
+* Recorders can now record constant properties (MR [#181](https://gitlab.com/cosapp/cosapp/-/merge_requests/181)).
+* Deprecation of `System.get_unsolved_problem` in favour of new method `assembled_problem` (MR [#174](https://gitlab.com/cosapp/cosapp/-/merge_requests/174)).
+* Inner off-design problem of systems is now exposed as attribute `problem`, but only within the `transition` method (MR [#174](https://gitlab.com/cosapp/cosapp/-/merge_requests/174)). This allows users to add or remove off-design constraints during event-driven transitions, while keeping this property inaccessible the rest of the time.
+
+```python
+from cosapp.base import System
+from math import sin, cos
+
+class SomeSystem(System):
+    def setup(self):
+        self.add_inward('x', 0.0)
+        self.add_inward('y', 0.0)
+        self.add_outward('z', 0.0)
+        a = self.add_event('event_a', trigger='x > y')
+        b = self.add_event('event_b', trigger='x < y')
+    
+    def compute(self):
+        self.z = cos(self.x) * sin(self.y)
+
+    def transition(self):
+        offdesign = self.problem
+        if self.event_a.present:
+            offdesign.clear()
+            offdesign.add_equation('z == 0.5').add_unknown('x')
+        if self.event_b.present:
+            offdesign.clear()
+```
+
+### Bug fixes and code quality
+
+* Fix serialization bugs for systems with setup parameters (MR [#180](https://gitlab.com/cosapp/cosapp/-/merge_requests/180)) and `None` variables (MR [#172](https://gitlab.com/cosapp/cosapp/-/merge_requests/172)).
+* Bug fix on event time calculation involving array transients (MR [#177](https://gitlab.com/cosapp/cosapp/-/merge_requests/177)).
+* Bug fix on possible name conflicts in connector storage (MR [#173](https://gitlab.com/cosapp/cosapp/-/merge_requests/173)).
+* Fix inconsistent behaviour of `System.add_child` when a `pulling` error is raised (MR [#197](https://gitlab.com/cosapp/cosapp/-/merge_requests/197)).
+* Various code quality improvements (MRs [#175](https://gitlab.com/cosapp/cosapp/-/merge_requests/175), [#185](https://gitlab.com/cosapp/cosapp/-/merge_requests/185), [#186](https://gitlab.com/cosapp/cosapp/-/merge_requests/186), [#187](https://gitlab.com/cosapp/cosapp/-/merge_requests/187), [#190](https://gitlab.com/cosapp/cosapp/-/merge_requests/190), [#191](https://gitlab.com/cosapp/cosapp/-/merge_requests/191), [#194](https://gitlab.com/cosapp/cosapp/-/merge_requests/194)).
+
+### Documentation
+
+* Updated time driver tutorial (MR [#182](https://gitlab.com/cosapp/cosapp/-/merge_requests/182)).
+* Updated Tips & Tricks (MR [#196](https://gitlab.com/cosapp/cosapp/-/merge_requests/196)).
+* Other updates (MRs [#176](https://gitlab.com/cosapp/cosapp/-/merge_requests/176), [#195](https://gitlab.com/cosapp/cosapp/-/merge_requests/195), [#198](https://gitlab.com/cosapp/cosapp/-/merge_requests/198)).
+
 ## 0.12.3 (2022-09-21)
 
 ### New features & API changes
