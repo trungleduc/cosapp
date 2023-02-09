@@ -188,8 +188,8 @@ described below for a system having one child and with only one ``RunSingleCase`
       solver->>+point: call_setup_run()
       point->>+point: setup_run()
       point->>subproblem: <<create>>
-      point->>+main: get_unsolved_problem()
-      main->>+child: get_unsolved_problem()
+      point->>+main: assembled_problem()
+      main->>+child: assembled_problem()
       child->>-main: child problem
       main->>-point: full unsolved problem
       point->>subproblem: set unknowns
@@ -253,7 +253,7 @@ The key elements are:
 
 1. At ``call_setup_run`` execution, each ``RunSingleCase`` will create its own mathematical 
    problem (through calls 9 to 15). This is done by gathering the intrinsic mathematical problem of
-   the system by recursively calling ``get_unsolved_problem``. Then user defined unknowns and 
+   the system obtained with ``assembled_problem``. Then user defined unknowns and 
    equations will be added to build the mathematical problem on a single point.
 2. During the ``precompute`` execution of ``NonLinearSolver``, the full mathematical problem will
    be built requesting the problem from each ``RunSingleCase`` (call 20 ``get_problem``).
@@ -291,8 +291,8 @@ Here is the sequence diagram for a transient simulation with explicit time integ
       main->>main: setup_run()
       main->>manager: <<create>>
       manager->>+manager: update_transients()
-      manager->>+main: get_unsolved_problem()
-      main->>+child: get_unsolved_problem()
+      manager->>+main: assembled_problem()
+      main->>+child: assembled_problem()
       child-->>-main: Child problem
       main-->>-manager: Full problem (including transients and rates)
          Note right of manager: Construct TransientUnknownStack
