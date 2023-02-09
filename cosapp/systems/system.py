@@ -35,6 +35,7 @@ from cosapp.core.numerics.boundary import TimeDerivative, TimeUnknown, Unknown
 from cosapp.core.time import TimeObserver
 from cosapp.ports.enum import PortType, Scope, Validity
 from cosapp.ports.port import BasePort, ExtensiblePort, ModeVarPort, Port
+from cosapp.ports.units import UnitError
 from cosapp.ports.variable import RangeValue, Types, Variable
 from cosapp.ports.connectors import BaseConnector, Connector, ConnectorError
 from cosapp.utils.distributions import Distribution
@@ -1511,7 +1512,7 @@ class System(Module, TimeObserver):
         if pulling is not None:
             try:
                 pull_variables(child, pulling)
-            except ConnectorError:
+            except (ConnectorError, UnitError):
                 self.pop_child(child.name)
                 raise
 

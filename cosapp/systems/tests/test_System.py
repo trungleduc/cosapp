@@ -1,3 +1,4 @@
+from __future__ import annotations
 import pytest
 from unittest import mock
 
@@ -532,7 +533,7 @@ def test_System_add_child():
         assert reference.value is obj, f"key = {key}"
 
 
-def test_System_add_child_pulling(caplog):
+def test_System_add_child_pulling(caplog, DummyFactory):
     caplog.set_level(logging.DEBUG)
 
     s = System("s")
@@ -627,11 +628,28 @@ def test_System_add_child_pulling(caplog):
     # Pulling from 2 children OUT to same OUT
     s = System("s")
     s.add_child(SubSystem("sub_a"), pulling={"out": "out"})
+
     with pytest.raises(ConnectorError):
         s.add_child(SubSystem("sub_b"), pulling={"out": "out"})
     assert "sub_b" not in s.children
+
     with pytest.raises(ConnectorError):
         s.add_child(SubSystem("sub_b"), pulling={"in_": "out"})
+    assert "sub_b" not in s.children
+
+    # Pulling with inconsistent units
+    s: System = DummyFactory(
+        name="s",
+        inwards=get_args("A", 0.0, unit="m**2"),
+        outwards=get_args("H", 2.0, unit="m"),
+    )
+
+    with pytest.raises(UnitError):
+        s.add_child(SubSystem("sub_a"), pulling={"sloss": "A"})
+    assert "sub_a" not in s.children
+
+    with pytest.raises(UnitError):
+        s.add_child(SubSystem("sub_b"), pulling={"tmp": "H"})
     assert "sub_b" not in s.children
 
     # Pulling from 1 child IN and 1 child OUT to same IN
@@ -2423,17 +2441,32 @@ def test_System_add_target_weak(weak):
             inwards = [get_args("x", 22.0), get_args("y", 42.0)],
             equations = get_args("x == 1", name="dummy", reference="norm"),
         ),
-        dict(residues = {"dummy": dict(value=2.1, reference=10)})
+        dict(
+            residues = {"dummy": dict(value=2.1, reference=10)},
+            n_residues = 1,
+        )
     ),
     (
         dict(
-            inwards = [get_args("x", 22.0), get_args("y", 42.0)],
+            inwards = [get_args("x", np.zeros(3)), get_args("y", 42.0)],
+            equations = get_args("x == [0.1, 0.2, -1.5]", name="dummy", reference="norm"),
+        ),
+        dict(
+            residues = {"dummy": dict(value=np.r_[-1, -2, 1.5], reference=np.r_[0.1, 0.1, 1.0])},
+            n_residues = 3,
+        )
+    ),
+    (
+        dict(
+            inwards = [get_args("x", 22.0), get_args("y", np.ones(5))],
             unknowns = get_args("y"),
             equations = get_args("x == 1", name="dummy", reference="norm"),
         ),
         dict(
             unknowns = {"y": dict()},
-            residues = {"dummy": dict(value=2.1)}
+            residues = {"dummy": dict(value=2.1)},
+            n_residues = 1,
+            n_unknowns = 5,
         )
     ),
     (
@@ -2445,23 +2478,28 @@ def test_System_add_target_weak(weak):
         dict(
             n_residues = 1,
             n_unknowns = 1,
-            unknowns = {"x": dict(
-                max_abs_step = 1,
-                max_rel_step = 0.1,
-                lower_bound = -5,
-                upper_bound = 40,
-            )},
+            unknowns = {
+                "x": dict(
+                    max_abs_step = 1,
+                    max_rel_step = 0.1,
+                    lower_bound = -5,
+                    upper_bound = 40,
+                ),
+            },
             residues = {"dummy": dict(value=41, reference=1)}
         )
     ),
 ])
-def test_System_get_unsolved_problem(DummyFactory, ctor_data, expected_data):
+def test_System_assembled_problem(DummyFactory, ctor_data, expected_data):
     system: System = DummyFactory("test", **ctor_data)  # test object
     problem = system.assembled_problem()
     assert isinstance(problem, MathematicalProblem)
     expected_unknowns = expected_data.get("unknowns", dict())
     expected_residues = expected_data.get("residues", dict())
-    assert problem.shape == (len(expected_unknowns), len(expected_residues))
+    assert problem.shape == (
+        expected_data.get('n_unknowns', 0),
+        expected_data.get('n_residues', 0),
+    )
     # Test unknowns
     assert set(system.unknowns) == set(expected_unknowns)
     assert set(problem.unknowns) == set(expected_unknowns)
@@ -2492,9 +2530,9 @@ def test_System_get_unsolved_problem(DummyFactory, ctor_data, expected_data):
         assert residue.value == pytest.approx(expected["value"], rel=1e-14)
 
 
-def test_System_get_unsolved_problem_seq(DummyFactory):
-    """Non-parametric version of `test_System_get_unsolved_system()`.
-    Tests method `get_unsolved_problem` for systems with children."""
+def test_System_assembled_problem_seq(DummyFactory):
+    """Non-parametric version of `test_System_assembled_system()`.
+    Tests method `assembled_problem` for systems with children."""
     a: System = DummyFactory("a",
         inwards = [get_args("x", 22.0), get_args("y", 42.0)],
         unknowns = get_args("x", 1.0, 0.1, -5, 40.0),
@@ -2542,7 +2580,7 @@ def test_System_get_unsolved_problem_seq(DummyFactory):
         inwards=get_args('x'),
         outwards=get_args('y'),
         unknowns=get_args('x'),
-        )
+    )
     T.add_child(s, pulling=["x"])
 
     problem = T.assembled_problem()
@@ -3214,21 +3252,6 @@ def test_System_connect_systems():
 def test_System_connect_port_connectors(caplog):
     """Tests connections with class-specific port connector
     """
-    class AbcConnector(BaseConnector):
-        """Connector for `AbcPort` objects
-        """
-        def __init__(self, name: str, sink: BasePort, source: BasePort, *args, **kwargs):
-            super().__init__(name, sink, source, mapping=self.fixed_mapping())
-        
-        def transfer(self) -> None:
-            source, sink = self.source, self.sink
-            sink.a = source.b
-            sink.b = -source.a
-
-        @staticmethod
-        def fixed_mapping():
-            return dict(zip('ba', 'ab'))
-
     class AbPort(Port):
         """Port class with custom connector"""
         def setup(self):
@@ -3236,7 +3259,20 @@ def test_System_connect_port_connectors(caplog):
             self.add_variable("b", 2.0)
         
         # Port-specific connector
-        Connector = AbcConnector
+        class Connector(BaseConnector):
+            """Peer-to-peer connector for `AbPort` objects
+            """
+            def __init__(self, name: str, sink: AbPort, source: AbPort, *args, **kwargs):
+                super().__init__(name, sink, source, mapping=self.fixed_mapping())
+            
+            def transfer(self) -> None:
+                source, sink = self.source, self.sink
+                sink.a = source.b
+                sink.b = -source.a
+
+            @staticmethod
+            def fixed_mapping():
+                return dict(zip('ba', 'ab'))
 
     class XyPort(Port):
         def setup(self):
