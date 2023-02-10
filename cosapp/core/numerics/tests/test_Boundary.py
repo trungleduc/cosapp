@@ -132,7 +132,7 @@ def test_Boundary_mask(a, name, kwargs, mask, expected):
 
 def test_Boundary_default_value(a):
     x = Boundary(a, 'x')
-    with pytest.raises(AttributeError, match="can't set attribute"):
+    with pytest.raises(AttributeError, match="can't set attribute|no setter"):
         setattr(x, 'default_value', 25.)
 
 

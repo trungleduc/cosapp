@@ -3361,7 +3361,7 @@ def test_System_add_property():
     with pytest.raises(AttributeError, match="has no attribute 'foo'"):
         b.foo
 
-    with pytest.raises(AttributeError, match="can't set attribute"):
+    with pytest.raises(AttributeError, match="can't set attribute|no setter"):
         a.foo = 3.14
 
     with pytest.raises(AttributeError, match="`add_property` cannot be called outside `setup`"):
@@ -3497,7 +3497,7 @@ def test_System_add_event():
     assert hasattr(a, 'beep')
     assert not hasattr(b, 'beep')
 
-    with pytest.raises(AttributeError, match="can't set attribute"):
+    with pytest.raises(AttributeError, match="can't set attribute|no setter"):
         a.beep = 3.14
 
     with pytest.raises(AttributeError, match="has no attribute 'beep'"):

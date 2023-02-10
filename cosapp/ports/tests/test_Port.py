@@ -94,7 +94,7 @@ from typing import Type
             variables = get_args("W", unit="kg/s"),
             init = {"W": dict(unit="lbm")},
         ),
-        dict(error=AttributeError, match="can't set attribute")
+        dict(error=AttributeError, match="can't set attribute|no setter")
     ),
     (
         dict(

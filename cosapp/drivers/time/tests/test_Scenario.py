@@ -126,7 +126,7 @@ def test_Scenario_stop(case):
     assert scenario.stop.final
     assert not scenario.stop.is_primitive
     
-    with pytest.raises(AttributeError, match="can't set attribute"):
+    with pytest.raises(AttributeError, match="can't set attribute|no setter"):
         scenario.stop = 'foo'
 
 
