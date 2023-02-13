@@ -4,7 +4,7 @@ import itertools
 from cosapp.patterns.visitor import Visitor, send
 from cosapp.systems import System
 from cosapp.drivers import RunOnce, NonLinearSolver, ValidityCheck
-from cosapp.utils.testing import get_args
+from cosapp.utils.testing import get_args, DummySystemFactory
 from cosapp.tests.library.ports import XPort, X3Port
 
 
@@ -143,7 +143,7 @@ def test_visitor_send(system_1):
     ]
 
 
-def test_send_DataCollector(DummySystemFactory):
+def test_send_DataCollector():
     """Send `DataCollector` visitor on composite system with drivers"""
     A = DummySystemFactory("A",
         inwards = [get_args('x', 1.0), get_args('y', 0.5)],

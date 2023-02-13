@@ -50,8 +50,8 @@ def test_MultimodeSystem___init__(DummyFactory):
     s = DummyFactory("s",
         inwards = get_args("x", 1.0),
         outwards = get_args("y", 0.0),
-        inward_modevars = get_args("m_in", value=3.14, unit="m"),
-        outward_modevars = [
+        modevars_in = get_args("m_in", value=3.14, unit="m"),
+        modevars_out = [
             get_args("m_out", False, desc="System state"),
             get_args("count", init=0, dtype=int),
         ],

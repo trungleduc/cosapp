@@ -4,11 +4,11 @@ import numpy as np
 from cosapp.drivers.utils import dealias_problem
 from cosapp.base import System
 from cosapp.core import MathematicalProblem
-from cosapp.utils.testing import get_args
+from cosapp.utils.testing import get_args, DummySystemFactory
 
 
 @pytest.fixture
-def MockUpFactory(DummySystemFactory):
+def MockUpFactory():
     def Factory(classname="MockUp", **options):
         """`options` includes equations, unknowns, targets, etc."""
         return DummySystemFactory(
@@ -42,7 +42,7 @@ def CompositeFactory(MockUpFactory):
         MockUp = MockUpFactory(**options)
         top = System('top')
         mid = System('mid')
-        sub = mid.add_child(MockUp('sub'), pulling={'x': 'a', 'y': 'b', 'u': 'Um'})
+        mid.add_child(MockUp('sub'), pulling={'x': 'a', 'y': 'b', 'u': 'Um'})
         top.add_child(mid, pulling={'Um': 'U'})
         return top
     
