@@ -261,8 +261,8 @@ def test_Driver_recorder(driver: Driver):
     ('p_in.foo', False),
     ('p_out.foo', False),
 ])
-def test_Driver_check_owner_attr(DummyFactory, attr, ok):
-    bogus = DummyFactory('bogus')
+def test_Driver_check_owner_attr(ExtendedMultiply, attr, ok):
+    bogus = ExtendedMultiply('bogus')
     driver = Driver('driver', bogus)
 
     if ok:

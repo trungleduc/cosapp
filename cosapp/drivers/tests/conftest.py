@@ -54,8 +54,11 @@ class Multiply2(System):
 
 
 @pytest.fixture(scope="function")
-def DummyFactory() -> Type[Multiply2]:
-    class DummyMultiply(Multiply2):
+def ExtendedMultiply() -> Type[Multiply2]:
+    """Fixture creating an extension of class `Multiply2`
+    with optional unknowns and equations added at setup.
+    """
+    class ExtendedMultiply(Multiply2):
         def setup(self, unknown=None, equation=None):
             super().setup()
             if unknown is not None:
@@ -63,7 +66,7 @@ def DummyFactory() -> Type[Multiply2]:
             if equation is not None:
                 self.add_equation(equation)
 
-    return DummyMultiply
+    return ExtendedMultiply
 
 
 @pytest.fixture(scope="function")
@@ -83,60 +86,3 @@ def hat_case(hat):
         return hat, case
 
     return factory
-
-
-@pytest.fixture(scope="function")
-def DummySystemFactory():
-    """Factory creating a dummy system class with custom attributes"""
-    # mapping option / method
-    # for example: `inputs` <-> `add_input`
-    basics = (
-        "inputs", "outputs",
-        "inwards", "outwards",
-        "transients", "rates",
-        "properties",
-    )
-    extra = (
-        "unknowns", "equations",
-        "targets", "design_methods",
-    )
-    mapping = dict(
-        (option, f"add_{option[:-1]}")
-        for option in basics + extra
-    )
-    mapping["properties"] = "add_property"
-
-    def Factory(classname, **settings) -> Type[System]:
-        struct_methods = dict(
-            (mapping[option], settings.get(option, None))
-            for option in basics
-        )
-        extra_methods = dict(
-            (mapping[option], settings.get(option, None))
-            for option in extra
-        )
-        base: Type[System] = settings.get("base", System)
-
-        class Prototype(base):
-            def setup(self, **kwargs):
-                super().setup(**kwargs)
-                def add_attributes(method_dict: dict):
-                    for method, values in method_dict.items():
-                        if values is None:
-                            continue
-                        if not isinstance(values, list):
-                            values = [values]
-                        for info in values:
-                            try:
-                                args, kwargs = info  # expects a list of (tuple, dict)
-                            except ValueError:
-                                args, kwargs = [info], {}  # fallback
-                            getattr(self, method)(*args, **kwargs)
-                # Add inputs, outputs, transients, etc.
-                add_attributes(struct_methods)
-                # Add unknowns, equations & design methods
-                add_attributes(extra_methods)
-        
-        return type(classname, (Prototype,), {})
-
-    return Factory

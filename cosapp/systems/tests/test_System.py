@@ -11,7 +11,7 @@ import itertools
 import numpy as np
 import math
 
-from cosapp.utils.testing import assert_keys, get_args, no_exception
+from cosapp.utils.testing import assert_keys, get_args, no_exception, DummySystemFactory
 from cosapp.utils.logging import LogFormat, LogLevel
 from cosapp.core.signal import Slot
 from cosapp.core.numerics.basics import MathematicalProblem
@@ -277,20 +277,21 @@ def test_System___setattr__():
         s.sub.sloss1 = 1.0
 
 
-def test_System___contains__(DummyFactory):
-    top: System = DummyFactory("top",
+def test_System___contains__():
+    Top = DummySystemFactory("Top",
         inwards = get_args('x', 1.0),
         outwards = get_args('y', 0.0),
         properties = get_args('const', 0.123),
         events = get_args('boom', trigger="y > x"),
     )
-    sub: System = DummyFactory("sub",
+    Sub = DummySystemFactory("Sub",
         inputs = get_args(DummyPort, 'p_in'),
         outputs = get_args(DummyPort, 'p_out'),
-        inward_modevars = get_args('m_in', True),
-        outward_modevars = get_args('m_out', init=0, dtype=int),
+        modevars_in = get_args('m_in', True),
+        modevars_out = get_args('m_out', init=0, dtype=int),
     )
-    top.add_child(sub, pulling=['p_in', 'p_out', 'm_out'])
+    top = Top("top")
+    top.add_child(Sub('sub'), pulling=['p_in', 'p_out', 'm_out'])
 
     assert "x" in top
     assert "y" in top
@@ -352,20 +353,21 @@ def test_System__repr__():
     assert repr(top.sub) == "sub - SubSystem"
 
 
-def test_System_ports(DummyFactory):
-    top: System = DummyFactory("top",
+def test_System_ports():
+    Top = DummySystemFactory("Top",
         inwards = get_args('x', 1.0),
         outwards = get_args('y', 0.0),
         properties = get_args('const', 0.123),
         events = get_args('boom', trigger="y > x"),
     )
-    sub: System = DummyFactory("sub",
+    Sub = DummySystemFactory("Sub",
         inputs = get_args(DummyPort, 'p_in'),
         outputs = get_args(DummyPort, 'p_out'),
-        inward_modevars = get_args('m_in', True),
-        outward_modevars = get_args('m_out', init=0, dtype=int),
+        modevars_in = get_args('m_in', True),
+        modevars_out = get_args('m_out', init=0, dtype=int),
     )
-    top.add_child(sub, pulling={'p_in': 'q_in', 'm_out': 'mod_out'})
+    top = Top('top')
+    sub = top.add_child(Sub('sub'), pulling={'p_in': 'q_in', 'm_out': 'mod_out'})
 
     assert set(map(get_name, top.ports())) == {
         'inwards',
@@ -384,26 +386,27 @@ def test_System_ports(DummyFactory):
     }
 
 
-def test_System__dir__(DummyFactory):
+def test_System__dir__():
     """Test function dir(), useful for autocompletion
     """
-    top: System = DummyFactory("top",
+    Top = DummySystemFactory("Top",
         inwards = get_args('x', 1.0),
         outwards = get_args('y', 0.0),
         properties = get_args('const', 0.123),
         events = get_args('boom', trigger="y > x"),
     )
-    sub: System = DummyFactory("sub",
+    Sub = DummySystemFactory("Sub",
         inputs = get_args(DummyPort, 'p_in'),
         outputs = get_args(DummyPort, 'p_out'),
-        inward_modevars = get_args('m_in', True),
-        outward_modevars = get_args('m_out', init=0, dtype=int),
+        modevars_in = get_args('m_in', True),
+        modevars_out = get_args('m_out', init=0, dtype=int),
     )
-    foo: System = DummyFactory("foo",
+    Foo = DummySystemFactory("Foo",
         inwards = get_args('x', np.zeros(3)),
     )
-    top.add_child(sub, pulling={'p_in': 'q_in', 'm_out': 'mod_out'})
-    top.add_child(foo, pulling={'x': 'u'})
+    top = Top('top')
+    top.add_child(Sub('sub'), pulling={'p_in': 'q_in', 'm_out': 'mod_out'})
+    top.add_child(Foo('foo'), pulling={'x': 'u'})
 
     members = set(dir(top)) - set(dir(System))
     assert members == {
@@ -850,14 +853,15 @@ def test_System_add_data(DummyFactory):
         s.add_inward("K", 2.0)
 
     # Add multiple inwards
-    s: System = DummyFactory("test", inwards=get_args(
-        {
+    s = DummyFactory(
+        name="s",
+        inwards=get_args({
             "K": 2.0,
             "switch": True,
             "r": {"value": 1, "scope": Scope.PUBLIC},
             "q": {"a": 1, "b": 2},
-        }
-        ))
+        }),
+    )
 
     for name in ["K", "switch", "r", "q"]:
         assert name in s
@@ -869,15 +873,18 @@ def test_System_add_data(DummyFactory):
     assert s.q == {"a": 1, "b": 2}
 
     # Test variables attributes
-    s: System = DummyFactory("test", inwards=get_args(
-        "K", 2.0,
-        unit="m",
-        dtype=float,
-        valid_range=(0.0, 5.0),
-        limits=(-5.0, 10.0),
-        desc="my little description.",
-        scope=Scope.PRIVATE,
-        ))
+    s = DummyFactory(
+        name="s",
+        inwards=get_args(
+            "K", 2.0,
+            unit="m",
+            dtype=float,
+            valid_range=(0.0, 5.0),
+            limits=(-5.0, 10.0),
+            desc="my little description.",
+            scope=Scope.PRIVATE,
+        ),
+    )
     assert_keys(s.inwards.get_details(), "K")
     details = s.inwards.get_details("K")
     assert details.unit == "m"
@@ -895,9 +902,9 @@ def test_System_add_data(DummyFactory):
 #     (get_args(VPort, "p", variables=[24, "a"]), None, TypeError),
 #     (get_args(VPort, "b"), get_args("b"), ValueError),
 # ])
-# def test_System_add_input_error(DummyFactory, inputs, inwards, error):
+# def test_System_add_input_error(inputs, inwards, error):
 #     with pytest.raises(error):
-#         DummyFactory("dummy", inputs=inputs, inwards=inwards)
+#         DummySystemFactory("Dummy", inputs=inputs, inwards=inwards)
 
 
 # @pytest.mark.parametrize("outputs, inwards, error", [
@@ -907,9 +914,9 @@ def test_System_add_data(DummyFactory):
 #     (get_args(VPort, "p", variables=[24, "a"]), None, TypeError),
 #     (get_args(VPort, "b"), get_args("b"), ValueError),
 # ])
-# def test_System_add_output_error(DummyFactory, outputs, inwards, error):
+# def test_System_add_output_error(outputs, inwards, error):
 #     with pytest.raises(error):
-#         DummyFactory("dummy", outputs=outputs, inwards=inwards)
+#         DummySystemFactory("Dummy", outputs=outputs, inwards=inwards)
 
 
 @pytest.mark.parametrize("port_kind", ["inputs", "outputs"])
@@ -1019,15 +1026,15 @@ def test_System_add_locals(DummyFactory):
     assert s.r == 42
 
     # Add multiple outwards
-    s: System = DummyFactory("dummy", outwards=get_args(
-        {
+    s: System = DummyFactory(
+        name="s",
+        outwards=get_args({
             "r": 42.0,
             "q": 12,
             "s": {"value": 1, "scope": Scope.PUBLIC},
             "x": {"a": 1, "b": 2},
-        }
-        ))
-
+        }),
+    )
     for name in ["r", "q", "s", "x"]:
         assert name in s
         assert f"{System.OUTWARDS}.{name}" in s
@@ -1038,8 +1045,12 @@ def test_System_add_locals(DummyFactory):
     assert s.x == {"a": 1, "b": 2}
 
     # Add multiple outwards with attributes
-    s: System = DummyFactory("dummy", outwards=get_args(
-        {"r": {"value": 42.0, "desc": "my value"}, "q": 12})
+    s: System = DummyFactory(
+        name="s",
+        outwards=get_args({
+            "r": {"value": 42.0, "desc": "my value"},
+            "q": 12,
+        }),
     )
     assert "r" in s
     assert "q" in s
@@ -1051,15 +1062,18 @@ def test_System_add_locals(DummyFactory):
         s.add_outward("a", 10.0)
 
     # Test outward attributes
-    s: System = DummyFactory("dummy", outwards=get_args(
-        "K", 2.0,
-        unit="m",
-        dtype=(int, float),
-        valid_range=(0.0, 5.0),
-        limits=(-5.0, 10.0),
-        desc="my little description.",
-        scope=Scope.PROTECTED,
-        ))
+    s: System = DummyFactory(
+        name="s",
+        outwards=get_args(
+            "K", 2.0,
+            unit="m",
+            dtype=(int, float),
+            valid_range=(0.0, 5.0),
+            limits=(-5.0, 10.0),
+            desc="my little description.",
+            scope=Scope.PROTECTED,
+        ),
+    )
     assert_keys(s.outwards.get_details(), "K")
     details = s.outwards.get_details("K")
     assert details.unit == "m"
@@ -1763,10 +1777,14 @@ def test_System_loop_residue_reference():
 
 
 def test_System_is_input_var(DummyFactory):
-    s: System = DummyFactory("dummy",
+    s: System = DummyFactory(
+        name="s",
         inputs = get_args(PtWPort, 'flow_in'),
         outputs = get_args(PtWPort, 'flow_out'),
-        inwards = [get_args('x', 1.0), get_args('y', np.zeros(4))],
+        inwards = [
+            get_args('x', 1.0),
+            get_args('y', np.zeros(4)),
+        ],
         outwards = get_args("z", 42.0),
     )
     # Test `System.is_input_var`
@@ -1882,7 +1900,9 @@ def test_System_check():
 
 
 def test_System_add_unknowns(DummyFactory):
-    m: System = DummyFactory("dummy", base=Multiply1,
+    m: System = DummyFactory(
+        name="m",
+        base=Multiply1,
         unknowns=get_args("K1", max_rel_step=0.01, lower_bound=-10.0),
     )
     unknown = m.assembled_problem().unknowns["K1"]
@@ -1895,7 +1915,9 @@ def test_System_add_unknowns(DummyFactory):
     assert unknown.upper_bound == np.inf
     assert unknown.mask is None
 
-    m: System = DummyFactory("dummy", base=Multiply1,
+    m: System = DummyFactory(
+        name="m",
+        base=Multiply1,
         unknowns=get_args(
             "p_in.x",
             max_rel_step=0.1,
@@ -1955,13 +1977,14 @@ def test_System_add_equation(DummyFactory):
         assert residue.name == name
     assert residues["cancel_x"].value == 1
 
-    s: System = DummyFactory("dummy",
-        inwards = [
+    s: System = DummyFactory(
+        name="dummy",
+        inwards=[
             get_args("x", 1.0),
             get_args("y", 1.0),
             get_args("z", 1.0),
         ],
-        equations = get_args([
+        equations=get_args([
             "x == 0",
             "y == 3",
             dict(equation="z == 5", name="test_r", reference=25.0),
@@ -3563,7 +3586,7 @@ def test_System_add_outward_modevar(DummyFactory, args_kwargs, expected):
     s: System = DummyFactory("dummy",
         inwards = get_args('x', 1.0),
         outwards = get_args('y', 0.5),
-        outward_modevars = get_args('a', *args, **kwargs),
+        modevars_out = get_args('a', *args, **kwargs),
     )
     assert "a" in s
     assert f"{System.MODEVARS_OUT}.a" in s
@@ -3574,7 +3597,7 @@ def test_System_add_outward_modevar_init(DummyFactory):
     s: System = DummyFactory("dummy",
         inwards = get_args('x', 1.0),
         outwards = get_args('y', 0.5),
-        outward_modevars = [
+        modevars_out = [
             get_args('a', 0.1),  # value, no init
             get_args('b', init='x + y'),  # init, but no value
             get_args('c', 0.3, init='x + y'),  # value and init

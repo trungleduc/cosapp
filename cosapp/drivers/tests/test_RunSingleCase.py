@@ -39,9 +39,9 @@ def test_RunSingleCase_setup():
     assert d.offdesign.is_empty()
 
 
-def test_RunSingleCase_setup_run(DummyFactory):
+def test_RunSingleCase_setup_run(ExtendedMultiply):
     def Dummy(name):
-        return DummyFactory(name, unknown=["p_in.x", "K2"])
+        return ExtendedMultiply(name, unknown=["p_in.x", "K2"])
 
     mult = Dummy("mult")
     d = RunSingleCase("case")
@@ -87,9 +87,9 @@ def test_RunSingleCase_setup_run(DummyFactory):
         assert unknown.context is s.mult
 
 
-def test_RunSingleCase__precompute_boundary_cdts(DummyFactory):
+def test_RunSingleCase__precompute_boundary_cdts(ExtendedMultiply):
     def Dummy(name):
-        return DummyFactory(name, unknown="K2")
+        return ExtendedMultiply(name, unknown="K2")
 
     # Test with top system
     mult = Dummy("mult")
@@ -122,9 +122,9 @@ def test_RunSingleCase__precompute_boundary_cdts(DummyFactory):
     assert s.mult.K1 == 15
 
 
-def test_RunSingleCase__precompute_equations(DummyFactory):
+def test_RunSingleCase__precompute_equations(ExtendedMultiply):
     def Dummy(name):
-        return DummyFactory(name, unknown=["K1"])
+        return ExtendedMultiply(name, unknown=["K1"])
 
     s = System("compute")
     s.add_child(Dummy("mult"))
@@ -139,9 +139,9 @@ def test_RunSingleCase__precompute_equations(DummyFactory):
     assert set(d.problem.unknowns) == {"mult.K1"}
 
 
-def test_RunSingleCase_set_values(DummyFactory, hat_case):
+def test_RunSingleCase_set_values(ExtendedMultiply, hat_case):
     def Dummy(name):
-        return DummyFactory(name, unknown=["K2"])
+        return ExtendedMultiply(name, unknown=["K2"])
 
     s = Dummy("mult")
     d = RunSingleCase("case")
@@ -203,10 +203,10 @@ def test_RunSingleCase_set_values(DummyFactory, hat_case):
     assert np.allclose(s.in_.x, [0, 33, 33], atol=0)
 
 
-def test_RunSingleCase_run_once(DummyFactory):
+def test_RunSingleCase_run_once(ExtendedMultiply):
     def make_case():
         s = System("compute")
-        s.add_child(DummyFactory("mult"))
+        s.add_child(ExtendedMultiply("mult"))
         s.exec_order = ["mult"]
         d = RunSingleCase("case")
         s.add_driver(d)
@@ -270,10 +270,10 @@ def test_RunSingleCase_owner():
     assert case.design.shape == (0, 0)
 
 
-def test_RunSingleCase_add_working_equations(DummyFactory, hat_case):
+def test_RunSingleCase_add_working_equations(ExtendedMultiply, hat_case):
     # TODO Fred test partial couple - only variable or only equation
     s = System("compute")
-    s.add_child(DummyFactory("mult"))
+    s.add_child(ExtendedMultiply("mult"))
     d = RunSingleCase("case")
     s.add_driver(d)
 
@@ -349,10 +349,10 @@ def test_RunSingleCase_add_working_equations(DummyFactory, hat_case):
     assert np.array_equal(unknown.mask, [False, True, False])
 
 
-def test_RunSingleCase_add_design_equations(DummyFactory, hat_case):
+def test_RunSingleCase_add_design_equations(ExtendedMultiply, hat_case):
     # TODO Fred test partial couple - only variable or only equation
     s = System("compute")
-    s.add_child(DummyFactory("mult"))
+    s.add_child(ExtendedMultiply("mult"))
     d = RunSingleCase("case")
     s.add_driver(d)
 
@@ -395,9 +395,9 @@ def test_RunSingleCase_add_design_equations(DummyFactory, hat_case):
     assert np.array_equal(unknown.mask, [False, True, False])
 
 
-def test_RunSingleCase_clean_run(DummyFactory):
+def test_RunSingleCase_clean_run(ExtendedMultiply):
     def Dummy(name):
-        return DummyFactory(name, unknown=["p_in.x", "K2"])
+        return ExtendedMultiply(name, unknown=["p_in.x", "K2"])
 
     mult = Dummy("mult")
     case = RunSingleCase("case")
@@ -443,10 +443,10 @@ def test_RunSingleCase_clean_run(DummyFactory):
     assert case.problem is None
 
 
-def test_RunSingleCase_get_problem(DummyFactory):
+def test_RunSingleCase_get_problem(ExtendedMultiply):
     def make_case():
         s = System("compute")
-        s.add_child(DummyFactory("mult"))
+        s.add_child(ExtendedMultiply("mult"))
         d = RunSingleCase("case")
         s.add_driver(d)
         return s, d
@@ -491,10 +491,10 @@ def test_RunSingleCase_get_problem(DummyFactory):
     #   - checking case of mixture of design and offdesign equations
 
 
-def test_RunSingleCase_get_init(DummyFactory):
+def test_RunSingleCase_get_init(ExtendedMultiply):
     def make_case():
         s = System("compute")
-        s.add_child(DummyFactory("mult"))
+        s.add_child(ExtendedMultiply("mult"))
         d = RunSingleCase("case")
         s.add_driver(d)
         return s, d

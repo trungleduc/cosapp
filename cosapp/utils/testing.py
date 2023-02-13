@@ -1,9 +1,12 @@
 """Utility functions for testing purposes"""
 import numpy
+import inspect
+import warnings
 import itertools
 from numbers import Number
 from contextlib import contextmanager
-from typing import Tuple, Dict, Any, Union, Iterable
+from typing import Tuple, Dict, Any, Union, Iterable, Type, Optional
+from cosapp.base import System
 
 
 ArgsKwargs = Tuple[Tuple[Any], Dict[str, Any]]
@@ -83,3 +86,143 @@ def not_raised(ExpectedException):
 
     except Exception as error:
         raise AssertionError(f"Unexpected exception raised: {error!r}")
+
+
+def DummySystemFactory(
+    classname: str,
+    base: Optional[Type[System]]=None,
+    **settings
+) -> Type[System]:
+    """Factory creating a dummy system class with custom attributes.
+    System is "dummy" in the sense it has no compute, and no connectors.
+    
+    Parameters:
+    -----------
+    - classname [str]: Output class name
+    - base [type[System], optional]:
+        Base class, derived from `System`. If not provided (default), base is `System`.
+    - **settings [dict[str, args_kwargs]]:
+        Class characteristics, as a dictionary. Keys are attribute names (e.g. inputs);
+        values are (args, kwargs) forwarded to the associated method (e.g. `add_input`).
+    
+    Possible Attributes:
+    --------------------
+    - inputs
+    - outputs
+    - inwards
+    - outwards
+    - modevars_in
+    - modevars_out
+    - transients
+    - rates
+    - properties
+    - children
+    - events
+    - unknowns
+    - equations
+    - targets
+    - design_methods
+
+    Examples:
+    ---------
+    >>> from cosapp.utils.testing import DummySystemFactory, get_args
+    >>> 
+    >>> Dummy = DummySystemFactory(
+    >>>     inwards=[
+    >>>         get_args('h', 0.1, unit='m'),
+    >>>         get_args('L', 2.0, unit='m'),
+    >>>     ],
+    >>>     outwards=[
+    >>>         get_args('b_ratio', 0.0),
+    >>>     ],
+    >>>     events=[
+    >>>         get_args('kaboom', trigger='h > L / 2')
+    >>>     ],
+    >>>     properties=[
+    >>>         get_args('n', 12),
+    >>>     ],
+    >>>     equations=[
+    >>>         "b_ratio == 1",
+    >>>     ],
+    >>>     unknowns=[
+    >>>         "h",
+    >>>     ],
+    >>> )
+    >>> 
+    >>> s = Dummy('s')
+    >>> assert s.assembled_problem().shape == (1, 1)
+    """
+    # mapping option / method
+    # for example: `inputs` <-> `add_input`
+    struct_method_mapping = {
+        "inputs": "add_input",
+        "outputs": "add_output",
+        "inwards": "add_inward",
+        "outwards": "add_outward",
+        "modevars_in": "add_inward_modevar",
+        "modevars_out": "add_outward_modevar",
+        "transients": "add_transient",
+        "rates": "add_rate",
+        "properties": "add_property",
+        "children": "add_child",
+    }
+    extra_method_mapping = {
+        "events": "add_event",
+        "unknowns": "add_unknown",
+        "equations": "add_equation",
+        "targets": "add_target",
+        "design_methods": "add_design_method",
+    }
+    unknown_keys = set(settings).difference(
+        struct_method_mapping,
+        extra_method_mapping,
+    )
+    if unknown_keys:
+        warnings.warn(
+            f"settings {sorted(unknown_keys)} are not supported."
+        )
+
+    def attribute_dict(methods: Dict[str, str]) -> Dict[str, ArgsKwargs]:
+        """Create attribute dict according to attributes required in `settings`"""
+        return {
+            methods[name]: ctor_data
+            for name, ctor_data in settings.items() if name in methods
+        }
+
+    struct_methods = attribute_dict(struct_method_mapping)
+    extra_methods = attribute_dict(extra_method_mapping)
+
+    base_message = "argument `base` must be a type derived from `System`"
+
+    if base is None:
+        base = System
+    elif not inspect.isclass(base):
+        raise TypeError(
+            f"{base_message}; got {base!r}."
+        )
+    elif not issubclass(base, System):
+        raise ValueError(
+            f"{base_message}; got class `{base.__name__}`."
+        )
+
+    class Prototype(base):
+        def setup(self, **kwargs):
+            super().setup(**kwargs)
+            def add_attributes(method_dict: dict):
+                for method_name, values in method_dict.items():
+                    if values is None:
+                        continue
+                    if not isinstance(values, list):
+                        values = [values]
+                    for info in values:
+                        try:
+                            args, kwargs = info  # expects a list of (tuple, dict)
+                        except ValueError:
+                            args, kwargs = [info], {}  # fallback
+                        getattr(self, method_name)(*args, **kwargs)
+            # Add inputs, outputs, transients, etc.
+            add_attributes(struct_methods)
+            # Add unknowns, equations & design methods
+            add_attributes(extra_methods)
+    
+    return type(classname, (Prototype,), {})

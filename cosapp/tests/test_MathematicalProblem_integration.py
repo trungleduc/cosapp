@@ -6,7 +6,7 @@ from typing import Type
 from cosapp.base import System, Port
 from cosapp.core import MathematicalProblem
 from cosapp.drivers import NonLinearSolver, RunSingleCase
-from cosapp.utils.testing import get_args
+from cosapp.utils.testing import get_args, DummySystemFactory
 
 
 class AbcPort(Port):
@@ -24,7 +24,7 @@ class XyzPort(Port):
 
 
 @pytest.fixture
-def A_factory(DummySystemFactory) -> Type[System]:
+def A_factory() -> Type[System]:
     def factory(classname, **settings):
         return DummySystemFactory(
             classname,
@@ -42,7 +42,7 @@ def A_factory(DummySystemFactory) -> Type[System]:
 
 
 @pytest.fixture
-def B_factory(DummySystemFactory) -> Type[System]:
+def B_factory() -> Type[System]:
     def factory(classname, **settings):
         return DummySystemFactory(
             classname,

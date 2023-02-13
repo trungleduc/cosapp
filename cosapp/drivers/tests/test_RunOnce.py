@@ -24,17 +24,17 @@ def test_RunOnce__initialize():
     assert isinstance(d.solution, dict)
 
 
-def test_RunOnce_get_init(DummyFactory):
+def test_RunOnce_get_init(ExtendedMultiply):
     # Test offdesign iteratives
     s = System('compute')
-    s.add_child(DummyFactory('mult'))
+    s.add_child(ExtendedMultiply('mult'))
     d = RunOnce('compute')
     s.add_driver(d)
     
     assert len(d.get_init()) == 0
 
     def Dummy(name):
-        return DummyFactory(name, unknown=["K1"])
+        return ExtendedMultiply(name, unknown=["K1"])
 
     s = System('compute')
     s.add_child(Dummy('mult'))
@@ -71,7 +71,7 @@ def test_RunOnce_get_init(DummyFactory):
     assert np.array_equal(init_array, [32])
 
     def Dummy(name):
-        return DummyFactory(name, unknown=["K1", "K2"])
+        return ExtendedMultiply(name, unknown=["K1", "K2"])
 
     s = System('compute')
     s.add_child(Dummy('mult'))
@@ -91,8 +91,8 @@ def test_RunOnce_get_init(DummyFactory):
     assert np.array_equal(init_array, [22., 42.])
 
 
-def test_RunOnce_set_init(DummyFactory, hat_case):
-    s = DummyFactory('mult')
+def test_RunOnce_set_init(ExtendedMultiply, hat_case):
+    s = ExtendedMultiply('mult')
     d = RunOnce('compute')
     s.add_driver(d)
 
@@ -150,13 +150,13 @@ def test_RunOnce_set_init(DummyFactory, hat_case):
     assert np.array_equal(s.in_.x, [22, 33, 33])
 
 
-def test_RunOnce_get_problem(DummyFactory):
-    s = DummyFactory('mult')
+def test_RunOnce_get_problem(ExtendedMultiply):
+    s = ExtendedMultiply('mult')
     d = s.add_driver(RunOnce('runner'))
     assert d.get_problem().shape == (0, 0)
 
     def Dummy(name):
-        return DummyFactory(name, unknown=["K1"])
+        return ExtendedMultiply(name, unknown=["K1"])
 
     s = Dummy('mult')
     d = s.add_driver(RunOnce('runner'))
@@ -171,9 +171,9 @@ def test_RunOnce_get_problem(DummyFactory):
     assert_keys(d.get_problem().residues, 'Wfan', 'PWfan')
 
 
-def test_RunOnce_setup_run(caplog, DummyFactory):
+def test_RunOnce_setup_run(caplog, ExtendedMultiply):
     def Dummy(name):
-        return DummyFactory(name, unknown=["p_in.x"])
+        return ExtendedMultiply(name, unknown=["p_in.x"])
 
     caplog.clear()
     logging.disable(logging.NOTSET)  # enable all logging levels
@@ -196,17 +196,17 @@ def test_RunOnce_setup_run(caplog, DummyFactory):
         assert expected_msg in caplog.text
 
 
-def test_RunOnce__precompute(DummyFactory):
-    s = DummyFactory('mult')
+def test_RunOnce__precompute(ExtendedMultiply):
+    s = ExtendedMultiply('mult')
     d = s.add_driver(RunOnce('runner'))
     d.solution['dummy'] = 1.
     d._precompute()
     assert len(d.solution) == 0
 
 
-def test_RunOnce_compute(DummyFactory):
+def test_RunOnce_compute(ExtendedMultiply):
     def Dummy(name):
-        return DummyFactory(name, unknown=["p_in.x"])
+        return ExtendedMultiply(name, unknown=["p_in.x"])
 
     s = Dummy('mult')
 
@@ -219,9 +219,9 @@ def test_RunOnce_compute(DummyFactory):
     s.compute.assert_called_once()
 
 
-def test_RunOnce__postcompute(DummyFactory):
+def test_RunOnce__postcompute(ExtendedMultiply):
     def Dummy(name):
-        return DummyFactory(name, unknown=["p_in.x"])
+        return ExtendedMultiply(name, unknown=["p_in.x"])
             
     s = Dummy('mult')
 

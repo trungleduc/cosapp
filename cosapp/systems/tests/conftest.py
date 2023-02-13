@@ -7,6 +7,7 @@ from io import StringIO
 
 import cosapp.tests as tests
 from cosapp.systems import System
+from cosapp.utils.testing import DummySystemFactory
 
 
 @pytest.fixture
@@ -30,39 +31,9 @@ def test_data():
 @pytest.fixture(scope="function")
 def DummyFactory():
     """Factory creating a dummy system with custom attributes"""
-    # mapping option / method, e.g.
-    #   `inputs`     <-> `add_input`
-    #   `properties` <-> `add_property`
-    mapping = dict(
-        (option, "add_" + option[:-1])
-        for option in (
-            "inputs", "outputs",
-            "inwards", "outwards",
-            "inward_modevars", "outward_modevars",
-            "transients", "rates",
-            "unknowns", "equations", "targets",
-            "design_methods", "events",
-        )
-    )
-    mapping["properties"] = "add_property"
-
     def Factory(name, **options):
-        method_dict = OrderedDict(
-            (mapping[option], options.pop(option))
-            for option in list(options.keys()) if option in mapping
-        )
-        base = options.pop("base", System)
-        class PrototypeSystem(base):
-            def setup(self, **options):
-                super().setup(**options)
-                for method, values in method_dict.items():
-                    if values is None:
-                        continue
-                    if not isinstance(values, list):
-                        values = [values]
-                    for args, kwargs in values:  # expects a list of (tuple, dict)
-                        getattr(self, method)(*args, **kwargs)
-        return PrototypeSystem(name, **options)
+        Dummy = DummySystemFactory("Dummy", **options)
+        return Dummy(name)
     return Factory
 
 
