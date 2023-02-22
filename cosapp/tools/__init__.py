@@ -5,6 +5,7 @@ from cosapp.tools.views.d3js import to_d3
 from cosapp.tools.views.markdown import port_to_md, system_to_md
 from cosapp.tools.views.prettyprint import list_inputs, list_outputs
 from cosapp.tools.views.visjs import VisJsRenderer, to_visjs
+from cosapp.tools.module_parser import parse_module
 
 __all__ = [
     "display_doc",
@@ -17,4 +18,5 @@ __all__ = [
     "to_fmu",
     "to_visjs",
     "VisJsRenderer",
+    "parse_module",
 ]
