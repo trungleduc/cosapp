@@ -1,0 +1,95 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "id": "0-1-0/modulePackage.schema.json",
+    "title": "Schema for package data for CoSApp Creator",
+    "description": "JSON of a package containing name, systems and ports",
+    "type": "object",
+    "required": [ "name" ],
+    "properties": {
+        "name": {
+            "description": "Name of the package",
+            "type": "string"
+        },
+        "version": {
+            "description": "Version of the package (package.__version__)",
+            "type": "string"
+        },
+        "systems" : {
+            "description": "List of system classes from the package",
+            "type": "array",
+            "items": { "$ref": "#/$defs/systemClass" }
+        },
+        "ports": {
+            "description": "List of port classes from the package",
+            "type": "array",
+            "items": { "$ref": "#/$defs/portClass" }
+        }
+    },
+    "required": [ "name" ],
+    "additionalProperties": false,
+    "$defs": {
+        "portVariable": {
+            "description": "Variable in ports",
+            "properties": {
+                "name": { "type": "string" },
+                "desc": { "type": "string" },
+                "unit": { "type": "string" }
+            },
+            "required": [ "name" ],
+            "additionalProperties": false
+        },
+        "sysPort": {
+            "description": "Port in a system",
+            "properties": {
+                "name": { "type": "string" },
+                "pack": { "type": "string" },
+                "desc": { "type": "string" },
+                "variables": {
+                    "type": "array",
+                    "items": { "$ref": "#/$defs/portVariable" }
+                }
+            },
+            "patternProperties": {
+                "^type$": { "type": "string" }
+            },
+            "required": [ "name", "type", "pack" ],
+            "additionalProperties": false
+        },
+        "portClass": {
+            "description": "Port class",
+            "properties": {
+                "name": { "type": "string" },
+                "pack": { "type": "string" },
+                "desc": { "type": "string" },
+                "variables": {
+                    "type": "array",
+                    "items": { "$ref": "#/$defs/portVariable" }
+                },
+                "kwargs" : { "type": "object"}
+            },
+            "required": [ "name", "pack", "variables"],
+            "additionalProperties": false
+        },
+        "systemClass": {
+            "description": "System class",
+            "properties": {
+                "name": { "type": "string" },
+                "className": { "type": "string" },
+                "pack": { "type": "string" },
+                "mod": { "type": "string" },
+                "desc": { "type": "string" },
+                "inputs": {
+                    "type": "array",
+                    "items": { "$ref": "#/$defs/sysPort" }
+                },
+                "outputs": {
+                    "type": "array",
+                    "items": { "$ref": "#/$defs/sysPort" }
+                },
+                "kwargs" : { "type": "object"}
+            },
+            "required": [ "name", "className", "pack", "mod" ],
+            "additionalProperties": false
+        }
+    }
+}
