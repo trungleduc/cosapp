@@ -1516,6 +1516,10 @@ class System(Module, TimeObserver):
                 self.pop_child(child.name)
                 raise
 
+        # If child is added outside of `setup`, system must be declared as dirty
+        # to ensure input propagation during the next system execution.
+        self.set_dirty(PortType.IN)
+
         return child
 
     def pop_child(self, name: str) -> System:
@@ -2074,9 +2078,6 @@ class System(Module, TimeObserver):
             for driver in self.drivers.values():
                 driver.call_clean_run()
 
-        self.set_dirty(PortType.IN)
-        self.set_dirty(PortType.OUT)
-
     def _postcompute(self) -> None:
         """Actions performed after the `System.compute` call."""
         if self.is_clean(PortType.IN):
@@ -2086,8 +2087,8 @@ class System(Module, TimeObserver):
             self.set_dirty(PortType.OUT)
 
             # Evaluate the residues
-            for r in self.residues.values():
-                r.update()
+            for residue in self.residues.values():
+                residue.update()
 
     def transition(self) -> None:
         """Method describing system transition upon the occurrence of events (if any).
@@ -2111,12 +2112,9 @@ class System(Module, TimeObserver):
         >>>         v_norm = np.linalg.norm(self.v)
         >>>         self.a = self.g - (self.cf / self.mass * v_norm) * self.v
         >>> 
-        >>> class BouncingPointMass(System):
+        >>> class BouncingPointMass(PointMassDynamics):
         >>>     def setup(self):
-        >>>         self.add_child(
-        >>>             PointMassDynamics('dyn'),
-        >>>             pulling = ['x', 'v', 'a', 'mass', 'cf', 'g'],
-        >>>         )
+        >>>         super().setup()
         >>>         self.add_event('rebound', trigger="x[2] <= 0")
         >>>     
         >>>     def transition(self):

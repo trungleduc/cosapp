@@ -8,7 +8,7 @@ import numpy
 
 from cosapp.core.eval_str import EvalString
 from cosapp.core.variableref import VariableReference
-from cosapp.ports.enum import PortType
+from cosapp.ports.port import BasePort
 from cosapp.ports.exceptions import ScopeError
 from cosapp.utils.parsing import get_indices
 from cosapp.utils.helpers import check_arg
@@ -115,7 +115,7 @@ class Boundary:
         return self._context
 
     @property
-    def port(self) -> "BasePort":
+    def port(self) -> BasePort:
         """BasePort: port containing the boundary."""
         return self.__info.port
 
@@ -202,7 +202,7 @@ class Boundary:
 
     def touch(self) -> None:
         """Set owner system as 'dirty'."""
-        self.__info.port.owner.set_dirty(PortType.IN)
+        self.port.touch()
 
     @property
     def default_value(self) -> Union[Number, numpy.ndarray, None]:
