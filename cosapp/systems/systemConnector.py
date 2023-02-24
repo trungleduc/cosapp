@@ -1,7 +1,8 @@
 import inspect
 from cosapp.patterns import Proxy
-from cosapp.ports.connectors import BaseConnector
+from cosapp.ports.port import BasePort
 from cosapp.ports.enum import PortType
+from cosapp.ports.connectors import BaseConnector
 from typing import Dict, Any
 
 
@@ -76,22 +77,22 @@ class SystemConnector(Proxy):
         self.__noise.clear()
 
     def __add_noise(self) -> None:
-        if len(self.__noise) == 0:
-            return
-        sink = self.sink
-        for var, perturbation in self.__noise.items():
-            sink[var] += perturbation
-        sink.owner.set_dirty(sink.direction)
+        if self.__noise:
+            sink: BasePort = self.sink
+            for var, perturbation in self.__noise.items():
+                sink[var] += perturbation
+            sink.touch()
 
     def __repr__(self):
         return repr(self.__wrapped__)
     
     def transfer(self) -> None:
         """Transfer values from `source` to `sink`."""
-        source, sink = self.source, self.sink
-
         if self.__is_active:
+            sink: BasePort = self.sink
+            source: BasePort = self.source
+
             if not source.owner.is_clean(source.direction):
-                sink.owner.set_dirty(sink.direction)
+                sink.touch()
                 self.__wrapped__.transfer()
             self.__add_noise()

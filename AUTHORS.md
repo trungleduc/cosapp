@@ -21,3 +21,4 @@
 * [Román Lapuente](https://gitlab.com/roman.lapuente)
 * [Peter Cairns](https://gitlab.com/petercairns_akka)
 * [Virginie Zell](https://gitlab.com/VirginieZ)
+* [Sébastien Raymond](https://gitlab.com/ssg-aero)

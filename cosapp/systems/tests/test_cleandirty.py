@@ -3,7 +3,7 @@ import os, sys
 from unittest import TestCase, mock
 import numpy as np
 
-from cosapp.core.numerics.residues import Residue
+from cosapp.ports.connectors import CopyConnector
 from cosapp.ports.port import PortType, Port, Scope
 from cosapp.systems import System
 from cosapp.drivers import RunOnce, RunSingleCase, NonLinearSolver
@@ -12,15 +12,27 @@ from cosapp.tests.library.systems import MultiplySystem2, Multiply1
 
 class UnitTestCleanDirty(TestCase):
 
+    class Foo:
+        pass
+
     class TestPort(Port):
         def setup(self):
             self.add_variable('Pt', 101325., limits=(0., None))
             self.add_variable('W', 1., valid_range=(0., None))
 
+    class FooPort(Port):
+        def setup(self):
+            self.add_variable('a', 1.)
+            self.add_variable('foo', UnitTestCleanDirty.Foo())
+
+        Connector = CopyConnector
+
     class SubSystem(System):
         def setup(self):
             self.add_input(UnitTestCleanDirty.TestPort, 'in_')
             self.add_output(UnitTestCleanDirty.TestPort, 'out')
+            self.add_input(UnitTestCleanDirty.FooPort, 'f_in')
+            self.add_output(UnitTestCleanDirty.FooPort, 'f_out')
             
             self.add_inward('sloss',
                 0.95, valid_range=(0.8, 1.), invalid_comment='not valid',
@@ -39,8 +51,11 @@ class UnitTestCleanDirty(TestCase):
             self.add_equation('dummy == 0')
 
         def compute(self):
-            for name in self.out:
-                self.out[name] = self.in_[name] * self.sloss
+            p_in = self.in_
+            self.out.set_values(
+                W = p_in.W,
+                Pt = p_in.Pt * self.sloss,
+            )
             self.dummy /= 100
 
     class TopSystem(System):
@@ -64,7 +79,7 @@ class UnitTestCleanDirty(TestCase):
 
             self.exec_order = ['sub1', 'sub2']
 
-    class IterativeSystem(System):
+    class CyclicSystem(System):
         def setup(self):
             self.add_inward('top_k')
 
@@ -89,7 +104,6 @@ class UnitTestCleanDirty(TestCase):
 
     def test_inputs_are_clean(self):
         s = UnitTestCleanDirty.SystemWithSubSystems('test')
-        s.call_clean_run = mock.MagicMock(name='call_clean_run')
         s1 = s.sub1
         s2 = s.sub2
 
@@ -132,6 +146,11 @@ class UnitTestCleanDirty(TestCase):
         s.run_once()
         assert clean_status(PortType.IN) == (True,) * 3
 
+        s.sub2.f_in.foo = UnitTestCleanDirty.Foo()
+        assert clean_status(PortType.IN) == (False, True, False)
+        s.run_once()
+        assert clean_status(PortType.IN) == (True,) * 3
+
         s.sub1.in_.W = 10.
         assert clean_status(PortType.IN) == (False, False, True)
 
@@ -142,7 +161,6 @@ class UnitTestCleanDirty(TestCase):
 
         # Test System with subsystem using pulling method
         s = UnitTestCleanDirty.TopSystem('s')
-        s.call_clean_run = mock.MagicMock(name='call_clean_run')
         s.run_once()
         assert s.is_clean(PortType.IN)
         assert s.sub.is_clean(PortType.IN)
@@ -173,14 +191,57 @@ class UnitTestCleanDirty(TestCase):
         assert s.is_clean(PortType.OUT)
         assert s.sub.is_clean(PortType.OUT)
 
+    def test_dirty_after_add_child_1(self):
+        """Check that adding a child sets parent status to dirty.
+        Test 1: child added to head system.
+        """
+        s = UnitTestCleanDirty.SystemWithSubSystems('test')
+        s.call_clean_run = mock.MagicMock(name='call_clean_run')
+
+        clean_status = lambda direction=None: (
+            s.is_clean(direction),
+            s.sub1.is_clean(direction),
+            s.sub2.is_clean(direction),
+        )
+
+        assert clean_status(PortType.IN) == (False,) * 3
+        assert clean_status(PortType.OUT) == (False,) * 3
+
+        s.run_once()
+        assert clean_status(PortType.IN) == (True,) * 3
+        assert clean_status(PortType.OUT) == (False,) * 3
+
+        s.add_child(System('empty'))
+        assert clean_status(PortType.IN) == (False, True, True)
+        assert clean_status(PortType.OUT) == (False,) * 3
+
+    def test_dirty_after_add_child_2(self):
+        """Same as test 1, with child added to a sub-system."""
+        s = UnitTestCleanDirty.SystemWithSubSystems('test')
+        s.call_clean_run = mock.MagicMock(name='call_clean_run')
+
+        clean_status = lambda direction=None: (
+            s.is_clean(direction),
+            s.sub1.is_clean(direction),
+            s.sub2.is_clean(direction),
+        )
+
+        assert clean_status(PortType.IN) == (False,) * 3
+        assert clean_status(PortType.OUT) == (False,) * 3
+
+        s.run_once()
+        assert clean_status(PortType.IN) == (True,) * 3
+        assert clean_status(PortType.OUT) == (False,) * 3
+
+        s.sub2.add_child(System('empty'))
+        assert clean_status(PortType.IN) == (False, True, False)
+        assert clean_status(PortType.OUT) == (False,) * 3
+
     def test_iterative_system(self):
-        s = UnitTestCleanDirty.IterativeSystem('s')
+        s = UnitTestCleanDirty.CyclicSystem('s')
         s1 = s.sub1
         s2 = s.sub2
         s.open_loops()
-        s.call_clean_run = mock.MagicMock(name='call_clean_run')
-        s1.call_clean_run = mock.MagicMock(name='call_clean_run')
-        s2.call_clean_run = mock.MagicMock(name='call_clean_run')
 
         clean_status = lambda direction=None: (
             s.is_clean(direction),

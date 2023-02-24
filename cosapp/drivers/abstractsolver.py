@@ -181,6 +181,8 @@ class AbstractSolver(Driver):
     def _precompute(self) -> None:
         # TODO we should check that all variables are of numerical types
         super()._precompute()
+        for unknown in self.problem.unknowns.values():
+            unknown.touch()
 
     @abc.abstractmethod
     def set_iteratives(self, x: Sequence[float]) -> None:
@@ -280,12 +282,15 @@ class AbstractSolver(Driver):
                 f"Solution expected as dict or json file name; got {type(solution).__qualname__!r}."
             )
 
-        def extract_varname(driver, key: str):
+        def extract_varname(driver: Driver, key: str):
             matches = re.findall(f"{driver.name}\[(.*)\]", key)
             if matches:  # Off-design variable
                 return matches[0]
             else:
                 return key
+
+        def is_RunOnce(driver: Driver) -> bool:
+            return isinstance(driver, RunOnce)
 
         with System.set_master(repr(self.owner)) as is_master:
             if is_master:
@@ -294,9 +299,7 @@ class AbstractSolver(Driver):
             try:
                 if case is None:
                     for name, value in data.items():
-                        for child in filter(
-                            lambda d: isinstance(d, RunOnce), self.children.values()
-                        ):
+                        for child in filter(is_RunOnce, self.children.values()):
                             varname = extract_varname(child, name)
                             if varname != name:  # Off-design variable
                                 try:
@@ -310,10 +313,10 @@ class AbstractSolver(Driver):
                                 break
                 else:
                     child = self.children[case]
-                    if not isinstance(child, RunOnce):
+                    if not is_RunOnce(child):
                         raise TypeError(
                             "Only drivers derived from RunOnce can be initialized"
-                            f"; got { type(child).__qualname__!r} for driver {case!r}."
+                            f"; got {type(child).__qualname__!r} for driver {case!r}."
                         )
                     for name, value in data.items():
                         varname = extract_varname(child, name)

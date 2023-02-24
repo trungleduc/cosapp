@@ -123,6 +123,11 @@ class BasePort(visitor.Component):
         """bool: True if port is an output, False otherwise."""
         return self._direction == PortType.OUT
 
+    def touch(self) -> None:
+        """Set owner system as 'dirty' in port direction."""
+        if self._owner:
+            self._owner.set_dirty(self.direction)
+
     def __repr__(self) -> str:
         return f"{type(self).__name__}: {self.serialize_data()!r}"
 
@@ -236,8 +241,8 @@ class BasePort(visitor.Component):
     def __set_notype_checking(self, key, value):
         super().__setattr__(key, value)
 
-        if key in self._variables and self._owner:
-            self._owner.set_dirty(self.direction)
+        if key in self._variables:
+            self.touch()
 
     def validate(self, key: str, value: Any) -> None:
         """Check if a variable is in the scope of the user and the type is valid.
