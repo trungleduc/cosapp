@@ -4,5 +4,6 @@ channels:
   - conda-forge
   - cosapp
 dependencies:
+  - python>=3.10
   - pytest
   - plotly>=5
