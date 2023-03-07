@@ -10,22 +10,24 @@ class FloatPort(Port):
 class Eq_2u_1(System):
     def setup(self):
         self.add_inward('u')
-        self.add_unknown('u').add_equation(('10.*u == 1.'))
+        self.add_unknown('u').add_equation('10 * u == 1')
 
 
 class Sys_Sum3_1Eq_2Mult(System):
     def setup(self):
         self.add_input(XPort, 'x_in')
         self.add_input(XPort, 'u_in')
-        self.add_child(XportMultiplier("Mult_by_2_1", factor=2))
-        self.add_child(XportMultiplier("Mult_by_2_2", factor=2), pulling = {"x_out":"x_out"})
-        self.add_child(Eq_2u_1("Eq2u1"))
+        self.add_output(XPort, 'x_out')
         self.add_output(XPort, 'u_out')
 
-        self.connect(self.Mult_by_2_1.x_in, self.x_in)
+        self.add_child(XportMultiplier("Mult_by_2_1", factor=2), pulling='x_in')
+        self.add_child(XportMultiplier("Mult_by_2_2", factor=2))
+        self.add_child(Eq_2u_1("Eq2u1"))
+
         self.connect(self.Mult_by_2_2.x_in, self.Mult_by_2_1.x_out)
+
     def compute(self):
-        self.x_out.x = self.x_out.x + 3
+        self.x_out.x = self.Mult_by_2_2.x_out.x + 3
         self.u_out.x = self.x_out.x + self.u_in.x
 
 
@@ -235,7 +237,7 @@ class Sys_DivBy2(System):
         self.add_output(FloatPort, 'a_out')
     
     def compute(self):
-        self.a_out.x = self.h_in.x / 2.
+        self.a_out.x = self.h_in.x * 0.5
 
 
 class Sys_DivBy2_DoubleInt(System):
