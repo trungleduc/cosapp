@@ -28,6 +28,7 @@ from cosapp.tests.library.systems.basicalgebra import (
 )
 from cosapp.tests.library.systems.vectors import Strait1dLine, Splitter1d
 from cosapp.utils.testing import get_args, no_exception
+from cosapp.utils import get_state, set_state
 
 
 """Meta model can be used on:
@@ -68,6 +69,34 @@ class C(System):
     def setup(self):
         self.add_input(XPort, 'j')
         self.add_transient('h', der='j.x')
+
+class MultiplyByM(System):
+    """System computing y = m * x"""
+    def setup(self):
+        self.add_inward('m')
+        self.add_inward('x')
+        self.add_outward('y')
+    
+    def compute(self):
+        self.y = self.m * self.x    
+
+class AffineSystem(System):
+    """System computing: y = a.m * b.m * x + 3"""
+    def setup(self):
+        self.add_outward('y')
+        # sub-systems
+        a = self.add_child(MultiplyByM('a'), pulling='x')
+        b = self.add_child(MultiplyByM('b'))
+        # connections
+        self.connect(a, b, {'y': 'x'})
+    
+    def compute(self):
+        self.y = self.b.y + 3
+    
+    @property
+    def y_exact(self):
+        """Expected value for `self.out.value`"""
+        return self.b.m * (self.a.m * self.x) + 3
 
 
 @pytest.fixture(scope="function")
@@ -1183,6 +1212,48 @@ def test_System_active_surrogate_result(case_factory, tag, expected):
     head.run_drivers()
     assert soi.u_out.x == expected['meta_u']
     assert soi.x_out.x == expected['meta_x']
+
+
+def test_System_active_surrogate_direct():
+    """Check that switching surrogate on and off has no side effect.
+    For this test, we use a direct system, with no loops, such that
+    no driver is needed to execute the system.
+    """
+    head = AffineSystem('head')
+    assert not head.has_surrogate
+    assert not head.active_surrogate
+
+    head.x = -4.5
+    head.a.m = -1.25
+    head.b.m = 2.52
+    head.run_once()
+    ref_state = get_state(head)
+    assert head.y_exact == pytest.approx(17.175, rel=1e-15)
+    assert head.y == head.y_exact
+
+    axes = {
+        'x': numpy.linspace(-5, 5, 11),
+        'a.m': numpy.linspace(-3, 3, 6),
+        'b.m': numpy.linspace(-3, 3, 6),
+    }
+    doe = cubic_DoE(axes)
+    head.make_surrogate(doe)
+    assert head.has_surrogate
+    assert head.active_surrogate
+
+    # Set to ref state and run with surrogate
+    set_state(head, ref_state)
+    head.run_once()
+    assert head.y == pytest.approx(head.y_exact, rel=1e-2)
+    assert head.y == pytest.approx(17.1356)
+
+    # Deactivate surrogate and re-run (inputs are unchanged)
+    head.active_surrogate = False
+    assert head.has_surrogate
+    assert not head.active_surrogate
+
+    head.run_once()
+    assert head.y == head.y_exact
 
 
 ################ FOR DRIVERS ##################
