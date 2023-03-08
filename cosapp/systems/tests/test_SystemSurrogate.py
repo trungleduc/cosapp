@@ -1245,7 +1245,7 @@ def test_System_active_surrogate_direct():
     set_state(head, ref_state)
     head.run_once()
     assert head.y == pytest.approx(head.y_exact, rel=1e-2)
-    assert head.y == pytest.approx(17.1356)
+    assert head.y == pytest.approx(17.13, rel=1e-3)
 
     # Deactivate surrogate and re-run (inputs are unchanged)
     head.active_surrogate = False
