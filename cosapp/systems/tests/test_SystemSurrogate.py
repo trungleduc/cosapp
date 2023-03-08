@@ -28,10 +28,10 @@ from cosapp.tests.library.systems.basicalgebra import (
 )
 from cosapp.tests.library.systems.vectors import Strait1dLine, Splitter1d
 from cosapp.utils.testing import get_args, no_exception
+from cosapp.utils import get_state, set_state
 
 
-"""
-meta model can be used on:
+"""Meta model can be used on:
 - systems without any driver on one or more of their children
 - systems without any driver on themself
 - systems with NLS (NonLinearSolver) on themself
@@ -68,7 +68,35 @@ class B(System):
 class C(System):
     def setup(self):
         self.add_input(XPort, 'j')
-        self.add_transient('h', der = 'j.x')
+        self.add_transient('h', der='j.x')
+
+class MultiplyByM(System):
+    """System computing y = m * x"""
+    def setup(self):
+        self.add_inward('m')
+        self.add_inward('x')
+        self.add_outward('y')
+    
+    def compute(self):
+        self.y = self.m * self.x    
+
+class AffineSystem(System):
+    """System computing: y = a.m * b.m * x + 3"""
+    def setup(self):
+        self.add_outward('y')
+        # sub-systems
+        a = self.add_child(MultiplyByM('a'), pulling='x')
+        b = self.add_child(MultiplyByM('b'))
+        # connections
+        self.connect(a, b, {'y': 'x'})
+    
+    def compute(self):
+        self.y = self.b.y + 3
+    
+    @property
+    def y_exact(self):
+        """Expected value for `self.out.value`"""
+        return self.b.m * (self.a.m * self.x) + 3
 
 
 @pytest.fixture(scope="function")
@@ -80,14 +108,13 @@ def no_output_sys():
     return NoOutputSystem('no_output_sys')
 
 
-@pytest.fixture(scope="function")
-def cubic_DoE():
-    def factory(data: dict):
-        return pandas.DataFrame(
-            list(itertools.product(*data.values())),
-            columns = [key for key in data]
-        )
-    return factory
+def cubic_DoE(axes: dict):
+    """Simple Cartesian grid DoE from 1D samples given by `axes`.
+    """
+    return pandas.DataFrame(
+        itertools.product(*axes.values()),
+        columns=axes.keys(),
+    )
 
 
 @pytest.fixture(scope="function")
@@ -103,23 +130,20 @@ def p1e2mg_doe_out():
 
 
 @pytest.fixture(scope="function")
-def p1e2mg_doe_out_df(p1e2mg_doe_out):
-    return pandas.DataFrame.from_dict(p1e2mg_doe_out)
-
-
-@pytest.fixture(scope="function")
-def p1e2mg_doe_out_factory(p1e2mg_doe_out_df, p1e2mg_doe_out):
+def p1e2mg_doe_out_factory(p1e2mg_doe_out):
     def factory(name):
         if name == "dict":
             return p1e2mg_doe_out
         elif name == "df":
-            return p1e2mg_doe_out_df
+            return pandas.DataFrame.from_dict(p1e2mg_doe_out)
+        else:
+            raise ValueError(f"Unsupported choice {name!r}")
     return factory
 
 
 @pytest.fixture(scope="function")
-def unknown_sys_training_data(cubic_DoE):
-    data = {'PMEMUG.x_in.x': numpy.linspace(-3,3,40)}
+def unknown_sys_training_data():
+    data = {'PMEMUG.x_in.x': numpy.linspace(-3, 3, 40)}
     return cubic_DoE(data)
 
 
@@ -136,7 +160,7 @@ def vectorsplit():
 
 
 @pytest.fixture(scope="function")
-def data_vectorsys(cubic_DoE):
+def data_vectorsys():
     data = {
         'a': list(numpy.full(3, k + 1) for k in range(3)),
         'in_.x': list(numpy.full(3, k * 0.5) for k in range(3)),
@@ -145,7 +169,7 @@ def data_vectorsys(cubic_DoE):
 
 
 @pytest.fixture(scope="function")
-def data_vectorsys_HF(cubic_DoE):
+def data_vectorsys_HF():
     data = {
         'a': list(numpy.full(3, k + 1) for k in range(5)),
         'in_.x': list(numpy.full(3, k * 0.5) for k in range(5)),
@@ -154,7 +178,7 @@ def data_vectorsys_HF(cubic_DoE):
 
 
 @pytest.fixture(scope="function")
-def data_vectorsplit_HF(cubic_DoE):
+def data_vectorsplit_HF():
     data = {
         'in_.x': list(numpy.full(3, k * 0.15) for k in range(15)),
     }
@@ -186,7 +210,7 @@ def surrogated_pme_LNN(unknown_sys_training_data):
 
 
 @pytest.fixture(scope="function")
-def training_data_pme(cubic_DoE):
+def training_data_pme():
     data = {
         'x_in.x': [0.5, 1., 1.5],
         'u_in.x': [0.5, 1., 1.3333],
@@ -210,62 +234,63 @@ def sumg():
 
 
 @pytest.fixture(scope="function")
-def training_data3(cubic_DoE):
+def training_data_ux():
+    def factory(n: int):
+        data = {
+            'x_in.x': numpy.linspace(0., float(n), n),
+            'u_in.x': numpy.linspace(0., float(n), n),
+        }
+        return cubic_DoE(data)
+    return factory
+
+
+@pytest.fixture(scope="function")
+def data_in():
     data = {
-        'x_in.x': numpy.linspace(0., 3., 3),
-        'u_in.x': numpy.linspace(0., 3., 3),
+        'x_in.x': [2., 2.333, 2.666, 3.],
+        'u_in.x': [1., 1.3333, 1.6666, 2.],
     }
     return cubic_DoE(data)
 
 
 @pytest.fixture(scope="function")
-def training_data15(cubic_DoE):
-    data = {
-        'x_in.x': numpy.linspace(0., 15., 15),
-        'u_in.x': numpy.linspace(0., 15., 15),
-    }
-    return cubic_DoE(data)
-
-
-@pytest.fixture(scope="function")
-def data_in(cubic_DoE):
-    data = {
-        'x_in.x' : [2., 2.333, 2.666, 3.],
-        'u_in.x' : [1., 1.3333, 1.6666, 2.],
-    }
-    return cubic_DoE(data)
-
-
-@pytest.fixture(scope="function")
-def case_factory(training_data_pme, training_data3, training_data15):
+def case_factory(training_data_pme, training_data_ux):
     def factory(name):
+        """Returns top system and System Of Interest (SOI).
+        """
         if name == "Eq_2Mult":
-            main = Sys_Provider_1Eq_2Mult_Getter('p1e2mg')
-            target = main.Eq_2Mult
-            data = training_data3
+            top = Sys_Provider_1Eq_2Mult_Getter('p1e2mg')
+            soi = top.Eq_2Mult
+            data = training_data_ux(3)
+        
         elif name == "PMEMUG":
-            main = Sys_PME2MUG_G_1E("pme")
-            target = main.PMEMUG
+            top = Sys_PME2MUG_G_1E("pme")
+            soi = top.PMEMUG
             data = training_data_pme
+        
         elif name == "Provider":
-            main = Sys_Unknown_1Eq_2Mult_Getter("sumg")
-            target = main.Provider
-            data = training_data15
+            top = Sys_Unknown_1Eq_2Mult_Getter("sumg")
+            soi = top.Provider
+            data = training_data_ux(15)
+        
+        else:
+            raise ValueError(f"Unsupported choice {name!r}")
     
-        target.make_surrogate(data, FloatKrigingSurrogate)
-        nls = main.add_driver(NonLinearSolver('nls'))
-        rsc = nls.add_child(RunSingleCase('rsc'))
-        return main, target
+        soi.make_surrogate(data, FloatKrigingSurrogate)
+        nls = top.add_driver(NonLinearSolver('nls'))
+        nls.add_child(RunSingleCase('rsc'))
+        return top, soi
 
     return factory
 
 
-@pytest.mark.parametrize("L_to_flat, expected", [
+@pytest.mark.parametrize("collection, expected", [
     ([[1, 2, 3], [4], [5, 6, 7, 8], [9]], [1, 2, 3, 4, 5, 6, 7, 8, 9]),
     ([[1, 2, 3], [4], [5, 6, 7, 8], [9, [10, 11]]], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]),
+    ([[1, 2, 3], 4, [5], [6, 7, 8], [9, [10, 11]]], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]),
 ])
-def test_flatten(L_to_flat, expected):
-    assert list(flatten(L_to_flat)) == expected
+def test_flatten(collection, expected):
+    assert list(flatten(collection)) == expected
 
 
 @pytest.mark.parametrize("mtype, expected", [
@@ -322,7 +347,7 @@ def test_SystemSurrogate_format_inputs_arrays(vectorsys, data_vectorsys):
     expected_formated_inputs = numpy.array([
         [1., 1., 1., 0., 0., 0.], [1., 1., 1., 0.5, 0.5, 0.5], [1., 1., 1., 1., 1., 1.],
         [2., 2., 2., 0., 0., 0.], [2., 2., 2., 0.5, 0.5, 0.5], [2., 2., 2., 1., 1., 1.],
-        [3., 3., 3., 0., 0., 0.], [3., 3., 3., 0.5, 0.5, 0.5], [3., 3., 3., 1., 1., 1.]
+        [3., 3., 3., 0., 0., 0.], [3., 3., 3., 0.5, 0.5, 0.5], [3., 3., 3., 1., 1., 1.],
     ])
     assert formated_inputs == pytest.approx(expected_formated_inputs, rel=1e-9)
     assert numpy.array_equal(formated_inputs, expected_formated_inputs)
@@ -357,9 +382,9 @@ def test_SystemSurrogate_format_outputs_arrays(vectorsys, data_vectorsys):
     meta = SystemSurrogate(vectorsys, data_vectorsys, FloatKrigingSurrogate)
     formated_outputs = meta._SystemSurrogate__format_outputs()
     expected = numpy.array([
-        [0. , 0. , 0. ],[0.5, 0.5, 0.5],[1. , 1. , 1. ],
-        [0. , 0. , 0. ],[1. , 1. , 1. ],[2. , 2. , 2. ],
-        [0. , 0. , 0. ],[1.5, 1.5, 1.5],[3. , 3. , 3. ]
+        [0., 0., 0.], [0.5, 0.5, 0.5], [1., 1., 1.],
+        [0., 0., 0.], [1. , 1. , 1. ], [2., 2., 2.],
+        [0., 0., 0.], [1.5, 1.5, 1.5], [3., 3., 3.],
     ])
     assert formated_outputs == pytest.approx(expected, rel=1e-9)
     assert numpy.array_equal(formated_outputs, expected)
@@ -368,8 +393,8 @@ def test_SystemSurrogate_format_outputs_arrays(vectorsys, data_vectorsys):
 def test_SystemSurrogate_train_model(p1e2mg):
     meta = SystemSurrogate(p1e2mg.Eq_2Mult, {}, FloatKrigingSurrogate)
     model = FloatKrigingSurrogate()
-    x_in = numpy.array([[1., 2., 3., 4., 5.]]).transpose()
-    x_out = numpy.array([[2., 4., 6., 8., 10.]]).transpose()
+    x_in = numpy.transpose([[1., 2., 3., 4., 5.]])
+    x_out = numpy.transpose([[2., 4., 6., 8., 10.]])
     model.train(x_in, x_out)
     meta._SystemSurrogate__train_model(x_in, x_out)
     state = meta.state
@@ -393,7 +418,7 @@ def test_SystemSurrogate_prepare_and_train_predict(p1e2mg, data_in):
         'Mult_by_2_1.x_out.x': [4.0, 4.0, 4.0, 4.0, 4.666, 4.666, 4.666, 4.666, 5.332, 5.332, 5.332, 5.332, 6.0, 6.0, 6.0, 6.0],
         'Mult_by_2_1.x_in.x': [2.0, 2.0, 2.0, 2.0, 2.333, 2.333, 2.333, 2.333, 2.666, 2.666, 2.666, 2.666, 3.0, 3.0, 3.0, 3.0],
         'Mult_by_2_2.x_out.x': [8.0, 8.0, 8.0, 8.0, 9.332, 9.332, 9.332, 9.332, 10.664, 10.664, 10.664, 10.664, 12.0, 12.0, 12.0, 12.0],
-        'Mult_by_2_2.x_in.x': [4.0, 4.0, 4.0, 4.0, 4.666, 4.666, 4.666, 4.666, 5.332, 5.332, 5.332, 5.332, 6.0, 6.0, 6.0, 6.0]
+        'Mult_by_2_2.x_in.x': [4.0, 4.0, 4.0, 4.0, 4.666, 4.666, 4.666, 4.666, 5.332, 5.332, 5.332, 5.332, 6.0, 6.0, 6.0, 6.0],
     }
     state = meta.state
     assert state.doe_out == expected_doe_out
@@ -419,11 +444,11 @@ def test_SystemSurrogate_prepare_and_train_check_functions_execution(p1e2mg, dat
 
 
 @pytest.mark.filterwarnings("ignore:The.*unknowns/transients are not part of the training set")
-@pytest.mark.parametrize("expected",[
-    ({'x_in.x' : 25, 'u_in.x' : 50}),
-    ({'x_in.x' : 0., 'u_in.x' : 20}),
-    ({'x_in.x' : -100, 'u_in.x' : 15}),
-    ({'x_in.x' : 2512/423, 'u_in.x' : -3.7586}),
+@pytest.mark.parametrize("expected", [
+    {'x_in.x': 25, 'u_in.x': 50},
+    {'x_in.x': 0., 'u_in.x': 20},
+    {'x_in.x': -100, 'u_in.x': 15},
+    {'x_in.x': 2512 / 423, 'u_in.x': -3.7586},
 ])
 def test_SystemSurrogate_get_current_inputs_result(p1e2mg, data_in, expected):
     meta = SystemSurrogate(p1e2mg.Eq_2Mult, data_in, FloatKrigingSurrogate)
@@ -431,7 +456,10 @@ def test_SystemSurrogate_get_current_inputs_result(p1e2mg, data_in, expected):
     p1e2mg.Eq_2Mult["u_in.x"] = expected["u_in.x"]
     assert p1e2mg.Eq_2Mult.x_in.x == expected["x_in.x"]
     assert p1e2mg.Eq_2Mult.u_in.x == expected["u_in.x"]
-    assert numpy.array_equal(meta._SystemSurrogate__get_owner_inputs(), [expected["x_in.x"], expected["u_in.x"]])
+    assert numpy.array_equal(
+        meta._SystemSurrogate__get_owner_inputs(),
+        [expected["x_in.x"], expected["u_in.x"]],
+    )
 
 
 @pytest.mark.filterwarnings("ignore:The.*unknowns/transients are not part of the training set")
@@ -487,16 +515,14 @@ def test_SystemSurrogate_init1(p1e2mg, data_in):
     meta = SystemSurrogate(p1e2mg.Eq_2Mult, data_in, FloatKrigingSurrogate)
     assert meta is not None
     assert meta.owner is p1e2mg.Eq_2Mult
-    expected_doe_in = pandas.DataFrame(numpy.array([
-        [2.0, 1.0], [2.0, 1.3333], 
-        [2.0, 1.6666], [2.0, 2.0], 
-        [2.333, 1.0], [2.333, 1.3333], 
-        [2.333, 1.6666], [2.333, 2.0], 
-        [2.666, 1.0], [2.666, 1.3333], 
-        [2.666, 1.6666], [2.666, 2.0], 
-        [3.0, 1.0], [3.0, 1.3333], 
-        [3.0, 1.6666], [3.0, 2.0]]), 
-        columns = ['x_in.x', 'u_in.x']
+    expected_doe_in = pandas.DataFrame(
+        numpy.array([
+            [2.0, 1.0], [2.0, 1.3333], [2.0, 1.6666], [2.0, 2.0], 
+            [2.333, 1.0], [2.333, 1.3333], [2.333, 1.6666], [2.333, 2.0], 
+            [2.666, 1.0], [2.666, 1.3333], [2.666, 1.6666], [2.666, 2.0], 
+            [3.0, 1.0], [3.0, 1.3333], [3.0, 1.6666], [3.0, 2.0],
+        ]), 
+        columns=['x_in.x', 'u_in.x'],
     )
     expected_doe_out = {
         'x_out.x': [11.0, 11.0, 11.0, 11.0, 12.332, 12.332, 12.332, 12.332, 13.664, 13.664, 13.664, 13.664, 15.0, 15.0, 15.0, 15.0],
@@ -506,15 +532,15 @@ def test_SystemSurrogate_init1(p1e2mg, data_in):
         'Mult_by_2_2.x_out.x': [8.0, 8.0, 8.0, 8.0, 9.332, 9.332, 9.332, 9.332, 10.664, 10.664, 10.664, 10.664, 12.0, 12.0, 12.0, 12.0],
         'Mult_by_2_2.x_in.x': [4.0, 4.0, 4.0, 4.0, 4.666, 4.666, 4.666, 4.666, 5.332, 5.332, 5.332, 5.332, 6.0, 6.0, 6.0, 6.0]
     }
-    assert (meta.state.doe_in.values == expected_doe_in.values).all()
-    assert (meta.state.doe_in.columns == expected_doe_in.columns).all()
+    assert numpy.array_equal(meta.state.doe_in.values, expected_doe_in.values)
+    assert list(meta.state.doe_in.columns) == list(expected_doe_in.columns)
     assert meta.state.doe_out == expected_doe_out
     assert meta.model_type is FloatKrigingSurrogate
     assert isinstance(meta.state, SystemSurrogateState)
 
     meta2 = SystemSurrogate(p1e2mg.Eq_2Mult, pandas.DataFrame.to_dict(data_in, orient="list"), FloatKrigingSurrogate)
-    assert (meta2.state.doe_in.values == expected_doe_in.values).all()
-    assert (meta2.state.doe_in.columns == expected_doe_in.columns).all()
+    assert numpy.array_equal(meta2.state.doe_in.values, expected_doe_in.values)
+    assert list(meta2.state.doe_in.columns) == list(expected_doe_in.columns)
     assert meta2.state.doe_out == expected_doe_out
     assert meta2.model_type is FloatKrigingSurrogate
     assert isinstance(meta2.state, SystemSurrogateState)
@@ -522,7 +548,7 @@ def test_SystemSurrogate_init1(p1e2mg, data_in):
 
 @pytest.mark.filterwarnings("ignore:The.*unknowns/transients are not part of the training set")
 @pytest.mark.filterwarnings("ignore:Values in x were outside bounds during a minimize step")
-def test_SystemSurrogate_equation_warning(pme, cubic_DoE):
+def test_SystemSurrogate_equation_warning(pme):
     data = {
         'x_in.x': [0.5, 1., 1.5],
         'u_in.x': [0.5, 1., 1.3333],
@@ -536,7 +562,7 @@ def test_SystemSurrogate_equation_warning(pme, cubic_DoE):
 
 
 @pytest.mark.filterwarnings("ignore:The.*unknowns/transients are not part of the training set")
-def test_SystemSurrogate_regtest_1(pme, cubic_DoE):
+def test_SystemSurrogate_regtest_1(pme):
     data = {
         'x_in.x': [0.5, 1., 1.5],
         'u_in.x': [0.5, 1., 1.3333],
@@ -557,8 +583,8 @@ def test_SystemSurrogate_regtest_1(pme, cubic_DoE):
 
 
 @pytest.mark.filterwarnings("ignore:The.*unknowns/transients are not part of the training set")
-def test_SystemSurrogate_regtest_3(sumg, training_data15):
-    sumg.Eq_2Mult.make_surrogate(training_data15, FloatKrigingSurrogate)
+def test_SystemSurrogate_regtest_3(sumg, training_data_ux):
+    sumg.Eq_2Mult.make_surrogate(training_data_ux(15), FloatKrigingSurrogate)
     sumg.run_drivers()
     assert sumg.Eq_2Mult.Basic_Eq.x_in.x == pytest.approx(25.)
     assert sumg.Provider.x_in.x == pytest.approx(12.5, rel=1e-3)
@@ -570,26 +596,26 @@ def test_SystemSurrogate_regtest_arrays(vectorsys, data_vectorsys_HF):
     vectorsys["a"] = 1.5 * numpy.ones(3)
     vectorsys["in_.x"] = 0.75 * numpy.ones(3)
     vectorsys.run_drivers()
-    assert vectorsys["out.x"] == pytest.approx(numpy.array([1.125, 1.125, 1.125]), rel=2.e-1)    
+    assert vectorsys["out.x"] == pytest.approx([1.125, 1.125, 1.125], rel=0.2)    
 
 
 def test_SystemSurrogate_regtest_arrays2(vectorsplit, data_vectorsplit_HF):
     vectorsplit.make_surrogate(data_vectorsplit_HF, FloatKrigingSurrogate)
     vectorsplit["in_.x"] = numpy.ones(3)
     vectorsplit.run_drivers()
-    assert vectorsplit["out1.x"] == pytest.approx(0.1 * numpy.ones(3), rel=1.e-3)
-    assert vectorsplit["out2.x"] == pytest.approx(0.9 * numpy.ones(3), rel=1.e-3)
+    assert vectorsplit["out1.x"] == pytest.approx(numpy.full(3, 0.1), rel=1e-3)
+    assert vectorsplit["out2.x"] == pytest.approx(numpy.full(3, 0.9), rel=1e-3)
 
 
 @pytest.mark.filterwarnings("ignore:The.*unknowns/transients are not part of the training set")
-def test_SystemSurrogate_dump_and_load(tmp_path, sumg, training_data15):
-    sumg.Eq_2Mult.make_surrogate(training_data15, FloatKrigingSurrogate)
+def test_SystemSurrogate_dump_and_load(tmp_path, sumg, training_data_ux):
+    sumg.Eq_2Mult.make_surrogate(training_data_ux(15), FloatKrigingSurrogate)
     meta = sumg.Eq_2Mult._meta
     meta.dump(tmp_path / "test_surrogate_save.obj")
     sumg.run_drivers()
     assert sumg.Provider.x_in.x == pytest.approx(12.5, rel=1e-3)
 
-    #2ND SYSTEM
+    # 2ND SYSTEM
     SUMG2 = Sys_Unknown_1Eq_2Mult_Getter("SUMG2")
     meta2 = SystemSurrogate(SUMG2.Eq_2Mult, {}, FloatKrigingSurrogate)
     SUMG2.Eq_2Mult._meta = meta2
@@ -597,19 +623,23 @@ def test_SystemSurrogate_dump_and_load(tmp_path, sumg, training_data15):
     SUMG2.Eq_2Mult._meta = meta2
     nls2 = SUMG2.add_driver(NonLinearSolver('nls2'))
     rsc2 = nls2.add_child(RunSingleCase('rsc2'))
-    #doe_in TEST
-    assert (meta2.state.doe_in.columns == meta.state.doe_in.columns).all()
-    assert (meta2.state.doe_in.values == meta.state.doe_in.values).all()
-    #doe_out TEST
+
+    # doe_in TEST
+    assert list(meta2.state.doe_in.columns) == list(meta.state.doe_in.columns)
+    assert numpy.array_equal(meta2.state.doe_in.values, meta.state.doe_in.values)
+    
+    # doe_out TEST
     assert meta2.state.doe_out == meta.state.doe_out
-    #MODEL PREDICTION TEST
+
+    # MODEL PREDICTION TEST
     for x in ([1.5, 0.5], [0.5, 10.], [5., 4.], [12.5, 11.5], [13., 7.]):
-        assert (meta2.state.model.predict(numpy.array(x)) == meta.state.model.predict(numpy.array(x))).all()
+        v = numpy.asarray(x)
+        assert numpy.array_equal(meta2.state.model.predict(v), meta.state.model.predict(v))
     SUMG2.run_drivers()
     assert SUMG2.Provider.x_in.x == pytest.approx(12.5, rel=1e-3)
 
 
-@pytest.mark.parametrize("wrong_state",[
+@pytest.mark.parametrize("wrong_state", [
     15.,
     dict(),
     list(),
@@ -621,28 +651,30 @@ def test_SystemSurrogate_dump_and_load_error_state(tmp_path, sumg, wrong_state):
     sumg.Eq_2Mult.make_surrogate({}, FloatKrigingSurrogate)
     meta = sumg.Eq_2Mult._meta
     meta._SystemSurrogate__state = wrong_state
-    if isinstance(wrong_state, numpy.ndarray):
-        assert (meta.state == wrong_state).all()
+    if isinstance(wrong_state, (list, tuple, numpy.ndarray)):
+        assert numpy.array_equal(meta.state, wrong_state)
     else:
         assert meta.state == wrong_state
-    meta.dump(tmp_path / "test_surrogate_save.obj")
+    filename = tmp_path / "test_surrogate_save.obj"
+    meta.dump(filename)
     with pytest.raises(TypeError): 
-        meta = SystemSurrogate.load(meta.owner, tmp_path / "test_surrogate_save.obj")
+        SystemSurrogate.load(meta.owner, filename)
 
 
 @pytest.mark.parametrize("wrong_state",[
-    (15.),
-    (dict()),
-    (list()),
-    (None),
-    (numpy.ones(3)),
-    ("sdqfs"),
+    15.,
+    dict(),
+    list(),
+    None,
+    numpy.ones(3),
+    "sdqfs",
 ])
 def test_SystemSurrogate_dump_and_load_error_owner(tmp_path, sumg, wrong_state):
     meta = SystemSurrogate(sumg.Eq_2Mult, {}, FloatKrigingSurrogate)
-    meta.dump(tmp_path / "test_surrogate_save.obj")
+    filename = tmp_path / "test_surrogate_save.obj"
+    meta.dump(filename)
     with pytest.raises(TypeError): 
-        meta = SystemSurrogate.load(wrong_state, tmp_path / "test_surrogate_save.obj")
+        SystemSurrogate.load(wrong_state, filename)
 
 
 @pytest.mark.filterwarnings("ignore:The.*unknowns/transients are not part of the training set")
@@ -739,14 +771,14 @@ def test_get_dependent_connections(system, expected):
 
 
 @pytest.mark.filterwarnings("ignore:The.*unknowns/transients are not part of the training set")
-def test_SystemSurrogate_no_output(no_output_sys, cubic_DoE):
+def test_SystemSurrogate_no_output(no_output_sys):
     data = {
         'a.a_in.x': [0.5, 1., 1.5],
         'a.c.j.x': [0.5, 1., 1.3333],
     }
-    training_data_ = cubic_DoE(data)
+    doe = cubic_DoE(data)
     with pytest.raises(ValueError, match="no output found"):
-        SystemSurrogate(no_output_sys, training_data_, FloatKrigingSurrogate)
+        SystemSurrogate(no_output_sys, doe, FloatKrigingSurrogate)
 
 
 @pytest.mark.parametrize("data, varlist", [
@@ -775,7 +807,7 @@ def test_SystemSurrogate_no_output(no_output_sys, cubic_DoE):
         [],
     ),
 ])
-def test_SystemSurrogate_check_unknowns_and_transients(no_output_sys, DummyFactory, cubic_DoE, data, varlist):
+def test_SystemSurrogate_check_unknowns_and_transients(no_output_sys, DummyFactory, data, varlist):
     no_output_sys.add_child(
         DummyFactory('sub', outwards=get_args('u_out', 1.0, desc='blah')),
     )
@@ -814,9 +846,9 @@ def test_get_dependent_connections_with_NLS(sumg_bare):
     }
 
 
-def test_SystemSurrogate_check_unknowns_with_NLS(sumg_bare, training_data3):
+def test_SystemSurrogate_check_unknowns_with_NLS(sumg_bare, training_data_ux):
     sumg_bare.Eq_2Mult.Eq2u1.add_driver(NonLinearSolver("nls"))
-    meta = sumg_bare.Eq_2Mult.make_surrogate(training_data3, FloatKrigingSurrogate)
+    meta = sumg_bare.Eq_2Mult.make_surrogate(training_data_ux(3), FloatKrigingSurrogate)
     assert set(meta.state.doe_out.keys()) == {
         'Basic_Eq.x_in.x',
         'Eq2u1.u',
@@ -829,9 +861,9 @@ def test_SystemSurrogate_check_unknowns_with_NLS(sumg_bare, training_data3):
     }
 
 
-def test_SystemSurrogate_check_unknowns_warning_without_NLS(sumg_bare, training_data3):
+def test_SystemSurrogate_check_unknowns_warning_without_NLS(sumg_bare, training_data_ux):
     with pytest.warns(UserWarning):
-        meta = sumg_bare.Eq_2Mult.make_surrogate(training_data3, FloatKrigingSurrogate)
+        meta = sumg_bare.Eq_2Mult.make_surrogate(training_data_ux(3), FloatKrigingSurrogate)
 
     assert set(meta.state.doe_out.keys()) == {
         'Basic_Eq.x_in.x',
@@ -849,13 +881,13 @@ def test_SystemSurrogate_regtest_2(surrogated_pme_LNN):
         1.,   1.2,  1.5,  2.5,  0.5,
         -0.5, -1.5, -2.5, -2.3, -0.9,
     ]
-    for d in data:
-        surrogated_pme_LNN.PMEMUG.x_in.x = d
+    for x in data:
+        surrogated_pme_LNN.PMEMUG.x_in.x = x
         surrogated_pme_LNN.run_drivers()
-        assert surrogated_pme_LNN.PMEMUG.SMXI.m.x == pytest.approx(107./(4*d), rel=5e-2)
+        assert surrogated_pme_LNN.PMEMUG.SMXI.m.x == pytest.approx(107 / (4 * x), rel=5e-2)
 
 
-################FOR SYSTEM##################
+################ FOR SYSTEMS ##################
 def test_System_set_recursive_active_status(p1e2mg):
     roG2D = p1e2mg.Get2D.add_driver(RunOnce('roG2D'))
     roP2D = p1e2mg.Provider.add_driver(RunOnce('roP2D'))
@@ -870,9 +902,15 @@ def test_System_make_surrogate_0(p1e2mg, data_in):
     p1e2mg.Eq_2Mult.make_surrogate(data_in, FloatKrigingSurrogate)
     assert p1e2mg.Eq_2Mult._meta is not None
     for vec in numpy.array([[1, 3], [2, 5], [0.5, 1.75], [1.8, 3.79], [1000, 30]]):
-        assert (p1e2mg.Eq_2Mult._meta.state.model.predict(vec) == meta.state.model.predict(vec)).all()
-    assert (p1e2mg.Eq_2Mult._meta.state.doe_in.columns == meta.state.doe_in.columns).all()
-    assert (p1e2mg.Eq_2Mult._meta.state.doe_in.values == meta.state.doe_in.values).all()
+        assert numpy.array_equal(
+            p1e2mg.Eq_2Mult._meta.state.model.predict(vec),
+            meta.state.model.predict(vec),
+        )
+    assert numpy.array_equal(
+        p1e2mg.Eq_2Mult._meta.state.doe_in.values,
+        meta.state.doe_in.values,
+    )
+    assert list(p1e2mg.Eq_2Mult._meta.state.doe_in.columns) == list(meta.state.doe_in.columns)
     assert p1e2mg.Eq_2Mult._meta.state.doe_out == meta.state.doe_out
     assert p1e2mg.Eq_2Mult.has_surrogate
 
@@ -882,14 +920,16 @@ def test_System_make_surrogate_execution_0(p1e2mg, data_in):
     specs = dict(
         _SystemSurrogate__prepare_and_train = DEFAULT,
     )
-    with patch.multiple("cosapp.systems.systemSurrogate.SystemSurrogate",
-        **specs) as mocked_methods:
+    with patch.multiple(
+        "cosapp.systems.systemSurrogate.SystemSurrogate",
+        **specs,
+    ) as mocked_methods:
         p1e2mg.Eq_2Mult.make_surrogate(data_in, DummyModel)        
         mocked_methods['_SystemSurrogate__prepare_and_train'].assert_called_once()
 
 
 @pytest.mark.filterwarnings("ignore:The.*unknowns/transients are not part of the training set")
-def test_System_make_surrogate_regtest_transient(tmp_path, cubic_DoE):
+def test_System_make_surrogate_regtest_transient(tmp_path):
     MySys = Sys_Looped_Div_Int_Div('LoopSys')
     data = {
         'h_in.x': numpy.linspace(-3, 10., 10),
@@ -946,9 +986,12 @@ def test_System_make_surrogate_1(pme, training_data_pme):
         [1000., 30., -95.],
     ])
     for vec in test_vectors:
-        assert pme.PMEMUG._meta.predict(vec) == pytest.approx(meta.predict(vec), rel=0.)
-    assert (pme.PMEMUG._meta.state.doe_in.columns == meta.state.doe_in.columns).all()
-    assert (pme.PMEMUG._meta.state.doe_in.values == meta.state.doe_in.values).all()
+        assert numpy.array_equal(
+            pme.PMEMUG._meta.predict(vec),
+            meta.predict(vec),
+        )
+    assert list(pme.PMEMUG._meta.state.doe_in.columns) == list(meta.state.doe_in.columns)
+    assert numpy.array_equal(pme.PMEMUG._meta.state.doe_in.values, meta.state.doe_in.values)
     assert pme.PMEMUG._meta.state.doe_out == meta.state.doe_out
     assert pme.PMEMUG.active_surrogate
 
@@ -964,52 +1007,63 @@ def test_System_make_surrogate_execution_1(pme, training_data_pme):
 
 
 @pytest.mark.filterwarnings("ignore:The.*unknowns/transients are not part of the training set")
-def test_System_make_surrogate_2(sumg, training_data3):
-    meta = SystemSurrogate(sumg.Eq_2Mult, training_data3, FloatKrigingSurrogate)
-    sumg.Eq_2Mult.make_surrogate(training_data3, FloatKrigingSurrogate)
+def test_System_make_surrogate_2(sumg, training_data_ux):
+    meta = SystemSurrogate(sumg.Eq_2Mult, training_data_ux(3), FloatKrigingSurrogate)
+    sumg.Eq_2Mult.make_surrogate(training_data_ux(3), FloatKrigingSurrogate)
     assert sumg.Eq_2Mult._meta is not None
-    for vec in [numpy.array([1., 3.]), numpy.array([2., 5.]), numpy.array([0.5, 1.75]), numpy.array([1.8,3.79]), numpy.array([1000.,30.])]:
-        assert sumg.Eq_2Mult._meta.state.model.predict(vec) == pytest.approx(meta.state.model.predict(vec), rel=0.)
-    assert (sumg.Eq_2Mult._meta.state.doe_in.columns == meta.state.doe_in.columns).all()
-    assert (sumg.Eq_2Mult._meta.state.doe_in.values == meta.state.doe_in.values).all()
+    for vec in [
+        numpy.array([1., 3.]),
+        numpy.array([2., 5.]),
+        numpy.array([0.5, 1.75]),
+        numpy.array([1.8, 3.79]),
+        numpy.array([1000., 30.]),
+    ]:
+        assert numpy.array_equal(
+            sumg.Eq_2Mult._meta.state.model.predict(vec),
+            meta.state.model.predict(vec),
+        )
+    assert list(sumg.Eq_2Mult._meta.state.doe_in.columns) == list(meta.state.doe_in.columns)
+    assert numpy.array_equal(sumg.Eq_2Mult._meta.state.doe_in.values, meta.state.doe_in.values)
     assert sumg.Eq_2Mult._meta.state.doe_out == meta.state.doe_out
     assert sumg.Eq_2Mult.active_surrogate
 
 
 @pytest.mark.filterwarnings("ignore:The.*unknowns/transients are not part of the training set")
-def test_System_make_surrogate_execution_2(sumg, training_data3):
+def test_System_make_surrogate_execution_2(sumg, training_data_ux):
     specs = dict(
         _SystemSurrogate__prepare_and_train = DEFAULT,
     )
     with patch.multiple("cosapp.systems.systemSurrogate.SystemSurrogate", **specs) as mocked_methods:
-        sumg.Eq_2Mult.make_surrogate(training_data3, FloatKrigingSurrogate)        
+        sumg.Eq_2Mult.make_surrogate(training_data_ux(3), FloatKrigingSurrogate)        
         mocked_methods['_SystemSurrogate__prepare_and_train'].assert_called_once()
 
 
 @pytest.mark.filterwarnings("ignore:The.*unknowns/transients are not part of the training set")
-@pytest.mark.parametrize("metatype, warn_err", [
-    (True, UserWarning),
-    (False, UserWarning),
-    ("foo", UserWarning),
-    (0, UserWarning),
-    (1, UserWarning),
-    (12., UserWarning),
-    ({}, UserWarning),
-    ([], UserWarning),
-    (set(), UserWarning),
+@pytest.mark.parametrize("metatype, expected", [
+    (True, pytest.warns(UserWarning)),
+    (False, pytest.warns(UserWarning)),
+    ("foo", pytest.warns(UserWarning)),
+    (0, pytest.warns(UserWarning)),
+    (1, pytest.warns(UserWarning)),
+    (12., pytest.warns(UserWarning)),
+    ({}, pytest.warns(UserWarning)),
+    ([], pytest.warns(UserWarning)),
+    (set(), pytest.warns(UserWarning)),
 ])
-def test_System_make_surrogate_warning(sumg, training_data3, metatype, warn_err):
+def test_System_make_surrogate_warning(sumg, training_data_ux, metatype, expected):
     sumg.Eq_2Mult._meta = metatype
-    with pytest.warns(warn_err):
-        sumg.Eq_2Mult.make_surrogate(training_data3, FloatKrigingSurrogate)
+    with expected:
+        sumg.Eq_2Mult.make_surrogate(training_data_ux(3), FloatKrigingSurrogate)
 
 
 @pytest.mark.filterwarnings("ignore:The.*unknowns/transients are not part of the training set")
-def test_System_dump_surrogate_load_surrogate_result(tmp_path, sumg, training_data15):
-    sumg.Eq_2Mult.make_surrogate(training_data15, FloatKrigingSurrogate)
+def test_System_dump_surrogate_load_surrogate_result(tmp_path, sumg, training_data_ux):
+    sumg.Eq_2Mult.make_surrogate(training_data_ux(15), FloatKrigingSurrogate)
     sumg.Eq_2Mult.dump_surrogate(tmp_path / "sysmetadump.obj")
+
     sumg.Eq_2Mult._meta = None
     assert sumg.Eq_2Mult._meta is None
+
     sumg.Eq_2Mult.load_surrogate(tmp_path / "sysmetadump.obj")
     assert sumg.Eq_2Mult.active_surrogate
     assert sumg.Eq_2Mult._meta is not None
@@ -1102,8 +1156,8 @@ def test_System_make_surrogate_DoE_out(pme, training_data_pme, postsynch, expect
     ({}, pytest.raises(TypeError)),
     ([], pytest.raises(TypeError)),
 ])
-def test_System_active_surrogate_arg(sumg, training_data3, choice, expected):
-    sumg.Eq_2Mult.make_surrogate(training_data3, FloatKrigingSurrogate)
+def test_System_active_surrogate_arg(sumg, training_data_ux, choice, expected):
+    sumg.Eq_2Mult.make_surrogate(training_data_ux(3), FloatKrigingSurrogate)
     with expected:
         sumg.Eq_2Mult.active_surrogate = choice
         assert sumg.Eq_2Mult.active_surrogate == choice
@@ -1116,8 +1170,8 @@ def test_System_active_surrogate_arg(sumg, training_data3, choice, expected):
         dict(
             meta_u = pytest.approx(14.8859, rel=1e-4), 
             meta_x = pytest.approx(13.3859, rel=1e-4),
-            u = pytest.approx(14.5, rel=0.),
-            x = pytest.approx(13.0, rel=0.),
+            u = pytest.approx(14.5, abs=0.),
+            x = pytest.approx(13.0, abs=0.),
         ),
     ),
     (
@@ -1134,30 +1188,75 @@ def test_System_active_surrogate_arg(sumg, training_data3, choice, expected):
         dict(
             meta_u = pytest.approx(15.0, rel=1e-4),
             meta_x = pytest.approx(12.5, rel=1e-4),
-            u = pytest.approx(15.0, rel=0),
+            u = pytest.approx(15.0, abs=0),
             x = pytest.approx(12.5),
         ),
     ),
 ])
 def test_System_active_surrogate_result(case_factory, tag, expected):
-    main, target = case_factory(tag)
+    head, soi = case_factory(tag)
+    assert soi.active_surrogate
 
-    main.run_drivers()
-    assert target.u_out.x == expected['meta_u']
-    assert target.x_out.x == expected['meta_x']
+    head.run_drivers()
+    assert soi.u_out.x == expected['meta_u']
+    assert soi.x_out.x == expected['meta_x']
 
-    target.active_surrogate = False
-    main.run_drivers()
-    assert target.u_out.x == expected['u']
-    assert target.x_out.x == expected['x']
+    soi.active_surrogate = False
+    assert not soi.active_surrogate
+    head.run_drivers()
+    assert soi.u_out.x == expected['u']
+    assert soi.x_out.x == expected['x']
 
-    target.active_surrogate = True
-    main.run_drivers()
-    assert target.u_out.x == expected['meta_u']
-    assert target.x_out.x == expected['meta_x']
+    soi.active_surrogate = True
+    assert soi.active_surrogate
+    head.run_drivers()
+    assert soi.u_out.x == expected['meta_u']
+    assert soi.x_out.x == expected['meta_x']
 
 
-################FOR DRIVER##################
+def test_System_active_surrogate_direct():
+    """Check that switching surrogate on and off has no side effect.
+    For this test, we use a direct system, with no loops, such that
+    no driver is needed to execute the system.
+    """
+    head = AffineSystem('head')
+    assert not head.has_surrogate
+    assert not head.active_surrogate
+
+    head.x = -4.5
+    head.a.m = -1.25
+    head.b.m = 2.52
+    head.run_once()
+    ref_state = get_state(head)
+    assert head.y_exact == pytest.approx(17.175, rel=1e-15)
+    assert head.y == head.y_exact
+
+    axes = {
+        'x': numpy.linspace(-5, 5, 11),
+        'a.m': numpy.linspace(-3, 3, 6),
+        'b.m': numpy.linspace(-3, 3, 6),
+    }
+    doe = cubic_DoE(axes)
+    head.make_surrogate(doe)
+    assert head.has_surrogate
+    assert head.active_surrogate
+
+    # Set to ref state and run with surrogate
+    set_state(head, ref_state)
+    head.run_once()
+    assert head.y == pytest.approx(head.y_exact, rel=1e-2)
+    assert head.y == pytest.approx(17.13, rel=1e-3)
+
+    # Deactivate surrogate and re-run (inputs are unchanged)
+    head.active_surrogate = False
+    assert head.has_surrogate
+    assert not head.active_surrogate
+
+    head.run_once()
+    assert head.y == head.y_exact
+
+
+################ FOR DRIVERS ##################
 def test_Driver_set_children_active_status_result(p1e2mg):
     roG2D = p1e2mg.Get2D.add_driver(RunOnce('roG2D'))
     roP2D = p1e2mg.Provider.add_driver(RunOnce('roP2D'))
@@ -1166,20 +1265,24 @@ def test_Driver_set_children_active_status_result(p1e2mg):
     rsc = nls.add_child(RunSingleCase('rsc'))
     roG2D._active = False
     roP2D._active = False
+
     nls._set_children_active_status(True)
     assert nls._active == True
     assert rsc._active == True
-    #Verify that it doesn't touch not concerned drivers.
+
+    # Check that it does not affect unconcerned drivers.
     assert roG2D._active == False
     assert roP2D._active == False
-    #Some modifs. Verify that it doesn't touch not concerned drivers.
+
+    # Some modifs. Check that it does not affect unconcerned drivers.
     nls._set_children_active_status(False)
     roG2D._set_children_active_status(True)
     assert nls._active == False
     assert rsc._active == False
     assert roP2D._active == False
     assert roG2D._active == True
-    #One last modif. Verify that it doesn't touch not concerned drivers.
+
+    # One last modif. Check that it does not affect unconcerned drivers.
     roP2D._set_children_active_status(True)
     assert nls._active == False
     assert rsc._active == False

@@ -3293,6 +3293,8 @@ class System(Module, TimeObserver):
             self._set_recursive_active_status(True)
             self.__runner = self
 
+        self.set_dirty(PortType.IN)
+
     @property
     def has_surrogate(self) -> bool:
         """bool: True if system has a surrogate model (even if inactive), False otherwise."""
