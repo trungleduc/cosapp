@@ -62,7 +62,7 @@ class DocDisplay:
 
     # TODO unit tests
 
-    def __init__(self, obj: Union[type, BasePort, Module]):
+    def __init__(self, obj: Union[type, BasePort, Module], **kwargs):
         """DocDisplay constructor.
 
         Documentation can only be built for object of type :py:class:`~cosapp.drivers.driver.Driver`,
@@ -70,8 +70,11 @@ class DocDisplay:
 
         Parameters
         ----------
-        obj: BasePort or Module class, or instance thereof
-            Class type of the object to display, or instance of such class.
+        - obj: `Port`, `System` or `Driver` class, or instance thereof.
+            Object to display.
+        - **kwargs:
+            Additional keyword arguments forwarded to class constructor,
+            if `obj` is a class.
         """
         supported = (BasePort, Module)
         if not (isinstance(obj, supported) or issubclass(obj, supported)):
@@ -79,9 +82,9 @@ class DocDisplay:
 
         if isinstance(obj, type):  # Instantiate an object
             if issubclass(obj, BasePort):
-                obj = obj("dummy", PortType.OUT)
+                obj = obj("dummy", PortType.OUT, **kwargs)
             else:
-                obj = obj("dummy")
+                obj = obj("dummy", **kwargs)
 
         self._obj = obj
 
@@ -109,16 +112,16 @@ class DocDisplay:
         self._obj.accept(visitor)
         return "\n".join(visitor.doc)
 
-    @classmethod
-    def display_doc(cls, obj: Union[type, BasePort, Module]) -> "DocDisplay":
-        """Display information for `Driver`, `System` or `Port` in a Jupyter notebook.
 
-        Parameters
-        ----------
-        obj: Any
-            Object of interest
-        """
-        return cls(obj)
+def display_doc(obj: Union[type, BasePort, Module], **kwargs) -> DocDisplay:
+    """Display information for `Driver`, `System` or `Port` in a Jupyter notebook.
 
-
-display_doc = DocDisplay.display_doc
+    Parameters
+    ----------
+    - obj: `Port`, `System` or `Driver` class, or instance thereof.
+        Object to display.
+    - **kwargs:
+        Additional keyword arguments forwarded to class constructor,
+        if `obj` is a class.
+    """
+    return DocDisplay(obj, **kwargs)
