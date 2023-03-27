@@ -1,6 +1,8 @@
 from cosapp.base import System, Port
 from cosapp.ports.port import BasePort, BaseVariable
 from cosapp.ports.enum import PortType
+from cosapp.core.numerics.boundary import Unknown
+from cosapp.core.numerics.residues import Residue
 from cosapp.tools.views.markdown import PortMarkdownFormatter
 from cosapp.utils.find_variables import make_wishlist
 
@@ -205,15 +207,39 @@ def get_data_from_class(
                 strippedDoc.append(strippedLine)
             return "\n".join(strippedDoc)
         return None
-  
+
+    def get_math_problem(system: System) -> Dict[str, Any]:
+        """Extract mathematical problem metadata from `system`"""
+        def extract_data(obj: Union[Unknown, Residue]):
+            objDict = obj.to_dict()
+            return { 'context': objDict['context'], 'content': objDict['name'] }
+        
+        def dict_to_list(objList: Union[Dict[str, Unknown], Dict[str, Residue]]):
+            return list(map(extract_data, objList.values()))
+    
+        system.open_loops()
+        problem = system.assembled_problem()
+        system.close_loops()
+
+        mathProblemDict = {}
+        if (unknowns := problem.unknowns):
+            mathProblemDict['unknowns'] = dict_to_list(unknowns)
+            mathProblemDict['nUnknowns'] = problem.n_unknowns
+        if (residues := problem.residues):
+            mathProblemDict['equations'] = dict_to_list(residues)
+            mathProblemDict['nEquations'] = problem.n_equations
+
+        return mathProblemDict
+
     if issubclass(dtype, System):
         systemType = dtype.__name__
-        systemName = kwargs.pop('__alias', systemType)
+        systemName = kwargs.pop('__alias__', systemType)
         sysPackage = package_name or dtype.__module__.split('.', maxsplit=1)[0]
         system = dtype('bogus', *args, **kwargs)
         desc = get_system_doc(dtype)
         inputs = get_all_port_data(system.inputs)
         outputs = get_all_port_data(system.outputs)
+        mathProblemDict = get_math_problem(system)
         dtypeDict = {
             'name': systemName,
             'className': systemType,
@@ -226,6 +252,8 @@ def get_data_from_class(
             dtypeDict['inputs'] = inputs
         if outputs:
             dtypeDict['outputs'] = outputs
+        if mathProblemDict:
+            dtypeDict['mathProblem'] = mathProblemDict
 
     else:
         port = dtype('bogus', direction=PortType.IN, *args, **kwargs)
@@ -250,11 +278,11 @@ def get_data_from_module(
     -----------
     - module [ModuleType]:
         Python module to be parsed.
-    - ctor_config [dict[str, list[dict[str, any]] | dict[str, Any]]] (optional):
+    - ctor_config [dict[str, Any] | dict[str, list[dict[str, any]]]] (optional):
         Dictionary or list of dictionaries containing kwargs required for system/port
         construction (if any), referenced by class names (keys).
-        If the dictonary has contains an `__alias` argument, the class will be
-        renamed to `__alias` value.
+        If the dictionary contains key '__alias__', the class will be
+        renamed into the associated value.
     - packageName [str] (optional):
         Custom package name.
     - includes [str or List[str]] (optional):
@@ -282,7 +310,7 @@ def get_data_from_module(
                     logger.info(f"Could not instantiate `{cls.__name__}`; skipped")
                     continue
                 if len(cls_kwargs_tab) > 1:
-                    if not cls_kwargs.pop('__alias', None):
+                    if not cls_kwargs.pop('__alias__', None):
                         cls_data['name'] += f' {format_kwargs(**cls_kwargs)}'
                 result.append(cls_data)
         return result
@@ -330,8 +358,8 @@ def parse_module(
     - ctor_config [dict[str, list[dict[str, any]] | dict[str, Any]]] (optional):
         Dictionary or list of dictionaries containing kwargs required for system/port
         construction (if any), referenced by class names (keys).
-        If the dictonary has contains an `__alias` argument, the class will be
-        renamed to `__alias` value.
+        If the dictionary contains key '__alias__', the class will be
+        renamed into the associated value.
     - packageName [str] (optional):
         Custom package name.
     - includes [str or List[str]] (optional):
@@ -351,7 +379,10 @@ def parse_module(
     >>>     module2,
     >>>     ctor_config = {
     >>>         'SystemA': dict(n=2, x=0.5),
-    >>>         'SystemB': dict(foo=None),
+    >>>         'SystemB': [
+    >>>             dict(foo=0),
+    >>>             dict(foo=None, __alias__='SystemB [default]'),
+    >>>         ],
     >>>     },
     >>> )
     """

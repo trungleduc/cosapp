@@ -55,6 +55,30 @@
             "required": [ "name", "type", "pack" ],
             "additionalProperties": false
         },
+        "mathProblemDataType": {
+            "description": "Name and context of an unknowns or an equation",
+            "properties": {
+                "context": { "type": "string" },
+                "content": { "type": "string"}
+            },
+            "additionalProperties": false
+        },
+        "mathProblem": {
+            "description": "Data for math problem of a system",
+            "properties": {
+                "nUnknowns" : { "type": "number" },
+                "nEquations" : { "type": "number" },
+                "unknowns":{
+                    "type": "array",
+                    "items": { "$ref": "#/$defs/mathProblemDataType" }
+                },
+                "equations":{
+                    "type": "array",
+                    "items": { "$ref": "#/$defs/mathProblemDataType" }
+                }
+            },
+            "additionalProperties": false
+        },
         "portClass": {
             "description": "Port class",
             "properties": {
@@ -65,7 +89,7 @@
                     "type": "array",
                     "items": { "$ref": "#/$defs/portVariable" }
                 },
-                "kwargs" : { "type": "object"}
+                "kwargs" : { "type": "object" }
             },
             "required": [ "name", "pack", "variables"],
             "additionalProperties": false
@@ -86,7 +110,8 @@
                     "type": "array",
                     "items": { "$ref": "#/$defs/sysPort" }
                 },
-                "kwargs" : { "type": "object"}
+                "kwargs" : { "type": "object" },
+                "mathProblem": { "$ref": "#/$defs/mathProblem" }
             },
             "required": [ "name", "className", "pack", "mod" ],
             "additionalProperties": false

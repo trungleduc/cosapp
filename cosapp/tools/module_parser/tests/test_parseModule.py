@@ -204,6 +204,15 @@ def test_get_data_from_class_with_kwargs():
     }
 
 
+def test_get_math_pb():
+    from MathPbSystem import AssemblyWithMathPb
+    mathPb = get_data_from_class(AssemblyWithMathPb)['mathProblem']
+    assert mathPb['nUnknowns'] == 1
+    assert len(mathPb['unknowns']) == 1
+    assert mathPb['nEquations'] == 3
+    assert len(mathPb['equations']) == 1
+    
+
 def sorted_by_name(list: List[Dict[str, Any]]):
     return sorted(list, key = lambda elem: elem['name'])
 
@@ -239,7 +248,7 @@ def test_get_data_from_module_with_opt_kwargs(expectedSystems, expectedPorts):
 def test_get_data_from_module_system_kwargs_with_alias():
     import bogusModule
     alias = 'TestAlias'
-    ctor_config = dict(SystemWithKwargs=[dict(n=3, __alias = alias), dict(n=2, r=1)])
+    ctor_config = dict(SystemWithKwargs=[dict(n=3, __alias__=alias), dict(n=2, r=1)])
     moduleData = get_data_from_module(bogusModule, ctor_config)
 
     expectedSystemWithAlias = {
