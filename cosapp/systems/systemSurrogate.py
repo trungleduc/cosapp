@@ -116,7 +116,7 @@ class SystemSurrogate:
         postsynch = make_wishlist(postsynch, 'postsynch')
         
         # BUILD INTERN DATA
-        self.__owner = owner
+        self.__owner: System = owner
         self.__need_doe = (data_out is None)
         
         doe_in = pandas.DataFrame.from_dict(data_in) if isinstance(data_in, dict) else data_in
@@ -209,14 +209,12 @@ class SystemSurrogate:
         pos = 0
         for var in doe_out_sizes:
             size = 0
-            value = owner[var]
-            if isinstance(value, Number):
-                size = 1
-            elif isinstance(value, numpy.ndarray):
-                size = value.size
+            attr = getattr(owner, var)
+            if isinstance(attr, (Number, numpy.ndarray)):
+                size = numpy.size(attr)
             else:
                 raise TypeError(
-                    f"Unsupported data type {type(value).__name__} for {owner.name}.{var}"
+                    f"Unsupported data type {type(attr).__name__} for {owner.name}.{var}"
                 )
             doe_out_sizes[var] = (pos, size)
             pos += size
@@ -306,10 +304,16 @@ class SystemSurrogate:
         owner = self.__owner
         logger.log(LogLevel.FULL_DEBUG, f"Post-synchronize outputs of {owner.name}")
         for var, (pos, size) in self.__state.doe_out_sizes.items():
-            if size == 1:
-                owner[var] = np_outputs[pos]
-            elif size > 1:
-                owner[var].ravel()[:] = np_outputs[pos : pos + size]
+            attr = getattr(owner, var)
+            if isinstance(attr, numpy.ndarray):
+                attr.flat = np_outputs[pos : pos + size]
+            elif size == 1:
+                setattr(owner, var, np_outputs[pos])
+            else:
+                # Should never occur, according to `__get_doe_out_sizes`
+                raise TypeError(
+                    f"Unsupported data type {type(attr).__name__} for {owner.name}.{var}"
+                )
 
     def dump(self, filename: str) -> None:
         """Dump current state to file"""
@@ -356,8 +360,7 @@ def flatten(iterable: Iterable) -> Iterable:
 
 
 def get_dependent_connections(system: "cosapp.systems.System") -> Dict[str, PortType]:
-    """
-    This function returns a dictionnary mapping variable names to a port direction.
+    """This function returns a dictionnary mapping variable names to a port direction.
     Keys are absolute paths to connected inputs and all outputs.
     Values are owner port direction.
     """
@@ -391,7 +394,9 @@ def get_dependent_connections(system: "cosapp.systems.System") -> Dict[str, Port
                 result[key] = PortType.IN
                 logger.debug(f"Add {key} to list of unknowns")
         for child in system.children.values():
-            logger.debug(f"Targeted child of recursive getter of connected inputs and all outputs is {child}")
+            logger.debug(
+                f"Targetted child of recursive getter of connected inputs and all outputs is {child}"
+            )
             result.update(get_connections(child, head_system))
         return result
 
