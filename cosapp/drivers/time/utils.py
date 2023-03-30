@@ -148,8 +148,8 @@ class TimeUnknownDict(MutableMapping):
     """
     def __init__(self, **mapping):
         super().__init__()
-        self.__transients = {}
-        self.__constrained = {}
+        self.__transients: Dict[str, AbstractTimeUnknown] = {}
+        self.__constrained: Dict[str, AbstractTimeUnknown] = {}
         self.update(mapping)
 
     def __str__(self) -> str:

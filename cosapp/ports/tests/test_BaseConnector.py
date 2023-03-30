@@ -370,13 +370,13 @@ def test_BaseConnector_source_sink(attr, port, expected):
     ('source', AbcPort('p3', PortType.IN), dict(error=None)),
     ('source', AbcdPort('p3', PortType.IN), dict(error=None)),  # source has extra variables `c` and `d` - OK
     ('source', PortWithNoOwner('p3', PortType.IN), dict(error=ConnectorError, match="owner is undefined")),
-    ('source', XPort('p3', PortType.IN), dict(error=ConnectorError, match="variable 'a' does not exist in port XPort")),
+    ('source', XPort('p3', PortType.IN), dict(error=ConnectorError, match="variables \['a', 'b'\] do not exist in port XPort")),
     ('source', APort('p3', PortType.IN), dict(error=ConnectorError, match="variable 'b' does not exist in port APort")),
     ('sink', XYPort('p3', PortType.IN), dict(error=None)),
     ('sink', XYZPort('p3', PortType.IN), dict(error=None)),  # sink has extra variable `z` - OK
     ('sink', PortWithNoOwner('p3', PortType.IN), dict(error=ConnectorError, match="owner is undefined")),
     ('sink', XPort('p3', PortType.IN), dict(error=ConnectorError, match="variable 'y' does not exist in port XPort")),
-    ('sink', APort('p3', PortType.IN), dict(error=ConnectorError, match="variable 'x' does not exist in port APort")),
+    ('sink', APort('p3', PortType.IN), dict(error=ConnectorError, match="variables \['x', 'y'\] do not exist in port APort")),
 ])
 def test_BaseConnector_source_sink_mapping(attr, port, expected):
     """
