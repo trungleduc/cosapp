@@ -368,6 +368,24 @@ class OptionsDictionary(object):
         """
         return iter(self._dict)
 
+    def keys(self):
+        """Return an iterator over dict keys."""
+        return self._dict.keys()
+
+    def values(self):
+        """Return an iterator over dict values.
+        Raises `RuntimeError` if a required option is undefined.
+        """
+        for key in self.keys():
+            yield self[key]
+
+    def items(self):
+        """Return an iterator over dict keys and values, as tuples.
+        Raises `RuntimeError` if a required option is undefined.
+        """
+        for key in self.keys():
+            yield key, self[key]
+
     def __contains__(self, key):
         """
         Check if the key is in the local dictionary.

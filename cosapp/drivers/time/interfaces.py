@@ -11,6 +11,7 @@ from cosapp.core.time import UniversalClock
 from cosapp.ports.enum import PortType
 from cosapp.drivers.driver import Driver, Recorder
 from cosapp.drivers.time.utils import (
+    TimeUnknown,
     TimeVarManager,
     TimeStepManager,
     TwoPointCubicInterpolator,
@@ -285,12 +286,15 @@ class ExplicitTimeDriver(Driver):
         manager = self.__var_manager
         owner_transients = manager.problem.transients
         self.__recorded_events = []
-        get_data = lambda var: [
-            copy.copy(var.value),
-            copy.copy(var.d_dt),
-        ]
+
+        def value_and_derivative(var: TimeUnknown):
+            return (
+                copy.copy(var.value),
+                copy.copy(var.d_dt),
+            )
+
         tr_data = dict(
-            (key, [*get_data(var), None, None])
+            (key, [*value_and_derivative(var), None, None])
             for key, var in owner_transients.items()
         )
 
@@ -303,8 +307,7 @@ class ExplicitTimeDriver(Driver):
             self._set_time(t + dt)
             # Store transient values and derivatives @ t + dt
             for key, var in owner_transients.items():
-                data = tr_data[key]
-                data[2:4] = get_data(var)
+                tr_data[key][2:4] = value_and_derivative(var)
             
             if stepper.event_detected():
                 stepper.set_data(

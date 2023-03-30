@@ -310,9 +310,12 @@ def test_connected_unknown_changing_conf(caplog):
     top.run_drivers()
     assert bar.y == pytest.approx(5.5)
     assert bar.x == pytest.approx(1.5)
+    assert set(solver.problem.unknowns) == {'bar.x'}
+    assert set(solver.problem.residues) == {'bar.y == 5.5'}
 
-    # Add a connector; unknown `bar.x` is no longer free
-    top.connect(foo.outwards, bar.inwards, {'y': 'x'})
+    # Add connector foo.y -> bar.x
+    # Unknown `bar.x` is no longer free
+    top.connect(foo, bar, {'y': 'x'})
 
     caplog.clear()
     with pytest.raises(ArithmeticError, match="numbers of params \[0\] and residues \[1\]"):
@@ -330,6 +333,9 @@ def test_connected_unknown_changing_conf(caplog):
 
     top.run_drivers()
     assert foo.x == pytest.approx(sqrt(0.5))
+    assert bar.y == pytest.approx(5.5)
+    assert set(solver.problem.unknowns) == {'foo.x'}
+    assert set(solver.problem.residues) == {'bar.y == 5.5'}
 
     # Introduce cyclic dependency with new sub-system
     class CubicRoot(System):
@@ -343,8 +349,19 @@ def test_connected_unknown_changing_conf(caplog):
     coupling = CubicRoot('coupling')
     top.add_child(coupling)
     # Make `foo.k` a function of `bar.y`
-    top.connect(bar.outwards, coupling.inwards, {'y': 'x'})
-    top.connect(coupling.outwards, foo.inwards, {'y': 'k'})
+    # with:
+    #     bar.y -> coupling.x
+    #     coupling.y -> foo.k
+    top.connect(bar, coupling, {'y': 'x'})
+    top.connect(coupling, foo, {'y': 'k'})
+
+    assert top.assembled_problem().is_empty()
+    top.open_loops()
+    problem = top.assembled_problem()
+    assert problem.shape == (1, 1)
+    assert set(problem.unknowns) == {'foo.k'}
+    assert set(problem.residues) == {'foo.k == coupling.y (loop)'}
+    top.close_loops()
 
     # Cyclic dependency induces a change in system structure,
     # which must be captured at driver execution
@@ -352,3 +369,11 @@ def test_connected_unknown_changing_conf(caplog):
     assert bar.y == pytest.approx(5.5)
     assert foo.k == pytest.approx(cbrt(5.5))
     assert foo.x == pytest.approx(0.5322200367)
+    assert set(solver.problem.unknowns) == {
+        'foo.x',
+        'foo.k',
+    }
+    assert set(solver.problem.residues) == {
+        'bar.y == 5.5',
+        'foo.k == coupling.y (loop)',
+    }

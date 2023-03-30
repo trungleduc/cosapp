@@ -24,31 +24,37 @@ from cosapp.utils.options_dictionary import OptionsDictionary
 def check_even(name, value):
     if value % 2 != 0:
         raise ValueError(
-            "Option '%s' with value %s is not an even number." % (name, value)
+            f"Option '{name}' with value {value} is not an even number."
         )
 
 
-def test_OptionsDictionary_reprs():
-    opt = OptionsDictionary()
+class MyComp(System):
+    pass
 
-    class MyComp(System):
-        pass
 
+@pytest.fixture
+def options():
+    options = OptionsDictionary()
     my_comp = MyComp("my_comp")
 
-    opt.declare("test", values=["a", "b"], desc="Test integer value")
-    opt.declare("flag", default=False, dtype=bool)
-    opt.declare("comp", default=my_comp, dtype=System)
-    opt.declare(
+    options.declare("test", values=["a", "b"], desc="Test integer value")
+    options.declare("flag", default=False, dtype=bool)
+    options.declare("comp", default=my_comp, dtype=System)
+    options.declare("undefined")
+    options.declare(
         "long_desc",
         dtype=str,
         desc="This description is long and verbose, so it "
         "takes up multiple lines in the options table.",
     )
+    return options
 
-    assert repr(opt) == repr(opt._dict)
 
-    assert opt.__str__(width=83) == "\n".join(
+def test_OptionsDictionary_reprs(options):
+    assert repr(options) == repr(options._dict)
+
+    print(options.__str__(width=83))
+    assert options.__str__(width=83) == "\n".join(
         [
             "========= ================ ================= ================ =====================",
             "Option    Default          Acceptable Values Acceptable Types Description          ",
@@ -61,12 +67,14 @@ def test_OptionsDictionary_reprs():
             "                                                              ines in the options t",
             "                                                              able.",
             "test      **Required**     ['a', 'b']        N/A              Test integer value   ",
+            "undefined **Required**     N/A               N/A                                   ",
             "========= ================ ================= ================ =====================",
         ]
     )
 
     # if the table can't be represented in specified width, then we get the full width version
-    assert opt.__str__(width=40) == "\n".join(
+    long_desc = "This description is long and verbose, so it takes up multiple lines in the options table."
+    assert options.__str__(width=40) == "\n".join(
         [
             "========= ================ ================= ================ ====================="
             "==================================================================== ",
@@ -82,6 +90,7 @@ def test_OptionsDictionary_reprs():
             "ong and verbose, so it takes up multiple lines in the options table. ",
             "test      **Required**     ['a', 'b']        N/A              Test integer value   "
             "                                                                     ",
+            "undefined **Required**     N/A               N/A              " + " " * (len(long_desc) + 1),
             "========= ================ ================= ================ ====================="
             "==================================================================== ",
         ]
@@ -157,15 +166,56 @@ def test_OptionsDictionary_unnamed_args():
         opt["test"] = 1
 
 
-def test_OptionsDictionary_contains():
-    opt = OptionsDictionary()
-    opt.declare("test")
+def test_OptionsDictionary_contains(options):
+    assert "test" in options
+    assert "flag" in options
+    assert "comp" in options
+    assert "long_desc" in options
+    assert "undefined" in options
+    assert "undeclared" not in options
 
-    contains = "undeclared" in opt
-    assert not contains
 
-    contains = "test" in opt
-    assert contains
+def test_OptionsDictionary_keys(options):
+    assert set(options.keys()) == {
+        "test",
+        "flag",
+        "comp",
+        "undefined",
+        "long_desc",
+    }
+    assert set(options.keys()) == set(options)
+    assert len(options.keys()) == len(options)
+
+
+def test_OptionsDictionary_values(options):
+    with pytest.raises(RuntimeError, match="required but has not been set"):
+        values = list(options.values())
+    # Define required options
+    options['test'] = 'b'
+    options['undefined'] = 0
+    options['long_desc'] = 'abracadabra'
+
+    values = list(options.values())
+    assert len(values) == len(options)
+
+    for key, value in zip(options, options.values()):
+        assert value == options[key], f"key: {key}"
+
+
+def test_OptionsDictionary_items(options):
+    with pytest.raises(RuntimeError, match="required but has not been set"):
+        list(options.items())
+    # Define required options
+    options['test'] = 'b'
+    options['undefined'] = 0
+    options['long_desc'] = 'abracadabra'
+
+    for key, value in options.items():
+        assert value == options[key], f"key: {key}"
+    
+    items = list(options.items())
+    assert len(items) == len(options)
+    assert items == list(zip(options.keys(), options.values()))
 
 
 def test_OptionsDictionary_update():

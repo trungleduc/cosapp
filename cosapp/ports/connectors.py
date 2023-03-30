@@ -141,21 +141,23 @@ class BaseConnector(abc.ABC):
 
     def __get_port(self, port: BasePort, sink: bool, check=True) -> "weakref.ref[BasePort]":
         """Returns a weakref to `port`, after compatibility check with internal mapping."""
-        if sink:
-            name = 'sink'
-            variables = self.sink_variables()
-        else:
-            name = 'source'
-            variables = self.source_variables()
+        port_type = 'sink' if sink else 'source'
 
         if check:
-            self.__check_port(port, name)
+            self.__check_port(port, port_type)
 
-        for variable in variables:
-            if variable not in port:
-                raise ConnectorError(
-                    f"{name.title()} variable {variable!r} does not exist in port {port}."
-                )
+        varnames: Iterator[str] = getattr(self, f"{port_type}_variables")()
+        not_found = list(
+            filter(lambda name: name not in port, varnames)
+        )
+        if not_found:
+            if len(not_found) == 1:
+                message = f"variable {not_found[0]!r} does not exist"
+            else:
+                message = f"variables {not_found} do not exist"
+            raise ConnectorError(
+                f"{port_type.title()} {message} in port {port}."
+            )
         
         return weakref.ref(port)
 

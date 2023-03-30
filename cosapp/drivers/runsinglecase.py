@@ -139,10 +139,14 @@ class RunSingleCase(IterativeCase):
         super()._precompute()
 
         # Set boundary conditions
+        owner_changed = False
         for assignment in self.case_values:
             value, changed = assignment.exec()
             if changed:
-                self.owner.set_dirty(PortType.IN)
+                owner_changed = True
+
+        if owner_changed:
+            self.owner.set_dirty(PortType.IN)
 
         # Set offdesign variables
         design_unknowns = set(self.design.unknowns)
