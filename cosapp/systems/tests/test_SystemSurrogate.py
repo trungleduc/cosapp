@@ -1256,6 +1256,29 @@ def test_System_active_surrogate_direct():
     assert head.y == head.y_exact
 
 
+def test_System_size1_array():
+    s = MultiplyByM('s')
+    s.m = 0.5
+    s.x = numpy.ones(1)
+
+    s.run_once()
+    assert isinstance(s.y, numpy.ndarray)
+    assert s.y == pytest.approx([0.5], rel=1e-15)
+
+    axes = {
+        'm': numpy.linspace(-2, 2, 11),
+        'x': numpy.atleast_2d(numpy.linspace(-5, 5, 11)).T,
+    }
+    doe = cubic_DoE(axes)
+    s.make_surrogate(doe)
+
+    s.m = 0.8
+    s.x[0] = 2.7
+    s.run_once()
+    assert isinstance(s.y, numpy.ndarray)
+    assert s.y == pytest.approx([0.8 * 2.7], abs=1e-2)
+
+
 ################ FOR DRIVERS ##################
 def test_Driver_set_children_active_status_result(p1e2mg):
     roG2D = p1e2mg.Get2D.add_driver(RunOnce('roG2D'))
