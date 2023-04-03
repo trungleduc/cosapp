@@ -1,5 +1,27 @@
 # History
 
+## 0.13.1 (2023-04-03)
+
+### Bug fixes and code quality
+
+* Update test baseline to pass in a Python 3.11 environment (MR [#200](https://gitlab.com/cosapp/cosapp/-/merge_requests/200)).
+* Creation of a dummy system factory, mostly for tests (MR [#201](https://gitlab.com/cosapp/cosapp/-/merge_requests/201)).
+* Improve clean/dirty mechanism (MR [#202](https://gitlab.com/cosapp/cosapp/-/merge_requests/202)) and fix incorrect clean/dirty status with surrogate models (MR [#205](https://gitlab.com/cosapp/cosapp/-/merge_requests/205)).
+* Fix bug in function `cosapp.tools.display_doc` for classes with setup arguments (MR [#208](https://gitlab.com/cosapp/cosapp/-/merge_requests/208)).
+* Various code quality improvements (MRs [#211](https://gitlab.com/cosapp/cosapp/-/merge_requests/211), [#212](https://gitlab.com/cosapp/cosapp/-/merge_requests/212)).
+
+### Documentation
+
+Note: extensive use of self-documenting f-strings (introduced in Python 3.8) has made tutorials incompatible with Python 3.7.
+
+* Updated tutorials (MRs [#203](https://gitlab.com/cosapp/cosapp/-/merge_requests/203), [#206](https://gitlab.com/cosapp/cosapp/-/merge_requests/206), [#207](https://gitlab.com/cosapp/cosapp/-/merge_requests/207), [#210](https://gitlab.com/cosapp/cosapp/-/merge_requests/210)).
+* The image used in binder is now based on Python 3.10 (MR [#204](https://gitlab.com/cosapp/cosapp/-/merge_requests/204)).
+
+### Module parser
+
+* New function `parse_module` in `cosapp.tools` collecting all system and port classes within a Python module. This parser, generating a JSON file containing the description of all CoSApp symbols, is primarily meant to be used for constructional GUI applications, developed separately (MRs [#192](https://gitlab.com/cosapp/cosapp/-/merge_requests/192) & [#209](https://gitlab.com/cosapp/cosapp/-/merge_requests/209)).
+
+
 ## 0.13.0 (2023-02-09)
 
 ### Python 3.10 support

@@ -1,6 +1,6 @@
 {% set name = "cosapp" %}
 # This needs to be updated manually => otherwise the source file won't be found
-{% set version = "0.13.0" %}
+{% set version = "0.13.1" %}
 
 package:
   name: {{ name }}
@@ -63,7 +63,7 @@ about:
 
     All design parameters have an intrinsic dispersion. Knowing the range of fluctuations is crucial to
     ensure the robustness of the design. CoSApp handles natively uncertain variables.
-  keywords: cosapp
+  keywords: cosapp, system simulation, system design
   dev_url: https://gitlab.com/cosapp/cosapp
   license: Apache-2.0
   copyright: Copyright Safran SA
