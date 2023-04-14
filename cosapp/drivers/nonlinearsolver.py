@@ -438,15 +438,18 @@ class NonLinearSolver(AbstractSolver):
         activate = getattr(record, "activate", None)
         emit_record = super().log_debug_message(handler, record, format)
 
+        try:
+            self.options["history"] = activate
+        except (KeyError, TypeError):
+            pass
+
         if message.endswith("call_setup_run") or message.endswith("call_clean_run"):
             emit_record = False
 
         elif activate == True:
-            self.options["history"] = True
             emit_record = False
 
         elif activate == False:
-            self.options["history"] = False
             emit_record = False
 
             message = ""
