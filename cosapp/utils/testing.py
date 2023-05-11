@@ -1,5 +1,6 @@
 """Utility functions for testing purposes"""
 import numpy
+import pytest
 import inspect
 import warnings
 import itertools
@@ -57,6 +58,27 @@ def rel_error(actual: Union[Number, Iterable], expected: Union[Number, Iterable]
         count=actual.size,
     )
     return errors.reshape(actual.shape)
+
+
+def assert_close_dict(actual: dict, expected: dict, abs=None, rel=None) -> None:
+    """Assert that `actual` and `expected` dictionaries are identical, within given tolerance bounds.
+    Works recursively with nested dictionaries.
+    """
+    def assert_close(actual: dict, expected: dict, context=""):
+        """Recursive test function, with contextual message"""
+        assert set(actual) == set(expected), context
+        for key, value in expected.items():
+            local_context = f"{context}[{key!r}]"
+            if isinstance(value, dict):
+                assert_close(actual[key], value, context=local_context)
+            else:
+                try:
+                    expected_value = pytest.approx(value, abs=abs, rel=rel)
+                except TypeError:
+                    expected_value = value
+                assert actual[key] == expected_value, f"key {local_context}"
+
+    assert_close(actual, expected)
 
 
 def get_args(*args, **kwargs) -> ArgsKwargs:

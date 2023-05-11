@@ -291,6 +291,7 @@ class Optimizer(AbstractSolver):
         
         # Resolve unknown aliasing and connected unknowns
         self.problem = dealias_problem(self._raw_problem)
+        self.touch_unknowns()
 
     def _fun_wrapper(self, expression: EvalString) -> Callable[[numpy.ndarray], float]:
         """Wrapper around objective and constraint expression to propagate the x values in the

@@ -1,6 +1,6 @@
 import abc
 import logging
-from typing import Optional
+from math import sqrt
 
 import numpy as np
 
@@ -56,7 +56,7 @@ class Duct(PlossFamily):
     def Duct_to_ComplexDuct(self):
         rtn = ComplexDuct(self.name)
         rtn.parent = self.parent
-        rtn.duct.inwards.cst_loss = self.inwards.cst_loss
+        rtn.duct.cst_loss = self.cst_loss
         rtn.bleed.split_ratio = 1.
 
         self.update_connections(rtn)
@@ -65,8 +65,8 @@ class Duct(PlossFamily):
     def Duct_to_SerialDuct(self):
         rtn = SerialDuct(self.name)
         rtn.parent = self.parent
-        rtn.duct1.inwards.cst_loss = self.inwards.cst_loss / 2
-        rtn.duct2.inwards.cst_loss = self.inwards.cst_loss / 2
+        rtn.duct1.cst_loss = self.cst_loss * 0.5
+        rtn.duct2.cst_loss = self.cst_loss * 0.5
 
         self.update_connections(rtn)
         return rtn
@@ -90,7 +90,7 @@ class SerialDuct(PlossFamily):
     def SerialDuct_to_Duct(self):
         rtn = Duct(self.name)
         rtn.parent = self.parent
-        rtn.inwards.cst_loss = self.duct1.inwards.cst_loss + self.duct2.inwards.cst_loss
+        rtn.cst_loss = self.duct1.cst_loss + self.duct2.cst_loss
 
         self.update_connections(rtn)
         return rtn
@@ -98,7 +98,7 @@ class SerialDuct(PlossFamily):
     def SerialDuct_to_ComplexDuct(self):
         rtn = ComplexDuct(self.name)
         rtn.parent = self.parent
-        rtn.duct.inwards.cst_loss = self.duct1.inwards.cst_loss + self.duct2.inwards.cst_loss
+        rtn.duct.cst_loss = self.duct1.cst_loss + self.duct2.cst_loss
         rtn.bleed.split_ratio = 1.
 
         self.update_connections(rtn)
@@ -138,7 +138,7 @@ class RealDuct(System):
         self.ts = self.fl_in.Tt / f
         self.rho = self.ps / (r * self.ts)
         self.v = self.mach * (gamma * r * self.ts) ** 0.5
-        loss = self.inwards.glp * 0.5 * self.rho * self.v ** 2
+        loss = self.glp * 0.5 * self.rho * self.v ** 2
         self.fl_out.Pt = (1. - loss) * self.fl_in.Pt
         self.fl_out.W = self.fl_in.W
         self.fl_out.Tt = self.fl_in.Tt
@@ -148,7 +148,7 @@ class RealDuct(System):
     def Duct_to_ComplexDuct(self):
         rtn = ComplexDuct(self.name)
         rtn.parent = self.parent
-        rtn.duct.inwards.cst_loss = self.inwards.cst_loss
+        rtn.duct.cst_loss = self.cst_loss
         rtn.bleed.split_ratio = 1.
 
         self.plug_same(rtn)
@@ -180,36 +180,40 @@ class Merger(System):
         self.add_output(FluidPort, 'fl_out')
 
     def compute(self):
-        self.fl_out.Pt = self.fl1_in.Pt
-        self.fl_out.Tt = self.fl1_in.Tt
-        self.fl_out.W = self.fl1_in.W + self.fl2_in.W
+        fl1_in, fl2_in = self.fl1_in, self.fl2_in
+        self.fl_out.set_values(
+            W = fl1_in.W + fl2_in.W,
+            Pt = fl1_in.Pt,
+            Tt = fl1_in.Tt,
+        )
 
 
 class Atm(System):
 
     def setup(self):
-        self.add_output(FluidState, 'fl_out', {'Pt': 101325, 'Tt': 273.15})
-        self.add_inward('Pt', 101325)
-        self.add_inward('Tt', 273.15)
+        self.add_output(FluidState, 'fl_out', {'Pt': 1.01325e5, 'Tt': 273.15})
+        self.add_inward('Pt', 1.01325e5, unit='Pa')
+        self.add_inward('Tt', 273.15, unit='K')
 
     def compute(self):
-        self.fl_out.Pt = self.inwards.Pt
-        self.fl_out.Tt = self.inwards.Tt
+        self.fl_out.set_values(Pt=self.Pt, Tt=self.Tt)
 
 
 class Inlet(System):
 
     def setup(self):
-        self.add_input(FluidState, 'fl_in', {'Pt': 101325, 'Tt': 273.15})
+        self.add_input(FluidState, 'fl_in', {'Pt': 1.01325e5, 'Tt': 273.15})
         self.add_output(FluidPort, 'fl_out')
-        self.add_input(FlowPort, 'W_in', variables={'W': 200})
+        self.add_input(FlowPort, 'W_in', variables={'W': 200.})
 
         self.add_unknown("W_in.W")
 
     def compute(self):
-        self.fl_out.Pt = self.fl_in.Pt * 0.995
-        self.fl_out.Tt = self.fl_in.Tt
-        self.fl_out.W = self.W_in.W
+        self.fl_out.set_values(
+            W = self.W_in.W,
+            Pt = self.fl_in.Pt * 0.995,
+            Tt = self.fl_in.Tt,
+        )
 
 
 class Fan(System):
@@ -236,18 +240,21 @@ class Fan(System):
         fl_out = self.fl_out
 
         if fl_in.Tt > 0:
-            self.pcnr = self.mech_in.XN / (fl_in.Tt / 288.15) ** 0.5
-            fl_out.W = 2 * (1 - self.gh) * self.pcnr / (fl_in.Tt / 288.15) ** 0.5 * (
-                        fl_in.Pt / 101325.)
+            Trel = fl_in.Tt / 288.15
+            Prel = fl_in.Pt / 1.01325e5
+            self.pcnr = self.mech_in.XN / sqrt(Trel)
+            fl_out.W = 2 * (1 - self.gh) * self.pcnr * Prel / sqrt(Trel)
+
         else:
-            logger.error(
-                f"{self.name!r} at port 'fl_in': Tt cannot be negative or null")
-            raise ZeroDivisionError
+            message = f"{self.full_name()}: fl_in.Tt cannot be negative or null"
+            logger.error(message)
+            raise ZeroDivisionError(message)
 
+        cp, gamma = 1004, 1.4
         fl_out.Pt = fl_in.Pt * (0.01 * (self.pcnr + self.gh) + 1)
-        fl_out.Tt = fl_in.Tt * (fl_out.Pt / fl_in.Pt) ** (1 - 1 / 1.4)
+        fl_out.Tt = fl_in.Tt * (fl_out.Pt / fl_in.Pt) ** (1 - 1 / gamma)
 
-        self.PWfan = fl_out.W * 1004 * (fl_out.Tt - fl_in.Tt)
+        self.PWfan = fl_out.W * cp * (fl_out.Tt - fl_in.Tt)
 
 
 class Nozzle(System):
@@ -262,29 +269,20 @@ class Nozzle(System):
 
     def compute(self):
         fl = self.fl_in
-        self.WRnozzle = fl.W * (fl.Tt / 288.15) ** 0.5 / (fl.Pt / 101325)
+        self.WRnozzle = fl.W * sqrt(fl.Tt / 288.15) / (fl.Pt / 101325)
 
 
 class FanComplex(System):
 
     def setup(self):
-        self.add_input(FluidPort, 'fl_in')
-        self.add_output(FluidPort, 'fl_out')
-        self.add_input(MechPort, 'mech_in')
-        self.add_inward('gh', 0.1)
+        self.add_child(ComplexDuct('ductC'), pulling='fl_in')
+        self.add_child(Fan('fan'), pulling=['mech_in', 'gh', 'fl_out'])
 
-        self.add_child(ComplexDuct('ductC'))
-        self.add_child(Fan('fan'))
-
-        self.connect(self.fl_in, self.ductC.fl_in)
-        self.connect(self.mech_in, self.fan.mech_in)
-        self.connect(self.inwards, self.fan.inwards, 'gh')
         self.connect(self.ductC.fl_out, self.fan.fl_in)
-        self.connect(self.fl_out, self.fan.fl_out)
 
         self.exec_order = ['ductC', 'fan']
                 
-        self.ductC.duct.inwards.cst_loss = 1.
+        self.ductC.duct.cst_loss = 1.
 
 
 class ComplexDuct(PlossFamily):
@@ -309,7 +307,7 @@ class ComplexDuct(PlossFamily):
     def ComplexDuct_to_Duct(self):
         rtn = Duct(self.name)
         rtn.parent = self.parent
-        rtn.inwards.cst_loss = self.duct.inwards.cst_loss
+        rtn.cst_loss = self.duct.cst_loss
 
         self.update_connections(rtn)
         return rtn
@@ -317,8 +315,8 @@ class ComplexDuct(PlossFamily):
     def ComplexDuct_to_SerialDuct(self):
         rtn = SerialDuct(self.name)
         rtn.parent = self.parent
-        rtn.duct1.inwards.cst_loss = self.duct.inwards.cst_loss / 2
-        rtn.duct2.inwards.cst_loss = self.duct.inwards.cst_loss / 2
+        rtn.duct1.cst_loss = self.duct.cst_loss * 0.5
+        rtn.duct2.cst_loss = self.duct.cst_loss * 0.5
 
         self.update_connections(rtn)
         return rtn
@@ -329,7 +327,7 @@ class ComplexTurbofan(TurbofanFamily):
     def setup(self):
         self.add_child(Duct('duct'))
         self.add_child(Merger('merger'))
-        self.add_child(Splitter(name='bleed'))
+        self.add_child(Splitter('bleed'))
         self.add_child(Atm('atm'))
         self.add_child(Inlet('inlet'))
         self.add_child(Nozzle('noz'))

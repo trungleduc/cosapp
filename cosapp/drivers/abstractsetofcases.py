@@ -64,7 +64,7 @@ class AbstractSetOfCases(Driver):
         pass
 
     def _postcase(self, case_idx: int, case: Any):
-        """Hook to be called before running each case.
+        """Hook to be called after running each case.
         
         Parameters
         ----------

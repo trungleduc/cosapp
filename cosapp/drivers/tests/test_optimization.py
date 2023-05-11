@@ -51,6 +51,7 @@ def test_system_solve(system, solver):
     assert system.p_out.x == pytest.approx(1)
     assert system.merger.p2_in.x == pytest.approx(1 / 9)
     assert system.secondary_load.p_in.x / system.main_load.p_in.x == pytest.approx(0.1, rel=1e-14)
+    assert system.load_ == system.main_load.load_ + system.secondary_load.load_
     assert system.load_ == pytest.approx(11.729536980212018)
 
 

@@ -263,6 +263,7 @@ class NonLinearSolver(AbstractSolver):
             problem.extend(local.offdesign, copy=False, unknown_wrapper=wrapper, residue_wrapper=wrapper)
             self.initial_values = numpy.append(self.initial_values, case.get_init(self.force_init))
 
+        self.touch_unknowns()
         logger.debug(
             "\n".join([
                 "Mathematical problem:",

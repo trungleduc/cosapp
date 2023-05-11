@@ -180,29 +180,35 @@ class Boundary:
     @property
     def value(self) -> Union[Number, numpy.ndarray]:
         """Number or numpy.ndarray: Current value of the boundary."""
+        # TODO: incoherent behaviour
+        # should be equivalent to:
+        # return value if mask is None else value[mask]
         value = self.__info.ref.value
-        if self.mask is None:
+        mask = self.mask
+        if mask is None:
             return value
-        elif numpy.any(self.mask):
-            return value[self.mask]
-        else:
-            return numpy.empty(0)
+        if numpy.any(mask):
+            return value[mask]
+        return numpy.empty(0)
 
     @value.setter
     def value(self, new: Union[Number, numpy.ndarray]) -> None:
         ref = self.__info.ref
+        mask = self.mask
 
-        if self.mask is None:
+        if mask is None:
             if not numpy.array_equal(ref.value, new):
                 ref.value = new
                 self.touch()
-        elif numpy.any(self.mask) and not numpy.array_equal(ref.value[self.mask], new):
-            ref.value[self.mask] = new
+
+        elif numpy.any(mask) and not numpy.array_equal(ref.value[mask], new):
+            ref.value[mask] = new
             self.touch()
 
     def touch(self) -> None:
-        """Set owner system as 'dirty'."""
+        """Set owner port as 'dirty'."""
         self.port.touch()
+        self.port.owner.touch()
 
     @property
     def default_value(self) -> Union[Number, numpy.ndarray, None]:
@@ -317,18 +323,18 @@ class Boundary:
             # logger.warning(f"No default value given for variable '{self.context.name}.{self.name}'. It will be skipped.")
             return
 
+        def apply_mask(mask: numpy.ndarray):
+            if numpy.all(mask):
+                self.value = self.default_value
+            else:
+                self.value[mask] = self.default_value[mask]
+
         nan_mask = numpy.isfinite(self._default_value)
         if self.mask is None:
-            if numpy.all(nan_mask):
-                self.value = self.default_value
-            else:
-                self.value[nan_mask] = self.default_value[nan_mask]
+            apply_mask(nan_mask)
         else:
             sub_mask = nan_mask[self.mask]
-            if numpy.all(sub_mask):
-                self.value = self.default_value
-            else:
-                self.value[sub_mask] = self.default_value[sub_mask]
+            apply_mask(sub_mask)
 
 
 class Unknown(Boundary):

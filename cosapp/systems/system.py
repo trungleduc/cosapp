@@ -73,6 +73,7 @@ class ConversionType(Enum):
     high_cost = "highest_cost"
     low_cost = "lowest_cost"
 
+
 # Default value use in list_inputs method to be able to tell if the caller set a value to out_stream
 _DEFAULT_OUT_STREAM = object()
 
@@ -116,7 +117,7 @@ class System(Module, TimeObserver):
         the default behavior outside the `setup` function.
     _active : bool
         if False, the `System` will not execute its `compute` method
-    _is_clean : dict[bool]
+    _is_tree_clean : bool
         Reflects the status of the inputs and outputs. `clean` status means the group of ports was not updated since
         last computation of the `System`
     _compute_calls: bool
@@ -160,7 +161,7 @@ class System(Module, TimeObserver):
     """
 
     __slots__ = (
-        '__context_lock', '_is_clean', '_locked', '_math',
+        '__context_lock', '_is_tree_clean', '_locked', '_math',
         'design_methods', 'drivers', 'inputs', 'outputs', 'name2variable',
         '__readonly', '__events', '_meta', '__runner', '__input_mapping',
         '__loop_problem', '__child_connectors', '__pulling_connectors',
@@ -230,15 +231,15 @@ class System(Module, TimeObserver):
 
         self.__context_lock = ContextLock()
         self.__free_problem = ContextLock()
-        self.inputs = collections.OrderedDict()  # type: Dict[str, BasePort]
+        self.inputs = dict()  # type: Dict[str, BasePort]
         self.outputs = dict()  # type: Dict[str, BasePort]
         self.__events = dict()  # type: Dict[str, Event]
         # Connectors are grouped in a dictionary where the key is the sink system i.e. the receiving system
         self.__child_connectors = dict()  # type: Dict[str, List[SystemConnector]]
         self.__pulling_connectors = list()  # type: List[SystemConnector]
-        
+
         self._locked = False  # type: bool
-        self._is_clean = dict.fromkeys(PortType, False)
+        self._is_tree_clean = False
         self._meta = None
         self.__runner = self  # type: Union[System, SystemSurrogate]
         self.__input_mapping = None  # type: Dict[str, VariableReference]
@@ -290,7 +291,14 @@ class System(Module, TimeObserver):
         bool
             Clean status
         """
-        return all(self._is_clean.values()) if direction is None else self._is_clean[direction]
+        if direction == PortType.IN:
+            ports = self.inputs.values()
+        elif direction == PortType.OUT:
+            ports = self.outputs.values()
+        else:
+            ports = self.ports()
+
+        return all(port.is_clean for port in ports)
 
     def set_clean(self, direction: PortType) -> None:
         """Set to clean ports of a certain direction.
@@ -300,7 +308,9 @@ class System(Module, TimeObserver):
         direction : PortType
             Direction to set
         """
-        self._is_clean[direction] = True
+        ports = self.inputs.values() if direction == PortType.IN else self.outputs.values()
+        for port in ports:
+            port.set_clean()
 
     def set_dirty(self, direction: PortType) -> None:
         """Set to dirty ports of a certain direction.
@@ -310,13 +320,17 @@ class System(Module, TimeObserver):
         direction : PortType
             Direction to set
         """
-        self._is_clean[direction] = False
-        if (
-            direction == PortType.IN
-            and self.parent is not None
-            and self.parent.is_clean(direction)
-        ):
-            self.parent.set_dirty(direction)
+        if direction == PortType.IN:
+            self.touch()
+        else:
+            for port in self.outputs.values():
+                port.touch()
+
+    def touch(self):
+        for system in self.path_to_root():
+            if not system._is_tree_clean:
+                break
+            system._is_tree_clean = False
 
     def __enforce_scope(self) -> None:
         """Encapsulate input ports for which some variables are out of scope."""
@@ -1212,8 +1226,8 @@ class System(Module, TimeObserver):
         return lambda s: s
 
     def _precompute(self) -> None:
-        if len(self._math.rates) > 0:
-            self.set_dirty(PortType.IN)  # ensured that system is recomputed at first time step
+        for rate in self._math.rates.values():
+            rate.touch()  # ensured that system is recomputed at first time step
 
     def check(self, name: Optional[str] = None) -> Union[Dict[str, Validity], Validity]:
         """Get variable value validity for a given variable, port or system or all of them.
@@ -1516,9 +1530,9 @@ class System(Module, TimeObserver):
                 self.pop_child(child.name)
                 raise
 
-        # If child is added outside of `setup`, system must be declared as dirty
+        # If child is added outside of `setup`, we must force system tree inspection
         # to ensure input propagation during the next system execution.
-        self.set_dirty(PortType.IN)
+        self.touch()
 
         return child
 
@@ -2081,7 +2095,8 @@ class System(Module, TimeObserver):
     def _postcompute(self) -> None:
         """Actions performed after the `System.compute` call."""
         if self.is_clean(PortType.IN):
-            self.set_clean(PortType.OUT)
+            if self._is_tree_clean:
+                self.set_clean(PortType.OUT)
         else:
             self.set_clean(PortType.IN)
             self.set_dirty(PortType.OUT)
@@ -2146,29 +2161,33 @@ class System(Module, TimeObserver):
                 if self.is_active():
                     self._precompute()
 
-                    if not self.is_clean(PortType.IN):
+                    dirty_inputs = not self.is_clean(PortType.IN)
+
+                    if dirty_inputs:
                         logger.debug(f"Call {self.name}.compute_before")
                         with self.__context_lock:
                             self.compute_before()
                     else:
                         logger.debug(f"Skip {self.name}.compute_before - Clean inputs")
 
-                    if not self.is_clean():
+                    dirty_tree = not self._is_tree_clean
+                    any_dirty_child = False
+
+                    if dirty_inputs or dirty_tree:
                         for child in self.children.values():
                             # Update connectors
                             for connector in self.__child_connectors.get(child.name, []):
                                 connector.transfer()
-                            # Execute the child
+                            # Execute sub-system
                             logger.debug(f"Call {self.name}.{child.name}.run_once()")
                             child.run_once()
+                            any_dirty_child |= not child.is_clean()
 
                         # Pull values from subsystems
                         for connector in self.__pulling_connectors:
                             connector.transfer()
-                    else:
-                        logger.debug(f"Skip {self.name} children execution - Clean interfaces")
 
-                    if not self.is_clean(PortType.IN):
+                    if dirty_inputs or any_dirty_child:
                         logger.debug(f"Call {self.name}.compute")
                         self._compute_calls += 1
                         with self.__context_lock:
@@ -2176,8 +2195,10 @@ class System(Module, TimeObserver):
                     else:
                         logger.debug(f"Skip {self.name}.compute - Clean inputs")
 
+                    self._is_tree_clean = not any_dirty_child
                     self._postcompute()
                     self.computed.emit()
+
                 else:
                     logger.debug(f"Skip {self.name} execution - Inactive")
 
@@ -2197,13 +2218,14 @@ class System(Module, TimeObserver):
                 logger.debug("Start setup_run recursive calls.")
                 self.call_setup_run()
 
-            if self.drivers and self.any_active_driver():
+            if self.any_active_driver():
                 if self.is_standalone():  # System not standalone can't set the mathematical problem
                     logger.debug(f"Exec order for {self.name}: {list(self.exec_order)}")
 
                 for driver in self.drivers.values():
                     logger.debug(f"Call driver {driver.name}.run_once on {self.name}")
                     driver.run_once()
+
             else:
                 self.run_children_drivers()
 
@@ -2224,37 +2246,43 @@ class System(Module, TimeObserver):
                 if self.is_active():
                     self._precompute()
 
-                    if not self.is_clean(PortType.IN):
+                    dirty_inputs = not self.is_clean(PortType.IN)
+
+                    if dirty_inputs:
                         logger.debug(f"Call {self.name}.compute_before")
                         with self.__context_lock:
                             self.compute_before()
                     else:
                         logger.debug(f"Skip {self.name}.compute_before - Clean inputs")
 
-                    if not self.is_clean():
-                        sys_connectors = self.__child_connectors
+                    dirty_tree = not self._is_tree_clean
+                    any_dirty_child = False
+
+                    if dirty_inputs or dirty_tree:
                         for child in self.children.values():
                             # Update connectors
-                            for connector in sys_connectors.get(child.name, []):
+                            for connector in self.__child_connectors.get(child.name, []):
                                 connector.transfer()
-                            # Execute the child
+                            # Execute sub-system
+                            logger.debug(f"Call {self.name}.{child.name}.run_once()")
                             child.run_drivers()
+                            any_dirty_child |= not child.is_clean()
 
                         # Pull values from subsystems
                         for connector in self.__pulling_connectors:
                             connector.transfer()
-                    else:
-                        logger.debug(f"Skip {self.name} children execution - Clean interfaces")
-
-                    if not self.is_clean(PortType.IN):
+                    
+                    if dirty_inputs or any_dirty_child:
                         self._compute_calls += 1
                         with self.__context_lock:
                             self.__runner.compute()
                     else:
                         logger.debug(f"Skip {self.name}.compute - Clean inputs")
 
+                    self._is_tree_clean = not any_dirty_child
                     self._postcompute()
                     self.computed.emit()
+
                 else:
                     logger.debug(f"Skip {self.name} execution - Inactive")
 
@@ -3293,7 +3321,9 @@ class System(Module, TimeObserver):
             self._set_recursive_active_status(True)
             self.__runner = self
 
-        self.set_dirty(PortType.IN)
+        self.touch()
+        for port in self.inputs.values():
+            port.touch()
 
     @property
     def has_surrogate(self) -> bool:
