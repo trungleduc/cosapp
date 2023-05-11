@@ -1,6 +1,7 @@
 import pytest
 
 from cosapp.utils.state_io import get_state, set_state
+from cosapp.utils.testing import assert_close_dict
 from cosapp.tests.library.systems import ComplexTurbofan
 
 
@@ -531,7 +532,7 @@ def test_get_state(turbofan: ComplexTurbofan, turbofan_state: dict):
         'fl_out',
     }
 
-    assert state == turbofan_state
+    assert_close_dict(state, turbofan_state, rel=1e-14)
 
 
 def test_set_state(turbofan: ComplexTurbofan, turbofan_state: dict):
@@ -540,9 +541,9 @@ def test_set_state(turbofan: ComplexTurbofan, turbofan_state: dict):
     assert turbofan.noz.fl_in.W == pytest.approx(187.0459)
     assert turbofan.noz.WRnozzle == pytest.approx(101.87617)
     assert turbofan.bleed.fl2_out.W == pytest.approx(1.889352)
-    assert turbofan.noz.fl_in.W == turbofan_state['children']['noz']['ports']['fl_in']['W']
-    assert turbofan.noz.WRnozzle == turbofan_state['children']['noz']['ports']['outwards']['WRnozzle']
-    assert turbofan.bleed.fl2_out.W == turbofan_state['children']['bleed']['ports']['fl2_out']['W']
+    assert turbofan.noz.fl_in.W == pytest.approx(turbofan_state['children']['noz']['ports']['fl_in']['W'], rel=1e-14)
+    assert turbofan.noz.WRnozzle == pytest.approx(turbofan_state['children']['noz']['ports']['outwards']['WRnozzle'], rel=1e-14)
+    assert turbofan.bleed.fl2_out.W == pytest.approx(turbofan_state['children']['bleed']['ports']['fl2_out']['W'], rel=1e-14)
 
     turbofan.inlet.W_in.W = 100.0
     turbofan.bleed.split_ratio = 0.985

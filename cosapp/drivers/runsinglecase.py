@@ -146,7 +146,7 @@ class RunSingleCase(IterativeCase):
                 owner_changed = True
 
         if owner_changed:
-            self.owner.set_dirty(PortType.IN)
+            self.owner.touch()
 
         # Set offdesign variables
         design_unknowns = set(self.design.unknowns)

@@ -13,6 +13,7 @@ class SystemConnector(Proxy):
         self.check(connector)
         super().__init__(connector)
         self.__noise: Dict[str, Any] = {}
+        self.source.touch()
         self.activate()
 
     @staticmethod
@@ -71,17 +72,10 @@ class SystemConnector(Proxy):
                 "Perturbations can only be added on sink variables"
             )
         self.__noise[name] = value
-        self.source.owner.set_dirty(PortType.IN)
+        self.sink.owner.touch()
 
     def clear_noise(self) -> None:
         self.__noise.clear()
-
-    def __add_noise(self) -> None:
-        if self.__noise:
-            sink: BasePort = self.sink
-            for var, perturbation in self.__noise.items():
-                sink[var] += perturbation
-            sink.touch()
 
     def __repr__(self):
         return repr(self.__wrapped__)
@@ -91,8 +85,10 @@ class SystemConnector(Proxy):
         if self.__is_active:
             sink: BasePort = self.sink
             source: BasePort = self.source
+            noise = self.__noise
 
-            if not source.owner.is_clean(source.direction):
+            if not source.is_clean or noise:
                 sink.touch()
                 self.__wrapped__.transfer()
-            self.__add_noise()
+                for varname, perturbation in noise.items():
+                    sink[varname] += perturbation

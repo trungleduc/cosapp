@@ -47,6 +47,7 @@ class BasePort(visitor.Component):
             raise TypeError(f"Direction must be PortType; got {direction}.")
         from cosapp.systems import System
 
+        self.__is_clean = False
         self._variables: Dict[str, BaseVariable] = OrderedDict()
         self._name: str = self._name_check(name)
         self._direction: PortType = direction
@@ -123,10 +124,19 @@ class BasePort(visitor.Component):
         """bool: True if port is an output, False otherwise."""
         return self._direction == PortType.OUT
 
+    @property
+    def is_clean(self) -> bool:
+        return self.__is_clean
+
+    def set_clean(self) -> None:
+        """Set port as 'clean'."""
+        self.__is_clean = True
+
     def touch(self) -> None:
-        """Set owner system as 'dirty' in port direction."""
-        if self._owner:
-            self._owner.set_dirty(self.direction)
+        """Set port as 'dirty'."""
+        self.__is_clean = False
+        if self._owner and self.is_input:
+            self._owner.touch()
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}: {self.serialize_data()!r}"
@@ -241,7 +251,7 @@ class BasePort(visitor.Component):
     def __set_notype_checking(self, key, value):
         super().__setattr__(key, value)
 
-        if key in self._variables:
+        if self.__is_clean and key in self._variables:
             self.touch()
 
     def validate(self, key: str, value: Any) -> None:
@@ -799,7 +809,7 @@ class Port(BasePort):
             Dictionary of variables with their value and details; default: None = default value
         """
         super().__init__(name, direction)
-        self._locked = False  # type: bool
+        self.__locked = False  # type: bool
 
         self.setup()
 
@@ -826,7 +836,7 @@ class Port(BasePort):
                 if variable_value is not None:
                     self[name] = variable_value
 
-        self._locked = True
+        self.__locked = True
 
     def setup(self) -> None:
         """`Port` variables are defined in this function by calling `add_variable`.
@@ -896,7 +906,7 @@ class Port(BasePort):
         scope : Scope {PRIVATE, PROTECTED, PUBLIC}, optional
             Variable visibility; default PUBLIC
         """
-        if self._locked:
+        if self.__locked:
             raise AttributeError("add_variable cannot be called outside `setup`.")
 
         super().add_variable(

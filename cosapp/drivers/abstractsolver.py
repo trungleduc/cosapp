@@ -181,6 +181,9 @@ class AbstractSolver(Driver):
     def _precompute(self) -> None:
         # TODO we should check that all variables are of numerical types
         super()._precompute()
+        self.touch_unknowns()
+
+    def touch_unknowns(self):
         for unknown in self.problem.unknowns.values():
             unknown.touch()
 
