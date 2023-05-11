@@ -323,17 +323,14 @@ def get_data_from_module(
     # Add port metadata *after* system metadata
     metadata['ports'] = get_all_class_data(portSet, ctor_config)
 
-    with open(
-        os.path.join(
-            os.path.dirname(os.path.abspath(__file__)), "packageData.schema.json"
-        )
-    ) as fp:
-        config_schema = json.load(fp)
-
     try:
         metadata['version'] = module.__version__
     except AttributeError:
         pass
+
+    pwd = os.path.dirname(os.path.abspath(__file__))
+    with open(os.path.join(pwd, "package_metadata.schema.json")) as fp:
+        config_schema = json.load(fp)
 
     jsonschema.validate(metadata, config_schema)
 
