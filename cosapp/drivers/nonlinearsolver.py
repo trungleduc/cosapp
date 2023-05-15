@@ -102,7 +102,7 @@ class NonLinearSolver(AbstractSolver):
         """
         return self.__results
 
-    def add_child(self, child: AnyDriver, execution_index: Optional[int] = None) -> AnyDriver:
+    def add_child(self, child: AnyDriver, execution_index: Optional[int]=None, desc="") -> AnyDriver:
         """Add a child `Driver` to the current `Driver`.
 
         When adding a child `Driver`, it is possible to specified its position in the execution order.
@@ -114,11 +114,13 @@ class NonLinearSolver(AbstractSolver):
 
         Parameters
         ----------
-        child: Module
-            `Module` to add to the current `Module`
-        execution_index: int, optional
+        - child: Driver
+            `Driver` to add to the current `Driver`
+        - execution_index: int, optional
             Index of the execution order list at which the `Module` should be inserted;
-            default is latest.
+            default latest.
+        - desc [str, optional]:
+            Sub-driver description in the context of its parent driver.
 
         Notes
         -----
@@ -128,7 +130,7 @@ class NonLinearSolver(AbstractSolver):
         if len(self.children) == 1 and default_driver in self.children:
             self.pop_child(default_driver)
         self.compute_jacobian = True
-        return super().add_child(child, execution_index)
+        return super().add_child(child, execution_index, desc)
 
     def is_standalone(self) -> bool:
         """Is this Driver able to solve a system?
