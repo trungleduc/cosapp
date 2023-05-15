@@ -217,7 +217,13 @@ class System(Module, TimeObserver):
                 OptionalDriver.set_inhibited(False)
 
     def __init__(self, name: str, **kwargs):
-        """Initialize a System"""
+        """Initialize a System
+
+        Parameters
+        ----------
+        - name [str]:
+            System name
+        """
         Module.__init__(self, name)
         TimeObserver.__init__(self, sign_in=False)
         from cosapp.drivers import Driver
@@ -625,6 +631,7 @@ class System(Module, TimeObserver):
         port_class: Type[AnyPort],
         name: str,
         variables: Optional[Dict[str, Any]] = None,
+        desc: str = "",
     ) -> AnyPort:
         """Add an input `Port` to the `System`.
 
@@ -632,17 +639,18 @@ class System(Module, TimeObserver):
 
         Parameters
         ----------
-        port_class: type
+        - port_class [type[Port]]
             Class of the `Port` to create
-        name : str
+        - name [str]:
             `Port` name
-        variables : Dict[str, Any], optional
+        - desc [str, optional]:
+            `Port` description
+        - variables [dict[str, Any], optional]:
             Dictionary of initial values (default: None)
 
         Returns
         -------
-        Port
-            The created port
+        The created port
 
         Examples
         --------
@@ -661,14 +669,15 @@ class System(Module, TimeObserver):
                 f"port_class should be a subclass of Port; got {type(port_class).__name__}."
             )
         new_port = port_class(name, PortType.IN, variables=variables)
-        self._add_port(new_port)
+        self._add_port(new_port, desc)
         self.__reset_input_mapping()
         return new_port
 
     def add_output(self,
         port_class: Type[AnyPort],
         name: str,
-        variables: Optional[Dict[str, Any]] = None
+        variables: Optional[Dict[str, Any]] = None,
+        desc: str = "",
     ) -> AnyPort:
         """Add an output `Port` to the `System`.
 
@@ -676,17 +685,18 @@ class System(Module, TimeObserver):
 
         Parameters
         ----------
-        port_class: type
+        - port_class [type[Port]]
             Class of the `Port` to create
-        name : str
+        - name [str]:
             `Port` name
-        variables : Dict[str, Any], optional
+        - desc [str, optional]:
+            `Port` description
+        - variables [dict[str, Any], optional]:
             Dictionary of initial values (default: None)
 
         Returns
         -------
-        Port
-            The created port
+        The created port
 
         Examples
         --------
@@ -705,10 +715,10 @@ class System(Module, TimeObserver):
                 f"port_class should be a subclass of Port; got {type(port_class).__name__}."
             )
         new_port = port_class(name, PortType.OUT, variables=variables)
-        self._add_port(new_port)
+        self._add_port(new_port, desc)
         return new_port
 
-    def _add_port(self, port: BasePort) -> None:
+    def _add_port(self, port: BasePort, desc="") -> None:
         """Add a port to the system
 
         Parameters
@@ -723,6 +733,7 @@ class System(Module, TimeObserver):
             )
 
         port.owner = self
+        port.description = desc
         if port.is_input:
             inputs = self.inputs
             if port.name in inputs:
@@ -1471,33 +1482,40 @@ class System(Module, TimeObserver):
         child: AnySystem,
         execution_index: Optional[int] = None,
         pulling: Optional[Union[str, List[str], Dict[str, str]]] = None,
+        desc: str = "",
     ) -> AnySystem:
         """Add a child `System` to the current `System`.
 
         When adding a child `System`, it is possible to specified its position in the execution
         order.
 
-        Child `Port`, `inwards` and `outwards` can also be pulled at the parent level by providing either
-        the name of the port/inward/outward or a list of them or the name mapping of the child element
+        Child ports or individual `inwards` and `outwards` can also be pulled at the parent level by providing
+        either the name of the port/inward/outward or a list of them or the name mapping of the child element
         (dictionary keys) to the parent element (dictionary values).
         If the argument is not a dictionary, the name in the parent system will be the same as in
         the child.
 
         Parameters
         ----------
-        child: System
+        - child [System]:
             `System` to add to the current `System`
-        execution_index: int, optional
+        execution_index [int, optional]:
             Index of the execution order list at which the `System` should be inserted;
             default latest.
-        pulling: str or List[str] or Dict[str, str], optional
+        - pulling [str or list[str] or dict[str, str], optional]:
             Map of child ports to pulled ports at the parent system level; default None (no pulling)
+        - desc [str, optional]:
+            Sub-system description in the context of its parent.
+
+        Returns
+        -------
+        `child`
         """
         # Type validation
         check_arg(child, 'child', System)
         check_arg(pulling, 'pulling', (type(None), str, list, dict, set))
 
-        child = super().add_child(child, execution_index)
+        child = super().add_child(child, execution_index, desc)
 
         if child.name in self.name2variable:
             if isinstance(self[child.name], System):

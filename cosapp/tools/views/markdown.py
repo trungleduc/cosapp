@@ -25,8 +25,11 @@ class PortMarkdownFormatter:
         """
         port = self.port
         name = port.full_name() if contextual else port.name
+        info = type(port).__name__
+        if (desc := port.description):
+            info += f", {desc}"
         doc = []
-        doc.extend([f"`{name}`: {type(port).__name__}"])
+        doc.append(f"`{name}`: {info}")
         doc.extend(self.var_repr())
         return doc
 
@@ -116,31 +119,35 @@ def system_to_md(system: System) -> str:
         Markdown formatted representation
     """
     doc = list()
-    if len(system.tags) > 0:
+    if system.tags:
         doc.extend(["", f"**Tags**: {list(system.tags)!s}", ""])
 
-    if len(system.children) > 0:
+    def get_child_doc(s: System) -> str:
+        info = type(s).__name__
+        if (desc := s.description):
+            info += f", {desc}"
+        return f"- `{s.name}`: {info}"
+
+    if system.children:
         doc.extend(["", "### Child components", ""])
-        doc.extend(
-            f"- `{name}`: {type(child).__name__}"
-            for name, child in system.children.items()
-        )
+        doc.extend(map(get_child_doc, system.children.values()))
 
     def dump_port_data(header, port_dict):
-        if all(len(port) == 0 for port in port_dict.values()):
-            return
-        doc.extend(["", f"### {header.title()}", ""])
+        port_docs = []
         for port in port_dict.values():
             if len(port) > 0:
                 formatter = PortMarkdownFormatter(port)
                 port_doc = formatter.content(contextual=False)
                 port_doc[0] = f"- {port_doc[0]}"
-                doc.extend(port_doc)
+                port_docs.extend(port_doc)
+        if port_docs:
+            doc.extend(["", f"### {header.title()}", ""])
+            doc.extend(port_docs)
 
     dump_port_data("inputs", system.inputs)
     dump_port_data("outputs", system.outputs)
 
-    if hasattr(system, "residues") and len(system.residues) > 0:
+    if system.residues:
         doc.extend(["", "### Residues", ""])
         doc.append(", ".join(f"`{key}`" for key in system.residues))
 

@@ -35,39 +35,41 @@ class Module(LoggerContext, VisitedComponent, metaclass=abc.ABCMeta):
 
     Parameters
     ----------
-    name: str
-        Name of the `Module`
+    - name [str]:
+        `Module` name
 
     Attributes
     ----------
-    name : str
+    - name [str]:
         `Module` name
-    children : Dict[str, Module]
+    - children [dict[str, Module]]:
         Sub-modules of current `Module`, referenced by names.
-    parent : Module
+    - parent [Module]:
         Parent `Module` of current `Module`; `None` if there is no parent.
-    exec_order : MappingView[str]
+    - exec_order [Iterator[str]]:
         Execution order in which sub-modules should be computed.
+    - description [str]:
+        `Module` description.
 
-    _active : bool
+    - _active [bool]:
         If False, the `Module` will not execute its `run_once` method
-    _compute_calls: int
+    - _compute_calls [int]:
         Store if the number of times :py:meth:`~cosapp.core.module.Module.compute` was called (due to inhibition of clean status)
 
     Signals
     -------
-    setup_ran : Signal()
+    - setup_ran [Signal]:
         Signal emitted after :py:meth:`~cosapp.core.module.Module.call_setup_run` execution
-    computed : Signal()
+    - computed [Signal]:
         Signal emitted after the :py:meth:`~cosapp.core.module.Module.compute` stack (= after :py:meth:`~cosapp.core.module.Module._post_compute`) execution
-    clean_ran : Signal()
+    - clean_ran [Signal]:
         Signal emitted after the :py:meth:`~cosapp.core.module.Module.call_clean_run` execution
     """
 
     __slots__ = (
         '__weakref__', '_name', 'children', 'parent', '_active',
         '_compute_calls', 'setup_ran', 'computed', 'clean_ran',
-        '__members',
+        '__members', '_desc',
     )
 
     _name_check = NameChecker(excluded=CommonPorts.names())
@@ -77,10 +79,11 @@ class Module(LoggerContext, VisitedComponent, metaclass=abc.ABCMeta):
 
         Parameters
         ----------
-        name: str, optional
-            Name of the `Module`
+        - name [str]:
+            Module name
         """
         self._name = self._name_check(name)
+        self._desc = ""
         self.children: Dict[str, Module] = collections.OrderedDict()
         self.parent: Optional[Module] = None
         self._active: bool = True
@@ -147,6 +150,16 @@ class Module(LoggerContext, VisitedComponent, metaclass=abc.ABCMeta):
     @name.setter
     def name(self, name: str) -> None:
         self._name = self._name_check(name)
+
+    @property
+    def description(self) -> str:
+        """str: Module description"""
+        return self._desc
+
+    @description.setter
+    def description(self, desc: str) -> None:
+        check_arg(desc, 'description', str)
+        self._desc = desc
 
     @property
     def exec_order(self) -> MappingView[str]:
@@ -294,7 +307,7 @@ class Module(LoggerContext, VisitedComponent, metaclass=abc.ABCMeta):
                 )
         return ".".join(reversed(path))
 
-    def add_child(self, child: Child, execution_index: Optional[int] = None) -> Child:
+    def add_child(self, child: Child, execution_index: Optional[int]=None, desc="") -> Child:
         """Add a child `Module` to the current `Module`.
 
         When adding a child `Module`, it is possible to specified its position
@@ -302,11 +315,17 @@ class Module(LoggerContext, VisitedComponent, metaclass=abc.ABCMeta):
 
         Parameters
         ----------
-        child: Module
+        - child [Module]:
             `Module` to add to the current `Module`
-        execution_index: int, optional
+        - execution_index [int, optional]:
             Index of the execution order list at which the `Module` should be inserted;
             default latest.
+        - desc [str, optional]:
+            Module description in the context of its parent module.
+
+        Returns
+        -------
+        `child`
         """
         # Type validation
         check_arg(child, 'child', Module)
@@ -324,6 +343,7 @@ class Module(LoggerContext, VisitedComponent, metaclass=abc.ABCMeta):
             )
 
         child.parent = self
+        child.description = desc
         self.children[child.name] = child
         self._add_member(child.name)
 

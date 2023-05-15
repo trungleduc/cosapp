@@ -99,12 +99,38 @@ def composite():
     (list(), TypeError),
 ])
 def test_Module__init__(name, error):
+    """Test Module initialization"""
     if error is None:
         module = Module(name)
         assert module.name == name
+        assert module.description == ""
+
     else:
         with pytest.raises(error):
             Module(name)
+
+
+@pytest.mark.parametrize(
+    "desc, expected", [
+        ("A really great module", does_not_raise()),
+        ("~~ non-alphanumeric start ~~", does_not_raise()),
+        ("", does_not_raise()),
+        (None, pytest.raises(TypeError)),
+        (0, pytest.raises(TypeError)),
+        (0.0, pytest.raises(TypeError)),
+        (list(), pytest.raises(TypeError)),
+        (dict(cool=True), pytest.raises(TypeError)),
+    ],
+)
+def test_Module_description(desc: str, expected):
+    """Test `description` getter & setter"""
+    module = Module('foo')
+    assert module.name == "foo"
+    assert module.description == ""
+
+    with expected:
+        module.description = desc
+        assert module.description == desc
 
 
 def test_Module__weakref__(fake):
@@ -181,6 +207,14 @@ def test_Module_compute_calls():
 
     m.call_setup_run()  # Reset counter
     assert m.compute_calls == 0
+
+
+def test_Module_add_child_desc():
+    top = Module("top")
+    foo = top.add_child(Module("foo"))
+    bar = top.add_child(Module("bar"), desc="A great sub-module")
+    assert foo.description == ""
+    assert bar.description == "A great sub-module"
 
 
 def test_Module_size():

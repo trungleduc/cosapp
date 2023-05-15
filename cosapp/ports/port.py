@@ -50,6 +50,7 @@ class BasePort(visitor.Component):
         self.__is_clean = False
         self._variables: Dict[str, BaseVariable] = OrderedDict()
         self._name: str = self._name_check(name)
+        self._desc: str = ""
         self._direction: PortType = direction
         self._owner: Optional[System] = None
         self.__clearance: Scope = None
@@ -108,6 +109,16 @@ class BasePort(visitor.Component):
                 path = path[1:]
         path.append(self.name)
         return ".".join(path)
+
+    @property
+    def description(self) -> str:
+        """str: Port description"""
+        return self._desc
+
+    @description.setter
+    def description(self, desc: str) -> None:
+        check_arg(desc, 'description', str)
+        self._desc = desc
 
     @property
     def direction(self) -> PortType:

@@ -69,11 +69,11 @@ class Driver(Module):
 
         Parameters
         ----------
-        name: str
-            Name of the `Driver`.
-        owner: System, optional
+        - name [str]:
+            Driver name
+        - owner [System, optional]:
             :py:class:`~cosapp.systems.system.System` to which driver belongs; defaults to `None`.
-        **kwargs: Dict[str, Any]
+        - **kwargs:
             Optional keywords arguments.
         """
         from cosapp.systems import System
@@ -209,7 +209,7 @@ class Driver(Module):
                 )
             )
 
-    def add_child(self, child: AnyDriver, execution_index: Optional[int] = None) -> AnyDriver:
+    def add_child(self, child: AnyDriver, execution_index: Optional[int]=None, desc="") -> AnyDriver:
         """Add a child `Driver` to the current `Driver`.
 
         When adding a child `Driver`, it is possible to specified its position in the execution
@@ -217,11 +217,13 @@ class Driver(Module):
 
         Parameters
         ----------
-        child: Driver
+        - child: Driver
             `Driver` to add to the current `Driver`
-        execution_index: int, optional
+        - execution_index: int, optional
             Index of the execution order list at which the `Module` should be inserted;
             default latest.
+        - desc [str, optional]:
+            Sub-driver description in the context of its parent driver.
 
         Returns
         -------
@@ -232,15 +234,13 @@ class Driver(Module):
         The added child will have its owner set to that of current driver.
         """
         check_arg(child, 'child', Driver)
-        
-        driver = super().add_child(child, execution_index)
-        driver.owner = self.owner
+        child.owner = self.owner
 
-        return driver
+        return super().add_child(child, execution_index, desc)
 
-    def add_driver(self, child: AnyDriver, execution_index: Optional[int] = None) -> AnyDriver:
+    def add_driver(self, child: AnyDriver, execution_index: Optional[int]=None, desc="") -> AnyDriver:
         """Alias for :py:meth:`~cosapp.drivers.driver.Driver.add_child`."""
-        return self.add_child(child, execution_index)
+        return self.add_child(child, execution_index, desc)
 
     def add_recorder(self, recorder: Recorder) -> Recorder:
         check_arg(recorder, 'recorder', BaseRecorder)

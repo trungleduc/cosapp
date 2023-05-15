@@ -775,7 +775,7 @@ def test_System_pop_child():
     assert 'sub1' not in dir(head)
 
 
-def test_System_add_port():
+def test_System__add_port():
     s = System("s")
 
     s._add_port(VPort("port1", PortType.IN, {"v": 1}))
@@ -809,18 +809,31 @@ def test_System_add_port():
     with pytest.raises(ValueError):
         s._add_port(p)
 
+    # Port with description
+    s = System("s")
+    s._add_port(CustomPort("p_in", PortType.IN), desc="Some input port")
+    s._add_port(CustomPort("p_out", PortType.OUT), desc="Some output port")
+    assert s.p_in.description == "Some input port"
+    assert s.p_out.description == "Some output port"
+
 
 def test_System_add_input():
     class T(System):
         def setup(self):
-            port = self.add_input(VPort, "port1", {"v": 1})
-            assert port is self.inputs["port1"]
+            port1 = self.add_input(VPort, "port1", {"v": 1})
+            port2 = self.add_input(VPort, "port2", {"v": 2}, desc="Blah-blah")
+            assert port1 is self.inputs["port1"]
+            assert port2 is self.inputs["port2"]
 
     s = T("test")
     assert "port1" in s.inputs
+    assert "port2" in s.inputs
     assert "port1" not in s.outputs
-    for key in ["port1", "port1.v"]:
+    assert "port2" not in s.outputs
+    for key in ["port1", "port1.v", "port2", "port2.v"]:
         assert key in s
+    assert s.port1.description == ""
+    assert s.port2.description == "Blah-blah"
 
     with pytest.raises(AttributeError):
         s.add_input(VPort, "port1", {"v": 1})
@@ -829,14 +842,20 @@ def test_System_add_input():
 def test_System_add_output():
     class T(System):
         def setup(self):
-            port = self.add_output(VPort, "port2", {"v": 1})
-            assert port is self.outputs["port2"]
+            port1 = self.add_output(VPort, "port1", {"v": 1})
+            port2 = self.add_output(VPort, "port2", {"v": 2}, desc="Blah-blah")
+            assert port1 is self.outputs["port1"]
+            assert port2 is self.outputs["port2"]
 
     s = T("test")
+    assert "port1" not in s.inputs
     assert "port2" not in s.inputs
+    assert "port1" in s.outputs
     assert "port2" in s.outputs
-    for key in ["port2", "port2.v"]:
+    for key in ["port1", "port1.v", "port2", "port2.v"]:
         assert key in s
+    assert s.port1.description == ""
+    assert s.port2.description == "Blah-blah"
 
     with pytest.raises(AttributeError):
         s.add_output(VPort, "port2", {"v": 1})
