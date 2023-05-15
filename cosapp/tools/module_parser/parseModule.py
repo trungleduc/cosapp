@@ -91,7 +91,7 @@ def find_ports_and_systems(
     
     def issubclass_strict(obj: type, base: type) -> bool:
         """Strict version of `issubclass`, returning `False` for base class."""
-        return obj is not base and issubclass(obj, base)
+        return issubclass(obj, base) and obj is not base
     
     modules = extract_modules(module)
     systemSet, portSet = set(), set()
@@ -108,7 +108,7 @@ def find_ports_and_systems(
 def get_data_from_class(
     dtype: Union[Type[System],Type[Port]],
     package_name: Optional[str] = None,
-    ports: Optional[Set[Port]] = None,
+    ports: Optional[Set[Type[Port]]] = None,
     *args,
     **kwargs
 ):
@@ -130,14 +130,23 @@ def get_data_from_class(
     --------
     dict[str, Any]
     """
+    if ports is None:
+        def register_port(port: BasePort):
+            pass
+    else:
+        def register_port(port: BasePort):
+            if isinstance(port, Port):
+                ports.add(type(port))
+
     def get_all_port_data(portDict: Dict[str, BasePort]):
         portList = []
         for port in portDict.values():
             if len(port) > 0:
                 portList.append(get_port_data(port))
-                if ports is not None:
-                    ports.add(port.__class__)
+                register_port(port)
         return portList or None
+
+    sysPackage = package_name or dtype.__module__.split('.', maxsplit=1)[0]
 
     def get_port_data(port: BasePort, is_port_type=False):
         ptype = type(port)
@@ -234,7 +243,6 @@ def get_data_from_class(
     if issubclass(dtype, System):
         systemType = dtype.__name__
         systemName = kwargs.pop('__alias__', systemType)
-        sysPackage = package_name or dtype.__module__.split('.', maxsplit=1)[0]
         system = dtype('bogus', *args, **kwargs)
         desc = get_system_doc(dtype)
         inputs = get_all_port_data(system.inputs)
@@ -339,10 +347,10 @@ def get_data_from_module(
 
 def parse_module(
     module: ModuleType,
-    ctor_config: SystemConfig = {},
+    ctor_config: Optional[SystemConfig] = None,
     package_name: Optional[str] = None,
-    includes: SearchPattern = '*',
-    excludes: SearchPattern = None,
+    includes: Optional[SearchPattern] = None,
+    excludes: Optional[SearchPattern] = None,
     path: Optional[Union[str, Path]] = None,
 ) -> None:
     """Creates a json file containing the metadata
@@ -357,7 +365,7 @@ def parse_module(
         construction (if any), referenced by class names (keys).
         If the dictionary contains key '__alias__', the class will be
         renamed into the associated value.
-    - packageName [str] (optional):
+    - package_name [str] (optional):
         Custom package name.
     - includes [str or List[str]] (optional):
         System and port names matching these patterns will be included.
@@ -367,6 +375,13 @@ def parse_module(
     - path [str | pathlib.Path] (optional):
         Optional path of output file <packageName or module.__name__>.json
         (current directory by default).
+
+    Use pre-defined settings
+    ------------------------
+    Pre-defined values of optional arguments `ctor_config`, `package_name`, `includes` and `excludes`
+    may be specified at module level by implementing hook function `_parse_module_config`,
+    returning preset values in a dictionary of the kind {option: value}.
+    Typically, `_parse_module_config` may be defined in the `__init__.py` file of the module.
     
     Examples:
     ---------
@@ -383,16 +398,33 @@ def parse_module(
     >>>     },
     >>> )
     """
-    if package_name is None:
-        package_name = module.__name__
-    
-    metadata = get_data_from_module(
-        module,
+    settings = dict(
         ctor_config=ctor_config,
         package_name=package_name,
         includes=includes,
         excludes=excludes,
     )
+    default_settings = dict(
+        ctor_config={},
+        includes='*',
+        excludes=None,
+        package_name=module.__name__,
+    )
+    try:
+        # Check if module has a pre-defined settings
+        get_module_settings = getattr(module, "_parse_module_config")
+    except AttributeError:
+        pass
+    else:
+        logger.info("Use pre-defined settings returned by `_parse_module_config`")
+        default_settings.update(get_module_settings())
+
+    # Apply user settings, if specified
+    for name, value in settings.items():
+        if value is None:
+            settings[name] = default_settings[name]
+
+    metadata = get_data_from_module(module, **settings)
 
     try:
         version = metadata['version']
