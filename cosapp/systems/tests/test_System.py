@@ -3640,12 +3640,16 @@ def test_System_add_outward_modevar_init(DummyFactory):
 
 
 def test_System_problem_lock():
-    """Check that `System.problem` can only be accessed during transitions.
+    """Check that attribute `System.problem`
+    can only be accessed at setup and during transitions.
     """
     from cosapp.drivers import EulerExplicit
     from cosapp.recorders import DataFrameRecorder
 
     class MultimodeSystem(System):
+        """System whose inner problem is accessed
+        in methods `setup` and `transition`.
+        """
         def setup(self) -> None:
             self.add_inward('a', 1.0)
             self.add_inward('x', 1.0)
@@ -3653,6 +3657,9 @@ def test_System_problem_lock():
 
             self.add_event('tada')
             self.add_outward_modevar('modified', init=False)
+
+            # Check that self.problem is accessible at setup
+            self.problem.clear()  # authorized, here
 
         def compute(self) -> None:
             self.y = self.a * self.x**2 - 1
