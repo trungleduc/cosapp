@@ -2,6 +2,7 @@ from __future__ import annotations
 import logging
 from collections import OrderedDict
 from numbers import Number
+from dataclasses import dataclass, field
 from typing import (
     Any, Dict, Iterable, Optional,
     Sequence, Union, Tuple, List,
@@ -19,45 +20,53 @@ from cosapp.utils.helpers import check_arg
 logger = logging.getLogger(__name__)
 
 
+def default_array_factory(shape=0, dtype=float):
+    """Default factory for dataclass fields."""
+    def factory():
+        return numpy.empty(shape, dtype=dtype)
+    return factory
+
+
+@dataclass
 class SolverResults:
-    """Storage class for solver solution
+    """Data class for solver solution
 
     Attributes
     ----------
-    x : Sequence[float]
-        Solution vector
-    success : bool
+    - x [numpy.ndarray[float]]:
+        Solution vector.
+    - fun [numpy.ndarray[float]]:
+        Values of the objective function.
+    - success [bool]:
         Whether or not the solver exited successfully.
-    message : str
+    - message [str]:
         Description of the cause of the termination.
-    fun : ndarray
-        Values of objective function.
-    jac_lup : (ndarray[float], ndarray[int]), optional
-        LU decomposition of Jacobian given as tuple (LU, perm); (None, None) if not available.
-    jac : ndarray, optional
+    - tol [float, optional]:
+        Tolerance level; `NaN` if not available.
+    - jac [numpy.ndarray[float], optional]
         Values of function Jacobian; None if not available.
-    jac_errors : dict, optional
-        Dictionary with singular Jacobian matrix error indexes
-    jac_calls : int
-        Number of calls to the Jacobian matrix calculation
-    fres_calls : int
-        Number of calls to the residues function
-    trace : List[Dict[str, Any]]
-        Resolution history (if requested) with the evolution of x, residues and jacobian
+    - jac_lup [tuple(numpy.ndarray[float], numpy.ndarray[int]), optional]
+        LU decomposition of Jacobian given as tuple (LU, perm); (None, None) if not available.
+    - jac_calls [int]:
+        Number of calls to the Jacobian matrix calculation.
+    - fres_calls [int]:
+        Number of calls to the residues function.
+    - jac_errors [dict, optional]:
+        Dictionary with singular Jacobian matrix error indexes.
+    - trace [list[dict[str, Any]]]:
+        Resolution history (if requested) with the evolution of x, residues and jacobian.
     """
-
-    def __init__(self):
-        self.x = list()  # type: Sequence[float]
-        self.success = False  # type: bool
-        self.message = ''  # type: str
-        self.fun = numpy.array([], dtype=float)  # type: numpy.ndarray
-        self.tol = numpy.nan
-        self.jac_lup = (None, None)  # type: Optional[Tuple[numpy.ndarray, numpy.ndarray]]
-        self.jac = None  # type: Optional[numpy.ndarray]
-        self.jac_errors = dict()
-        self.jac_calls = 0  # type: int
-        self.fres_calls = 0  # type: int
-        self.trace = list()  # type: List[Dict[str, Any]]
+    x: numpy.ndarray = field(default_factory=default_array_factory())
+    fun: numpy.ndarray = field(default_factory=default_array_factory())
+    success: bool = False
+    message: str = ''
+    tol: float = numpy.nan
+    jac: Optional[numpy.ndarray] = None
+    jac_lup: Optional[Tuple[numpy.ndarray, numpy.ndarray]] = (None, None)
+    jac_calls: int = 0
+    fres_calls: int = 0
+    jac_errors: dict = field(default_factory=dict)
+    trace: List[Dict[str, Any]] = field(default_factory=list)
 
 
 class WeakDeferredResidue(NamedTuple):
