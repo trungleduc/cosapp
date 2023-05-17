@@ -74,6 +74,7 @@ Modules
    cosapp.tools.problem_viewer.webview
    cosapp.tools.help
    cosapp.tools.trigger
+   cosapp.tools.module_parser.parseModule
 
    cosapp.utils.distributions.distribution
    cosapp.utils.distributions.normal
