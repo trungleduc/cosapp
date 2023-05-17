@@ -6,16 +6,13 @@ include README.md
 
 include cosapp/core/configuration_schema.json
 include cosapp/ports/unit_library.ini
-include cosapp/systems/system.schema.json
-include cosapp/tools/module_parser/package_metadata.schema.json
+recursive-include cosapp *.schema.json
 recursive-include cosapp/tools/templates *
 recursive-include cosapp/tools/problem_viewer/visualization *
-
 recursive-include cosapp/tutorials *.ipynb *.svg *.py
 
-recursive-include cosapp/tests *
-recursive-exclude cosapp/tests *.html
-recursive-exclude * test_*.py conftest.py
+recursive-exclude * conftest.py
+recursive-exclude */tests __init__.py test_*.py
 recursive-exclude * __pycache__
 recursive-exclude * *.py[co]
 prune */tests

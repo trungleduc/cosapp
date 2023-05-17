@@ -1,5 +1,67 @@
 # History
 
+## 0.14.0 (2023-05-17)
+
+### New features & API changes
+
+* Improved performance, through a revised clean/dirty mechanism (MR [#215](https://gitlab.com/cosapp/cosapp/-/merge_requests/215)).
+* Possibility to add a contextual description to sub-systems and ports of a system, as well as sub-drivers (MR [#216](https://gitlab.com/cosapp/cosapp/-/merge_requests/216)). This feature is useful for automatic documentation tools, and has been included in the Markdown representation of systems (also used in function `cosapp.tools.display_doc`). Example:
+  
+  ```python
+  from cosapp.base import System
+  from my_module import FlowPort
+  
+  class MySystem(System):
+      def setup(self):
+          self.add_input(FlowPort, "fl_in1", desc="Primary inlet flow port")
+          self.add_input(FlowPort, "fl_in2", desc="Secondary inlet flow port")
+  
+          self.add_output(FlowPort, "fl_out")
+  ```
+  
+* New hook function `_parse_module_config`, returning pre-defined settings for `cosapp.tools.parse_module` (MR [#218](https://gitlab.com/cosapp/cosapp/-/merge_requests/218)). This allows module maintainers to simply call
+  
+  ```python
+  from cosapp.tools import parse_module
+  import my_module
+  
+  parse_module(my_module)
+  ```
+
+  instead of, *e.g.*,
+
+  ```python
+  parse_module(
+      my_module,
+      ctor_config={
+          "ComplexSystem1": [
+              dict(n=1, foo=0.5),
+              dict(n=2, foo=0.1),
+          ],
+          "ComplexSystem2": [
+              dict(xi=0.0, __alias__="ComplexSystem2_a"),
+              dict(xi=1.0, __alias__="ComplexSystem2_b"),
+          ],
+      },
+      excludes=["Foo*", "*Bar?"],
+  )
+  ```
+
+  provided `my_module._parse_module_config()` returns a dictionary specifying the values of `ctor_config`, `excludes`, *etc.*
+
+- Make `SolverResults` a `dataclass`, for easier handling of `NonLinearSolver.results`, *e.g.* (MR [#220](https://gitlab.com/cosapp/cosapp/-/merge_requests/220)).
+- Expose attribute `problem` in system setup (MR [#221](https://gitlab.com/cosapp/cosapp/-/merge_requests/221)). Previously, `problem` was only exposed in method `System.transition`.
+
+### Bug fixes and code quality
+
+* Fix bug in `NonLinearSolver` log message (MR [#214](https://gitlab.com/cosapp/cosapp/-/merge_requests/214)).
+* Add missing JSON file in PyPI and conda packages, preventing the use of `cosapp.tools.parse_module` (MR [#219](https://gitlab.com/cosapp/cosapp/-/merge_requests/219)).
+
+### Documentation
+
+* Illustrate port and sub-system description in tutorials (MR [#215](https://gitlab.com/cosapp/cosapp/-/merge_requests/215)).
+
+
 ## 0.13.1 (2023-04-03)
 
 ### Bug fixes and code quality
@@ -37,53 +99,53 @@ Support of Python 3.7 is thus officially dropped, although no version-specific P
 * Improved VisJs graph rendering, by limiting node size for long system names (MR [#184](https://gitlab.com/cosapp/cosapp/-/merge_requests/184)).
 * New utility functions `get_state` and `set_state` in `cosapp.utils`, for quick system data recovery (MR [#193](https://gitlab.com/cosapp/cosapp/-/merge_requests/193)):
 
-```python
-from cosapp.utils import get_state, set_state
-
-s = SomeSystem('s')
-# ... many design steps, say
-
-# Save state in local object
-designed = get_state(s)
-
-s.drivers.clear()
-s.add_driver(SomeDriver('driver'))
-
-try:
-    s.run_drivers()
-except:
-    # Recover previous state
-    set_state(s, designed)
-```
+  ```python
+  from cosapp.utils import get_state, set_state
+  
+  s = SomeSystem('s')
+  # ... many design steps, say
+  
+  # Save state in local object
+  designed = get_state(s)
+  
+  s.drivers.clear()
+  s.add_driver(SomeDriver('driver'))
+  
+  try:
+      s.run_drivers()
+  except:
+      # Recover previous state
+      set_state(s, designed)
+  ```
 
 * Functions `radians`, `degrees` and `arctan2`/`atan2` have been added to the scope of `EvalString` objects, and can therefore be used in equations, *e.g.* (MR [#178](https://gitlab.com/cosapp/cosapp/-/merge_requests/178)).
 * Recorders can now record constant properties (MR [#181](https://gitlab.com/cosapp/cosapp/-/merge_requests/181)).
 * Deprecation of `System.get_unsolved_problem` in favour of new method `assembled_problem` (MR [#174](https://gitlab.com/cosapp/cosapp/-/merge_requests/174)).
 * Inner off-design problem of systems is now exposed as attribute `problem`, but only within the `transition` method (MR [#174](https://gitlab.com/cosapp/cosapp/-/merge_requests/174)). This allows users to add or remove off-design constraints during event-driven transitions, while keeping this property inaccessible the rest of the time.
 
-```python
-from cosapp.base import System
-from math import sin, cos
-
-class SomeSystem(System):
-    def setup(self):
-        self.add_inward('x', 0.0)
-        self.add_inward('y', 0.0)
-        self.add_outward('z', 0.0)
-        a = self.add_event('event_a', trigger='x > y')
-        b = self.add_event('event_b', trigger='x < y')
-    
-    def compute(self):
-        self.z = cos(self.x) * sin(self.y)
-
-    def transition(self):
-        offdesign = self.problem
-        if self.event_a.present:
-            offdesign.clear()
-            offdesign.add_equation('z == 0.5').add_unknown('x')
-        if self.event_b.present:
-            offdesign.clear()
-```
+  ```python
+  from cosapp.base import System
+  from math import sin, cos
+  
+  class SomeSystem(System):
+      def setup(self):
+          self.add_inward('x', 0.0)
+          self.add_inward('y', 0.0)
+          self.add_outward('z', 0.0)
+          a = self.add_event('event_a', trigger='x > y')
+          b = self.add_event('event_b', trigger='x < y')
+      
+      def compute(self):
+          self.z = cos(self.x) * sin(self.y)
+  
+      def transition(self):
+          offdesign = self.problem
+          if self.event_a.present:
+              offdesign.clear()
+              offdesign.add_equation('z == 0.5').add_unknown('x')
+          if self.event_b.present:
+              offdesign.clear()
+  ```
 
 ### Bug fixes and code quality
 
@@ -148,71 +210,71 @@ class SomeSystem(System):
   * Suppression of sub-driver `runner` (MR [#136](https://gitlab.com/cosapp/cosapp/-/merge_requests/136)). This change introduces new methods `set_objective`, `add_unknowns` and `add_constraints` in driver `Optimizer`.
   * Optimization constraints are now declared with human-readable expressions in `Optimizer.add_constraints` (MR [#138](https://gitlab.com/cosapp/cosapp/-/merge_requests/138)).
 
-Before:
+  Before:
+    
+  ```python
+  from cosapp.drivers import Optimizer
   
-```python
-from cosapp.drivers import Optimizer
-
-s = SomeSystem('s')
-optim = s.add_driver(Optimizer('optim'))
-
-optim.runner.set_objective('cost')
-optim.runner.add_unknown(['a', 'b', 'p_in.x'])
-# Enter constraints as non-negative expressions:
-optim.runner.add_constraints([
-    "b - a",  # b >= a
-    "a",      # a >= 0
-    "1 - a",  # a <= 1
-])
-optim.runner.add_constraints(
-    "p_out.y",
-    inequality = False,  # p_out.y == 0
-)
-
-s.run_drivers()
-```
-
-After:
+  s = SomeSystem('s')
+  optim = s.add_driver(Optimizer('optim'))
   
-```python
-optim.set_objective('cost')
-optim.add_unknown(['a', 'b', 'p_in.x'])
-optim.add_constraints(
-    "b >= a",
-    "0 <= a <= 1",
-    "p_out.y == 0",
-)
-```
+  optim.runner.set_objective('cost')
+  optim.runner.add_unknown(['a', 'b', 'p_in.x'])
+  # Enter constraints as non-negative expressions:
+  optim.runner.add_constraints([
+      "b - a",  # b >= a
+      "a",      # a >= 0
+      "1 - a",  # a <= 1
+  ])
+  optim.runner.add_constraints(
+      "p_out.y",
+      inequality = False,  # p_out.y == 0
+  )
+  
+  s.run_drivers()
+  ```
+  
+  After:
+    
+  ```python
+  optim.set_objective('cost')
+  optim.add_unknown(['a', 'b', 'p_in.x'])
+  optim.add_constraints(
+      "b >= a",
+      "0 <= a <= 1",
+      "p_out.y == 0",
+  )
+  ```
 
   * New, convenient iterators and setters for ports (MR [#137](https://gitlab.com/cosapp/cosapp/-/merge_requests/137)):
   
-```python
-from cosapp.base import Port, System
-
-class XyzPort(Port):
-    def setup(self):
-        self.add_variable('x')
-        self.add_variable('y')
-        self.add_variable('z')
-
-class SomeSystem(System):
-    def setup(self):
-        self.add_input(XyzPort, 'p_in')
-        self.add_output(XyzPort, 'p_out')
-    
-    def compute(self):
-        self.p_out.set_from(self.p_in)  # assign values from `p_in`
-        self.p_out.z = 0.0
-
-s = SomeSystem('s')
-# Multi-variable setter `set_values`
-s.p_in.set_values(x=1, y=-0.5, z=0.1)
-
-s.run_once()
-# Dict-like (key, value) iterator `items`:
-for varname, value in s.p_out.items():
-    print(f"p_out.{varname} = {value})
-```
+  ```python
+  from cosapp.base import Port, System
+  
+  class XyzPort(Port):
+      def setup(self):
+          self.add_variable('x')
+          self.add_variable('y')
+          self.add_variable('z')
+  
+  class SomeSystem(System):
+      def setup(self):
+          self.add_input(XyzPort, 'p_in')
+          self.add_output(XyzPort, 'p_out')
+      
+      def compute(self):
+          self.p_out.set_from(self.p_in)  # assign values from `p_in`
+          self.p_out.z = 0.0
+  
+  s = SomeSystem('s')
+  # Multi-variable setter `set_values`
+  s.p_in.set_values(x=1, y=-0.5, z=0.1)
+  
+  s.run_once()
+  # Dict-like (key, value) iterator `items`:
+  for varname, value in s.p_out.items():
+      print(f"p_out.{varname} = {value})
+  ```
 
 ### Documentation
 
