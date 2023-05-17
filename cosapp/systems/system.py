@@ -264,8 +264,9 @@ class System(Module, TimeObserver):
         kwargs = self._initialize(**kwargs)
 
         # Customized the `System` according to user wishes
-        self.setup(**kwargs)
-        self.update()
+        with self.__free_problem:
+            self.setup(**kwargs)
+            self.update()
 
         self.__enforce_scope()
         self._locked = True
@@ -420,9 +421,7 @@ class System(Module, TimeObserver):
         """
         return kwargs
 
-    def setup(
-        self, **kwargs
-    ) -> None:  # TODO update doc for **kwargs and add unit tests
+    def setup(self, **kwargs) -> None:
         """`System` port and/or child `System` are defined in this function.
 
         This function allows to populate a customized `System` class. The helper functions for the
