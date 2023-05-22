@@ -7,12 +7,11 @@ package:
   version: {{ version }}
 
 source:
-  # You need to generate the source archive with `python setup.py sdist`
-  # before running this recipe
-  url: ../dist/{{ name }}-{{ version }}.tar.gz
+  path: ..
   
 build:
   noarch: python
+  number: 1
   script: python -m pip install . --no-deps --ignore-installed --no-cache-dir -vvv
 
 requirements:
