@@ -1,0 +1,23 @@
+name: cosapp
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - pytest
+  - jsonschema
+  - pandas
+  - wrapt
+  - jinja2
+  - openpyxl
+  - sphinx
+  - nbsphinx
+  - sphinx-copybutton
+  - sphinx-mdinclude
+  - sphinxcontrib-mermaid
+  - watchdog
+  - requests_ntlm
+  - ipykernel
+  - plotly
+  - pyfmi
+  - pythonfmu~=0.6.0
