@@ -27,15 +27,6 @@ r"""
     :copyright: Copyright 2007-2020 by the Sphinx team, see AUTHORS.
     :license: BSD, see LICENSE for details.
 """
-
-import builtins
-import inspect
-import re
-from hashlib import md5
-from importlib import import_module
-from pathlib import Path
-from typing import Any, Dict, Iterable, List, Tuple, cast
-
 import sphinx
 from docutils import nodes
 from docutils.nodes import Node
@@ -52,12 +43,13 @@ from sphinx.ext.inheritance_diagram import (
     inheritance_diagram,
     skip,
 )
-from sphinx.util.docutils import SphinxDirective
 from sphinx.writers.html import HTMLTranslator
 from sphinx.writers.latex import LaTeXTranslator
 from sphinx.writers.texinfo import TexinfoTranslator
 
-from mermaid import render_mm_html, render_mm_latex, render_mm_texinfo
+from sphinxcontrib.mermaid import render_mm_html, render_mm_latex, render_mm_texinfo
+
+from typing import Any, Dict, Iterable, List, cast
 
 
 class MermaidGraph(InheritanceGraph):
@@ -194,7 +186,7 @@ class MermaidDiagram(InheritanceDiagram):
         # Create xref nodes for each target of the graph's image map and
         # add them to the doc tree so that Sphinx can resolve the
         # references to real URLs later.  These nodes will eventually be
-        # removed from the doctree after we're done with them.
+        # removed from the doctree after we are done with them.
         for name in graph.get_all_class_names():
             refnodes, x = class_role(  # type: ignore
                 "class", ":class:`%s`" % name, name, 0, self.state

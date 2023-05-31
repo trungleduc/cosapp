@@ -10,7 +10,6 @@
 #
 # All configuration values have a default; values that are commented out
 # serve to show the default.
-import os
 import time
 import sys
 from pathlib import Path
@@ -32,22 +31,24 @@ sys.path.insert(0, str(Path.cwd().resolve() / "tools"))
 # coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
 extensions = [
     "nbsphinx",
-    "mermaid",
-    "mermaid_inheritance",
+    "sphinx_mdinclude",
     "sphinx_copybutton",
     "sphinx.ext.autosummary",
     "sphinx.ext.mathjax",
     "sphinx.ext.napoleon",
     "sphinx.ext.viewcode",
-    "m2r2",
+    "mermaid",
+    "mermaid_inheritance",
 ]
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
 
 # The suffix of source filenames.
-source_suffix = ['.rst', '.md', '.ipynb']
-
+source_suffix = {
+    '.rst': 'restructuredtext',
+    '.md': 'markdown',
+}
 # The encoding of source files.
 # source_encoding = 'utf-8-sig'
 
@@ -130,9 +131,16 @@ html_theme_path = ["."]
 # so a file named "default.css" will overwrite the builtin "default.css".
 # html_static_path = ['_static']
 
-html_css_files =  ['css/font.css', 'css/kube.min.css',
-  'css/kube.legenda.css', 'css/highlight.css', 'css/master.css',
-  'css/kube.demo.css', 'css/custom.css']
+html_css_files =  [
+    'css/font.css',
+    'css/kube.min.css',
+    'css/kube.legenda.css', 
+    'css/highlight.css',
+    'css/master.css',
+    'css/kube.demo.css',
+    'css/custom.css',
+    'css/mermaid.css',
+]
 
 html_js_files = [
     'js/tocbot.min.js',
