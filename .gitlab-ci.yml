@@ -5,7 +5,7 @@ stages:
   - deploy
 
 variables:
-  COSAPP_DEP: jsonschema ipython jinja2 watchdog openpyxl ipykernel nbconvert ipywidgets plotly pytest pyfmi scipy pandas packaging typing pythonfmu~=0.6.0
+  COSAPP_DEP: jsonschema numpy scipy pandas wrapt pytest jinja2 openpyxl pyfmi pythonfmu~=0.6.0
   USER: "cosapp_test"
 
 # Test script for all OS
@@ -15,7 +15,7 @@ variables:
     - source activate cosapp
     - mamba install -y $COSAPP_DEP
     - pip install . --trusted-host=files.pythonhosted.org
-    - python -m pytest 
+    - python -m pytest
   
   only:
    - pushes
@@ -62,20 +62,20 @@ linux_py38:
      - ".linux_env"
      - ".test_script"
     variables:
-      PYTHON_VERSION: "3.8" 
+      PYTHON_VERSION: "3.8"
 
 linux_py39:
     extends: 
      - ".linux_env"
      - ".test_script"
     variables:
-      PYTHON_VERSION: "3.9" 
+      PYTHON_VERSION: "3.9"
 
 linux_py310:
   extends: 
     - ".linux_env"
   variables:
-    PYTHON_VERSION: "3.10" 
+    PYTHON_VERSION: "3.10"
   script:
     - mamba create -y -n cosapp python=$PYTHON_VERSION
     - source activate cosapp
@@ -122,12 +122,13 @@ build_doc:
   extends: 
     - ".linux_env"
   variables:
-    JOB_DEP: $COSAPP_DEP jupyter_client "conda-forge::sphinx>=1.5" "nbsphinx>=0.6.0" sphinx-copybutton m2r2 requests_ntlm pythonfmu
+    DOCS_DEP: $COSAPP_DEP sphinx nbsphinx sphinx-copybutton sphinx-mdinclude sphinxcontrib-mermaid watchdog requests_ntlm ipykernel plotly pyfmi pytest
     BUILDDIR: _build
-    PYTHON_VERSION : "3.9"
+    PYTHON_VERSION : "3.10"
   script:
-    - mamba env create --name cosapp --file docs/environment.yml
+    - mamba create -y -n cosapp python=$PYTHON_VERSION
     - source activate cosapp
+    - mamba install -y $DOCS_DEP
     - pip install .
     # Build the documentation
     - cd docs/

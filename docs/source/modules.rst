@@ -31,7 +31,7 @@ Modules
    cosapp.ports.connectors
    cosapp.ports.exceptions
    cosapp.ports.variable
-   cosapp.ports.multimode_variable
+   cosapp.ports.mode_variable
    cosapp.ports.units
 
    cosapp.systems.system
