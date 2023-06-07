@@ -533,7 +533,7 @@ class Variable(BaseVariable):
         if self.description:
             msg["description"] = f" | {self.description}"
         else:
-            msg["description"] = " |"
+            msg["description"] = f" | &nbsp;"
 
         scope_format = {
             Scope.PRIVATE: f" {lock_icon*2} ",

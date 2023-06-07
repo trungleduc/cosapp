@@ -43,8 +43,8 @@ class PortMarkdownFormatter:
             List of Markdown strings representing port variables as a table.
         """
         content = [
-            f"  {value._repr_markdown_()}"
-            for value in self.port.get_details().values()
+            f"  {variable._repr_markdown_()}"
+            for variable in self.port.variables()
         ]
         return self.wrap(content)
 
@@ -68,10 +68,10 @@ class PortMarkdownFormatter:
         if isinstance(content, str):
             content = [content]
         header = ["|  |  |", "---|---"]
-        doc = [cls.div_header(), ""]
+        doc = ["", cls.div_header()]
         doc.extend(header)
         doc.extend(content)
-        doc.extend(["</div>", ""])
+        doc.append("</div>")
         return doc
 
     @classmethod
