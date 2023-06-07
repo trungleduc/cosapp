@@ -169,7 +169,7 @@ def get_data_from_class(
         
         if not fixed_size_port or is_port_type:
             portDict['variables'] = get_port_var(port)
-            desc = "\n".join(PortMarkdownFormatter(port).var_repr()[2:-2])
+            desc = "\n".join(PortMarkdownFormatter(port).var_repr()[2:-1])
             if desc:
                 portDict['desc'] = desc
         return portDict

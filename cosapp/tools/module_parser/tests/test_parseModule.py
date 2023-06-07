@@ -97,7 +97,7 @@ def test_get_data_from_class_system():
                 'type': 'ExtensiblePort',
                 'pack': 'bogusModule',
                 'name': 'inwards',
-                'desc': '|  |  |\n---|---\n  **foo** &#128274;&#128274; : 0 |',
+                'desc': '|  |  |\n---|---\n  **foo** &#128274;&#128274; : 0 | &nbsp;',
                 'variables':
                 [
                     {
@@ -117,7 +117,7 @@ def test_get_data_from_class_system():
                 'name': 'outwards',
                 'type': 'ExtensiblePort',
                 'pack': 'bogusModule',
-                'desc': '|  |  |\n---|---\n  **bar**: 1 |',
+                'desc': '|  |  |\n---|---\n  **bar**: 1 | &nbsp;',
                 'variables':
                 [
                     {
@@ -167,7 +167,7 @@ def test_get_data_from_class_port():
                     "name": "z",
                 },
             ],
-            "desc": '|  |  |\n---|---\n  **x**: 3 | x var\n  **y**: 2 K |\n  **z**: 1 |',
+            "desc": '|  |  |\n---|---\n  **x**: 3 | x var\n  **y**: 2 K | &nbsp;\n  **z**: 1 | &nbsp;',
         }
 
 
@@ -185,7 +185,7 @@ def test_get_data_from_class_with_kwargs():
                 'type': 'ExtensiblePort',
                 'pack': 'bogusModule',
                 'name': 'inwards',
-                'desc': '|  |  |\n---|---\n  **v** &#128274;&#128274; : [1. 1. 1. 1. 1.] |\n  **r** &#128274;&#128274; : 2 |',
+                'desc': '|  |  |\n---|---\n  **v** &#128274;&#128274; : [1. 1. 1. 1. 1.] | &nbsp;\n  **r** &#128274;&#128274; : 2 | &nbsp;',
                 'variables':
                 [
                     {
@@ -238,7 +238,7 @@ def test_get_data_from_module_with_opt_kwargs(expectedSystems, expectedPorts):
             system['inputs'][0]['variables'].append({
                 'name': 'r',
             })
-            system['inputs'][0]['desc'] += '\n  **r** &#128274;&#128274; : 1 |'
+            system['inputs'][0]['desc'] += '\n  **r** &#128274;&#128274; : 1 | &nbsp;'
             system['kwargs']['r'] = 1 # add the optional argument to the expected result
 
     assert sorted_by_name(moduleData['systems']) == sorted_by_name(expectedSystems)
@@ -261,7 +261,7 @@ def test_get_data_from_module_system_kwargs_with_alias():
                 'name': 'inwards',
                 'type': 'ExtensiblePort',
                 'pack': 'bogusModule',
-                'desc': '|  |  |\n---|---\n  **v** &#128274;&#128274; : [1. 1. 1.] |',
+                'desc': '|  |  |\n---|---\n  **v** &#128274;&#128274; : [1. 1. 1.] | &nbsp;',
                 'variables':
                 [{
                     'name': 'v',
@@ -282,7 +282,7 @@ def test_get_data_from_module_system_kwargs_with_alias():
                 'name': 'inwards',
                 'type': 'ExtensiblePort',
                 'pack': 'bogusModule',
-                'desc': '|  |  |\n---|---\n  **v** &#128274;&#128274; : [1. 1.] |\n  **r** &#128274;&#128274; : 1 |',
+                'desc': '|  |  |\n---|---\n  **v** &#128274;&#128274; : [1. 1.] | &nbsp;\n  **r** &#128274;&#128274; : 1 | &nbsp;',
                 'variables': [
                     {
                         'name': 'v',
@@ -329,7 +329,7 @@ def test_get_data_from_module_includes_excludes(expectedSystems):
                     'name': 'inwards',
                     'type': 'ExtensiblePort',
                     'pack': 'bogusModule',
-                    'desc': '|  |  |\n---|---\n  **foo** &#128274;&#128274; : 0 |',
+                    'desc': '|  |  |\n---|---\n  **foo** &#128274;&#128274; : 0 | &nbsp;',
                     'variables':
                     [{
                         'name': 'foo',
@@ -347,7 +347,7 @@ def test_get_data_from_module_includes_excludes(expectedSystems):
                     'name': 'outwards',
                     'type': 'ExtensiblePort',
                     'pack': 'bogusModule',
-                    'desc': '|  |  |\n---|---\n  **bar**: 1 |',
+                    'desc': '|  |  |\n---|---\n  **bar**: 1 | &nbsp;',
                     'variables':
                     [{
                         'name': 'bar',
@@ -380,7 +380,7 @@ def test_get_data_from_module_includes_excludes(expectedSystems):
                     "name": "z",
                 },
             ],
-            "desc": '|  |  |\n---|---\n  **x**: 3 | x var\n  **y**: 2 K |\n  **z**: 1 |',
+            "desc": '|  |  |\n---|---\n  **x**: 3 | x var\n  **y**: 2 K | &nbsp;\n  **z**: 1 | &nbsp;',
         },
         {
             "name": "AbPort",
@@ -394,7 +394,7 @@ def test_get_data_from_module_includes_excludes(expectedSystems):
                     "name": "b",
                 },
             ],
-            "desc": '|  |  |\n---|---\n  **a**: 1 |\n  **b**: [0. 0. 0.] |',
+            "desc": '|  |  |\n---|---\n  **a**: 1 | &nbsp;\n  **b**: [0. 0. 0.] | &nbsp;',
         },
     ]
 
@@ -444,7 +444,7 @@ def test_get_data_from_module_child():
                     'name': 'inwards',
                     'type': 'ExtensiblePort',
                     'pack': 'bogusModule.systemWithChildPulling',
-                    'desc': '|  |  |\n---|---\n  **foo** &#128274;&#128274; : 0 |',
+                    'desc': '|  |  |\n---|---\n  **foo** &#128274;&#128274; : 0 | &nbsp;',
                     'variables':
                     [{
                         'name': 'foo',
@@ -462,7 +462,7 @@ def test_get_data_from_module_child():
                     'name': 'outwards',
                     'type': 'ExtensiblePort',
                     'pack': 'bogusModule.systemWithChildPulling',
-                    'desc': '|  |  |\n---|---\n  **bar**: 1 |',
+                    'desc': '|  |  |\n---|---\n  **bar**: 1 | &nbsp;',
                     'variables':
                     [{
                         'name': 'bar',
@@ -481,7 +481,7 @@ def test_get_data_from_module_child():
         {
             'name': 'AbPort',
             'pack': 'bogusModule.systemWithChildPulling',
-            'desc': '|  |  |\n---|---\n  **a**: 1 |\n  **b**: [0. 0. 0.] |',
+            'desc': '|  |  |\n---|---\n  **a**: 1 | &nbsp;\n  **b**: [0. 0. 0.] | &nbsp;',
             'variables': [
                 {
                     'name': 'a',
@@ -494,7 +494,7 @@ def test_get_data_from_module_child():
         {
             "name": "XyzPort",
             "pack": "bogusModule.systemWithChildPulling",
-            "desc": '|  |  |\n---|---\n  **x**: 3 | x var\n  **y**: 2 K |\n  **z**: 1 |',
+            "desc": '|  |  |\n---|---\n  **x**: 3 | x var\n  **y**: 2 K | &nbsp;\n  **z**: 1 | &nbsp;',
             "variables":
             [
                 {
@@ -535,7 +535,7 @@ def expectedSystems():
                     'name': 'inwards',
                     'type': 'ExtensiblePort',
                     'pack': 'bogusModule',
-                    'desc': '|  |  |\n---|---\n  **foo** &#128274;&#128274; : 0 |',
+                    'desc': '|  |  |\n---|---\n  **foo** &#128274;&#128274; : 0 | &nbsp;',
                     'variables':
                     [{
                         'name': 'foo',
@@ -553,7 +553,7 @@ def expectedSystems():
                     'name': 'outwards',
                     'type': 'ExtensiblePort',
                     'pack': 'bogusModule',
-                    'desc': '|  |  |\n---|---\n  **bar**: 1 |',
+                    'desc': '|  |  |\n---|---\n  **bar**: 1 | &nbsp;',
                     'variables':
                     [{
                         'name': 'bar',
@@ -577,7 +577,7 @@ def expectedSystems():
                     'name': 'inwards',
                     'type': 'ExtensiblePort',
                     'pack': 'bogusModule',
-                    'desc': '|  |  |\n---|---\n  **v** &#128274;&#128274; : [1. 1.] |',
+                    'desc': '|  |  |\n---|---\n  **v** &#128274;&#128274; : [1. 1.] | &nbsp;',
                     'variables':
                     [{
                         'name': 'v',
@@ -621,7 +621,7 @@ def expectedPorts():
                     "name": "z",
                 },
             ],
-            "desc": '|  |  |\n---|---\n  **x**: 3 | x var\n  **y**: 2 K |\n  **z**: 1 |',
+            "desc": '|  |  |\n---|---\n  **x**: 3 | x var\n  **y**: 2 K | &nbsp;\n  **z**: 1 | &nbsp;',
         },
         {
             "name": "AbPort",
@@ -635,7 +635,7 @@ def expectedPorts():
                     "name": "b",
                 },
             ],
-            "desc": '|  |  |\n---|---\n  **a**: 1 |\n  **b**: [0. 0. 0.] |',
+            "desc": '|  |  |\n---|---\n  **a**: 1 | &nbsp;\n  **b**: [0. 0. 0.] | &nbsp;',
         },
         {
             "name": "BogusPort",

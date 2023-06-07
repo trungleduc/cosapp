@@ -522,28 +522,31 @@ def test_Variable___str__(port):
     assert str(v) == name
 
 
-@pytest.mark.parametrize("data, expected", [
+@pytest.mark.parametrize("kwargs, expected", [
     (
-        get_args(), "**var1** &#128274;&#128274; : 2 |"
-    ),(
-        get_args (unit="kg",
-        dtype=float,
-        valid_range=(-2, 0),
-        invalid_comment="No valid",
-        limits=(-4, 1),
-        out_of_limits_comment="No so far!",
-        desc="I'm a dummy donkey.",
-        scope=Scope.PROTECTED,
-        distribution=Uniform(1.0, 4.0, 0.2)),
+        dict(), "**var1** &#128274;&#128274; : 2 | &nbsp;"
+    ),
+    (
+        dict(
+            unit="kg",
+            dtype=float,
+            valid_range=(-2, 0),
+            invalid_comment="No valid",
+            limits=(-4, 1),
+            out_of_limits_comment="No so far!",
+            desc="I'm a dummy donkey.",
+            scope=Scope.PROTECTED,
+            distribution=Uniform(1.0, 4.0, 0.2)
+        ),
         "**var1** &#128274; : 2 kg;  &#10647; -4 &#10205; -2 &#10205;  value  &#10206; 0 &#10206; 1 &#10648;  | I'm a dummy donkey."
     )
 ])
-def test_Variable___repr__(port, data, expected):
+def test_Variable__repr_markdown_(port, kwargs: dict, expected: str):
     name = "var1"
     value = 2.0
     setattr(port, name, value)
-    v = Variable(name, port, value, **data[1])
-    assert repr(v) == expected 
+    v = Variable(name, port, value, **kwargs)
+    assert v._repr_markdown_() == expected 
 
 
 @pytest.mark.parametrize("data, expected", [
