@@ -50,8 +50,8 @@ class DocVisitor(Visitor):
             for line in obj_type.__doc__.split("\n"):
                 if indent == 0:
                     stripped = line.lstrip()
-                    if len(stripped) > 0:
-                        indent = len(line) - len(stripped)
+                    if (n_stripped := len(stripped)) > 0:
+                        indent = len(line) - n_stripped
                 else:
                     stripped = line[indent:]
                 doc.append(stripped)
