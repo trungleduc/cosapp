@@ -192,7 +192,7 @@ class TwoWayCircuitWithEq(System):
 
     def reconfig(self):
         problem = self._math
-        if not self.upbranch and problem.shape == (0, 0):
+        if not self.upbranch and problem.is_empty():
             self.add_unknown("R0.R").add_equation("R0.R == 500")
         else:
             problem.clear()

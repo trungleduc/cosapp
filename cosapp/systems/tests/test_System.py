@@ -1319,7 +1319,7 @@ def test_System_loops_1():
     # Sanity check between `all_connectors()` and `connectors.values()`
     assert list(s.all_connectors()) == list(connectors.values())
     assert all(connector.is_active for connector in s.all_connectors())
-    assert s.assembled_problem().shape == (0, 0)
+    assert s.assembled_problem().is_empty()
 
     s.open_loops()
     problem = s.assembled_problem()
@@ -1344,7 +1344,7 @@ def test_System_loops_1():
     assert connectors["a.exit -> b.entry"].is_active
     assert connectors["b.exit -> a.entry"].is_active
     assert all(connector.is_active for connector in s.all_connectors())
-    assert s.assembled_problem().shape == (0, 0)
+    assert s.assembled_problem().is_empty()
 
     # Case 2 - same as #1 with different exec order
     s, a, b = make_case()
@@ -1353,7 +1353,7 @@ def test_System_loops_1():
     s.exec_order = ['b', 'a']
 
     problem = s.assembled_problem()
-    assert problem.shape == (0, 0)
+    assert problem.is_empty()
 
     s.open_loops()
     problem = s.assembled_problem()
@@ -1376,7 +1376,7 @@ def test_System_loops_1():
     # Check that `close_loops` restores all connections
     s.close_loops()
     assert all(connector.is_active for connector in s.all_connectors())
-    assert s.assembled_problem().shape == (0, 0)
+    assert s.assembled_problem().is_empty()
 
     # Breaking link between ExtensiblePort (1)
     s, a, b = make_case()
@@ -1402,7 +1402,7 @@ def test_System_loops_1():
     # Check that `close_loops` restores all connections
     s.close_loops()
     assert all(connector.is_active for connector in s.all_connectors())
-    assert s.assembled_problem().shape == (0, 0)
+    assert s.assembled_problem().is_empty()
 
     # Breaking link between ExtensiblePort (2)
     s, a, b = make_case()
@@ -1432,7 +1432,7 @@ def test_System_loops_1():
     # Check that `close_loops` restores all connections
     s.close_loops()
     assert all(connector.is_active for connector in s.all_connectors())
-    assert s.assembled_problem().shape == (0, 0)
+    assert s.assembled_problem().is_empty()
 
 
 def test_System_loops_2():
@@ -1483,7 +1483,7 @@ def test_System_loops_2():
     # Check that `close_loops` restores all connections
     top.close_loops()
     assert all(connector.is_active for connector in top.all_connectors())
-    assert top.assembled_problem().shape == (0, 0)
+    assert top.assembled_problem().is_empty()
 
     # Backward dependencies: information flow opposite to exec order
     # s1 <-- s2 <-- s3
@@ -1511,7 +1511,7 @@ def test_System_loops_2():
     # Check that `close_loops` restores all connections
     top.close_loops()
     assert all(connector.is_active for connector in top.all_connectors())
-    assert top.assembled_problem().shape == (0, 0)
+    assert top.assembled_problem().is_empty()
 
     # Same as previous, with s1 --> s3 connector
     top = make_case()
@@ -1541,7 +1541,7 @@ def test_System_loops_2():
     # Check that `close_loops` restores all connections
     top.close_loops()
     assert all(connector.is_active for connector in top.all_connectors())
-    assert top.assembled_problem().shape == (0, 0)
+    assert top.assembled_problem().is_empty()
 
 
 def test_System_loops_control_unknowns():
@@ -1579,7 +1579,7 @@ def test_System_loops_control_unknowns():
     s = Assembly('s')
     # Check that assembled problem is empty, since
     # `s.a.x` and `s.b.u` are both connected to outputs
-    assert s.assembled_problem().shape == (0, 0)
+    assert s.assembled_problem().is_empty()
     assert s.a.assembled_problem().n_unknowns == 1
     assert s.b.assembled_problem().n_unknowns == 1
 
@@ -1592,7 +1592,7 @@ def test_System_loops_control_unknowns():
     assert unknown.max_abs_step == np.inf
     assert unknown.max_rel_step == 0.5
     s.close_loops()
-    assert s.assembled_problem().shape == (0, 0)
+    assert s.assembled_problem().is_empty()
     # Solve problem
     s.add_driver(NonLinearSolver('solver', tol=1e-7))
     s.a.x = 10
@@ -1609,7 +1609,7 @@ def test_System_loops_control_unknowns():
     assert unknown.max_abs_step == 0.1
     assert unknown.max_rel_step == np.inf
     s.close_loops()
-    assert s.assembled_problem().shape == (0, 0)
+    assert s.assembled_problem().is_empty()
     # Solve problem
     s.add_driver(NonLinearSolver('solver', tol=1e-7))
     s.b.u = 3
@@ -1655,7 +1655,7 @@ def test_System_loops_control_array_unknowns():
     s = Assembly('s', ndim=4)
     # Check that assembled problem is empty, since
     # `s.a.x` and `s.b.u` are both connected to outputs
-    assert s.assembled_problem().shape == (0, 0)
+    assert s.assembled_problem().is_empty()
     # Check that sub-system inner problems have masked unknowns
     problem_a = s.a.assembled_problem()
     problem_b = s.b.assembled_problem()
@@ -1684,7 +1684,7 @@ def test_System_loops_control_array_unknowns():
     assert unknown.max_rel_step == 0.5
     assert np.array_equal(unknown.mask, [True] * s.ndim)
     s.close_loops()
-    assert s.assembled_problem().shape == (0, 0)
+    assert s.assembled_problem().is_empty()
     # Solve problem
     s.add_driver(NonLinearSolver('solver', tol=1e-7))
     s.a.x.fill(10)
@@ -1704,7 +1704,7 @@ def test_System_loops_control_array_unknowns():
     assert unknown.max_rel_step == np.inf
     assert np.array_equal(unknown.mask, [True] * s.ndim)
     s.close_loops()
-    assert s.assembled_problem().shape == (0, 0)
+    assert s.assembled_problem().is_empty()
     # Solve problem
     s.add_driver(NonLinearSolver('solver', tol=1e-7))
     s.b.u.fill(3)
@@ -1750,7 +1750,7 @@ def test_System_loop_residue_reference():
     s = Assembly('s')
     # Check that assembled problem is empty, since
     # `s.a.x` and `s.b.x` are both connected to outputs
-    assert s.assembled_problem().shape == (0, 0)
+    assert s.assembled_problem().is_empty()
 
     s.exec_order = ('a', 'b')
 
@@ -1871,7 +1871,7 @@ def test_System_clean_partial_inwards():
     assert not connectors["source.outwards -> sink.inwards"].is_active
     top.close_loops()
     assert all(connector.is_active for connector in top.all_connectors())
-    assert top.assembled_problem().shape == (0, 0)
+    assert top.assembled_problem().is_empty()
 
 
 def test_System_check():
@@ -2031,7 +2031,7 @@ def test_System_new_problem(args_kwargs, expected_name):
     assert isinstance(p, MathematicalProblem)
     assert p.context is s
     assert p.name == expected_name
-    assert p.shape == (0, 0)
+    assert p.is_empty()
 
 
 def test_System_add_design_method():
@@ -2149,7 +2149,7 @@ def test_System_add_target_design():
     s = SystemWithTarget('s')
 
     offdesign = s.assembled_problem()
-    assert offdesign.shape == (0, 0)
+    assert offdesign.is_empty()
 
     solver = s.add_driver(NonLinearSolver('solver', tol=1e-9))
     solver.runner.design.extend(s.design('target_z'))
@@ -2185,7 +2185,7 @@ def test_System_add_target_array():
     s = SystemWithTarget('s')
 
     offdesign = s.assembled_problem()
-    assert offdesign.shape == (0, 0)
+    assert offdesign.is_empty()
 
     solver = s.add_driver(NonLinearSolver('solver', tol=1e-9, factor=0.5))
     solver.runner.design.extend(s.design('target_z'))
@@ -2224,7 +2224,7 @@ def test_System_add_target_expression():
     s = SystemWithTarget('s')
 
     offdesign = s.assembled_problem()
-    assert offdesign.shape == (0, 0)
+    assert offdesign.is_empty()
 
     solver = s.add_driver(NonLinearSolver('solver', tol=1e-9))
     solver.runner.design.extend(s.design('target_z'))
@@ -2272,7 +2272,7 @@ def test_System_add_target_composite():
     top = TopSystem('top')
 
     offdesign = top.assembled_problem()
-    assert offdesign.shape == (0, 0)
+    assert offdesign.is_empty()
 
     solver = top.add_driver(NonLinearSolver('solver', tol=1e-9))
     solver.runner.design.extend(top.design('target_z'))
@@ -2614,7 +2614,7 @@ def test_System_assembled_problem_seq(DummyFactory):
     T.connect(T.b.outwards, T.c.inwards, {"y": "x"})
 
     problem = T.assembled_problem()
-    assert problem.shape == (0, 0)
+    assert problem.is_empty()
 
     # Test that unknowns are forwarded by connection to the parent
     T: System = DummyFactory('top')
@@ -3677,7 +3677,7 @@ def test_System_problem_lock():
     with pytest.raises(AttributeError, match="problem"):
         system.problem.clear()
     
-    assert system.assembled_problem().shape == (0, 0)
+    assert system.assembled_problem().is_empty()
 
     driver = system.add_driver(EulerExplicit(time_interval=[0, 1.5], dt=0.2))
     driver.add_child(NonLinearSolver('solver'))

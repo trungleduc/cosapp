@@ -237,10 +237,10 @@ class BaseConnector(abc.ABC):
 
         If the name mapping is complete, with identical names,
         it is omitted, and the output tuple is formatted as:
-            (target_name, source_name)
+        - (target_name, source_name)
 
         Otherwise, output is formatted as:
-            (target_name, source_name, name_mapping)
+        - (target_name, source_name, name_mapping)
 
         Returns
         -------

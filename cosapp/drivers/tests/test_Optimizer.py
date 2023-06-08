@@ -71,7 +71,7 @@ def test_Optimizer_available_methods():
 def test_Optimizer__init__(optim: Optimizer):
     assert optim.owner is None
     assert optim.problem is None
-    assert optim.raw_problem.shape == (0, 0)
+    assert optim.raw_problem.is_empty()
     assert optim.objective is None
 
 
