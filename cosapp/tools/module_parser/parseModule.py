@@ -425,6 +425,7 @@ def parse_module(
             settings[name] = default_settings[name]
 
     metadata = get_data_from_module(module, **settings)
+    package_name = settings['package_name']
 
     try:
         version = metadata['version']
