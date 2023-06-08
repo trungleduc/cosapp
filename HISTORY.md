@@ -1,5 +1,18 @@
 # History
 
+## 0.14.1 (2023-06-08)
+
+### Bug fixes and code quality
+
+- Fix incorrect output file name in `cosapp.tools.parse_module` (MR [#229](https://gitlab.com/cosapp/cosapp/-/merge_requests/229)).
+- Refactoring pass (MR [#230](https://gitlab.com/cosapp/cosapp/-/merge_requests/230)).
+
+### Documentation
+
+- Upgrade documentation build stack (MRs [#224](https://gitlab.com/cosapp/cosapp/-/merge_requests/224) and [#226](https://gitlab.com/cosapp/cosapp/-/merge_requests/226)).
+- Fix bad rendering of ports and systems (MRs [#227](https://gitlab.com/cosapp/cosapp/-/merge_requests/227) and [#228](https://gitlab.com/cosapp/cosapp/-/merge_requests/228)).
+
+
 ## 0.14.0 (2023-05-17)
 
 ### New features & API changes
@@ -49,8 +62,8 @@
 
   provided `my_module._parse_module_config()` returns a dictionary specifying the values of `ctor_config`, `excludes`, *etc.*
 
-- Make `SolverResults` a `dataclass`, for easier handling of `NonLinearSolver.results`, *e.g.* (MR [#220](https://gitlab.com/cosapp/cosapp/-/merge_requests/220)).
-- Expose attribute `problem` in system setup (MR [#221](https://gitlab.com/cosapp/cosapp/-/merge_requests/221)). Previously, `problem` was only exposed in method `System.transition`.
+* Make `SolverResults` a `dataclass`, for easier handling of `NonLinearSolver.results`, *e.g.* (MR [#220](https://gitlab.com/cosapp/cosapp/-/merge_requests/220)).
+* Expose attribute `problem` in system setup (MR [#221](https://gitlab.com/cosapp/cosapp/-/merge_requests/221)). Previously, `problem` was only exposed in method `System.transition`.
 
 ### Bug fixes and code quality
 
