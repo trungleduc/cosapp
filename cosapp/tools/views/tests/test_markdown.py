@@ -130,7 +130,7 @@ def test_system_to_md():
 def test_port_to_md(PortCls: type, direction, expected):
     p = PortCls("p", direction)
     div_header = PortMarkdownFormatter.div_header()
-    table_header = f"\n{div_header}\n|  |  |\n---|---\n"
+    table_header = f"\n{div_header}\n\n|  |  |\n---|---\n"
     header = f"`p`: {PortCls.__name__}\n{table_header}"
     footer = "\n</div>"
     assert port_to_md(p) == f"{header}{expected}{footer}"
@@ -152,6 +152,7 @@ def test_PortMarkdownFormatter_wrap():
     assert PortMarkdownFormatter.wrap("foo") == [
         "",
         PortMarkdownFormatter.div_header(),
+        "",
         "|  |  |",
         "---|---",
         "foo",
@@ -161,6 +162,7 @@ def test_PortMarkdownFormatter_wrap():
     assert PortMarkdownFormatter.wrap(['x', 'y']) == [
         "",
         PortMarkdownFormatter.div_header(),
+        "",
         "|  |  |",
         "---|---",
         "x", "y",
@@ -192,6 +194,7 @@ def test_PortMarkdownFormatter_wrap():
             "`p`: DummyPortWithDesc",
             "",
             PortMarkdownFormatter.div_header(),
+            "",
             "|  |  |",
             "---|---",
             "  **foo**: 1 | Foo variable",
@@ -255,7 +258,7 @@ def test_PortMarkdownFormatter_markdown(composite):
     top.dyn.entry.b = -0.5
     expected = (
         "`top.dyn.entry`: DummyPort\n"
-        f"\n{PortMarkdownFormatter.div_header()}"
+        f"\n{PortMarkdownFormatter.div_header()}\n"
         "\n|  |  |\n---|---\n"
         "  **a**: 3.14 | &nbsp;\n  **b**: -0.5 | &nbsp;"
         "\n</div>"

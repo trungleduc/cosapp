@@ -68,7 +68,7 @@ class PortMarkdownFormatter:
         if isinstance(content, str):
             content = [content]
         header = ["|  |  |", "---|---"]
-        doc = ["", cls.div_header()]
+        doc = ["", cls.div_header(), ""]
         doc.extend(header)
         doc.extend(content)
         doc.append("</div>")
