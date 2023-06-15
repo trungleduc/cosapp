@@ -609,7 +609,7 @@ class NonLinearSolver(AbstractSolver):
     ) -> MathematicalProblem:
         """Add design unknown(s).
 
-        More details in `MathematicalProblem.add_unknown`.
+        More details in `cosapp.core.MathematicalProblem.add_unknown`.
 
         Parameters
         ----------
@@ -631,7 +631,7 @@ class NonLinearSolver(AbstractSolver):
     ) -> MathematicalProblem:
         """Add off-design equation(s).
 
-        More details in `MathematicalProblem.add_equation`.
+        More details in `cosapp.core.MathematicalProblem.add_equation`.
 
         Parameters
         ----------
@@ -646,3 +646,24 @@ class NonLinearSolver(AbstractSolver):
             The updated problem.
         """
         return self._raw_problem.add_equation(equation, *args, **kwargs)
+
+    def add_target(self,
+        expression: Union[str, Iterable[str]],
+        *args, **kwargs,
+    ) -> MathematicalProblem:
+        """Add deferred off-design equation(s).
+
+        More details in `cosapp.core.MathematicalProblem.add_target`.
+
+        Parameters
+        ----------
+        - expression: str
+            Targetted expression
+        - *args, **kwargs : Forwarded to `MathematicalProblem.add_target`
+
+        Returns
+        -------
+        MathematicalProblem
+            The modified mathematical problem
+        """
+        return self._raw_problem.add_target(expression, *args, **kwargs)

@@ -87,7 +87,7 @@ class TimeAssignString:
             raise TypeError(
                 f"right-hand side must be a callable function; got {rhs!r}"
             )
-        Boundary.parse(context, lhs)  # checks that variable is valid
+        Boundary.parse(context, lhs, inputs_only=True)  # checks that variable is valid
         fname = f"BC{id(rhs)}"
         assignment = f"{context.name}.{lhs} = {fname}(t)"
         self.__locals = {fname: rhs, context.name: context, 't': 0}
@@ -222,11 +222,11 @@ class Scenario:
         if self.owner is None:
             raise AttributeError(f"Driver {self.name!r} must be attached to a System to set initial values.")
 
-        for variable, value in modifications.items():
-            variable, context = self._get_alias(variable)
+        for varname, value in modifications.items():
+            varname, context = self._get_alias(varname, inputs_only=False)
             if context is None:
                 continue
-            assignment = AssignString(variable, value, context)
+            assignment = AssignString(varname, value, context)
             if assignment.constant:
                 # If assignment is constant, it is safer to insert it at the top
                 # of the list, since other initial condition assignments might use it.
@@ -264,14 +264,14 @@ class Scenario:
         if self.owner is None:
             raise AttributeError(f"Driver {self.name!r} must be attached to a System to set case values.")
 
-        for variable, value in modifications.items():
-            variable, context = self._get_alias(variable)
+        for varname, value in modifications.items():
+            varname, context = self._get_alias(varname, inputs_only=True)
             if context is None:
                 continue
             if callable(value):
-                assignment = InterpolAssignString(variable, value, context)
+                assignment = InterpolAssignString(varname, value, context)
             else:
-                assignment = AssignString(variable, value, context)
+                assignment = AssignString(varname, value, context)
             if assignment.constant:
                 # If assignment is constant, it can be regarded as an initial condition,
                 # rather than a time-dependent boundary condition.
@@ -307,9 +307,16 @@ class Scenario:
         """List[AssignString]: list of initial conditions"""
         return self.__init_values
 
-    def _get_alias(self, lhs) -> Tuple[str, System]:
-        """Resolve potential aliasing for input `lhs`, targetted
+    def _get_alias(self, lhs: str, inputs_only=True) -> Tuple[str, System]:
+        """Resolve potential aliasing for variable `lhs`, targetted
         in an initial or a boundary condition.
+
+        Arguments:
+        ----------
+        - lhs [str]:
+            Assignment left-hand-side, i.e. targetted variable
+        - inputs_only [bool, optional]:
+            If `True` (default), only input variables are regarded as valid
 
         Returns:
         --------
@@ -317,7 +324,11 @@ class Scenario:
             Free lhs and its evaluation context, usable in `AssignString`.
         """
         context = self.__context
-        info = Boundary.parse(context, lhs)  # checks that variable is valid
+        info = Boundary.parse(context, lhs, inputs_only=inputs_only)  # checks that variable is valid
+
+        if info.port.is_output:
+            return (lhs, context)
+
         varname = natural_varname(info.basename)
         variable = info.ref
         try:

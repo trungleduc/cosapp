@@ -73,7 +73,7 @@ class RunOnce(Driver):
             )
 
         for variable, value in modifications.items():
-            boundary = Boundary(self.owner, variable, default=value)
+            boundary = Boundary(self.owner, variable, default=value, inputs_only=False)
 
             # Check if boundary.name already exists
             actual = self.initial_values.setdefault(boundary.name, boundary)
