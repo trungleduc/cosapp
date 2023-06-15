@@ -405,6 +405,8 @@ class NonLinearSolver(AbstractSolver):
 
         else:
             logger.debug('No parameters/residues to solve. Fallback to children execution.')
+            for child in self.children.values():
+                child.run_once()
             self.owner.run_children_drivers()
 
         if self._recorder is not None:
