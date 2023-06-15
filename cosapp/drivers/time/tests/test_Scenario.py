@@ -159,13 +159,16 @@ def test_Scenario_stop(case):
         {'tank1.height': 'pipe.L / 2', 'tank2.height': '10 * pipe.D'},
         dict(content=['tank1.height = pipe.L / 2', 'tank2.height = 10 * pipe.D'], n_const=0)
     ),
+    (
+        {'pipe.k': 2},  # Output variables are accepted in `set_init`
+        dict(content=['pipe.k = 2'], n_const=0),
+    ),
     # Erroneous cases:
     ({'foo.bar': 2}, dict(error=AttributeError, match=r"'foo\.bar' is not known in \w*")),
-    ({'pipe.k': 2}, dict(error=ValueError, match="Only variables in input ports can be used as boundaries")),
 ])
 def test_Scenario_set_init(scenario, init, expected):
     error = expected.get('error', None)
-
+ 
     if error is None:
         scenario.set_init(init)
         assert all(isinstance(assignment, AssignString) for assignment in scenario.init_values)

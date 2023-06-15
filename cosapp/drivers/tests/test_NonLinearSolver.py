@@ -69,6 +69,7 @@ def FixedPointArray():
 class QuadraticFunction(System):
     def setup(self):
         self.add_inward('a', 0.0)
+        self.add_inward('k', 1.0)
         self.add_inward('x', 1.0)
         self.add_outward('y', 0.0)
 
@@ -76,7 +77,7 @@ class QuadraticFunction(System):
         design.add_unknown('x').add_target('y')
     
     def compute(self) -> None:
-        self.y = self.x**2 - self.a
+        self.y = self.k * self.x**2 - self.a
 
 
 def test_NonLinearSolver__setattr__():
@@ -930,6 +931,7 @@ def test_NonLinearSolver_add_target_solver():
     solver = f.add_driver(NonLinearSolver('solver', tol=1e-9))
     solver.add_unknown('x').add_target('y')
 
+    f.k = 1.0
     f.a = 2.0
     f.y = 0.0   # set target value by setting output variable
     f.run_drivers()
@@ -953,6 +955,7 @@ def test_NonLinearSolver_add_target_case(design):
     problem = case.design if design else case.offdesign
     problem.add_unknown('x').add_target('y')
 
+    f.k = 1.0
     f.a = 2.0
     f.y = 0.0   # set target value by setting output variable
     f.run_drivers()
@@ -963,6 +966,176 @@ def test_NonLinearSolver_add_target_case(design):
     f.run_drivers()
     assert f.x == pytest.approx(np.sqrt(1.5))
     assert f.y == pytest.approx(-0.5)
+
+
+def test_NonLinearSolver_add_target_fix_values():
+    """Test multi-point design problem with targets.
+
+    Test purpose:
+    -------------
+    When target values are specified in `RunSingleCase.set_values`,
+    these values are used in the mathematical problem, regardless of
+    values set interactively.
+    """
+    f = QuadraticFunction('f')
+
+    solver = f.add_driver(NonLinearSolver('solver'))
+    solver.force_init = True
+    case = solver.add_child(RunSingleCase('case'))
+    
+    case.add_unknown('x').add_target('y')
+    case.set_values({
+        'k': 0.5,
+        'a': 1.2,
+        'y': 0.0,  # target value
+    })
+
+    f.x = 2.0
+    f.y = 1.0  # should not be used as target
+    f.run_drivers()
+
+    assert f.y == pytest.approx(0)
+    assert f.x == pytest.approx(np.sqrt(2.4))
+    # Check that actual RHS is determined by case values
+    assert set(solver.problem.residues) == {"y == 0.0"}
+
+    # Re-run with a different initial guess
+    f.x = -2.0
+    f.y = 1.0  # should not be used as target
+    f.run_drivers()
+
+    assert f.y == pytest.approx(0)
+    assert f.x == pytest.approx(-np.sqrt(2.4))
+    assert set(solver.problem.residues) == {"y == 0.0"}
+
+
+def test_NonLinearSolver_add_target_multipoint_1():
+    """Test multi-point design problem with targets.
+
+    Case 1: targets declared at design point level.
+    """
+    f = QuadraticFunction('f')
+
+    solver = f.add_driver(NonLinearSolver('solver'))
+    point1 = solver.add_child(RunSingleCase('point1'))
+    point2 = solver.add_child(RunSingleCase('point2'))
+    
+    solver.add_unknown(['x', 'a'])
+
+    point1.add_target('y')
+    point2.add_target('y')
+
+    point1.set_values({'k': 2.0, 'y': 0.0})
+    point2.set_values({'k': -0.5, 'y': -1.0})
+
+    f.run_drivers()
+    assert set(solver.problem.residues) == {
+        "point1[y == 0.0]",
+        "point2[y == -1.0]",
+    }
+    assert f.a == pytest.approx(0.8)
+    assert f.x == pytest.approx(np.sqrt(0.5 * 0.8))
+
+    # Dynamically change case values
+    point1.set_values({'k': 2.0, 'y': 0.75})
+    point2.set_values({'k': 0.5, 'y': 0.0})
+
+    f.a = 1.0
+    f.x = 2.0
+    f.run_drivers()
+    assert set(solver.problem.residues) == {
+        "point1[y == 0.75]",
+        "point2[y == 0.0]",
+    }
+    assert f.a == pytest.approx(0.25)
+    assert f.x == pytest.approx(np.sqrt(2 * 0.25))
+
+    # Same with negative initial x
+    f.a = 1.0
+    f.x = -2.0
+    f.run_drivers()
+    assert set(solver.problem.residues) == {
+        "point1[y == 0.75]",
+        "point2[y == 0.0]",
+    }
+    assert f.a == pytest.approx(0.25)
+    assert f.x == pytest.approx(-np.sqrt(2 * 0.25))
+
+
+def test_NonLinearSolver_add_target_multipoint_2():
+    """Test multi-point design problem with targets.
+
+    Case 2: Single target declared at solver level.
+    Target is expected to be transmitted to all design points,
+    with different target values.
+    """
+    f = QuadraticFunction('f')
+
+    solver = f.add_driver(NonLinearSolver('solver'))
+    point1 = solver.add_child(RunSingleCase('point1'))
+    point2 = solver.add_child(RunSingleCase('point2'))
+    
+    solver.add_unknown(['x', 'a']).add_target('y')
+
+    point1.set_values({'k': 2.0, 'y': 0.0})
+    point2.set_values({'k': -0.5, 'y': -1.0})
+
+    f.run_drivers()
+    assert set(solver.problem.residues) == {
+        "point1[y == 0.0]",
+        "point2[y == -1.0]",
+    }
+    assert f.a == pytest.approx(0.8)
+    assert f.x == pytest.approx(np.sqrt(0.5 * 0.8))
+
+    # Dynamically change case values
+    point1.set_values({'k': 2.0, 'y': 0.75})
+    point2.set_values({'k': 0.5, 'y': 0.0})
+
+    f.a = 1.0
+    f.x = 2.0
+    f.run_drivers()
+    assert set(solver.problem.residues) == {
+        "point1[y == 0.75]",
+        "point2[y == 0.0]",
+    }
+    assert f.a == pytest.approx(0.25)
+    assert f.x == pytest.approx(np.sqrt(2 * 0.25))
+
+    # Same with negative initial x
+    f.a = 1.0
+    f.x = -2.0
+    f.run_drivers()
+    assert set(solver.problem.residues) == {
+        "point1[y == 0.75]",
+        "point2[y == 0.0]",
+    }
+    assert f.a == pytest.approx(0.25)
+    assert f.x == pytest.approx(-np.sqrt(2 * 0.25))
+
+
+def test_NonLinearSolver_add_target_multipoint_3():
+    """Test multi-point design problem with targets.
+
+    Case 3: specify target values in `set_init`,
+    rather than `set_values`.
+    """
+    f = QuadraticFunction('f')
+
+    solver = f.add_driver(NonLinearSolver('solver'))
+    point1 = solver.add_child(RunSingleCase('point1'))
+    point2 = solver.add_child(RunSingleCase('point2'))
+    
+    solver.add_unknown(['x', 'a']).add_target('y')
+
+    point1.set_init({'y': 0.0})
+    point2.set_init({'y': -1.0})
+    point1.set_values({'k': 2.0})
+    point2.set_values({'k': -0.5})
+
+    f.run_drivers()
+    assert f.a == pytest.approx(0.8)
+    assert f.x == pytest.approx(np.sqrt(0.5 * 0.8))
 
 
 def test_NonLinearSolver_vector1d_system():

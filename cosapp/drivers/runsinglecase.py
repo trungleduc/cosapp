@@ -6,7 +6,6 @@ from cosapp.core.numerics.basics import MathematicalProblem
 from cosapp.core.numerics.boundary import Boundary
 from cosapp.drivers.iterativecase import IterativeCase
 from cosapp.drivers.utils import DesignProblemHandler
-from cosapp.ports.enum import PortType
 from cosapp.systems import System
 from cosapp.utils.helpers import check_arg
 
@@ -85,11 +84,25 @@ class RunSingleCase(IterativeCase):
         self.__processed = DesignProblemHandler(self.owner)
         self.problem = None
 
-    def merge_problems(self) -> None:
-        # Activate targets in processed problems
-        for problem in self.__processed.problems:
-            problem.activate_targets()
+    def __merge_problems(self) -> None:
+        self.__activate_targets()
         self.problem = self.merged_problem(copy=False)
+
+    def __activate_targets(self) -> None:
+        """Activate targets in processed problems"""
+        extract_targets = lambda problem: set(
+            r.target for r in problem.deferred_residues.values()
+        )
+        target_names = set.union(
+            *map(extract_targets, self.__processed.problems)
+        )
+        if target_names:
+            # Set init values corresponding to targetted variables
+            for boundary in self.initial_values.values():
+                if boundary.basename in target_names:
+                    boundary.set_to_default()
+            for problem in self.__processed.problems:
+                problem.activate_targets()
 
     def merged_problem(self, copy=True) -> MathematicalProblem:
         handler = self.__processed
@@ -114,7 +127,7 @@ class RunSingleCase(IterativeCase):
 
         # Resolve unknown aliasing in `processed`
         self.__processed = processed.copy(prune=True)
-        self.merge_problems()
+        self.__merge_problems()
 
     def add_offdesign_problem(self, offdesign: MathematicalProblem) -> MathematicalProblem:
         """Add outer off-design problem to inner problem.
@@ -128,7 +141,7 @@ class RunSingleCase(IterativeCase):
         # Existing unknowns and equations are silently overwritten.
         if not offdesign.is_empty():
             self.__processed.offdesign.extend(offdesign, copy=True, overwrite=True)
-            self.merge_problems()
+            self.__merge_problems()
         return self.problem
 
     def _precompute(self) -> None:
@@ -139,14 +152,7 @@ class RunSingleCase(IterativeCase):
         super()._precompute()
 
         # Set boundary conditions
-        owner_changed = False
-        for assignment in self.case_values:
-            value, changed = assignment.exec()
-            if changed:
-                owner_changed = True
-
-        if owner_changed:
-            self.owner.touch()
+        self.apply_values()
 
         # Set offdesign variables
         design_unknowns = set(self.design.unknowns)
@@ -156,6 +162,16 @@ class RunSingleCase(IterativeCase):
                 continue
             if not numpy.array_equal(unknown.value, unknown.default_value):
                 unknown.set_to_default()
+
+    def apply_values(self) -> None:
+        owner_changed = False
+        for assignment in self.case_values:
+            value, changed = assignment.exec()
+            if changed:
+                owner_changed = True
+
+        if owner_changed:
+            self.owner.touch()
 
     def clean_run(self):
         """Method called once after any simulation."""
@@ -216,9 +232,25 @@ class RunSingleCase(IterativeCase):
             )
         check_arg(modifications, 'modifications', dict)
 
-        for variable, value in modifications.items():
-            Boundary.parse(owner, variable)  # checks that variable is valid
-            self.__case_values.append(AssignString(variable, value, owner))
+        init = {}
+        for varname, value in modifications.items():
+            info = Boundary.parse(owner, varname)  # checks that variable is valid
+            if info.port.is_input:
+                self.__case_values.append(AssignString(varname, value, owner))
+            else:
+                init[varname] = value
+        if init:
+            varnames = list(init)
+            if len(init) == 1:
+                head = f"Variable {varnames[0]}"
+                tail = f"has been set as initial condition"
+            else:
+                head = f"Variables {varnames}"
+                tail = f"have been set as initial conditions"
+            logger.info(
+                f"{head} declared in `{self.name}` values {tail}."
+            )
+            self.set_init(init)
 
     def add_value(self, variable: str, value: Any) -> None:
         """Add a single variable to list of case values.

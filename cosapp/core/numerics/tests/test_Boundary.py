@@ -1,10 +1,10 @@
 import pytest
-
 import numpy as np
 
 from cosapp.systems import System
 from cosapp.core.numerics.boundary import Boundary
 from cosapp.ports.port import Port, PortType
+from contextlib import nullcontext as does_not_raise
 
 
 class APort(Port):
@@ -40,9 +40,9 @@ def a():
     ('y', dict(default=1.234), dict(variable='y', default_value=np.full(2, 1.234), mask=[True, True])),
     ('y[1]', dict(default=np.array([-2.])), dict(variable='y', default_value=np.array([-2]), mask=[False, True])),
     ('y[1]', dict(default=[-2.]), dict(variable='y', default_value=np.array([-2]), mask=[False, True])),
-    ('y[1]', dict(default=-2), dict(variable='y', default_value=np.array([-2]), mask=[False, True])),
-    ('y[1:]', dict(default=-2), dict(variable='y', default_value=np.array([-2]), mask=[False, True])),
-    ('y[:-1]', dict(default=-2), dict(variable='y', default_value=np.array([-2]), mask=[True, False])),
+    ('y[1]', dict(default=-2.), dict(variable='y', default_value=np.array([-2]), mask=[False, True])),
+    ('y[1:]', dict(default=-2.), dict(variable='y', default_value=np.array([-2]), mask=[False, True])),
+    ('y[:-1]', dict(default=-2.), dict(variable='y', default_value=np.array([-2]), mask=[True, False])),
     ('y[:]', dict(default=np.array([-2., 1.])), dict(variable='y', default_value=[-2, 1], mask=[True, True])),
     ('y[:]', dict(default=[-2., 1.]), dict(variable='y', default_value=[-2, 1], mask=[True, True])),
     ('x', dict(mask=[False]), dict(variable='x', mask=[False])),
@@ -52,7 +52,7 @@ def a():
     ('y', dict(mask=(True, True)), dict(variable='y', mask=[True, True])),
     ('y', dict(mask=np.full(2, True)), dict(variable='y', mask=[True, True])),
     ('u[::2]', dict(), dict(variable='u', mask=[True, False, True, False, True])),
-    ('u[::2]', dict(default=[1, 2, 3]), dict(variable='u', default_value=[1, 2, 3], mask=[True, False, True, False, True])),
+    ('u[::2]', dict(default=[1., 2., 3.]), dict(variable='u', default_value=[1., 2., 3.], mask=[True, False, True, False, True])),
     # ('', dict(), dict(variable='', default_value=, mask=[True, True])),
 ])
 def test_Boundary___init__(a, name, kwargs, expected):
@@ -80,25 +80,27 @@ def test_Boundary___init__(a, name, kwargs, expected):
             assert x_attr == pytest.approx(value), err_msg
 
 
-@pytest.mark.parametrize("name, kwargs, exception", [
-    ('_', dict(), AttributeError),
-    ('foo', dict(), AttributeError),
-    ('in_.x', dict(), AttributeError),
-    ('inwards.m', dict(), AttributeError),
-    ('v', dict(), ValueError),
-    ('outwards.v', dict(), ValueError),
-    ('x', dict(mask=False), TypeError),
-    ('y', dict(mask=False), TypeError),
-    ('y', dict(mask="False"), TypeError),
-    ('y', dict(mask=0), TypeError),
-    ('in_', dict(), TypeError),
-    ('inwards', dict(), TypeError),
-    ('outwards', dict(), TypeError),
-    ('y[', dict(), SyntaxError),
-    ('y(', dict(), SyntaxError),
+@pytest.mark.parametrize("name, kwargs, expected", [
+    ('_', dict(), pytest.raises(AttributeError)),
+    ('foo', dict(), pytest.raises(AttributeError)),
+    ('in_.x', dict(), pytest.raises(AttributeError)),
+    ('inwards.m', dict(), pytest.raises(AttributeError)),
+    ('v', dict(inputs_only=False), does_not_raise()),
+    ('v', dict(), pytest.raises(ValueError, match="Only variables in input ports")),
+    ('outwards.v', dict(), pytest.raises(ValueError, match="Only variables in input ports")),
+    ('x', dict(mask=False), pytest.raises(TypeError, match="mask")),
+    ('y', dict(mask="False"), pytest.raises(TypeError, match="mask")),
+    ('y', dict(mask=0), pytest.raises(TypeError, match="mask")),
+    ('x', dict(inputs_only=True), does_not_raise()),
+    ('x', dict(inputs_only=False), does_not_raise()),
+    ('in_', dict(), pytest.raises(TypeError)),
+    ('inwards', dict(), pytest.raises(TypeError)),
+    ('outwards', dict(), pytest.raises(TypeError)),
+    ('y[', dict(), pytest.raises(SyntaxError)),
+    ('y(', dict(), pytest.raises(SyntaxError)),
 ])
-def test_Boundary___init__error(a, name, kwargs, exception):
-    with pytest.raises(exception):
+def test_Boundary___init__error(a, name, kwargs, expected):
+    with expected:
         Boundary(a, name, **kwargs)
 
 
@@ -196,7 +198,7 @@ def test_Boundary__merge_masked_array(args, expected):
 
 
 @pytest.mark.parametrize("name, kwargs, expected", [
-    ('u[::2]', dict(default=[1, 2, 3]), dict(value=[1, 2, 3], context_value=[1, 0, 2, 0, 3])),
+    ('u[::2]', dict(default=[1., 2., 3.]), dict(value=[1., 2., 3.], context_value=[1., 0., 2., 0., 3.])),
     ('in_.m', dict(), dict(value=1)),
     ('x', dict(), dict(value=1)),
     ('y',    dict(), dict(value=[1, 2])),
@@ -205,10 +207,10 @@ def test_Boundary__merge_masked_array(args, expected):
     ('y[1]', dict(), dict(context_value=[1, 2], value=[2])),
     ('x', dict(default=4.), dict(value=4)),
     ('y', dict(default=np.zeros(2)), dict(value=[0, 0])),
-    ('y[0]', dict(default=[-2]), dict(value=[-2], context_value=[-2, 2])),
-    ('y[1]', dict(default=[-2]), dict(value=[-2], context_value=[1, -2])),
-    ('y[1]', dict(default=np.array([-2.])), dict(value=[-2], context_value=[1, -2])),
-    ('y[:]', dict(default=[-3, 5]), dict(value=[-3, 5])),
+    ('y[0]', dict(default=[-2.]), dict(value=[-2.], context_value=[-2., 2.])),
+    ('y[1]', dict(default=[-2.]), dict(value=[-2.], context_value=[1., -2.])),
+    ('y[1]', dict(default=np.array([-2.])), dict(value=[-2.], context_value=[1., -2.])),
+    ('y[:]', dict(default=[-3., 5.]), dict(value=[-3., 5.])),
 ])
 def test_Boundary_set_to_default(a, name, kwargs, expected):
     x = Boundary(a, name, **kwargs)

@@ -19,24 +19,27 @@ class Boundary:
 
     Parameters
     ----------
-    context : cosapp.systems.System
+    context: cosapp.systems.System
         System in which the boundary is defined.
-    name : str
+    name: str
         Name of the boundary
-    mask : numpy.ndarray or None
+    mask: numpy.ndarray or None
         Mask of the values in the vector boundary.
-    default : Number, numpy.ndarray or None
+    default: Number, numpy.ndarray or None
         Default value to set the boundary with.
+    inputs_only: bool, optional
+        If `True` (default), output variables are regarded as invalid.
     """
     def __init__(self,
         context: "cosapp.systems.System",
         name: str,
         mask: Optional[numpy.ndarray] = None,
         default: Union[Number, numpy.ndarray, None] = None,
-        **kwargs
+        inputs_only: bool = True,
+        **kwargs,
     ):
         super().__init__(**kwargs)  # for collaborative inheritance
-        self.__info = info = Boundary.parse(context, name, mask)
+        self.__info = info = Boundary.parse(context, name, mask, inputs_only)
 
         self._context = context  # type: cosapp.systems.System
         self._default_value = None  # type: Union[Number, numpy.ndarray, None]
@@ -48,7 +51,8 @@ class Boundary:
     def parse(
         context: "cosapp.systems.System",
         name: str,
-        mask: Optional[numpy.ndarray] = None
+        mask: Optional[numpy.ndarray] = None,
+        inputs_only: bool = False,
     ) -> SimpleNamespace:
         """
         Parse port and variable name from a name and its evaluation context.
@@ -56,12 +60,14 @@ class Boundary:
 
         Parameters
         ----------
-        - context : cosapp.systems.System
+        - context [cosapp.systems.System]:
             System in which the boundary is defined.
-        - name : str
+        - name [str]:
             Name of the boundary
-        - mask : numpy.ndarray[bool] or None, optional
+        - mask [numpy.ndarray[bool] or None, optional]:
             Mask to apply on the variable; default is None (i.e. no mask)
+        - inputs_only [bool, optional]:
+            If `True`, output variables are regarded as invalid. Default is `False`.
 
         Returns
         -------
@@ -80,7 +86,7 @@ class Boundary:
             raise TypeError(
                 f"Only variables can be used in mathematical algorithms; got {info.basename!r} in {context.name!r}"
             )
-        if not container.is_input:
+        if inputs_only and not container.is_input:
             raise ValueError(
                 f"Only variables in input ports can be used as boundaries; got {info.basename!r} in {container.contextual_name!r}."
             )
@@ -385,7 +391,7 @@ class Unknown(Boundary):
         # reference: Union[Number, numpy.ndarray] = 1.,  # TODO normalize unknown
         mask: Optional[numpy.ndarray] = None,
     ):
-        super().__init__(context, name, mask)
+        super().__init__(context, name, mask, inputs_only=True)
 
         check_arg(max_abs_step, 'max_abs_step', Number, lambda x: x > 0)
         check_arg(max_rel_step, 'max_rel_step', Number, lambda x: x > 0)
@@ -683,14 +689,13 @@ class TimeDerivative(Boundary):
     initial_value : Any
         Time derivative initial value
     """
-
     def __init__(self,
         context: "cosapp.systems.System",
         name: str,
         source: Any,
         initial_value: Any = None,
     ):
-        super().__init__(context, name)
+        super().__init__(context, name, inputs_only=True)
         self.__shape = None
         self.__previous = None
         eval_string, value, self.__type = self.source_type(source, self.context)
