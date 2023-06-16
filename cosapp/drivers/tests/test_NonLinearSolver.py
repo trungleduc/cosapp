@@ -3,7 +3,7 @@ import logging, re
 import numpy as np
 
 from collections import OrderedDict
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, DEFAULT
 from contextlib import nullcontext as does_not_raise
 
 from cosapp.core.numerics.residues import Residue
@@ -67,6 +67,8 @@ def FixedPointArray():
 
 
 class QuadraticFunction(System):
+    """Simple function y = k * x^2 - a
+    """
     def setup(self):
         self.add_inward('a', 0.0)
         self.add_inward('k', 1.0)
@@ -1487,3 +1489,60 @@ def test_NonLinearSolver_options(options, expected):
     """
     with expected:
         NonLinearSolver('solver', **options)
+
+
+def test_NonLinearSolver_empty_problem_mock():
+    """Test solver behaviour with a plain, direct system.
+    Related to https://gitlab.com/cosapp/cosapp/-/issues/99
+    """
+    def get_module(cls: type):
+        """Return full module path of `cls`"""
+        return f"{cls.__module__}.{cls.__qualname__}"
+
+    s = System("system")
+    s.add_driver(NonLinearSolver('solver'))
+
+    specs = dict(
+        get_init = DEFAULT,
+        apply_values = DEFAULT,
+    )
+    
+    with patch.multiple(get_module(RunSingleCase), **specs) as mocked_methods:
+        s.run_drivers()
+        assert mocked_methods['get_init'].call_count > 0
+        assert mocked_methods['apply_values'].call_count > 0
+
+
+@pytest.mark.parametrize("method_name", [
+    "set_init",
+    "set_values",
+])
+def test_NonLinearSolver_empty_problem_case(method_name):
+    """Test solver with a direct system, with case values
+    set through `RunSingleCase.set_init` and `set_values`.
+
+    Expected behaviour: case values are transferred to system,
+    and system is updated.
+
+    Related to https://gitlab.com/cosapp/cosapp/-/issues/99
+    """
+    s = QuadraticFunction("system")
+    s.a = s.k = s.x = 0.0
+
+    solver = s.add_driver(NonLinearSolver('solver'))
+    case = solver.add_child(RunSingleCase('case'))
+
+    set_case = getattr(case, method_name)
+    set_case({
+        'a': 1.0,
+        'k': 0.5,
+        'x': 0.1,
+    })
+
+    s.run_drivers()
+
+    assert s.x == 0.1
+    assert s.k == 0.5
+    assert s.a == 1.0
+    assert s.y == pytest.approx(-0.995)
+    assert solver.problem.is_empty()
