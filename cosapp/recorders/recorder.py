@@ -19,6 +19,31 @@ class SpecialColumns(NamedTuple):
     reference: str
 
 
+
+def is_cosapp_object(obj: Any) -> bool:
+    """Returns `True` if `obj` is either a port,
+    a system or a driver; `False` otherwise."""
+    from cosapp.base import Port, System, Driver
+    return isinstance(obj, (Port, System, Driver))
+
+
+def any_cosapp_objects(collection: Any) -> bool:
+    """Returns `True` if argument is a cosapp object
+    or a collection thereof; `False` otherwise."""
+    if isinstance(collection, str):
+        return False
+    try:
+        return any(map(is_cosapp_object, collection))
+    except TypeError:
+        return is_cosapp_object(collection)
+
+
+def no_cosapp_objects(dict_item: tuple) -> bool:
+    """Filter function for dictionary items, to
+    exclude entries that match `any_cosapp_object`."""
+    return not any_cosapp_objects(dict_item[1])
+
+
 class BaseRecorder(abc.ABC):
     """Abstract base class for recorders.
 
@@ -242,11 +267,11 @@ class BaseRecorder(abc.ABC):
     def __update_varlist(self) -> None:
         """Update the list of fields to be recorded"""
         includes = []
-        evaluables = []
+        evaluables = {}
         context = self.watched_object
         for expression in set(self.__includes):
             try:
-                EvalString(expression, context)
+                evaluable = EvalString(expression, context)
             except:
                 includes.append(expression)
             else:
@@ -255,7 +280,7 @@ class BaseRecorder(abc.ABC):
                     # in case it matches an exclusion pattern
                     includes.append(expression)
                 else:
-                    evaluables.append(expression)
+                    evaluables[expression] = evaluable.eval()
         
         if self._numerical_only:
             criterion = is_numerical
@@ -269,7 +294,12 @@ class BaseRecorder(abc.ABC):
             advanced_filter=criterion,
             include_const=True,
         )
-        variables.extend(evaluables)
+        variables.update(evaluables)
+
+        # Filter out attributes containing non-copyable CoSApp objects
+        variables = dict(
+            filter(no_cosapp_objects, variables.items())
+        )
         self.__variables = variables = sorted(variables)
         self.__expressions = EvalString(", ".join(variables).join("[]"), context)
 

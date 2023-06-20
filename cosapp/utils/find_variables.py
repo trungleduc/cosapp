@@ -1,5 +1,5 @@
 from fnmatch import fnmatchcase
-from typing import List, Any, Callable, Set, Union
+from typing import List, Any, Callable, Set, Dict, Union
 from collections.abc import Collection
 import inspect
 import itertools
@@ -39,45 +39,44 @@ def get_attributes(obj) -> Set[str]:
 
 
 def find_variables(
-    watched_object: "cosapp.systems.System",
+    system: "cosapp.systems.System",
     includes: SearchPattern,
     excludes: SearchPattern,
     advanced_filter: Callable[[Any], bool] = lambda any: True,
     inputs: bool = True,
     outputs: bool = True,
     include_const: bool = False,
-) -> List[str]:
-    """Generate the list of requested variables.
-
-    The variables are sorted in alphabetical order.
+) -> Dict[str, Any]:
+    """Generate the dictionary (name, value) of variables
+    whose names match inclusion and exclusion criteria.
 
     Parameters
     ----------
-    watched_object : cosapp.systems.System
-        Object that owns the variables searched
+    system : cosapp.systems.System
+        Object that owns the variables searched.
     includes : str or List[str]
-        Variables matching these patterns will be included
+        Variables matching these patterns will be included.
     excludes : str or List[str]
-        Variables matching these patterns will be excluded
+        Variables matching these patterns will be excluded.
     advanced_filter : Callable[[Any], bool]
-        Function taking the variable as input and returning an acceptance criteria (True if variable is valid)
+        Function taking the variable as input and returning an acceptance criteria (True if variable is valid).
     inputs : bool
-        Defines if input variables will be accepted or not
+        Defines if input variables will be accepted or not.
     outputs : bool
-        Defines if output variables will be accepted or not
+        Defines if output variables will be accepted or not.
     include_const : bool
-        Defines if read-only properties defined with `System.add_property` will be accepted or not
+        Defines if read-only properties defined with `System.add_property` will be accepted or not.
 
     Returns
     -------
-    List[str]
-        Variable names matching the includes/excludes patterns of the user in the watched object.
+    dict[str, Any]
+        Dictionary (name, value) of matches.
 
     .. note::
         Inward and outward variables will appear without the prefix `inwards.` or `outwards.`.
     """
     from cosapp.systems import System  # Local import to avoid recursion
-    check_arg(watched_object, 'watched_object', System)
+    check_arg(system, 'system', System)
 
     if not (inputs or outputs):
         # quick return, if possible
@@ -85,7 +84,7 @@ def find_variables(
 
     includes = make_wishlist(includes)
     excludes = make_wishlist(excludes)
-    result = set()
+    result = dict()
 
     def is_valid(port: BasePort) -> bool:
         return isinstance(port, BasePort) and (
@@ -93,8 +92,8 @@ def find_variables(
             (port.is_output and outputs)
         )
 
-    def find_matches(name: str, value: Any) -> Set[str]:
-        result = set()
+    def find_matches(name: str, value: Any) -> Dict[str, Any]:
+        matches = dict()
         if advanced_filter(value):
             for pattern in includes:
                 if fnmatchcase(name, pattern):
@@ -104,13 +103,13 @@ def find_variables(
                             include = False
                             break
                     if include:
-                        result.add(name)
+                        matches[name] = value
                         break
-        return result
+        return matches
 
     ports = set()
 
-    for name, ref in watched_object.name2variable.items():
+    for name, ref in system.name2variable.items():
         # Save variable for non virtual port
         # Suppress duplicates INWARDS and OUTWARDS
         port = ref.mapping
@@ -122,7 +121,7 @@ def find_variables(
             continue  # skip `name`
 
         ports.add(port)
-        result |= find_matches(name, watched_object[name])
+        result.update(find_matches(name, ref.value))
     
     # Find matches among port properties
     Port_cls_attr = get_attributes(Port)
@@ -133,20 +132,77 @@ def find_variables(
         port_properties = get_attributes(port) - Port_cls_attr - set(port._variables)
         port_name = port.full_name(trim_root=True)
         for name in port_properties:
-            result |= find_matches(f"{port_name}.{name}", getattr(port, name))
+            result.update(
+                find_matches(f"{port_name}.{name}", getattr(port, name))
+            )
 
     # Find matches among system properties
-    system_properties = find_system_properties(watched_object, include_const)
+    system_properties = find_system_properties(system, include_const)
     for name in system_properties:
         try:
             child, attr = name.rsplit('.', maxsplit=1)
         except ValueError:
-            owner, attr = watched_object, name
+            owner, attr = system, name
         else:
-            owner = watched_object[child]
-        result |= find_matches(name, getattr(owner, attr))
+            owner = system[child]
+        result.update(
+            find_matches(name, getattr(owner, attr))
+        )
 
-    return sorted(result)
+    return result
+
+
+def find_variable_names(
+    system: "cosapp.systems.System",
+    includes: SearchPattern,
+    excludes: SearchPattern,
+    advanced_filter: Callable[[Any], bool] = lambda any: True,
+    inputs: bool = True,
+    outputs: bool = True,
+    include_const: bool = False,
+) -> List[str]:
+    """Generate the list of requested variable names,
+    given inclusion and exclusion criteria.
+
+    Matching variable names are returned in alphabetical order.
+
+    Parameters
+    ----------
+    system : cosapp.systems.System
+        Object that owns the variables searched.
+    includes : str or List[str]
+        Variables matching these patterns will be included.
+    excludes : str or List[str]
+        Variables matching these patterns will be excluded.
+    advanced_filter : Callable[[Any], bool]
+        Function taking the variable as input and returning an acceptance criteria (True if variable is valid).
+    inputs : bool
+        Defines if input variables will be accepted or not.
+    outputs : bool
+        Defines if output variables will be accepted or not.
+    include_const : bool
+        Defines if read-only properties defined with `System.add_property` will be accepted or not.
+
+    Returns
+    -------
+    list[str]
+        Variable names in `system` matching the requested includes/excludes patterns.
+
+    .. note::
+        Inward and outward variables will appear without the prefix `inwards.` or `outwards.`.
+        This functions returns the sorted keys of the dictionary returned by `find_variables`.
+    """
+    return sorted(
+        find_variables(
+            system,
+            includes,
+            excludes,
+            advanced_filter,
+            inputs,
+            outputs,
+            include_const,
+        )
+    )
 
 
 def find_system_properties(system, include_const=False) -> Set[str]:
@@ -161,12 +217,12 @@ def find_system_properties(system, include_const=False) -> Set[str]:
     - system [cosapp.systems.System]:
         System of interest
     - include_const [bool, optional]:
-        Defines if read-only properties defined with `System.add_property` will be accepted or not.
+        Defines if read-only properties defined with `System.add_property` will be accepted or not..
         Default: `False`.
 
     Returns
     -------
-    - Set[str]:
+    - set[str]:
         Set of property names.
     """
     from cosapp.systems import System  # Local import to avoid recursion

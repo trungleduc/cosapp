@@ -6,7 +6,7 @@ from cosapp.drivers.abstractsetofcases import AbstractSetOfCases
 from cosapp.drivers.optionaldriver import OptionalDriver
 from cosapp.recorders.dataframe_recorder import DataFrameRecorder
 from cosapp.utils.helpers import check_arg, is_number
-from cosapp.utils.find_variables import find_variables
+from cosapp.utils.find_variables import find_variable_names
 
 
 # TODO This does not support multipoints cases
@@ -145,14 +145,14 @@ class Influence(AbstractSetOfCases):
             )
         )
 
-        self.found_input_vars = find_variables(
+        self.found_input_vars = find_variable_names(
             self.owner,
             includes=self.input_vars,
             excludes=[],
             advanced_filter=lambda x: is_number(x),
             outputs=False,
         )
-        self.found_response_vars = find_variables(
+        self.found_response_vars = find_variable_names(
             self.owner,
             includes=self.response_vars,
             excludes=[],

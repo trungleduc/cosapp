@@ -24,6 +24,12 @@ class _AllTypesSystem(System):
         self.add_inward_modevar("m_in", 0.1)
         self.add_outward_modevar("m_out", False)
         self.add_event('beep')
+        # Properties containing CoSApp objects
+        self.add_property('v_ports', (self.in_, self.out))
+        self.add_property('s_tuple', (
+            self.add_child(System('foo')),
+            self.add_child(System('bar')),
+        ))
 
     def compute(self):
         self.out.x = self.a * self.in_.x + self.b
