@@ -3,6 +3,7 @@ import numpy as np
 
 from cosapp.systems import System
 from cosapp.core.numerics.residues import Residue
+from cosapp.utils.testing import get_args
 
 
 class LocalSystem(System):
@@ -10,6 +11,12 @@ class LocalSystem(System):
         self.add_inward('a', 1.)
         self.add_inward('b', [1., 2.])
         self.add_inward('c', np.array([1., 2.]))
+
+
+@pytest.fixture
+def system():
+    """Evaluation context for residues"""
+    return LocalSystem('system')
 
 
 @pytest.mark.parametrize("expression, exception", [
@@ -44,44 +51,46 @@ def test_Residue_split_equation_ok(expression, lhs, rhs):
     assert Residue.split_equation(expression) == (lhs, rhs)
 
 
-@pytest.mark.parametrize("args, kwargs, exception", [
-    (("2. == 3.", 'foo', 20.), dict(), RuntimeWarning),
-    (("4.",), dict(), ValueError),
-    (("4.",), dict(reference=20.), ValueError),
-    (("array([2., 4.]) == array([3., 6.])",), dict(reference=20.), RuntimeWarning),
-    (("array([4., 5.]) == 0",), dict(), RuntimeWarning),
-    (("array([4., 5.]) == a + 'foo'",), dict(), TypeError),
-    (("[a, b] == [1, 2]",), dict(), TypeError),
-    (("[a, b] == [1, [2, 3]]",), dict(), TypeError),
+@pytest.mark.parametrize("args_kwargs, expected", [
+    (get_args("2. == 3.", 'foo', 20.), pytest.raises(RuntimeWarning, match="trivially constant")),
+    (get_args("4."), pytest.raises(ValueError, match="equation")),
+    (get_args("4.", reference=20.), pytest.raises(ValueError, match="equation")),
+    (get_args("array([2., 4.]) == array([3., 6.])", reference=20.), pytest.raises(RuntimeWarning, match="trivially constant")),
+    (get_args("array([4., 5.]) == 0"), pytest.raises(RuntimeWarning, match="trivially constant")),
+    (get_args("array([4., 5.]) == a + 'foo'"), pytest.raises(TypeError)),
+    (get_args("[a, b] == [1, 2]"), pytest.raises(TypeError, match="not comparable")),
+    (get_args("[a, b] == [1, [2, 3]]"), pytest.raises(TypeError, match="not comparable")),
     # Note: behaviour of next cases may change with numpy version
     #       (comparison of two arrays of different sizes)
-    (("c == []",), dict(), ValueError),
-    (("c == [4., 5., 0.1]",), dict(), ValueError),
-    (("c == array([4., 5., 0.1])",), dict(), ValueError),
+    #       For numpy < 1.25, `ValueError` is raised
+    #       For numpy >= 1.25, `TypeError` is raised
+    (get_args("c == []"), pytest.raises((ValueError, TypeError))),
+    (get_args("c == [4., 5., 0.1]"), pytest.raises((ValueError, TypeError))),
+    (get_args("c == array([4., 5., 0.1])"), pytest.raises((ValueError, TypeError))),
 ])
-def test_Residue___init__Error(args, kwargs, exception):
-    s = LocalSystem('system')
-    with pytest.raises(exception):
-        Residue(s, *args, **kwargs)
+def test_Residue___init__Error(system, args_kwargs, expected):
+    args, kwargs = args_kwargs
+    with expected:
+        Residue(system, *args, **kwargs)
 
 
-@pytest.mark.parametrize("args, kwargs, name, value, reference", [
-    (("a == 4",), dict(), "a == 4", -3, 1),
-    (("c == 0",), dict(), "c == 0", [1, 2], 1),
-    (("c == 0",), dict(reference="norm"), "c == 0", [1, 2], [1, 1]),
-    (("a + b[0] == 0.5",), dict(), "a + b[0] == 0.5", 1.5, 1),
-    (("a + b[0] == 0.5",), dict(name="balance"), "balance", 1.5, 1),
-    (('a + b[0] == 0.5', 'foo',), dict(), 'foo', 1.5, 1),
-    (('a + b[0] == 0.5', 'foo', 15,), dict(), 'foo', 0.1, 15),
-    (("c == [1, 0]",), dict(), "c == [1, 0]", [0, 2], 1),
-    (("c == [1, 0]",), dict(reference=[1, 10]), "c == [1, 0]", [0, 0.2], [1, 10]),
-    (("c == [1, 0]",), dict(reference="norm"), "c == [1, 0]", [0, 2], [1, 1]),
-    (("[a, b[0]] == [0, 2]", "weird"), dict(), "weird", [1, -1], 1),
+@pytest.mark.parametrize("args_kwargs, name, value, reference", [
+    (get_args("a == 4"), "a == 4", -3, 1),
+    (get_args("c == 0"), "c == 0", [1, 2], 1),
+    (get_args("c == 0", reference="norm"), "c == 0", [1, 2], [1, 1]),
+    (get_args("a + b[0] == 0.5"), "a + b[0] == 0.5", 1.5, 1),
+    (get_args("a + b[0] == 0.5", name="balance"), "balance", 1.5, 1),
+    (get_args('a + b[0] == 0.5', 'foo'), 'foo', 1.5, 1),
+    (get_args('a + b[0] == 0.5', 'foo', 15), 'foo', 0.1, 15),
+    (get_args("c == [1, 0]"), "c == [1, 0]", [0, 2], 1),
+    (get_args("c == [1, 0]", reference=[1, 10]), "c == [1, 0]", [0, 0.2], [1, 10]),
+    (get_args("c == [1, 0]", reference="norm"), "c == [1, 0]", [0, 2], [1, 1]),
+    (get_args("[a, b[0]] == [0, 2]", "weird"), "weird", [1, -1], 1),
 ])
-def test_Residue___init__(args, kwargs, name, value, reference):
-    s = LocalSystem('system')
-    r = Residue(s, *args, **kwargs)
-    assert r._context is s
+def test_Residue___init__(system, args_kwargs, name, value, reference):
+    args, kwargs = args_kwargs
+    r = Residue(system, *args, **kwargs)
+    assert r._context is system
     assert r.name == name
     assert r.value == pytest.approx(value, rel=1e-14)
     assert r.reference == pytest.approx(reference, rel=1e-14)
@@ -149,24 +158,24 @@ def test_Residue_evaluate_residue(args, expected):
     assert Residue.evaluate_residue(*args) == pytest.approx(expected, rel=1e-14)
 
 
-@pytest.mark.parametrize("args, kwargs", [
-    (('a + b[0] == 0.5', 'foo', 15,), dict()),
-    (('a + b[0] == 0.5', 'foo',), dict()),
-    (('a + b[0] == 0.5',), dict()),
-    (("c == 0",), dict()),
-    (("a + b[0] == 0.5",), dict(name="balance")),
-    (("[a, b[0]] == [0, 2]", "weird"), dict()),
-    (("c == [1, 0]",), dict()),
+@pytest.mark.parametrize("args_kwargs", [
+    get_args('a + b[0] == 0.5', 'foo', 15),
+    get_args('a + b[0] == 0.5', 'foo'),
+    get_args('a + b[0] == 0.5'),
+    get_args("c == 0"),
+    get_args("a + b[0] == 0.5", name="balance"),
+    get_args("[a, b[0]] == [0, 2]", "weird"),
+    get_args("c == [1, 0]"),
 ])
-def test_Residue_copy(args, kwargs):
-    s = LocalSystem('system')
-    r = Residue(s, *args, **kwargs)
-    t = r.copy()
-    assert t is not r
-    assert t.context is r.context
-    assert t.name == r.name
-    assert t.value == pytest.approx(t.value, rel=1e-14)
-    assert t.reference == pytest.approx(t.reference, rel=1e-14)
+def test_Residue_copy(system, args_kwargs):
+    args, kwargs = args_kwargs
+    r = Residue(system, *args, **kwargs)
+    c = r.copy()
+    assert c is not r
+    assert c.context is r.context
+    assert c.name == r.name
+    assert c.value == pytest.approx(r.value, abs=0)
+    assert c.reference == pytest.approx(r.reference, abs=0)
 
 
 @pytest.mark.parametrize("options, expected", [
@@ -182,12 +191,11 @@ def test_Residue_copy(args, kwargs):
     (dict(equation="c == [1, 0]", reference="norm"), dict(reference="[1.0, 1.0]")),
     (dict(equation="[a, b[0]] == [0, 2]", name="weird"), dict()),
 ])
-def test_Residue_to_dict(options, expected):
-    s = LocalSystem('system')
-    r = Residue(s, **options)
+def test_Residue_to_dict(system, options, expected):
+    r = Residue(system, **options)
     r_dict = r.to_dict()
 
-    assert r_dict["context"] == s.contextual_name
-    assert r_dict["name"] == options.get("name", options["equation"])
+    assert r_dict["context"] == system.contextual_name
     assert r_dict["equation"] == options["equation"]
     assert r_dict["reference"] == expected.get("reference", "1")
+    assert r_dict["name"] == options.get("name", options["equation"])

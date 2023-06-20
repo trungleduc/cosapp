@@ -4,6 +4,7 @@ from cosapp.utils.find_variables import (
     natural_varname,
     make_wishlist,
     find_variables,
+    find_variable_names,
     find_system_properties,
 )
 from cosapp.tests.library.systems import AllTypesSystem
@@ -81,22 +82,22 @@ def test_natural_varname_weird(case1, case2):
 
 
 @pytest.mark.parametrize("args, expected", [
-    ([], dict(list=[])),
-    (None, dict(list=[])),
-    ('', dict(list=[''])),
-    ('x', dict(list=['x'])),
+    ([], dict(result=[])),
+    (None, dict(result=[])),
+    ('', dict(result=[''])),
+    ('x', dict(result=['x'])),
     (['x', 'y'], dict()),
-    ('foo.bar', dict(list=['foo.bar'])),
-    ('foo.inwards.a', dict(list=['foo.a'])),
-    ('foo.outwards.x', dict(list=['foo.x'])),
-    ('inwards.a', dict(list=['a'])),
-    ('outwards.x', dict(list=['x'])),
+    ('foo.bar', dict(result=['foo.bar'])),
+    ('foo.inwards.a', dict(result=['foo.a'])),
+    ('foo.outwards.x', dict(result=['foo.x'])),
+    ('inwards.a', dict(result=['a'])),
+    ('outwards.x', dict(result=['x'])),
     # Wildcard symbols left unchanged
-    ('foo.?', dict(list=['foo.?'])),
-    ('*.foo.b?r', dict(list=['*.foo.b?r'])),
+    ('foo.?', dict(result=['foo.?'])),
+    ('*.foo.b?r', dict(result=['*.foo.b?r'])),
     (['*.foo.b?r', 'foo.?'], dict()),
-    (set('abracadabra'), dict(list=['a', 'b', 'c', 'd', 'r'])),
-    (dict(strange=True, weird=False), dict(list=['strange', 'weird'])),
+    (set('abracadabra'), dict(result=['a', 'b', 'c', 'd', 'r'])),
+    (dict(strange=True, weird=False), dict(result=['strange', 'weird'])),
     # Erroneous cases
     (3.14, dict(error=TypeError)),
     ([3.14], dict(error=TypeError)),
@@ -108,7 +109,7 @@ def test_make_wishlist(args, expected):
     if error is None:
         wishlist = make_wishlist(args)
         assert isinstance(wishlist, list)
-        assert set(wishlist) == set(expected.get('list', args))  # test content regardless of order
+        assert set(wishlist) == set(expected.get('result', args))  # test content regardless of order
 
     else:
         with pytest.raises(error, match=expected.get('match', None)):
@@ -133,42 +134,65 @@ def test_find_variables__includes(includes, expected):
     top = AllTypesSystem('top')
     top.add_child(sub)
     hits = find_variables(top, includes=includes, excludes=None)
-    assert set(hits) == set(expected)  # test lists regardless of order
+    assert set(hits) == set(expected)  # test variable names regardless of order
 
 
 @pytest.mark.parametrize("excludes, expected", [
     ('*', []),
-    ('sub.a', ['in_.x', 'out.x', 'a', 'b', 'c', 'e', 'd',
-                'sub.b', 'sub.c', 'sub.d', 'sub.e',
-                'sub.in_.x', 'sub.out.x']),
-    ('sub.inwards.a', ['in_.x', 'out.x', 'a', 'b', 'c', 'e', 'd',
-                        'sub.b', 'sub.c', 'sub.d', 'sub.e',
-                        'sub.in_.x', 'sub.out.x']),
-    ('inwards.a', ['in_.x', 'out.x', 'sub.a', 'b', 'c', 'e', 'd',
-                   'sub.b', 'sub.c', 'sub.d', 'sub.e',
-                   'sub.in_.x', 'sub.out.x']),
-    ('sub.d', ['in_.x', 'out.x', 'a', 'b', 'c', 'e', 'd',
-                'sub.a', 'sub.b', 'sub.c', 'sub.e',
-                'sub.in_.x', 'sub.out.x']),
-    ('sub.outwards.d', ['in_.x', 'out.x', 'a', 'b', 'c', 'e', 'd',
-                         'sub.a', 'sub.b', 'sub.c', 'sub.e',
-                         'sub.in_.x', 'sub.out.x']),
-    ('outwards.d', ['in_.x', 'out.x', 'a', 'b', 'c', 'e',
-                    'sub.d', 'sub.a', 'sub.b', 'sub.c', 'sub.e',
-                    'sub.in_.x', 'sub.out.x']),
-    ('sub.?', ['a', 'b', 'c', 'e', 'd', 'in_.x', 'out.x', 'sub.in_.x', 'sub.out.x']),
-    ('sub.*', ['a', 'b', 'c', 'e', 'd', 'in_.x', 'out.x']),
-    (['sub.*', '*d', 'a'], ['b', 'c', 'e', 'in_.x', 'out.x']),
-    ('banana', ['a', 'b', 'c', 'e', 'd', 'in_.x', 'out.x',
-                'sub.in_.x', 'sub.a', 'sub.b', 'sub.c', 'sub.e',
-                'sub.d', 'sub.out.x']),
+    ('sub.a', [
+        'in_.x', 'out.x', 'a', 'b', 'c', 'e', 'd',
+        'sub.b', 'sub.c', 'sub.d', 'sub.e',
+        'sub.in_.x', 'sub.out.x',
+    ]),
+    ('sub.inwards.a', [
+        'in_.x', 'out.x', 'a', 'b', 'c', 'e', 'd',
+        'sub.b', 'sub.c', 'sub.d', 'sub.e',
+        'sub.in_.x', 'sub.out.x',
+    ]),
+    ('inwards.a', [
+        'in_.x', 'out.x', 'sub.a', 'b', 'c', 'e', 'd',
+        'sub.b', 'sub.c', 'sub.d', 'sub.e',
+        'sub.in_.x', 'sub.out.x',
+    ]),
+    ('sub.d', [
+        'in_.x', 'out.x', 'a', 'b', 'c', 'e', 'd',
+        'sub.a', 'sub.b', 'sub.c', 'sub.e',
+        'sub.in_.x', 'sub.out.x',
+    ]),
+    ('sub.outwards.d', [
+        'in_.x', 'out.x', 'a', 'b', 'c', 'e', 'd',
+        'sub.a', 'sub.b', 'sub.c', 'sub.e',
+        'sub.in_.x', 'sub.out.x',
+    ]),
+    ('outwards.d', [
+        'in_.x', 'out.x', 'a', 'b', 'c', 'e',
+        'sub.d', 'sub.a', 'sub.b', 'sub.c', 'sub.e',
+        'sub.in_.x', 'sub.out.x',
+    ]),
+    ('sub.?', [
+        'a', 'b', 'c', 'e', 'd',
+        'in_.x', 'out.x', 'sub.in_.x', 'sub.out.x',
+    ]),
+    ('sub.*', [
+        'a', 'b', 'c', 'e', 'd',
+        'in_.x', 'out.x',
+    ]),
+    (
+        ['sub.*', '*d', 'a'],
+        ['b', 'c', 'e', 'in_.x', 'out.x'],
+    ),
+    ('banana', [
+        'a', 'b', 'c', 'e', 'd', 'in_.x', 'out.x',
+        'sub.in_.x', 'sub.a', 'sub.b', 'sub.c', 'sub.e',
+        'sub.d', 'sub.out.x',
+    ]),
 ])
 def test_find_variables__excludes(excludes, expected):
     sub = AllTypesSystem('sub')
     top = AllTypesSystem('top')
     top.add_child(sub)
     hits = find_variables(top, includes='*', excludes=excludes)
-    assert set(hits) == set(expected)  # test lists regardless of order
+    assert set(hits) == set(expected)  # test variable names regardless of order
 
 
 @pytest.mark.parametrize("criteria, expected", [
@@ -273,6 +297,18 @@ def test_find_variables_composite_2(criteria, expected):
 
     actual = find_variables(top, **criteria)
     assert set(actual) == set(expected)
+
+
+@pytest.mark.parametrize("criteria", [
+        dict(includes='*', excludes='*.*'),
+        dict(includes='*', excludes=None),
+])
+def test_find_variable_names(criteria):
+    top = AllTypesSystem("top")
+    top.add_child(SystemWithProps("foo"))
+
+    matches = find_variables(top, **criteria)
+    assert find_variable_names(top, **criteria) == sorted(matches)
 
 
 @pytest.mark.parametrize("include_const, expected", [

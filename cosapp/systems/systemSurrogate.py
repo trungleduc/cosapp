@@ -179,7 +179,7 @@ class SystemSurrogate:
                 postsynch = [postsynch]
             if '*' in postsynch:
                 watched = self.__get_owner_connections()
-                varlist = watched.keys()
+                varnames = watched.keys()
             else:
                 owner = self.owner
                 def writeable(var) -> bool:
@@ -189,17 +189,17 @@ class SystemSurrogate:
                         return False
                     else:
                         return True
-                varlist = find_variables(
+                matches = find_variables(
                     owner,
                     includes=postsynch,
                     excludes=None,
                     inputs=False,
                 )
-                varlist = set(filter(writeable, varlist))
+                varnames = set(filter(writeable, matches.keys()))
                 # Make sure varlist contains at least owner system outputs
                 for portname, port in owner.outputs.items():
-                    varlist.update(natural_varname(f"{portname}.{var}") for var in port)
-            doe_out = OrderedDict((var, []) for var in varlist)
+                    varnames.update(natural_varname(f"{portname}.{var}") for var in port)
+            doe_out = OrderedDict((name, []) for name in varnames)
         return doe_out
 
     def __get_doe_out_sizes(self) -> None:
