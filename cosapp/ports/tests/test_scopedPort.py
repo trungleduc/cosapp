@@ -1,41 +1,60 @@
 import pytest
+import numpy
 from unittest import mock
 
 from cosapp.ports.exceptions import ScopeError
 from cosapp.ports import Scope
 from cosapp.systems import System
-from cosapp.drivers import NonLinearSolver
+from cosapp.drivers import NonLinearSolver, RunSingleCase
 from cosapp.tests.library.systems import NonLinear1, Multiply2, MergerMath, SplitterMath
 from cosapp.tests.library.ports import XPort
+from typing import List, FrozenSet
 
 
-class ScopedS(System):
-    tags = frozenset(["privacy", "protection"])
+def make_roles(role_lists: List[List[str]]) -> FrozenSet[FrozenSet[str]]:
+    """Utility function to format lists of roles into
+    nested frozensets, as expected by `CoSAppConfiguration`.
+    """
+    return frozenset(
+        map(frozenset, role_lists)
+    )
+
+
+class PublicSystem(System):
 
     def setup(self):
-        self.add_inward("A", 1.0, scope=Scope.PRIVATE)
-        self.add_inward("B", 2.0, scope=Scope.PROTECTED)
-        self.add_inward("C", 3.0, scope=Scope.PUBLIC)
+        self.add_inward("a", 1.0, scope=Scope.PRIVATE)
+        self.add_inward("b", 2.0, scope=Scope.PROTECTED)
+        self.add_inward("c", 3.0, scope=Scope.PUBLIC)
 
-        self.add_design_method("design_a").add_unknown("A").add_equation("A == 0")
-        self.add_design_method("design_b").add_unknown("B").add_equation("B == 0")
+        self.add_outward("v", numpy.zeros(3))
 
     def compute(self):
-        self.A = 2.0
-        self.B = 4.0
-        self.C = 6.0
+        self.v[:] = [self.a, self.b, self.c]
 
 
-class PublicS(System):
+class ScopedSystem(PublicSystem):
+
+    tags = ["privacy", "protection"]
+
     def setup(self):
-        self.add_inward("A", 1.0, scope=Scope.PRIVATE)
-        self.add_inward("B", 2.0, scope=Scope.PROTECTED)
-        self.add_inward("C", 3.0, scope=Scope.PUBLIC)
+        super().setup()
 
-    def compute(self):
-        self.A = 2.0
-        self.B = 4.0
-        self.C = 6.0
+        self.add_design_method("design_a").add_unknown("a").add_equation("v[0] == 0")
+        self.add_design_method("design_b").add_unknown("b").add_equation("v[1] == 0")
+
+
+def test_make_roles():
+    """Sanity check on utility function `make_roles`"""
+    roles = [
+        ["apple", "cherry", "apple"],
+        ["privacy", "extra", "protection"],
+    ]
+    assert make_roles(roles) == frozenset([
+        frozenset(["apple", "cherry"]),
+        frozenset(["privacy", "extra", "protection"]),
+    ])
+    assert make_roles([]) == frozenset()
 
 
 @mock.patch("cosapp.core.config.CoSAppConfiguration")
@@ -45,54 +64,77 @@ def test_ScopedPort_system_changing_own_var(Config):
 
     # Public user
 
-    s = PublicS("dummy")
+    s = PublicSystem("dummy")
     # Test set operations
-    s.A = -1
-    s.B = -2
-    s.C = -3
+    s.a = -1.
+    s.b = -2.
+    s.c = -3.
     s.run_once()
-    assert s.A == 2.0
-    assert s.B == 4.0
-    assert s.C == 6.0
+    assert numpy.array_equal(s.v, [-1, -2, -3])
 
-    s = ScopedS("dummy")
+    s = ScopedSystem("dummy")
     # Test set operations
     with pytest.raises(ScopeError):
-        s.A = -1
+        s.a = -1.
     with pytest.raises(ScopeError):
-        s.B = -2
-    s.C = -3
+        s.b = -2.
+    s.c = -3.
     s.run_once()
-    assert s.A == 2.0
-    assert s.B == 4.0
-    assert s.C == 6.0
+    assert numpy.array_equal(s.v, [1, 2, -3])
 
     # Protected user
-    Config().roles = frozenset([frozenset(["protection"])])
+    Config().roles = make_roles([["protection"]])
 
-    s = ScopedS("dummy")
+    s = ScopedSystem("dummy")
     # Test set operations
     with pytest.raises(ScopeError):
-        s.A = -1
-    s.B = -2
-    s.C = -3
+        s.a = -1.
+    s.b = -2.
+    s.c = -3.
     s.run_once()
-    assert s.A == 2.0
-    assert s.B == 4.0
-    assert s.C == 6.0
+    assert numpy.array_equal(s.v, [1, -2, -3])
 
     # Private user
-    Config().roles = frozenset([frozenset(["privacy", "protection"])])
+    Config().roles = make_roles([["privacy", "protection"]])
 
-    s = ScopedS("dummy")
+    s = ScopedSystem("dummy")
     # Test set operations
-    s.A = -1
-    s.B = -2
-    s.C = -3
+    s.a = -1.
+    s.b = -2.
+    s.c = -3.
     s.run_once()
-    assert s.A == 2.0
-    assert s.B == 4.0
-    assert s.C == 6.0
+    assert numpy.array_equal(s.v, [-1, -2, -3])
+
+    # Private user, with extra roles, compared to tags
+    Config().roles = make_roles(
+        [
+            ["apple", "cherry"],
+            ["privacy", "extra", "protection"],
+        ]
+    )
+    s = ScopedSystem("dummy")
+    # Test set operations
+    s.a = -1.
+    s.b = -2.
+    s.c = -3.
+    s.run_once()
+    assert numpy.array_equal(s.v, [-1, -2, -3])
+
+    # Private user, with incomplete role and fully matching role
+    Config().roles = make_roles(
+        [
+            ["apple", "cherry"],
+            ["privacy"],
+            ["privacy", "extra", "protection"],  # should prevail
+        ]
+    )
+    s = ScopedSystem("dummy")
+    # Test set operations
+    s.a = -1.
+    s.b = -2.
+    s.c = -3.
+    s.run_once()
+    assert numpy.array_equal(s.v, [-1, -2, -3])
 
 
 @mock.patch("cosapp.core.config.CoSAppConfiguration")
@@ -115,41 +157,44 @@ def test_ScopedPort_solver_changing_unknown(Config):
 
                 self.exec_order = ["merger", "mult2", "splitter", "nonlinear"]
 
-        snl = Head("nl")
+        s = Head("s")
 
-        design = snl.add_driver(NonLinearSolver("design", factor=0.05))
+        s.mult2.K1 = 1
+        s.mult2.K2 = 1
+        s.nonlinear.k1 = 1
+        s.nonlinear.k2 = 0.5
 
-        snl.mult2.inwards.K1 = 1
-        snl.mult2.inwards.K2 = 1
-        snl.nonlinear.inwards.k1 = 1
-        snl.nonlinear.inwards.k2 = 0.5
+        solver = s.add_driver(NonLinearSolver("solver", factor=0.05))
+        runner = solver.add_child(RunSingleCase("runner"))
 
-        design.runner.set_values({"p_in.x": 10})
-        design.runner.design.add_unknown(
-            ["mult2.inwards.K1", "nonlinear.inwards.k2"]
-        ).add_equation(
-            [
-                "splitter.p2_out.x == 50.",
-                "merger.p_out.x == 30.",
-                "splitter.p1_out.x == 5.",
-            ]
+        solver.add_unknown(
+            ["mult2.K1", "nonlinear.k2"]
         )
+        solver.add_equation([
+            "splitter.p2_out.x == 50.",
+            "splitter.p1_out.x == 5.",
+            "merger.p_out.x == 30.",
+        ])
+        runner.set_values({
+            "p_in.x": 10,
+        })
 
-        return snl
+        return s
 
     # No tags case => everything can be changed
-    snl = build_case(SplitterMath)
-    snl.drivers["design"].runner.design.add_unknown("splitter.inwards.split_ratio")
-    snl.run_drivers()
+    s = build_case(SplitterMath)
+    s.drivers["solver"].add_unknown("splitter.split_ratio")
+    s.run_drivers()
 
-    assert snl.mult2.inwards.K1 == pytest.approx(1.83333, abs=10e-4)
-    assert snl.nonlinear.inwards.k2 == pytest.approx(1.86136, abs=10e-4)
-    assert snl.splitter.inwards.split_ratio == pytest.approx(0.090909091, abs=10e-4)
+    assert s.mult2.K1 == pytest.approx(1.83333, rel=1e-3)
+    assert s.nonlinear.k2 == pytest.approx(1.86136, rel=1e-3)
+    assert s.splitter.split_ratio == pytest.approx(0.090909091, rel=1e-3)
 
     # Public iterative
     #  Globally unfrozen => no error
     class PublicFrozenSplitter(System):
-        tags = frozenset(["privacy", "protection"])
+
+        tags = ["privacy", "protection"]
 
         def setup(self):
             self.add_input(XPort, "p_in", {"x": 1.0})
@@ -161,18 +206,19 @@ def test_ScopedPort_solver_changing_unknown(Config):
             self.p1_out.x = self.p_in.x * self.split_ratio
             self.p2_out.x = self.p_in.x * (1 - self.split_ratio)
 
-    snl = build_case(PublicFrozenSplitter)
-    snl.drivers["design"].runner.design.add_unknown("splitter.inwards.split_ratio")
-    snl.run_drivers()
+    s = build_case(PublicFrozenSplitter)
+    s.drivers["solver"].add_unknown("splitter.split_ratio")
+    s.run_drivers()
 
-    assert snl.mult2.inwards.K1 == pytest.approx(1.83333, abs=10e-4)
-    assert snl.nonlinear.inwards.k2 == pytest.approx(1.86136, abs=10e-4)
-    assert snl.splitter.inwards.split_ratio == pytest.approx(0.090909091, abs=10e-4)
+    assert s.mult2.K1 == pytest.approx(1.83333, rel=1e-3)
+    assert s.nonlinear.k2 == pytest.approx(1.86136, rel=1e-3)
+    assert s.splitter.split_ratio == pytest.approx(0.090909091, rel=1e-3)
 
     # Protected iterative
     #  Locally unfrozen => no error
     class ProtectedFreeSplitter(System):
-        tags = frozenset(["privacy", "protection"])
+
+        tags = ["privacy", "protection"]
 
         def setup(self):
             self.add_input(XPort, "p_in", {"x": 1.0})
@@ -186,16 +232,17 @@ def test_ScopedPort_solver_changing_unknown(Config):
             self.p1_out.x = self.p_in.x * self.split_ratio
             self.p2_out.x = self.p_in.x * (1 - self.split_ratio)
 
-    snl = build_case(ProtectedFreeSplitter)
-    snl.run_drivers()
+    s = build_case(ProtectedFreeSplitter)
+    s.run_drivers()
 
-    assert snl.mult2.inwards.K1 == pytest.approx(1.83333, abs=10e-4)
-    assert snl.nonlinear.inwards.k2 == pytest.approx(1.86136, abs=10e-4)
-    assert snl.splitter.inwards.split_ratio == pytest.approx(0.090909091, abs=10e-4)
+    assert s.mult2.K1 == pytest.approx(1.83333, rel=1e-3)
+    assert s.nonlinear.k2 == pytest.approx(1.86136, rel=1e-3)
+    assert s.splitter.split_ratio == pytest.approx(0.090909091, rel=1e-3)
 
     #  Globally unfrozen => error for common user
     class ProtectedFrozenSplitter(System):
-        tags = frozenset(["privacy", "protection"])
+
+        tags = ["privacy", "protection"]
 
         def setup(self):
             self.add_input(XPort, "p_in", {"x": 1.0})
@@ -207,39 +254,40 @@ def test_ScopedPort_solver_changing_unknown(Config):
             self.p1_out.x = self.p_in.x * self.split_ratio
             self.p2_out.x = self.p_in.x * (1 - self.split_ratio)
 
-    snl = build_case(ProtectedFrozenSplitter)
+    s = build_case(ProtectedFrozenSplitter)
     with pytest.raises(
         ScopeError,
         match=r"Trying to set variable '\w+[\.\w+]*' out of your scope through a boundary\.",
     ):
-        snl.drivers["design"].runner.design.add_unknown("splitter.inwards.split_ratio")
+        s.drivers["solver"].add_unknown("splitter.split_ratio")
 
     #  Globally unfrozen => no error for protected user
-    Config().roles = frozenset([frozenset(["protection"])])
+    Config().roles = make_roles([["protection"]])
     ProtectedFrozenSplitter._user_context = None
-    snl = build_case(ProtectedFrozenSplitter)
-    snl.drivers["design"].runner.design.add_unknown("splitter.inwards.split_ratio")
-    snl.run_drivers()
+    s = build_case(ProtectedFrozenSplitter)
+    s.drivers["solver"].add_unknown("splitter.split_ratio")
+    s.run_drivers()
 
-    assert snl.mult2.inwards.K1 == pytest.approx(1.83333, abs=10e-4)
-    assert snl.nonlinear.inwards.k2 == pytest.approx(1.86136, abs=10e-4)
-    assert snl.splitter.inwards.split_ratio == pytest.approx(0.090909091, abs=10e-4)
+    assert s.mult2.K1 == pytest.approx(1.83333, rel=1e-3)
+    assert s.nonlinear.k2 == pytest.approx(1.86136, rel=1e-3)
+    assert s.splitter.split_ratio == pytest.approx(0.090909091, rel=1e-3)
 
     #  Globally unfrozen => no error for private user
-    Config().roles = frozenset([frozenset(["privacy", "protection"])])
+    Config().roles = make_roles([["privacy", "protection"]])
     ProtectedFrozenSplitter._user_context = None
-    snl = build_case(ProtectedFrozenSplitter)
-    snl.drivers["design"].runner.design.add_unknown("splitter.inwards.split_ratio")
-    snl.run_drivers()
+    s = build_case(ProtectedFrozenSplitter)
+    s.drivers["solver"].add_unknown("splitter.split_ratio")
+    s.run_drivers()
 
-    assert snl.mult2.inwards.K1 == pytest.approx(1.83333, abs=10e-4)
-    assert snl.nonlinear.inwards.k2 == pytest.approx(1.86136, abs=10e-4)
-    assert snl.splitter.inwards.split_ratio == pytest.approx(0.090909091, abs=10e-4)
+    assert s.mult2.K1 == pytest.approx(1.83333, rel=1e-3)
+    assert s.nonlinear.k2 == pytest.approx(1.86136, rel=1e-3)
+    assert s.splitter.split_ratio == pytest.approx(0.090909091, rel=1e-3)
 
     # Private iterative
     #  Locally unfrozen => no error
     class PrivateFreeSplitter(System):
-        tags = frozenset(["privacy", "protection"])
+
+        tags = ["privacy", "protection"]
 
         def setup(self):
             self.add_input(XPort, "p_in", {"x": 1.0})
@@ -253,18 +301,19 @@ def test_ScopedPort_solver_changing_unknown(Config):
             self.p1_out.x = self.p_in.x * self.split_ratio
             self.p2_out.x = self.p_in.x * (1 - self.split_ratio)
 
-    snl = build_case(PrivateFreeSplitter)
-    snl.run_drivers()
+    s = build_case(PrivateFreeSplitter)
+    s.run_drivers()
 
-    assert snl.mult2.inwards.K1 == pytest.approx(1.83333, abs=10e-4)
-    assert snl.nonlinear.inwards.k2 == pytest.approx(1.86136, abs=10e-4)
-    assert snl.splitter.inwards.split_ratio == pytest.approx(0.090909091, abs=10e-4)
+    assert s.mult2.K1 == pytest.approx(1.83333, rel=1e-3)
+    assert s.nonlinear.k2 == pytest.approx(1.86136, rel=1e-3)
+    assert s.splitter.split_ratio == pytest.approx(0.090909091, rel=1e-3)
 
     #  Globally unfrozen => error for common user
     Config().roles = frozenset()
 
     class PrivateFrozenSplitter(System):
-        tags = frozenset(["privacy", "protection"])
+
+        tags = ["privacy", "protection"]
 
         def setup(self):
             self.add_input(XPort, "p_in", {"x": 1.0})
@@ -276,33 +325,33 @@ def test_ScopedPort_solver_changing_unknown(Config):
             self.p1_out.x = self.p_in.x * self.split_ratio
             self.p2_out.x = self.p_in.x * (1 - self.split_ratio)
 
-    snl = build_case(PrivateFrozenSplitter)
+    s = build_case(PrivateFrozenSplitter)
     with pytest.raises(
         ScopeError,
         match=r"Trying to set variable '\w+[\.\w+]*' out of your scope through a boundary\.",
     ):
-        snl.drivers["design"].runner.design.add_unknown("splitter.inwards.split_ratio")
+        s.drivers["solver"].add_unknown("splitter.split_ratio")
 
     #  Globally unfrozen => error for protected user
-    Config().roles = frozenset([frozenset(["protection"])])
+    Config().roles = make_roles([["protection"]])
     PrivateFrozenSplitter._user_context = None
-    snl = build_case(PrivateFrozenSplitter)
+    s = build_case(PrivateFrozenSplitter)
     with pytest.raises(
         ScopeError,
         match=r"Trying to set variable '\w+[\.\w+]*' out of your scope through a boundary\.",
     ):
-        snl.drivers["design"].runner.design.add_unknown("splitter.inwards.split_ratio")
+        s.drivers["solver"].add_unknown("splitter.split_ratio")
 
     #  Globally unfrozen => no error for private user
-    Config().roles = frozenset([frozenset(["privacy", "protection"])])
+    Config().roles = make_roles([["privacy", "protection"]])
     PrivateFrozenSplitter._user_context = None
-    snl = build_case(PrivateFrozenSplitter)
-    snl.drivers["design"].runner.design.add_unknown("splitter.inwards.split_ratio")
-    snl.run_drivers()
+    s = build_case(PrivateFrozenSplitter)
+    s.drivers["solver"].add_unknown("splitter.split_ratio")
+    s.run_drivers()
 
-    assert snl.mult2.inwards.K1 == pytest.approx(1.83333, abs=10e-4)
-    assert snl.nonlinear.inwards.k2 == pytest.approx(1.86136, abs=10e-4)
-    assert snl.splitter.inwards.split_ratio == pytest.approx(0.090909091, abs=10e-4)
+    assert s.mult2.K1 == pytest.approx(1.83333, rel=1e-3)
+    assert s.nonlinear.k2 == pytest.approx(1.86136, rel=1e-3)
+    assert s.splitter.split_ratio == pytest.approx(0.090909091, rel=1e-3)
 
 
 @mock.patch("cosapp.core.config.CoSAppConfiguration")
@@ -324,47 +373,46 @@ def test_ScopedPort_driver_set_boundary(Config):
 
                 self.exec_order = ["merger", "mult2", "splitter", "nonlinear"]
 
-        snl = Head("nl")
+        s = Head("s")
 
-        design = snl.add_driver(NonLinearSolver("design", factor=0.05))
+        s.mult2.K1 = 1
+        s.mult2.K2 = 1
 
-        snl.mult2.inwards.K1 = 1
-        snl.mult2.inwards.K2 = 1
+        solver = s.add_driver(NonLinearSolver("solver", factor=0.05))
+        runner = solver.add_child(RunSingleCase("runner"))
 
-        design.runner.set_values(
-            {
-                "p_in.x": 10.0,
-                # This is the boundary for testing
-                "nonlinear.inwards.k1": 2,
-            }
+        solver.add_unknown(
+            ["mult2.K1", "splitter.split_ratio"]
         )
-        design.runner.design.add_unknown(
-            ["mult2.inwards.K1", "splitter.inwards.split_ratio"]
-        ).add_equation(
-            [
-                "splitter.p2_out.x == 50.",
-                "merger.p_out.x == 30.",
-                "splitter.p1_out.x == 5.",
-            ]
-        )
+        solver.add_equation([
+            "splitter.p2_out.x == 50.",
+            "splitter.p1_out.x == 5.",
+            "merger.p_out.x == 30.",
+        ])
+        runner.set_values({
+            "p_in.x": 10.0,
+            # This is the boundary for testing
+            "nonlinear.k1": 2,
+        })
 
-        return snl
+        return s
 
     # No tags case => everything can be changed
-    snl = build_case(NonLinear1)
-    snl.drivers["design"].runner.design.add_unknown("nonlinear.inwards.k2")
-    snl.run_drivers()
+    s = build_case(NonLinear1)
+    s.drivers["solver"].add_unknown("nonlinear.k2")
+    s.run_drivers()
 
-    assert snl.mult2.inwards.K1 == pytest.approx(1.83333, abs=10e-4)
-    assert snl.nonlinear.inwards.k2 == pytest.approx(1.43068, abs=10e-4)
-    assert snl.splitter.inwards.split_ratio == pytest.approx(0.09091, abs=10e-4)
+    assert s.mult2.K1 == pytest.approx(1.83333, rel=1e-3)
+    assert s.nonlinear.k2 == pytest.approx(1.43068, rel=1e-3)
+    assert s.splitter.split_ratio == pytest.approx(0.09091, rel=1e-3)
 
     # Public iterative
     #  Set boundary => no error
     Config().roles = frozenset()
 
     class PublicNonLinear1(System):
-        tags = frozenset(["privacy", "protection"])
+
+        tags = ["privacy", "protection"]
 
         def setup(self):
             self.add_input(XPort, "p_in", {"x": 1.0})
@@ -377,19 +425,20 @@ def test_ScopedPort_driver_set_boundary(Config):
         def compute(self):
             self.p_out.x = self.k1 * self.p_in.x ** self.k2
 
-    snl = build_case(PublicNonLinear1)
-    snl.run_drivers()
+    s = build_case(PublicNonLinear1)
+    s.run_drivers()
 
-    assert snl.mult2.inwards.K1 == pytest.approx(1.83333, abs=10e-4)
-    assert snl.nonlinear.inwards.k2 == pytest.approx(1.43068, abs=10e-4)
-    assert snl.splitter.inwards.split_ratio == pytest.approx(0.09091, abs=10e-4)
+    assert s.mult2.K1 == pytest.approx(1.83333, rel=1e-3)
+    assert s.nonlinear.k2 == pytest.approx(1.43068, rel=1e-3)
+    assert s.splitter.split_ratio == pytest.approx(0.09091, rel=1e-3)
 
     # Protected iterative
     #  Set boundary => error
     Config().roles = frozenset()
 
     class ProtectedNonLinear1(System):
-        tags = frozenset(["privacy", "protection"])
+
+        tags = ["privacy", "protection"]
 
         def setup(self):
             self.add_input(XPort, "p_in", {"x": 1.0})
@@ -409,31 +458,32 @@ def test_ScopedPort_driver_set_boundary(Config):
         build_case(ProtectedNonLinear1)
 
     #  Set boundary => no error for protected user
-    Config().roles = frozenset([frozenset(["protection"])])
+    Config().roles = make_roles([["protection"]])
     ProtectedNonLinear1._user_context = None
-    snl = build_case(ProtectedNonLinear1)
-    snl.run_drivers()
+    s = build_case(ProtectedNonLinear1)
+    s.run_drivers()
 
-    assert snl.mult2.inwards.K1 == pytest.approx(1.83333, abs=10e-4)
-    assert snl.nonlinear.inwards.k2 == pytest.approx(1.43068, abs=10e-4)
-    assert snl.splitter.inwards.split_ratio == pytest.approx(0.09091, abs=10e-4)
+    assert s.mult2.K1 == pytest.approx(1.83333, rel=1e-3)
+    assert s.nonlinear.k2 == pytest.approx(1.43068, rel=1e-3)
+    assert s.splitter.split_ratio == pytest.approx(0.09091, rel=1e-3)
 
     #  Set boundary => no error for private user
-    Config().roles = frozenset([frozenset(["privacy", "protection"])])
+    Config().roles = make_roles([["privacy", "protection"]])
     ProtectedNonLinear1._user_context = None
-    snl = build_case(ProtectedNonLinear1)
-    snl.run_drivers()
+    s = build_case(ProtectedNonLinear1)
+    s.run_drivers()
 
-    assert snl.mult2.inwards.K1 == pytest.approx(1.83333, abs=10e-4)
-    assert snl.nonlinear.inwards.k2 == pytest.approx(1.43068, abs=10e-4)
-    assert snl.splitter.inwards.split_ratio == pytest.approx(0.09091, abs=10e-4)
+    assert s.mult2.K1 == pytest.approx(1.83333, rel=1e-3)
+    assert s.nonlinear.k2 == pytest.approx(1.43068, rel=1e-3)
+    assert s.splitter.split_ratio == pytest.approx(0.09091, rel=1e-3)
 
     # Private iterative
     #  Set boundary => error for common user
     Config().roles = frozenset()
 
     class PrivateNonLinear1(System):
-        tags = frozenset(["privacy", "protection"])
+
+        tags = ["privacy", "protection"]
 
         def setup(self):
             self.add_input(XPort, "p_in", {"x": 1.0})
@@ -453,7 +503,7 @@ def test_ScopedPort_driver_set_boundary(Config):
         build_case(PrivateNonLinear1)
 
     #  Set boundary => error for protected user
-    Config().roles = frozenset([frozenset(["protection"])])
+    Config().roles = make_roles([["protection"]])
     PrivateNonLinear1._user_context = None
 
     with pytest.raises(
@@ -463,11 +513,11 @@ def test_ScopedPort_driver_set_boundary(Config):
         build_case(PrivateNonLinear1)
 
     #  Set boundary => no error for private user
-    Config().roles = frozenset([frozenset(["privacy", "protection"])])
+    Config().roles = make_roles([["privacy", "protection"]])
     PrivateNonLinear1._user_context = None
-    snl = build_case(PrivateNonLinear1)
-    snl.run_drivers()
+    s = build_case(PrivateNonLinear1)
+    s.run_drivers()
 
-    assert snl.mult2.inwards.K1 == pytest.approx(1.83333, abs=10e-4)
-    assert snl.nonlinear.inwards.k2 == pytest.approx(1.43068, abs=10e-4)
-    assert snl.splitter.inwards.split_ratio == pytest.approx(0.09091, abs=10e-4)
+    assert s.mult2.K1 == pytest.approx(1.83333, rel=1e-3)
+    assert s.nonlinear.k2 == pytest.approx(1.43068, rel=1e-3)
+    assert s.splitter.split_ratio == pytest.approx(0.09091, rel=1e-3)

@@ -343,21 +343,18 @@ class System(Module, TimeObserver):
         """Encapsulate input ports for which some variables are out of scope."""
         if self._user_context is None:
 
-            def get_context(
-                tags: FrozenSet[str], roles: FrozenSet[FrozenSet[str]]
-            ) -> Scope:
-                """Get context depending on the matching between user roles and tags.
+            # Ensure tags is a frozenset
+            self.tags = tags = frozenset(self.tags)
 
-                If tags is empty => `PRIVATE`
-                If one role == all tags => `PRIVATE`
+            def get_scope(role_sets: FrozenSet[FrozenSet[str]]) -> Scope:
+                """Get context depending on the matching between user roles and tags:
 
-                If one group of one role matches one of the tags => `PROTECTED`
-
-                Else `PUBLIC`
+                - No tags or full match with one role => `PRIVATE`
+                - Partial match, at best, between tags and one role => `PROTECTED`
+                - Else `PUBLIC`
 
                 Parameters
                 ----------
-                tags : FrozenSet[str]
                 roles : FrozenSet[FrozenSet[str]]
 
                 Returns
@@ -382,29 +379,30 @@ class System(Module, TimeObserver):
                 >>> tags = frozenset(['Aerodynamics', 'Compressor'])
                 >>> roles = frozenset([frozenset(['Heat transfert', 'Turbine'])])
                 >>> assert get_context(tags, roles) == Scope.PUBLIC
-
                 """
-                if len(tags) and tags not in roles:
-                    for role in roles:
-                        for group in role:
-                            if group in tags:
-                                return Scope.PROTECTED
-                    return Scope.PUBLIC
-                else:
+                if not tags or tags in role_sets:
                     return Scope.PRIVATE
 
-            # Unsure tags is a frozenset
-            self.tags = frozenset(self.tags)
+                else:
+                    best = Scope.PUBLIC
+                    for roles in role_sets:
+                        if tags.issubset(roles):
+                            return Scope.PRIVATE
+                        if tags.intersection(roles):
+                            best = Scope.PROTECTED
+                    return best
 
             from cosapp.core.config import CoSAppConfiguration
 
-            user_roles = CoSAppConfiguration().roles
+            user_config = CoSAppConfiguration()
+            self._user_context = get_scope(user_config.roles)
+            # print(f"{tags = }", user_config.roles, self._user_context)
 
-            self._user_context = get_context(self.tags, user_roles)
+        scope = self._user_context
 
-        if self._user_context != Scope.PRIVATE:  # Some ports may be restrained
+        if scope != Scope.PRIVATE:  # Some ports may be restrained
             for port in self.inputs.values():
-                port.scope_clearance = self._user_context
+                port.scope_clearance = scope
 
     def _initialize(self, **kwargs) -> Dict[str, Any]:
         """Hook method to add `System` member before calling `setup` method.
