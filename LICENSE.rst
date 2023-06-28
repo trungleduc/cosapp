@@ -1,4 +1,4 @@
-Copyright (C) 2017-2020 Safran SA - All Rights Reserved
+Copyright (C) 2017-2023 Safran SA - All Rights Reserved
 
 CoSApp Open Source License:
 
