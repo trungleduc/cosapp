@@ -4,7 +4,7 @@ import logging, re
 from numpy import sqrt, cbrt
 
 from cosapp.systems import System
-from cosapp.drivers import NonLinearSolver
+from cosapp.drivers import NonLinearSolver, RunSingleCase
 
 
 class Quadratic(System):
@@ -37,6 +37,7 @@ def test_design_unknown_aliasing_1(caplog):
     """
     top = NestedQuad('top')
     solver = top.add_driver(NonLinearSolver('solver', tol=1e-9))
+    solver.add_child(RunSingleCase('runner'))
     solver.runner.add_equation('foo.y == 7').add_unknown('foo.k')
     solver.runner.set_values({
         'foo.x': 2,
@@ -75,6 +76,7 @@ def test_design_unknown_aliasing_2(caplog):
     assert top.foo.k == top.c
 
     solver = top.foo.add_driver(NonLinearSolver('solver', tol=1e-9))
+    solver.add_child(RunSingleCase('runner'))
     solver.runner.add_unknown('k').add_equation('y == 7')
     solver.runner.set_values({'x': 2})
 
@@ -104,9 +106,8 @@ def test_design_unknown_aliasing_3(caplog):
     top.connect(sub1.outwards, sub2.inwards, {'y': 'c'})  # sub2.c is no longer free
 
     solver = top.add_driver(NonLinearSolver('solver'))
-    design = solver.runner
     # Use input `bar.k` connected to an output as unknown:
-    design.add_equation('sub2.foo.y == 7').add_unknown('sub2.bar.k')
+    solver.add_equation('sub2.foo.y == 7').add_unknown('sub2.bar.k')
 
     caplog.clear()
     with pytest.raises(ArithmeticError, match="numbers of params \[0\] and residues \[1\]"):
@@ -150,9 +151,8 @@ def test_design_connected_unknown_1(caplog):
     """Tests that unknowns connected to an output variable are discarded"""
     top = NestedQuad('top')
     solver = top.add_driver(NonLinearSolver('solver'))
-    design = solver.runner
     # Use input `bar.k` connected to an output as unknown:
-    design.add_equation('bar.y == 7').add_unknown('bar.k')
+    solver.add_equation('bar.y == 7').add_unknown('bar.k')
 
     caplog.clear()
     with pytest.raises(ArithmeticError, match="numbers of params \[0\] and residues \[1\]"):
@@ -175,7 +175,7 @@ def test_design_connected_unknown_2(caplog):
     top = NestedQuad('top')
     # Attach driver to sub-system `bar`
     solver = top.bar.add_driver(NonLinearSolver('solver', tol=1e-9))
-    solver.runner.add_unknown('k').add_equation('y == 7')
+    solver.add_unknown('k').add_equation('y == 7')
 
     caplog.clear()
     with pytest.raises(ArithmeticError, match="numbers of params \[0\] and residues \[1\]"):
@@ -205,7 +205,7 @@ def test_design_offdesign_aliasing_1(caplog):
     top = TopSystem('top')
     solver = top.add_driver(NonLinearSolver('solver', tol=1e-9))
     # Use pulled variable `foo.k` as design unknown:
-    solver.runner.design.add_equation('foo.y == 7').add_unknown('foo.k')
+    solver.add_equation('foo.y == 7').add_unknown('foo.k')
 
     caplog.clear()
     with pytest.raises(ValueError, match="'c' is defined as design and off-design unknown"):
@@ -238,7 +238,7 @@ def test_design_offdesign_aliasing_2(caplog):
     top = TopSystem('top')
     solver = top.add_driver(NonLinearSolver('solver', tol=1e-9))
     # Use parent variable 'c' as design unknown
-    solver.runner.design.add_equation('foo.y == 7').add_unknown('c')
+    solver.add_equation('foo.y == 7').add_unknown('c')
 
     caplog.clear()
     with pytest.raises(ValueError, match="'c' is defined as design and off-design unknown"):

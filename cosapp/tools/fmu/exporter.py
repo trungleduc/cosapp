@@ -435,23 +435,31 @@ class FmuBuilder:
         )
 
         if nonlinear_solver is not None:
-            children_driver = list(nonlinear_solver.children.values())
-            if len(children_driver) > 1:
-                raise ValueError("The nonlinear solver can only have one child.")
-            runSingleCase = children_driver[0]
-            if not isinstance(runSingleCase, RunSingleCase):
-                raise TypeError(
-                    "The nonlinear solver child must be of type RunSingleCase."
-                )
-            # Note:
-            #   Since `RunSingleCase` child is unique, a simple merging
-            #   of the various mathematical problems by extension works.
-            #   It would not be the case in a multi-point design problem,
-            #   for example, where off-design, design and local problems
-            #   must be assembled with care.
-            problem = nonlinear_solver.raw_problem.copy()
-            problem.extend(runSingleCase.offdesign)
-            problem.extend(runSingleCase.design)
+            subdrivers = list(nonlinear_solver.children.values())
+            error_msg = "The nonlinear solver may have at most one sub-driver, of type `RunSingleCase`"
+            if len(subdrivers) > 1:
+                names = list(map(lambda driver: driver.name, subdrivers))
+                raise ValueError(f"{error_msg}; found sub-drivers {names}")
+            # Assemble solver problem
+            try:
+                problem = nonlinear_solver.raw_problem.copy()
+            except:
+                problem = system.new_problem('design')
+            try:
+                driver = subdrivers[0]
+            except IndexError:
+                pass
+            else:
+                if not isinstance(driver, RunSingleCase):
+                    raise TypeError(f"{error_msg}; got {driver!r}")
+                # Note:
+                #   Since `RunSingleCase` child is unique, a simple merging
+                #   of the various mathematical problems by extension works.
+                #   It would not be the case in a multi-point design problem,
+                #   for example, where off-design, design and local problems
+                #   must be assembled with care.
+                problem.extend(driver.offdesign)
+                problem.extend(driver.design)
             params["problem"] = problem.to_dict()
 
         env = Environment(

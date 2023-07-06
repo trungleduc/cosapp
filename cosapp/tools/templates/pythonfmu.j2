@@ -25,8 +25,9 @@ class {{ class_name }}FMU(Fmi2Slave):
         FMUForwardHandler.add_handler(self, level=logging.WARNING)
 
         self.__master = System.load(pathlib.Path(__file__).parent / "{{ system_file }}")
-        self.__driver = {{ driver }}({% for key, value in time_options.items() %}{{key}}={{value}},{% endfor %})
-        self.__driver.owner = self.__master
+        self.__driver = self.__master.add_driver(
+            {{ driver }}({% for key, value in time_options.items() %}{{key}}={{value}},{% endfor %})
+        )
         self.__start_time = 0.
         
         {% for var in variables %}
@@ -57,10 +58,10 @@ class {{ class_name }}FMU(Fmi2Slave):
 
         self.__driver.children.clear()
         if has_iterative:
-            self.__driver.add_child(NonLinearSolver('solver'))  {# TODO, {% for key, value in nl_options.items() %}{{key}}={{option}},{% endfor %})) #}
+            solver = self.__driver.add_child(NonLinearSolver('solver'))  {# TODO, {% for key, value in nl_options.items() %}{{key}}={{option}},{% endfor %})) #}
 
-{% if problem %}            runner = self.__driver.solver.runner
-            runner.offdesign \
+{% if problem %}
+            solver \
 {% for name, unknown in problem.unknowns.items() %}                .add_unknown("{{ unknown.name }}", {{ unknown.max_abs_step }}, {{ unknown.max_rel_step }}, {{ unknown.lower_bound }}, {{ unknown.upper_bound }}{% if unknown.mask is not none %}, {{ unknown.mask }}{% endif %}) \
             {% endfor %}
 {% for name, equation in problem.equations.items() %}                .add_equation("{{ equation.equation }}", "{{ name }}", {{ equation.reference }}) \

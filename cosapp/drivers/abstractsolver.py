@@ -103,11 +103,6 @@ class AbstractSolver(Driver):
             else:
                 raise KeyError(f"Unknown solver option {key!r}")
 
-    @property
-    def _default_driver_name(self) -> str:
-        """str : Name for the default driver."""
-        return "runner"
-
     def _get_solver_limits(self) -> Dict[str, numpy.ndarray]:
         """Returns the step limitations for all iteratives.
 
