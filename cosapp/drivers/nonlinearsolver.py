@@ -1,5 +1,6 @@
 import copy
 import numpy
+import abc
 import csv
 from io import StringIO
 from numbers import Number
@@ -14,7 +15,6 @@ from cosapp.core.numerics.enum import NonLinearMethods
 from cosapp.core.numerics.root import root
 from cosapp.drivers.driver import Driver
 from cosapp.drivers.abstractsolver import AbstractSolver
-from cosapp.drivers.driver import Driver
 from cosapp.drivers.runsinglecase import RunSingleCase
 from cosapp.drivers.utils import DesignProblemHandler
 from cosapp.utils.helpers import check_arg
@@ -24,6 +24,39 @@ import logging
 logger = logging.getLogger(__name__)
 
 AnyDriver = TypeVar("AnyDriver", bound=Driver)
+
+
+class BaseSolverBuilder(abc.ABC):
+    """Base interface for numerical system building strategy used by `NonLinearSolver`.
+    Implementations will differ for single- or multi-point design.
+    """
+    def __init__(self, solver: AbstractSolver):
+        self.solver = solver
+        self.problem = MathematicalProblem(solver.name, solver.owner)
+        self.initial_values = numpy.empty(0)
+        self.is_design_unknown: Dict[str, bool] = dict()
+
+    @abc.abstractmethod
+    def build_system(self) -> None:
+        pass
+
+    @abc.abstractmethod
+    def update_residues(self) -> None:
+        pass
+
+    def update_unknowns(self, x: numpy.ndarray) -> None:
+        counter = 0
+        for name, unknown in self.problem.unknowns.items():
+            if unknown.mask is None:
+                unknown.set_default_value(x[counter])
+                counter += 1
+            else:
+                n = numpy.count_nonzero(unknown.mask)
+                unknown.set_default_value(x[counter : counter + n])
+                counter += n
+            # Update design unknowns
+            if self.is_design_unknown[name]:
+                unknown.set_to_default()
 
 
 class NonLinearSolver(AbstractSolver):
@@ -42,6 +75,7 @@ class NonLinearSolver(AbstractSolver):
     __slots__ = (
         '__method', '__option_aliases', '__trace', '__results',
         '__design_unknowns', 'compute_jacobian', 'jac_lup', 'jac',
+        '__builder',
     )
 
     def __init__(self, 
@@ -74,6 +108,7 @@ class NonLinearSolver(AbstractSolver):
         self.__set_method(method, **kwargs)
         self.__trace: List[Dict[str, Any]] = list()
         self.__results: SolverResults = None
+        self.__builder: BaseSolverBuilder = None
 
         self.compute_jacobian = True  # type: bool
             # desc='Should the Jacobian matrix be computed?'
@@ -82,8 +117,6 @@ class NonLinearSolver(AbstractSolver):
             # desc='LU decomposition of latest Jacobian matrix (if available).'
         self.jac = None  # type: Optional[numpy.ndarray]
             # desc='Latest computed Jacobian matrix (if available).'
-
-        self.add_child(RunSingleCase(self._default_driver_name))
 
     def reset_problem(self) -> None:
         """Reset mathematical problem"""
@@ -126,9 +159,6 @@ class NonLinearSolver(AbstractSolver):
         -----
         The added child will have its owner set to match the one of the current driver.
         """
-        default_driver = self._default_driver_name
-        if len(self.children) == 1 and default_driver in self.children:
-            self.pop_child(default_driver)
         self.compute_jacobian = True
         return super().add_child(child, execution_index, desc)
 
@@ -191,7 +221,7 @@ class NonLinearSolver(AbstractSolver):
                 else:
                     logger.info(f"   # ({name}, {value:.5g})")
 
-            tol = numpy.max(numpy.abs(self.problem.residues_vector))
+            tol = numpy.linalg.norm(self.problem.residue_vector(), numpy.inf)
             try:
                 option = self.__option_aliases['tol']  # should never fail, in principle
                 target = self.options[option]
@@ -210,61 +240,21 @@ class NonLinearSolver(AbstractSolver):
                 "*" * 40,
             ])
         )
-        handler = DesignProblemHandler(self.owner)
-        handler.design.extend(self._raw_problem, equations=False)
-        handler.offdesign.extend(self._raw_problem, unknowns=False)
-        handler.prune()  # resolve aliasing
-        self.__design_unknowns = handler.design.unknowns
-        self.initial_values = numpy.append(self.initial_values, self.get_init())
-        # Set of unknown names to detect design/offdesign conflicts
-        design_unknown_set = set(handler.design.unknowns)
-        # Create assembled problem
-        problem = self.problem = MathematicalProblem(self.name, self.owner)
-        problem.extend(handler.design)
-
-        run_cases: List[RunSingleCase] = []
-        for driver in self.children.values():
-            if isinstance(driver, RunSingleCase):
-                run_cases.append(driver)
-            else:
-                logger.warning(
-                    f"Including Driver {driver.name!r} without iteratives in Driver {self.name!r} is not numerically advised."
-                )
-
-        if len(run_cases) > 1:
-            # If more than one RunSingleCase drivers are present,
-            # use a name wrapper to distinguish dict entries for
-            # residues and off-design unknowns in global problem
-            get_key_wrapper = lambda case: (
-               lambda key: f"{case.name}[{key}]"
+        run_cases = list(
+            filter(
+                lambda driver: isinstance(driver, RunSingleCase),
+                self.children.values(),
             )
+        )
+        if run_cases:
+            builder = MultipointSolverBuilder(self, run_cases)
         else:
-            get_key_wrapper = lambda case: None
-
-        for case in run_cases:
-            local = case.processed_problems
-            design_unknown_set.update(local.design.unknowns)
-            common = design_unknown_set.intersection(local.offdesign.unknowns)
-            if common:
-                kind = "unknown"
-                if len(common) > 1:
-                    names = ", ".join(repr(v) for v in sorted(common))
-                    names = f"({names}) are"
-                    kind += "s"
-                else:
-                    names = f"{common.pop()!r} is"
-                raise ValueError(
-                    f"{names} defined as design and off-design {kind} in {case.name!r}"
-                )
-            self.__design_unknowns.update(local.design.unknowns)
-            # Enforce solver-level off-design problem to child case
-            case.add_offdesign_problem(handler.offdesign)
-            # Assemble case problems (design & off-design)
-            wrapper = get_key_wrapper(case)
-            problem.extend(local.design, copy=False, residue_wrapper=wrapper)
-            problem.extend(local.offdesign, copy=False, unknown_wrapper=wrapper, residue_wrapper=wrapper)
-            self.initial_values = numpy.append(self.initial_values, case.get_init(self.force_init))
-
+            builder = StandaloneSolverBuilder(self)
+        
+        builder.build_system()
+        self.problem = builder.problem
+        self.initial_values = builder.initial_values
+        self.__builder = builder
         self.touch_unknowns()
         logger.debug(
             "\n".join([
@@ -272,23 +262,6 @@ class NonLinearSolver(AbstractSolver):
                 f"{'<empty>' if self.problem.is_empty() else self.problem}",
             ])
         )
-
-    def get_init(self) -> numpy.ndarray:
-        """Get the System iteratives initial values for this driver.
-
-        Returns
-        -------
-        numpy.ndarray
-            The list of iteratives initial values.
-            The values should be in the same order as the unknowns in the `get_problem`.
-        """
-        full_init = numpy.empty(0)
-
-        for unknown in self.__design_unknowns.values():
-            data = copy.deepcopy(unknown.value)
-            full_init = numpy.append(full_init, data)
-
-        return full_init
 
     def _fresidues(self, x: Sequence[float]) -> numpy.ndarray:
         """
@@ -311,31 +284,21 @@ class NonLinearSolver(AbstractSolver):
         logger.debug(f"Call fresidues with x = {x!r}")
         self.set_iteratives(x)
 
-        # Run all points
-        for child in self.children.values():
-            logger.debug(f"Call {child.name}.run_once()")
-            child.run_once()
+        if self.children:
+            for subdriver in self.children.values():
+                logger.debug(f"Call {subdriver.name}.run_once()")
+                subdriver.run_once()
+        else:
+            self.owner.run_children_drivers()
 
-        residues = self.problem.residues_vector
+        self.__builder.update_residues()
+        residues = self.problem.residue_vector()
         logger.debug(f"Residues: {residues!r}")
         return residues
 
     def set_iteratives(self, x: Sequence[float]) -> None:
         x = numpy.asarray(x)
-        counter = 0
-        for name, unknown in self.problem.unknowns.items():
-            if unknown.mask is None:
-                unknown.set_default_value(x[counter])
-                counter += 1
-            else:
-                n = numpy.count_nonzero(unknown.mask)
-                unknown.set_default_value(x[counter : counter + n])
-                counter += n
-            # Set all design variables at once
-            if name in self.__design_unknowns:
-                # Set the variable to the new x
-                if not numpy.array_equal(unknown.value, unknown.default_value):
-                    unknown.set_to_default()
+        self.__builder.update_unknowns(x)
 
     def compute(self) -> None:
         """Run the resolution method to find free vars values that zero out residues
@@ -377,19 +340,17 @@ class NonLinearSolver(AbstractSolver):
 
                 error_desc = getattr(results, 'jac_errors', {})
                 if error_desc:
-                    if len(error_desc['unknowns']) > 0:
-                        indices = error_desc['unknowns']
-                        unknown_names = [self.problem.unknowns_names[i] for i in indices]
+                    if (indices := error_desc.get('unknowns', [])):
+                        unknown_names = self.problem.unknown_names()
                         error_msg += (
                             f" \nThe {len(indices)} following parameter(s)"
-                            f" have no influence: {unknown_names} \n{indices}"
+                            f" have no influence: {[unknown_names[i] for i in indices]} \n{indices}"
                         )
-                    if len(error_desc['residues']) > 0:
-                        indices = error_desc['residues']
-                        equation_names = [self.problem.residues_names[i] for i in indices]
+                    if (indices := error_desc.get('residues', [])):
+                        residue_names = self.problem.residue_names()
                         error_msg += (
                             f" \nThe {len(indices)} following residue(s)"
-                            f" are not influenced: {equation_names}"
+                            f" are not influenced: {[residue_names[i] for i in indices]}"
                         )
 
                 if self.parent is not None:
@@ -410,9 +371,12 @@ class NonLinearSolver(AbstractSolver):
             self.owner.run_children_drivers()
 
         if self._recorder is not None:
-            for child in self.children.values():
-                child.run_once()
-                self._recorder.record_state(child.name, self.status, self.error_code)
+            if self.children:
+                for child in self.children.values():
+                    child.run_once()
+                    self._recorder.record_state(child.name, self.status, self.error_code)
+            else:
+                self._recorder.record_state(self.name, self.status, self.error_code)
 
     def log_debug_message(self,
         handler: "HandlerWithContextFilters",
@@ -460,8 +424,8 @@ class NonLinearSolver(AbstractSolver):
             message = ""
             unknown_trace = None
             residue_trace = None
-            residue_names = self.problem.residues_names
-            unknown_names = self.problem.unknowns_names
+            residue_names = self.problem.residue_names()
+            unknown_names = self.problem.unknown_names()
             for i, record in enumerate(self.__trace):
                 if i == 0:
                     unknown_trace = record["x"]
@@ -669,3 +633,99 @@ class NonLinearSolver(AbstractSolver):
             The modified mathematical problem
         """
         return self._raw_problem.add_target(expression, *args, **kwargs)
+
+
+class StandaloneSolverBuilder(BaseSolverBuilder):
+    """System building strategy for solvers with no
+    `RunSingleCase` sub-drivers. In this case, the actual
+    mathematical problem is entirely defined by unknowns and
+    equations declared at solver level.
+    """
+    def build_system(self):
+        solver = self.solver
+        system = self.solver.owner
+        problem = self.problem
+        handler = DesignProblemHandler(system)
+        handler.design.extend(solver.raw_problem)
+        handler.offdesign.extend(system.assembled_problem())
+        handler.prune()
+        problem.clear()
+        problem.extend(handler.merged_problem(), copy=False)
+        self.initial_values = problem.unknown_vector()
+        self.is_design_unknown = dict.fromkeys(problem.unknowns, True)
+
+    def update_residues(self):
+        for residue in self.problem.residues.values():
+            residue.update()
+
+
+class MultipointSolverBuilder(BaseSolverBuilder):
+    """System building strategy for solvers with one or more
+    `RunSingleCase` sub-drivers. In this case, the actual
+    mathematical problem is a combination of unknowns and
+    equations declared at solver level, and of local design
+    and off-design problems declared at case level.
+    """
+    def __init__(self, solver: NonLinearSolver, points: List[RunSingleCase]):
+        super().__init__(solver)
+        self.points = points
+
+    def build_system(self):
+        solver = self.solver
+        system = self.solver.owner
+        problem = self.problem
+        handler = DesignProblemHandler(system)
+        handler.design.extend(solver.raw_problem, equations=False)
+        handler.offdesign.extend(solver.raw_problem, unknowns=False)
+        handler.prune()  # resolve aliasing
+        # Create assembled problem
+        problem.clear()
+        problem.extend(handler.design)
+
+        self.initial_values = handler.design.unknown_vector()
+
+        if len(self.points) > 1:
+            # If more than one `RunSingleCase` drivers are present,
+            # use a name wrapper to distinguish dict entries for
+            # residues and off-design unknowns in global problem
+            get_key_wrapper = lambda case: (
+               lambda key: f"{case.name}[{key}]"
+            )
+        else:
+            get_key_wrapper = lambda case: None
+
+        # Set of unknown names to detect design/off-design conflicts
+        design_unknown_names = set(handler.design.unknowns)
+
+        for point in self.points:
+            local = point.processed_problems
+            # Check that local problem does not introduce design/off-design conflicts
+            design_unknown_names.update(local.design.unknowns)
+            common = design_unknown_names.intersection(local.offdesign.unknowns)
+            if common:
+                kind = "unknown"
+                if len(common) > 1:
+                    names = ", ".join(map(repr, sorted(common)))
+                    names = f"({names}) are"
+                    kind += "s"
+                else:
+                    names = f"{common.pop()!r} is"
+                raise ValueError(
+                    f"{names} defined as design and off-design {kind} in {point.name!r}"
+                )
+            # Enforce solver-level off-design problem to child case
+            point.add_offdesign_problem(handler.offdesign)
+            # Assemble case problems (design & off-design)
+            wrapper = get_key_wrapper(point)
+            problem.extend(local.design, copy=False, residue_wrapper=wrapper)
+            problem.extend(local.offdesign, copy=False, unknown_wrapper=wrapper, residue_wrapper=wrapper)
+            self.initial_values = numpy.append(self.initial_values, point.get_init(solver.force_init))
+
+        self.is_design_unknown = dict.fromkeys(problem.unknowns, False)
+        for name in design_unknown_names:
+            self.is_design_unknown[name] = True
+
+    def update_residues(self):
+        # Nothing to do, since residues are updated
+        # by `RunSingleCase` sub-drivers
+        pass

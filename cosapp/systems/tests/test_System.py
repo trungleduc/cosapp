@@ -2152,7 +2152,7 @@ def test_System_add_target_design():
     assert offdesign.is_empty()
 
     solver = s.add_driver(NonLinearSolver('solver', tol=1e-9))
-    solver.runner.design.extend(s.design('target_z'))
+    solver.extend(s.design('target_z'))
 
     s.x = 0.5
     s.y = 0.5
@@ -2188,7 +2188,7 @@ def test_System_add_target_array():
     assert offdesign.is_empty()
 
     solver = s.add_driver(NonLinearSolver('solver', tol=1e-9, factor=0.5))
-    solver.runner.design.extend(s.design('target_z'))
+    solver.extend(s.design('target_z'))
 
     s.x = 1.0
     s.y = 1.0
@@ -2227,7 +2227,7 @@ def test_System_add_target_expression():
     assert offdesign.is_empty()
 
     solver = s.add_driver(NonLinearSolver('solver', tol=1e-9))
-    solver.runner.design.extend(s.design('target_z'))
+    solver.extend(s.design('target_z'))
 
     s.x = -0.5
     s.y = 0.5
@@ -2275,7 +2275,7 @@ def test_System_add_target_composite():
     assert offdesign.is_empty()
 
     solver = top.add_driver(NonLinearSolver('solver', tol=1e-9))
-    solver.runner.design.extend(top.design('target_z'))
+    solver.extend(top.design('target_z'))
 
     top.sub.x = 0.5
     top.sub.y = 0.5

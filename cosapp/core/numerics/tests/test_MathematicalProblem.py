@@ -107,20 +107,29 @@ def test_MathematicalProblem_noSetters(test_objects: Tuple[System, MathematicalP
         m.transients = [TimeUnknown(ds, "A", "2.5 * q"), ]
 
 
-def test_MathematicalProblem_residues_vector(test_objects: Tuple[System, MathematicalProblem]):
+def test_MathematicalProblem_residue_vector(test_objects: Tuple[System, MathematicalProblem]):
     s, m = test_objects
     m.add_equation([
         dict(equation="g == 0"),
         dict(equation="h == array([22., 4.2])", name="h equation", reference=24.)
     ])
-    m.add_unknown([
-        dict(name="a", max_rel_step=1e-5),
-        dict(name="c", max_abs_step=1e-2)
-    ])
 
-    assert len(m.residues_vector) == 3
-    assert m.residues_vector == pytest.approx(
-        np.concatenate(([m.residues['g == 0'].value], m.residues['h equation'].value)))
+    residue_vector = m.residue_vector()
+    assert len(residue_vector) == 3
+    assert np.array_equal(
+        residue_vector,
+        np.concatenate(([m.residues['g == 0'].value], m.residues['h equation'].value))
+    )
+
+
+def test_MathematicalProblem_unknown_vector(test_objects: Tuple[System, MathematicalProblem]):
+    s, m = test_objects
+    m.add_unknown(["c", "a"])
+
+    s.a = 3.14
+    s.c = np.r_[0.1, 0.2, 0.3, 0.4]
+
+    assert np.array_equal(m.unknown_vector(), [0.1, 0.2, 0.3, 0.4, 3.14])
 
 
 @pytest.mark.parametrize("case, expected", [
@@ -435,7 +444,7 @@ def test_MathematicalProblem_add_unknown(
     problem.add_unknown(*args, **kwargs)
 
     if 'unknown_names' in expected:
-        assert problem.unknowns_names == expected.pop('unknown_names')
+        assert problem.unknown_names() == expected.pop('unknown_names')
 
     unknowns = problem.unknowns
     assert set(unknowns.keys()) == set(expected.keys())

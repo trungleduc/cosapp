@@ -62,4 +62,3 @@ def test_AbstractSolver_setup():
     assert len(d.initial_values) == 0
     assert isinstance(d.solution, dict)
     assert len(d.solution) == 0
-    assert d._default_driver_name == "runner"

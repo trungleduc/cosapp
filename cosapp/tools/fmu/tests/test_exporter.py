@@ -318,14 +318,12 @@ def test_FMU_integration_nonlinear_design(tmp_path, iterativenonlinear):
     """
     pyfmi = pytest.importorskip("pyfmi")
 
-    solver = NonLinearSolver("solver", iterativenonlinear)
-    solver.add_unknown("nonlinear.k1").add_equation("splitter.p2_out.x == 10")
-
     # Init
     t_driver = iterativenonlinear.add_driver(
         RungeKutta(order=4, dt=0.1, time_interval=[0, 0.2])
     )
-    t_driver.add_child(solver)
+    solver = t_driver.add_child(NonLinearSolver("solver"))
+    solver.add_unknown("nonlinear.k1").add_equation("splitter.p2_out.x == 10")
 
     # Set BC
     t_driver.set_scenario(
@@ -333,7 +331,8 @@ def test_FMU_integration_nonlinear_design(tmp_path, iterativenonlinear):
         values = {"p_in.x": "5 - 4 * exp(-t / 0.1)"},
     )
     recorder = t_driver.add_recorder(
-        DataFrameRecorder(includes=["p_in.x", "p_out.x", "nonlinear.k1"]), period=0.1
+        DataFrameRecorder(includes=["p_in.x", "p_out.x", "nonlinear.k1"]),
+        period=0.1
     )
     iterativenonlinear.run_drivers()
 
@@ -368,16 +367,13 @@ def test_FMU_integration_nonlinear_design(tmp_path, iterativenonlinear):
 def test_FMU_integration_nonlinear_local(tmp_path, iterativenonlinear):
     pyfmi = pytest.importorskip("pyfmi")
 
-    solver = NonLinearSolver("solver", iterativenonlinear)
-    solver.runner.add_unknown("nonlinear.k1").add_equation(
-        "splitter.p2_out.x == 10"
-    )
-
     # Init
     t_driver = iterativenonlinear.add_driver(
         RungeKutta(order=4, dt=0.1, time_interval=[0, 0.2])
     )
-    t_driver.add_child(solver)
+    solver = t_driver.add_child(NonLinearSolver("solver"))
+    solver.add_child(RunSingleCase("runner"))
+    solver.runner.add_unknown("nonlinear.k1").add_equation("splitter.p2_out.x == 10")
 
     # Set BC
     t_driver.set_scenario(
@@ -422,11 +418,11 @@ def test_FMU_integration_vector_problem(tmp_path, vector_problem):
     pyfmi = pytest.importorskip("pyfmi")
 
     # Setup the system
-    solver = NonLinearSolver("solver", vector_problem)
+    solver = vector_problem.add_driver(NonLinearSolver("solver"))
+    
 
-    # Init
+    # Init & solve
     vector_problem.x = 1.0
-    vector_problem.add_driver(solver)
     vector_problem.run_drivers()
 
     # Convert to FMU

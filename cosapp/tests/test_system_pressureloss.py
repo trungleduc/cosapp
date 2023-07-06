@@ -1,7 +1,7 @@
 import pytest
 
 from cosapp.systems import System
-from cosapp.drivers import NonLinearSolver
+from cosapp.drivers import NonLinearSolver, RunSingleCase
 
 
 @pytest.fixture
@@ -222,8 +222,9 @@ def test_system121_redundant_2(system121):
     Case 2: system unknown `sp.x` is redeclared as unknown at runner level.
     """
     s = system121
-    d = s.add_driver(NonLinearSolver("solver"))
-    d.runner.add_unknown("sp.x")
+    solver = s.add_driver(NonLinearSolver("solver"))
+    solver.add_child(RunSingleCase("case"))
+    solver.case.add_unknown("sp.x")
 
     with pytest.raises(ValueError, match="'sp\.x' already exists in 'offdesign'"):
         s.run_drivers()
@@ -279,11 +280,12 @@ def test_system222(system222):
 
 
 def test_system222_redundant(system222):
-    """Same as `test_system222` with redundant unknowns.
+    """Same as `test_system222` with redundant off-design unknowns.
     """
     s = system222
-    d = s.add_driver(NonLinearSolver("solver"))
-    d.runner.add_unknown(["p2.s21.x", "s1.x"])
+    solver = s.add_driver(NonLinearSolver("solver"))
+    solver.add_child(RunSingleCase("case"))
+    solver.case.add_unknown(["p2.s21.x", "s1.x"])
 
     with pytest.raises(ValueError, match="'p2\.s21\.x' already exists in 'offdesign'"):
         s.run_drivers()

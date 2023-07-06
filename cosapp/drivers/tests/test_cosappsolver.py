@@ -240,7 +240,7 @@ def test_partialjacobian(caplog, caplog_messages, set_master_system):
     s.K1 = 1.0
     d.jac = np.linalg.inv(np.array([[10.0]]))
     d.jac_lup = lu_factor(d.jac)
-    d.runner.solution.clear()
+    d.solution.clear()
 
     caplog.clear()
     with caplog.at_level(logging.INFO):
@@ -339,7 +339,7 @@ def test_partialjacobian_independentmatrix(caplog, caplog_messages, set_master_s
     # Impose Jacobian matrix; exact matrix is identity
     d.jac = np.array([[1, 0], [0, -3.2]])
     d.jac_lup = lu_factor(d.jac)
-    d.runner.solution.clear()
+    d.solution.clear()
 
     caplog.clear()
     with caplog.at_level(logging.DEBUG):

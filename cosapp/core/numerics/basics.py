@@ -169,12 +169,30 @@ class MathematicalProblem:
 
     @property
     def residues(self) -> Dict[str, Residue]:
-        """Dict[str, Residue] : Residue equations."""
+        """Dict[str, Residue]: Residue dictionary defined in problem."""
         return self._residues
 
     @property
-    def residues_names(self) -> Tuple[str]:
-        """Tuple[str] : Names of residues, flattened to have the same size as `residues_vector`."""
+    def unknowns(self) -> Dict[str, Unknown]:
+        """Dict[str, Unknown]: Unknown dictionary defined in problem."""
+        return self._unknowns
+
+    def residue_vector(self) -> numpy.ndarray:
+        """numpy.ndarray: Residue values stacked into a vector."""
+        return self.__as_vector(self.residues)
+
+    def unknown_vector(self):
+        """numpy.ndarray: Unknown values stacked into a vector."""
+        return self.__as_vector(self.unknowns)
+
+    def __as_vector(self, collection: dict):
+        values = tuple(
+            element.value for element in collection.values()
+        )
+        return numpy.hstack(values) if values else numpy.empty(0)
+
+    def residue_names(self) -> Tuple[str]:
+        """Tuple[str]: Names of residues, flattened to have the same size as `residue_vector()`."""
         names = []
         for name, residue in self.residues.items():
             n_values = numpy.size(residue.value)
@@ -184,13 +202,19 @@ class MathematicalProblem:
                 names.append(name)
         return tuple(names)
 
-    @property
-    def residues_vector(self) -> numpy.ndarray:
-        """numpy.ndarray : Vector of residues."""
-        values = tuple(
-            residue.value for residue in self.residues.values()
-        )
-        return numpy.hstack(values) if values else numpy.empty(0)
+    def unknown_names(self) -> Tuple[str]:
+        """Tuple[str]: Names of unknowns flatten to have the same size as `unknown_vector()`."""
+        names = []
+        for unknown in self.unknowns.values():
+            if unknown.mask is None:
+                names.append(unknown.name)
+            else:
+                basename = unknown.basename
+                ref_size = numpy.size(unknown.ref.value)
+                names.extend(
+                    f"{basename}[{i}]" for i in numpy.arange(ref_size)[unknown.mask.flatten()]
+                )
+        return tuple(names)
 
     @property
     def n_unknowns(self) -> int:
@@ -220,26 +244,6 @@ class MathematicalProblem:
 
     def is_empty(self) -> bool:
         return self.shape == (0, 0)
-
-    @property
-    def unknowns(self) -> Dict[str, Unknown]:
-        """Dict[str, Unknown] : Unknown numerical features defined for this system."""
-        return self._unknowns
-
-    @property
-    def unknowns_names(self) -> Tuple[str]:
-        """Tuple[str] : Names of unknowns flatten to have the same size as `residues_vector`."""
-        names = []
-        for unknown in self.unknowns.values():
-            if unknown.mask is None:
-                names.append(unknown.name)
-            else:
-                basename = unknown.basename
-                ref_size = numpy.size(unknown.ref.value)
-                names.extend(
-                    f"{basename}[{i}]" for i in numpy.arange(ref_size)[unknown.mask.flatten()]
-                )
-        return tuple(names)
 
     def add_unknown(self,
         name: Union[str, Iterable[Union[dict, str, Unknown]]],

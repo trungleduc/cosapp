@@ -1,9 +1,6 @@
 import pytest
 import sys
 from pathlib import Path
-from typing import Type
-
-from cosapp.systems import System
 
 
 @pytest.fixture

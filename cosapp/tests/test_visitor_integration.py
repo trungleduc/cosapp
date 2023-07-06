@@ -201,7 +201,6 @@ def test_send_DataCollector():
 
     assert visitor.data['drivers'] == {
         'NonLinearSolver': 1,
-        'RunSingleCase': 1,
         'ValidityCheck': 2,
         'RunOnce': 1,
     }

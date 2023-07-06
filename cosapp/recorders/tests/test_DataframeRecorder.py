@@ -173,6 +173,7 @@ def test_DataframeRecorder_restore():
 
     recorder = solver.add_recorder(DataFrameRecorder(hold=True))
     
+    s.K1 = 5
     s.run_drivers()
 
     s.K1 = 1

@@ -222,8 +222,8 @@ def test_MathematicalProblem_repr_2(s1: System, caplog):
         r"  a\.p\.y = .*",
         r"  a\.p\.x = .*",
         r"Equations",
-        r"  foo\.beq: v\[::2\] == \[0, 1\] := \[.* .*\]",
         r"  b\.area == 10 := .*",
+        r"  foo\.beq: v\[::2\] == \[0, 1\] := \[.* .*\]",
     ])
     # print(pattern, problem, sep="\n")
     assert re.match(pattern, repr(problem))
