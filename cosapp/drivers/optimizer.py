@@ -84,7 +84,7 @@ class Optimizer(AbstractSolver):
     https://docs.scipy.org/doc/scipy-1.0.0/reference/generated/scipy.optimize.minimize.html
 
     """
-    __slots__ = ('_constraints', '_raw_constraints', '_initial_state', '_objective')
+    __slots__ = ('_constraints', '_raw_constraints', '_initial_state', '_objective', '__current_x')
 
     def __init__(self,
         name: str,
@@ -109,6 +109,7 @@ class Optimizer(AbstractSolver):
         self._constraints: List[Dict] = list()   # Non-negativity constraints
         self._initial_state: Dict[str, Any] = dict()
         self._objective: EvalString = None
+        self.__current_x = numpy.empty(0)
 
         self.options.declare(
             name = 'method',
@@ -288,12 +289,13 @@ class Optimizer(AbstractSolver):
     def setup_run(self):
         """Method called once before starting any simulation."""
         super().setup_run()
+        self.__current_x = numpy.empty(0)
         
         # Resolve unknown aliasing and connected unknowns
         self.problem = dealias_problem(self._raw_problem)
         self.touch_unknowns()
 
-    def _fun_wrapper(self, expression: EvalString) -> Callable[[numpy.ndarray], float]:
+    def _expression_wrapper(self, expression: EvalString) -> Callable[[numpy.ndarray], float]:
         """Wrapper around objective and constraint expression to propagate the x values in the
             `System` owner.
 
@@ -305,47 +307,22 @@ class Optimizer(AbstractSolver):
         Returns
         -------
         Callable[[numpy.ndarray], float]
-            Callable function usable by scipy.optimize.minimize
+            Callable objective function usable by scipy.optimize.minimize
         """
+        if self.children:
+            def wrapper(x: numpy.ndarray, *args) -> float:
+                modified = self._update_unknowns(x)
+                if modified:
+                    for driver in self.children.values():
+                        driver.run_once()
+                return expression.eval()
 
-        def wrapper(x: numpy.ndarray, *args) -> float:
-            """Wrapper around objective and constraint function to propagate the x values in the
-            `System` owner.
-
-            Parameters
-            ----------
-            x : 1D-scalar numpy.ndarray
-                Points at which the function needs to be evaluated
-            args : Tuple
-                Any additional fixed parameters needed to completely specify the function
-
-            Returns
-            -------
-            Float
-                Value of the function for x
-            """
-            # Propagate x value in the System owner, if it has changed
-            counter = 0
-            need_update = False
-            for unknown in self.problem.unknowns.values():
-                if unknown.mask is None:
-                    unknown.set_default_value(x[counter])
-                    counter += 1
-                else:
-                    n = numpy.count_nonzero(unknown.mask)
-                    unknown.set_default_value(x[counter:counter + n])
-                    counter += n
-
-                # Set the variable to the new x
-                if not numpy.array_equal(unknown.value, unknown.default_value):
-                    unknown.set_to_default()
-                    need_update = True
-
-            if need_update:
-                for driver in self.children.values():
-                    driver.run_once()
-
-            return expression.eval()
+        else:
+            def wrapper(x: numpy.ndarray, *args) -> float:
+                modified = self._update_unknowns(x)
+                if modified:
+                    self.owner.run_children_drivers()
+                return expression.eval()
 
         return wrapper
 
@@ -368,7 +345,7 @@ class Optimizer(AbstractSolver):
         logger.debug(f"Call fresidues with x = {x!r}")
         self.set_iteratives(x)
 
-        if len(self.children) > 0:
+        if self.children:
             for subdriver in self.children.values():
                 subdriver.run_once()
         else:
@@ -379,19 +356,28 @@ class Optimizer(AbstractSolver):
         return objective
 
     def set_iteratives(self, x: Sequence[float]) -> None:
-        x = numpy.asarray(x)
-        counter = 0
-        for unknown in self.problem.unknowns.values():
-            if unknown.mask is None:
-                unknown.set_default_value(x[counter])
-                counter += 1
-            else:
-                n = numpy.count_nonzero(unknown.mask)
-                unknown.set_default_value(x[counter : counter + n])
-                counter += n
-            # Set variable to new x
-            if not numpy.array_equal(unknown.value, unknown.default_value):
+        self._update_unknowns(x)
+
+    def _update_unknowns(self, x: Sequence[float]) -> bool:
+        modified = not numpy.array_equal(x, self.__current_x)
+
+        if modified:
+            x = numpy.asarray(x)
+            counter = 0
+            for unknown in self.problem.unknowns.values():
+                if unknown.mask is None:
+                    unknown.set_default_value(x[counter])
+                    counter += 1
+                else:
+                    n = numpy.count_nonzero(unknown.mask)
+                    unknown.set_default_value(x[counter : counter + n])
+                    counter += n
+                # Set variable to new x
                 unknown.set_to_default()
+
+            self.__current_x = numpy.array(x)  # force copy
+
+        return modified
 
     def resolution_method(self,
         fresidues: Callable[[Sequence[float]], float],
@@ -505,7 +491,7 @@ class Optimizer(AbstractSolver):
                 None if lower == -numpy.inf else lower,
                 None if upper ==  numpy.inf else upper
             )
-        if unique_lower.size == 1 and unique_upper.size == 1:
+        if unique_lower.size == unique_upper.size == 1:
             bounds = get_bounds(unique_lower[0], unique_upper[0])
             if bounds == (None, None):
                 bounds = None
@@ -524,7 +510,7 @@ class Optimizer(AbstractSolver):
         def format_constraint(constraint):
             return {
                 'type': constraint['type'],
-                'fun': self._fun_wrapper(constraint['expr'])
+                'fun': self._expression_wrapper(constraint['expr'])
             }
         constraints = tuple(map(format_constraint, self._constraints))
 
