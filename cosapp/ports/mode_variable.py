@@ -59,8 +59,8 @@ class ModeVariable(BaseVariable):
             value = init_value
         elif init_value is not None:
             if not isinstance(init_value, type(value)):
-                raise ValueError(
-                    f"Initial value {init} appears to be inconsistent with arg value={value}."
+                raise TypeError(
+                    f"Initial value {init!r} appears to be inconsistent with arg value={value!r}."
                 )
 
         super().__init__(name, port, value, unit, dtype, desc, scope)
