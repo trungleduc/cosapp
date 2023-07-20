@@ -3,6 +3,7 @@
 from .logging import LogLevel, set_log
 from .helpers import partition
 from .state_io import get_state, set_state
+from .swap_system import swap_system
 
 try:
     import pytest
@@ -17,4 +18,5 @@ __all__ = [
     "partition",
     "get_state",
     "set_state",
+    "swap_system",
 ]

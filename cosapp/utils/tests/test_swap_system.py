@@ -579,7 +579,7 @@ class TestSwapVersions:
 
 
 def test_swap_system_parent_error(composite):
-    with pytest.raises(ValueError, match="Cannot swap top system 'composite'"):
+    with pytest.raises(ValueError, match="Cannot replace top system 'composite'"):
         swap_system(composite, System('bogus'))
     
     with pytest.raises(ValueError, match="System 'composite.bar' already belongs to a system tree"):
@@ -592,3 +592,14 @@ def test_swap_system_rename(composite, caplog):
 
     assert "New system 'bogus' renamed into 'foo' inside 'composite'" in caplog.text
     assert composite.foo.name == 'foo'
+
+
+def test_swap_system_return(composite):
+    head = composite
+    assert isinstance(head.foo, VersionA)
+
+    original = swap_system(head.foo, VersionB('foo'))
+
+    assert isinstance(head.foo, VersionB)
+    assert isinstance(original, VersionA)
+    assert original.parent is None
