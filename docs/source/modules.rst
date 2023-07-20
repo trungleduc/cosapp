@@ -80,6 +80,7 @@ Modules
    cosapp.utils.distributions.normal
    cosapp.utils.distributions.triangular
    cosapp.utils.distributions.uniform
+   cosapp.utils.swap_system
 
    cosapp.utils.context
    cosapp.utils.helpers

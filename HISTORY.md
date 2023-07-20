@@ -1,5 +1,24 @@
 # History
 
+## 0.15.0 (2023-07-20)
+
+### New features & API changes
+
+- Suppression of default `RunSingleCase` subdriver `runner` in `NonLinearSolver` drivers (MR [#239](https://gitlab.com/cosapp/cosapp/-/merge_requests/239)).
+- Enable target initialization in multi-point design problems (MR [#233](https://gitlab.com/cosapp/cosapp/-/merge_requests/233)).
+- New utility function `swap_system` to replace on the fly a subsystem by another `System` instance (MR [#238](https://gitlab.com/cosapp/cosapp/-/merge_requests/238)).
+
+### Bug fixes and code quality
+
+- Refactor driver `Optimizer` (MR [#240](https://gitlab.com/cosapp/cosapp/-/merge_requests/240)).
+- Various bug fixes (MRs [#234](https://gitlab.com/cosapp/cosapp/-/merge_requests/234), [#235](https://gitlab.com/cosapp/cosapp/-/merge_requests/235), [#241](https://gitlab.com/cosapp/cosapp/-/merge_requests/241)).
+
+### Documentation
+
+- New tutorial on `swap_system` (MR [#243](https://gitlab.com/cosapp/cosapp/-/merge_requests/243)).
+- General update of tutorials (MRs [#232](https://gitlab.com/cosapp/cosapp/-/merge_requests/232) and [#242](https://gitlab.com/cosapp/cosapp/-/merge_requests/242)).
+
+
 ## 0.14.1 (2023-06-08)
 
 ### Bug fixes and code quality
