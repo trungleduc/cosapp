@@ -3,33 +3,38 @@
 
 import copy
 import logging
-
-from cosapp.base import System
-from cosapp.ports.port import BasePort
-
+from cosapp.utils.helpers import check_arg
 
 logger = logging.getLogger(__name__)
 
 
-def swap_system(old_system: System, new_system: System, init_values: bool = True):
-    """Swap the `old_system` with `new_system`.
+def swap_system(old_system: "System", new_system: "System", init_values=True):
+    """Replace `old_system` by `new_system`.
 
     Parameters
     ----------
-    - old_system [System]:
-        System to replace
-    - new_system [System]:
-        Replacement system
-    - init_values [bool, optional]:
-        If `True` (default), original system values are copied into the replacement system.
+    - old_system [System]: System to replace
+    - new_system [System]: Replacement system
+    - init_values [bool, optional]: If `True` (default), original
+        system values are copied into the replacement system.
+    
+    Returns
+    -------
+    old_system [System]: the original system, devoid of parent.
     """
+    from cosapp.base import System
+    from cosapp.ports.port import BasePort
+
+    check_arg(old_system, "old_system", System)
+    check_arg(new_system, "new_system", System)
+
     if new_system.parent is not None:
         raise ValueError(
             f"System {new_system.full_name()!r} already belongs to a system tree."
         )
     if old_system.parent is None:
         raise ValueError(
-            f"Cannot swap top system {old_system.full_name()!r}."
+            f"Cannot replace top system {old_system.full_name()!r}."
         )
     if new_system.name != old_system.name:
         logger.info(
