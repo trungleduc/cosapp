@@ -525,3 +525,74 @@ def test_ExplicitTimeDriver_init_conditions():
 
     assert system.x == 1
     assert system.c == pytest.approx(-1.01)
+
+
+@pytest.mark.parametrize("with_recorder", [True, False])
+def test_ExplicitTimeDriver_event_data(with_recorder):
+
+    class EventSystem(System):
+        def setup(self):
+            self.add_inward("x", 0.0)
+            self.add_inward("y", 1.0)
+            self.add_inward("z", 2.0)
+            self.add_event("crossing", trigger="x == y")
+
+    s = EventSystem('s')
+
+    driver = s.add_driver(
+        ExplicitTimeDriver(dt=0.05, time_interval=[0, 1])
+    )
+    driver.set_scenario(
+        values={
+            'x': 'exp(-2 * t)',
+            'y': 'sin(10 * t)',
+            'z': 't',
+        },
+    )
+    if with_recorder:
+        driver.add_recorder(
+            DataFrameRecorder(includes=['x', 'y']),
+            period=0.05,
+        )
+    s.run_drivers()
+
+    # Retrieve event data
+    event_data = driver.event_data
+    assert 'time' in event_data.columns
+
+    if with_recorder:
+        # Check that event_data records the same fields as the recorder
+        data = driver.recorder.export_data()
+        assert list(data.columns) == list(event_data.columns)
+        assert 'x' in event_data.columns
+        assert 'y' in event_data.columns
+        assert 'z' not in event_data.columns
+
+    else:
+        assert 'x' not in event_data.columns
+        assert 'y' not in event_data.columns
+        assert 'z' not in event_data.columns
+        assert driver.recorder is None
+
+    # `driver.event_data` contains twice as many entries as
+    # `driver.recorded_events`, since it captures the system
+    # state before and after each event occurrence.
+    assert len(event_data) == 2 * len(driver.recorded_events)
+
+    # Check event times
+    event_times = np.array([
+        record.time for record in driver.recorded_events
+    ])
+    xs = np.exp(-2 * event_times)
+    ys = np.sin(10 * event_times)
+    assert event_times == pytest.approx([
+        0.09683198,
+        0.24880810,
+        0.65560525,
+        0.92674399,
+    ])
+    assert np.allclose(xs, ys, atol=1e-12)
+    assert np.array_equal(
+        event_times,
+        np.unique(event_data['time'])
+    )

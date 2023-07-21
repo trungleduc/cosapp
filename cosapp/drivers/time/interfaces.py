@@ -236,7 +236,8 @@ class ExplicitTimeDriver(Driver):
         if recorder is None:
             must_record = lambda t, t_record: False
             record_data = lambda *args, **kwargs: None
-            event_rec_options = {}
+            event_rec_options = dict(includes='time')
+
         else:
             if self.recording_period is None:
                 if self.dt is None:
@@ -264,6 +265,7 @@ class ExplicitTimeDriver(Driver):
             )
             event_rec_options["numerical_only"] = recorder._numerical_only
             event_rec_options["raw_output"] = recorder._raw_output #TODO: Expose both to the API?
+
         event_rec = DataFrameRecorder(**event_rec_options)
         event_rec.watched_object = self.owner
         def record_event(stamp=None):
