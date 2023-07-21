@@ -27,21 +27,29 @@ def is_cosapp_object(obj: Any) -> bool:
     return isinstance(obj, (Port, System, Driver))
 
 
-def any_cosapp_objects(collection: Any) -> bool:
+def any_forbidden_object(collection: Any) -> bool:
     """Returns `True` if argument is a cosapp object
     or a collection thereof; `False` otherwise."""
     if isinstance(collection, str):
         return False
+    try:
+        iterator = iter(collection)
+    except:
+        pass
+    else:
+        if iter(iterator) is collection:
+            # collection is an iterator - leave it untouched
+            return True
     try:
         return any(map(is_cosapp_object, collection))
     except TypeError:
         return is_cosapp_object(collection)
 
 
-def no_cosapp_objects(dict_item: tuple) -> bool:
+def no_forbidden_objects(dict_item: tuple) -> bool:
     """Filter function for dictionary items, to
-    exclude entries that match `any_cosapp_object`."""
-    return not any_cosapp_objects(dict_item[1])
+    exclude entries that match `any_forbidden_object`."""
+    return not any_forbidden_object(dict_item[1])
 
 
 class BaseRecorder(abc.ABC):
@@ -296,9 +304,10 @@ class BaseRecorder(abc.ABC):
         )
         variables.update(evaluables)
 
-        # Filter out attributes containing non-copyable CoSApp objects
+        # Filter out attributes containing forbidden objects
+        # such as non-copyable CoSApp objects or iterators
         variables = dict(
-            filter(no_cosapp_objects, variables.items())
+            filter(no_forbidden_objects, variables.items())
         )
         self.__variables = variables = sorted(variables)
         self.__expressions = EvalString(", ".join(variables).join("[]"), context)

@@ -2,6 +2,7 @@ import pytest
 from unittest import mock
 from contextlib import nullcontext as does_not_raise
 
+from cosapp.base import Port, System
 from cosapp.core.signal import Slot
 from cosapp.recorders.recorder import BaseRecorder
 
@@ -457,3 +458,49 @@ def test_BaseRecorder_data_warning():
     recorder = BaseRecorder()
     with pytest.warns(DeprecationWarning, match="use export_data()"):
         recorder.data
+
+
+class XyPort(Port):
+    def setup(self):
+        self.add_variable('x', 1.0)
+        self.add_variable('y', 1.0)
+
+
+class SystemWithCoSAppObjects(System):
+    """System with a property containing CoSApp objects,
+    and another containing an iterator.
+    """
+    def setup(self):
+        self.add_input(XyPort, 'p_in')
+        self.add_output(XyPort, 'p_out')
+        self.add_inward('foo', 0.0)
+        self.add_outward('bar', 0.0)
+
+        self.add_property('xy_ports', (self.p_in, self.p_out))
+        self.add_property('iterator', iter('abcd'))
+
+
+def test_BaseRecorder_forbidden_objects():
+    """Check that collections containing CoSApp objects
+    and iterators are not captured by recorders.
+    """
+    s = SystemWithCoSAppObjects('s')
+
+    assert next(s.iterator) == 'a'
+
+    recorder = BaseRecorder()
+    recorder.watched_object = s
+
+    field_names = recorder.field_names()
+    assert 'xy_ports' not in field_names
+    assert 'iterator' not in field_names
+    assert set(field_names) == {
+        'p_in.x',
+        'p_in.y',
+        'p_out.x',
+        'p_out.y',
+        'foo',
+        'bar',
+    }
+    # Check that iterator is untouched by recorder
+    assert next(s.iterator) == 'b'
