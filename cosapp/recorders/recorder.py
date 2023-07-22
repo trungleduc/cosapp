@@ -28,8 +28,8 @@ def is_cosapp_object(obj: Any) -> bool:
 
 
 def any_forbidden_object(collection: Any) -> bool:
-    """Returns `True` if argument is a cosapp object
-    or a collection thereof; `False` otherwise."""
+    """Returns `True` if argument is either an iterator,
+    a cosapp object, or a collection thereof; `False` otherwise."""
     if isinstance(collection, str):
         return False
     try:
@@ -37,8 +37,8 @@ def any_forbidden_object(collection: Any) -> bool:
     except:
         pass
     else:
-        if iter(iterator) is collection:
-            # collection is an iterator - leave it untouched
+        if iterator is collection:
+            # collection is an iterator; leave it untouched
             return True
     try:
         return any(map(is_cosapp_object, collection))
