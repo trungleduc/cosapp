@@ -1572,3 +1572,35 @@ def test_NonLinearSolver_empty_problem_case(method_name):
     assert s.a == 1.0
     assert s.y == pytest.approx(-0.995)
     assert solver.problem.is_empty()
+
+
+@pytest.mark.parametrize(
+    "shape", [
+        3,
+        (3, 2),
+        (3, 2, 4),
+    ]
+)
+def test_NonLinearSolver_ndarray_residue(shape):
+    """Test solver with a mathematical problem involving
+    array unknowns and residues of various shapes.
+
+    Related to https://gitlab.com/cosapp/cosapp/-/issues/122
+    """
+    class NdArraySystem(System):
+        def setup(self):
+            self.add_inward('x', np.ones(shape))
+            self.add_outward('y', np.ones(shape))
+
+        def compute(self):
+            self.y = 10 * self.x
+
+    s = NdArraySystem('s')
+
+    solver = s.add_driver(NonLinearSolver('solver'))
+    solver.add_unknown('x').add_equation(f"y == full({shape}, 2.0)")
+
+    s.run_drivers()
+
+    assert s.x == pytest.approx(np.full(shape, 0.2))
+    assert s.y == pytest.approx(np.full(shape, 2.0))

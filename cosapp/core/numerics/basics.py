@@ -187,9 +187,9 @@ class MathematicalProblem:
 
     def __as_vector(self, collection: dict):
         values = tuple(
-            element.value for element in collection.values()
+            numpy.ravel(element.value) for element in collection.values()
         )
-        return numpy.hstack(values) if values else numpy.empty(0)
+        return numpy.concatenate(values) if values else numpy.empty(0)
 
     def residue_names(self) -> Tuple[str]:
         """Tuple[str]: Names of residues, flattened to have the same size as `residue_vector()`."""

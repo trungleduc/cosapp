@@ -27,10 +27,12 @@ class SystemA(System):
         self.add_inward('b', [1., 2.])
         self.add_inward('c', np.arange(4, dtype=float))
         self.add_inward('d', -2.7)
+        self.add_inward('nd_in', np.ones((2, 4, 3), dtype=float))
 
         self.add_outward('g', 3.5)
         self.add_outward('h', [1., 2.])
         self.add_outward('i', 5.)
+        self.add_outward('nd_out', np.zeros_like(self.nd_in))
 
 class SystemB(System):
     def setup(self):
@@ -109,16 +111,47 @@ def test_MathematicalProblem_noSetters(test_objects: Tuple[System, MathematicalP
 
 def test_MathematicalProblem_residue_vector(test_objects: Tuple[System, MathematicalProblem]):
     s, m = test_objects
+    s.g = 0.1
+    s.h = [1., 2.]
+
     m.add_equation([
         dict(equation="g == 0"),
-        dict(equation="h == array([22., 4.2])", name="h equation", reference=24.)
+        dict(equation="h == array([22., 4.2])", name="h equation", reference=10.),
     ])
 
+    residue_dict = m.residues
     residue_vector = m.residue_vector()
-    assert len(residue_vector) == 3
+    assert residue_vector.ndim == 1, "residue vector should be flat"
+    assert residue_vector.size == 1 + 2
+    assert residue_vector == pytest.approx([0.1, -2.1, -0.22])
     assert np.array_equal(
         residue_vector,
-        np.concatenate(([m.residues['g == 0'].value], m.residues['h equation'].value))
+        np.concatenate((
+            np.ravel(residue_dict['g == 0'].value),
+            np.ravel(residue_dict['h equation'].value),
+        ))
+    )
+
+    # Add multi-dimensional array residue
+    # Related to https://gitlab.com/cosapp/cosapp/-/issues/122
+    s.nd_out.fill(0.0)
+    m.add_equation("nd_out == ones((2, 4, 3))", name="nd equation")
+
+    assert np.array_equal(
+        residue_dict['nd equation'].value,
+        np.full_like(s.nd_out, -1.0),
+    )
+    residue_vector = m.residue_vector()
+    assert residue_vector.ndim == 1, "residue vector should be flat"
+    assert residue_vector.size == 1 + 2 + 2 * 4 * 3
+    assert residue_vector == pytest.approx([0.1, -2.1, -0.22] + [-1.0] * 24)
+    assert np.array_equal(
+        residue_vector,
+        np.concatenate((
+            np.ravel(residue_dict['g == 0'].value),
+            np.ravel(residue_dict['h equation'].value),
+            np.ravel(residue_dict['nd equation'].value),
+        ))
     )
 
 
