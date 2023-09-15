@@ -332,7 +332,7 @@ class Module(LoggerContext, VisitedComponent, metaclass=abc.ABCMeta):
 
         specific_order = None
         if execution_index is not None:
-            check_arg(execution_index, 'execution_index', Integral, lambda i: i >= 0)
+            check_arg(execution_index, 'execution_index', Integral)
             specific_order = list(self.exec_order)
             specific_order.insert(execution_index, child.name)
 
