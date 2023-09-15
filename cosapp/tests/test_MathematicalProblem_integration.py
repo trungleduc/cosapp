@@ -175,9 +175,9 @@ def test_MathematicalProblem_repr_1(s1: System, caplog):
         "a.p.x",
     }
     pattern = "\n".join([
-        r"Unknowns",
+        r"Unknowns \[1\]",
         r"  a\.p\.x = .*",
-        r"Equations",
+        r"Equations \[2\]",
         r"  foo\.beq: v\[::2\] == \[0, 1\] := \[.* .*\]",
     ])
     assert re.match(pattern, repr(problem))
@@ -217,11 +217,11 @@ def test_MathematicalProblem_repr_2(s1: System, caplog):
         "b.width",
     }
     pattern = "\n".join([
-        r"Unknowns",
+        r"Unknowns \[3\]",
         r"  b\.width = .*",
         r"  a\.p\.y = .*",
         r"  a\.p\.x = .*",
-        r"Equations",
+        r"Equations \[3\]",
         r"  b\.area == 10 := .*",
         r"  foo\.beq: v\[::2\] == \[0, 1\] := \[.* .*\]",
     ])
@@ -273,14 +273,14 @@ def test_MathematicalProblem_repr_3(s1: System, caplog):
         "point1[a.aun.u[-1]]",
     }
     pattern = "\n".join([
-        r"Unknowns",
+        r"Unknowns \[6\]",
         r"  b\.width = .*",
         r"  b\.length = .*",
         r"  point1\[a\.aun\.u\[-1\]\] = \[.*\]",
         r"  point1\[a\.p\.x\] = .*",
         r"  foo\.xyz_in\.y = .*",
         r"  point2\[a\.p\.x\] = .*",
-        r"Equations",
+        r"Equations \[8\]",
         r"  point1\[a\.z == 0\] := .*",
         r"  point1\[foo\.beq: v\[::2\] == \[0, 1\]\] := \[.* .*\]",
         r"  point1\[q_out\.a == x \+ y\] := .*",
@@ -297,7 +297,7 @@ def test_MathematicalProblem_repr_4(s2: System):
     """
     problem = s2.assembled_problem()
     assert repr(problem) == "\n".join([
-        "Equations",
+        "Equations [5]",
         "  sub.z == 0.12 (target)",
         "  out.a == 3.14 (target)",
         "  abs(out.b) == 2.3 (target)",
@@ -314,7 +314,7 @@ def test_MathematicalProblem_repr_5(s2: System):
         driver.setup_run()
     problem = solver.problem
     assert repr(problem) == "\n".join([
-        "Equations",
+        "Equations [5]",
         "  sub.z == 0.12 := 0.0",
         "  out.a == 3.14 := 0.0",
         "  abs(out.b) == 2.3 := 0.0",
@@ -330,35 +330,33 @@ def test_MathematicalProblem_repr_6(s2: System):
     point1 = solver.add_driver(RunSingleCase('point1'))
     point2 = solver.add_driver(RunSingleCase('point2'))
 
-    # TODO: allow outputs in RunSingleCase.set_init,
-    #       to set different targets in different points.
-    # point1.set_init({
-    #     'sub.z': 0.12,
-    #     'out.a': 3.14,
-    #     'out.b': -2.3,
-    #     'out.c': np.r_[0.1, 0.2, 0.3, 0.4],
-    # })
-    # point2.set_init({
-    #     'sub.z': 0.0,
-    #     'out.a': 0.0,
-    #     'out.b': 0.0,
-    #     'out.c': np.ones(4),
-    # })
+    point1.set_init({
+        'sub.z': 0.12,
+        'out.a': 3.14,
+        'out.b': -7.3,
+        'out.c': np.r_[0.1, 0.2, 0.3, 0.4],
+    })
+    point2.set_init({
+        'sub.z': 0.0,
+        'out.a': 0.5,
+        'out.b': 0.0,
+        'out.c': np.ones(4),
+    })
 
     for driver in solver.tree():
         driver.setup_run()
 
     # print(solver.problem)
     assert repr(solver.problem) == "\n".join([
-        "Equations",
+        "Equations [10]",
         #  point1 equations
         "  point1[sub.z == 0.12] := 0.0",
         "  point1[out.a == 3.14] := 0.0",
-        "  point1[abs(out.b) == 2.3] := 0.0",
+        "  point1[abs(out.b) == 7.3] := 0.0",
         "  point1[out.c[::2] == array([0.1, 0.3])] := [0. 0.]",
         #  point2 equations
-        "  point2[sub.z == 0.12] := 0.0",
-        "  point2[out.a == 3.14] := 0.0",
-        "  point2[abs(out.b) == 2.3] := 0.0",
-        "  point2[out.c[::2] == array([0.1, 0.3])] := [0. 0.]",
+        "  point2[sub.z == 0.0] := 0.0",
+        "  point2[out.a == 0.5] := 0.0",
+        "  point2[abs(out.b) == 0.0] := 0.0",
+        "  point2[out.c[::2] == array([1., 1.])] := [0. 0.]",
     ])
