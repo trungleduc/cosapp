@@ -296,10 +296,23 @@ def test_Module_exec_order(composite, child_name, values, expected):
         assert exec_order == list(system.children)
 
 
+def test_Module_execution_index_values():
+    parent = Module("parent")
+
+    parent.add_child(Module("a"))
+    parent.add_child(Module("b"), execution_index=0)
+    assert list(parent.exec_order) == ["b", "a"]
+
+    parent.add_child(Module("c"), execution_index=-1)
+    assert list(parent.exec_order) == ["b", "c", "a"]
+
+    parent.add_child(Module('d'), execution_index=-42)
+    assert list(parent.exec_order) == ["d", "b", "c", "a"]
+
+
 @pytest.mark.parametrize("names", itertools.permutations(['aa', 'ab', 'ac']))
 def test_Module_exec_order_perms(composite, names):
     composite.exec_order = names
-    print(type(composite.exec_order))
     assert isinstance(composite.exec_order, MappingView)
     exec_order = list(composite.exec_order)
     assert exec_order == list(names)
