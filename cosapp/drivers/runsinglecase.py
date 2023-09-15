@@ -1,5 +1,5 @@
 import numpy
-from typing import Any, Iterable, Dict, Optional, Union, List
+from typing import Any, Iterable, Dict, Optional, Union, List, Set
 
 from cosapp.core.eval_str import AssignString
 from cosapp.core.numerics.basics import MathematicalProblem
@@ -11,6 +11,23 @@ from cosapp.utils.helpers import check_arg
 
 import logging
 logger = logging.getLogger(__name__)
+
+
+def get_target_varnames(problem: MathematicalProblem) -> Set[str]:
+    """Extract the names of all variables involved in targets within `problem`.
+
+    Parameters:
+    -----------
+    problem [MathematicalProblem]
+
+    Returns:
+    --------
+    set[str]: set of variable names.
+    """
+    varnames = set()
+    for residue in problem.deferred_residues.values():
+        varnames |= residue.variables
+    return varnames
 
 
 class RunSingleCase(IterativeCase):
@@ -90,11 +107,8 @@ class RunSingleCase(IterativeCase):
 
     def __activate_targets(self) -> None:
         """Activate targets in processed problems"""
-        extract_targets = lambda problem: set(
-            r.target for r in problem.deferred_residues.values()
-        )
         target_names = set.union(
-            *map(extract_targets, self.__processed.problems)
+            *map(get_target_varnames, self.__processed.problems)
         )
         if target_names:
             # Set init values corresponding to targetted variables

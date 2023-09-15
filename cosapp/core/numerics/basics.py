@@ -134,12 +134,12 @@ class MathematicalProblem:
             return f"{indent}{key} = {value}"
 
         if self.unknowns:
-            lines.append("Unknowns")
+            lines.append(f"Unknowns [{self.n_unknowns}]")
             lines.extend(
                 map(format_unknown, self.unknowns.items())
             )
         if self.residues or self.deferred_residues:
-            lines.append("Equations")
+            lines.append(f"Equations [{self.n_equations}]")
             lines.extend(
                 f"{indent}{key} := {residue.value}"
                 for key, residue in self.residues.items()
