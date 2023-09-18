@@ -1,5 +1,19 @@
 # History
 
+## 0.15.1 (2023-09-18)
+
+### New features & API changes
+
+- The representation of `MathematicalProblem` objects now indicates the number of unknowns and equations, for a better readability (MR [#249](https://gitlab.com/cosapp/cosapp/-/merge_requests/249)).
+- Optional argument `execution_index` in `System.add_child` and `Driver.add_child` can now take a negative value, with a behaviour following that of `list.insert` (MR [#250](https://gitlab.com/cosapp/cosapp/-/merge_requests/250)).
+
+### Bug fixes and code quality
+
+- Add missing field "time" in `ExplicitTimeRecorder.event_data`, when no recorder is set (MR [#245](https://gitlab.com/cosapp/cosapp/-/merge_requests/245)).
+- Fix bug with recorders inspecting systems with iterators (MRs [#246](https://gitlab.com/cosapp/cosapp/-/merge_requests/246) and [#247](https://gitlab.com/cosapp/cosapp/-/merge_requests/247)).
+- Fix bug with `NonLinearSolver` with NumPy array residues (MR [#248](https://gitlab.com/cosapp/cosapp/-/merge_requests/248)).
+- Fix initialization bug of targets involving expressions (MR [#249](https://gitlab.com/cosapp/cosapp/-/merge_requests/249)).
+
 ## 0.15.0 (2023-07-20)
 
 ### New features & API changes
