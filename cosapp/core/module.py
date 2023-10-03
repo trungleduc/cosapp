@@ -286,15 +286,22 @@ class Module(LoggerContext, VisitedComponent, metaclass=abc.ABCMeta):
         """Method called once after any simulation."""
         pass  # pragma: no cover
 
-    def get_path_to_child(self, other: Module) -> str:
+    def get_path_to_child(self, other: Module, trim_top=True) -> str:
         """
         Returns the relative path to target Module `other`.
         Raises `ValueError` if `other` is not related to current Module.
 
+        Parameters:
+        -----------
+        - other [Module]:
+            sub-module of module tree.
+        - trim_top [boll, optional]:
+            if `True`, the name of the top module (self) is added to the path.
+            Default is `False`.
+
         Returns
         -------
-        Roots
-            The relative path to `target`
+        str: The relative path to `other`
         """
         path = list()
         child = other
@@ -305,6 +312,8 @@ class Module(LoggerContext, VisitedComponent, metaclass=abc.ABCMeta):
                 raise ValueError(
                     f"{other.name!r} is not a child of {self.name!r}."
                 )
+        if not trim_top:
+            path.append(self.name)
         return ".".join(reversed(path))
 
     def add_child(self, child: Child, execution_index: Optional[int]=None, desc="") -> Child:
