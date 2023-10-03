@@ -243,6 +243,13 @@ def test_Module_get_path_to_child(Russian_dolls):
     assert b.get_path_to_child(c) == "c"
     assert b.get_path_to_child(d) == "c.d"
 
+    assert a.get_path_to_child(a, trim_top=False) == "a"
+    assert a.get_path_to_child(b, trim_top=False) == "a.b"
+    assert a.get_path_to_child(c, trim_top=False) == "a.b.c"
+    assert a.get_path_to_child(d, trim_top=False) == "a.b.c.d"
+    assert b.get_path_to_child(c, trim_top=False) == "b.c"
+    assert b.get_path_to_child(d, trim_top=False) == "b.c.d"
+
     with pytest.raises(ValueError, match="not a child of 'b'"):
         b.get_path_to_child(a)
 
