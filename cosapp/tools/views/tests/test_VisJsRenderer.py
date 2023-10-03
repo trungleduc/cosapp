@@ -1,7 +1,7 @@
 import pytest
 
 from cosapp.base import System
-from cosapp.tests.library.systems import FanComplex
+from cosapp.tests.library.systems import FanComplex, ComplexTurbofan
 from cosapp.tools.views.visjs import VisJsRenderer
 from cosapp.utils.testing import no_exception, assert_keys
 
@@ -81,3 +81,74 @@ def test_VisJsRenderer_get_system_title():
     assert visjs.get_system_title(sub2) == "sub2 - Sub2"
     with pytest.raises(ValueError, match="not a child"):
         visjs.get_system_title(head)
+
+
+def test_VisJsRenderer_get_data():
+    turbofan = ComplexTurbofan("turbofan")
+
+    visjs = VisJsRenderer(turbofan)
+    data = visjs.get_data()
+    assert set(data) == {
+        "title",
+        "nodes",
+        "edges",
+        "groups",
+    }
+    assert set(data["groups"]) == {
+        "turbofan",
+        "turbofan.fanC",
+        "turbofan.fanC.ductC",
+    }
+    assert set(node["title"] for node in data["nodes"]) == {
+        # Systems:
+        "turbofan - ComplexTurbofan",
+        "atm - Atm",
+        "inlet - Inlet",
+        "fanC - FanComplex",
+        "fanC.ductC - ComplexDuct",
+        "fanC.ductC.merger - Merger",
+        "fanC.ductC.duct - Duct",
+        "fanC.ductC.bleed - Splitter",
+        "fanC.fan - Fan",
+        "merger - Merger",
+        "duct - Duct",
+        "bleed - Splitter",
+        "noz - Nozzle",
+        # Ports:
+        "fanC.inwards",
+        "fanC.fl_out - FluidPort",
+        "fanC.fl_in - FluidPort",
+        "fanC.mech_in - MechPort",
+        "fanC.ductC.fl_out - FluidPort",
+        "fanC.ductC.fl_in - FluidPort",
+    }
+
+    # Test on sub-system
+    visjs = VisJsRenderer(turbofan.fanC)
+    data = visjs.get_data()
+    assert set(data) == {
+        "title",
+        "nodes",
+        "edges",
+        "groups",
+    }
+    assert set(data["groups"]) == {
+        "fanC",
+        "fanC.ductC",
+    }
+    assert set(node["title"] for node in data["nodes"]) == {
+        # Systems:
+        "fanC - FanComplex",
+        "ductC - ComplexDuct",
+        "ductC.merger - Merger",
+        "ductC.duct - Duct",
+        "ductC.bleed - Splitter",
+        "fan - Fan",
+        # Ports:
+        "fanC.inwards",
+        "fanC.fl_in - FluidPort",
+        "fanC.fl_out - FluidPort",
+        "fanC.mech_in - MechPort",
+        "fanC.ductC.fl_out - FluidPort",
+        "fanC.ductC.fl_in - FluidPort",
+    }
