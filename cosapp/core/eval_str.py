@@ -5,6 +5,7 @@ This code is inspired from the OpenMDAO module openmdao.components.exec_comp.
 """
 import re
 import numpy
+from enum import Enum
 from numbers import Number
 from typing import Any, Dict, Iterable, Optional, Tuple, Union, Callable, FrozenSet
 
@@ -256,7 +257,6 @@ class EvalString:
         Compiles an expression, and checks that it is evaluable within a given context.
         """
         from cosapp.systems import System
-        from cosapp.ports.port import BasePort
         if not isinstance(context, System):
             cname = type(context).__name__
             raise TypeError(
@@ -272,6 +272,10 @@ class EvalString:
         # Look for the requested variables
         global_dict = self.available_symbols()
         self.__locals = local_dict = ContextLocals(context)  # type: ContextLocals
+        if isinstance(expression, Enum):
+            etype = type(expression)
+            global_dict = global_dict.copy()
+            global_dict[etype.__name__] = etype
         value = eval(code, global_dict, local_dict)
         
         self.__attr = None  # type: FrozenSet[str]
@@ -314,7 +318,7 @@ class EvalString:
             # Include a substitution pass to make sure that no spaces are left
             # between objects and attributes, that is "foo.bar" instead of "foo .  bar"
             return re.sub("(?![0-9]) *\. *(?![0-9])", ".", expression.strip())
-        elif isinstance(expression, EvalString):
+        elif isinstance(expression, (EvalString, Enum)):
             return str(expression)
         else:
             return repr(expression)
