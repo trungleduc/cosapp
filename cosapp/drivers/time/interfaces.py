@@ -440,13 +440,15 @@ class ExplicitTimeDriver(Driver):
         from cosapp.systems import System
         
         for system in self.owner.tree():
-            name = system.full_name()
+            system.retrieve_incoming_data()
             port = system[System.MODEVARS_OUT]
-            for variable in port.variables():
-                variable.initialize()
-                logger.debug(
-                    f"Mode variable {name}.{variable.name} set to {variable.value}"
-                )
+            if len(port) > 0:
+                name = system.full_name()
+                for variable in port.variables():
+                    variable.initialize()
+                    logger.debug(
+                        f"Mode variable {name}.{variable.name} set to {variable.value}"
+                    )
 
     def _synch_transients(self):
         """Re-synch stacked unknowns with root variables"""
