@@ -2153,8 +2153,15 @@ class System(Module, TimeObserver):
         """
         pass
 
-    def tree_transition(self):
+    def retrieve_incoming_data(self) -> None:
+        """Transfer data from all incoming connectors"""
+        for connector in self.incoming_connectors():
+            connector.transfer()
+
+    def tree_transition(self) -> None:
+        """Invoke transition in entire system tree"""
         for system in self.tree():
+            system.retrieve_incoming_data()
             with system.__free_problem:
                 system.transition()
 
