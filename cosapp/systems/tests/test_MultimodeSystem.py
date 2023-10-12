@@ -1,12 +1,15 @@
 import pytest
 import numpy as np
 from contextlib import nullcontext as does_not_raise
+from enum import Enum
 
 from cosapp.base import System, Port
 from cosapp.multimode.event import Event
 from cosapp.ports.connectors import ConnectorError, BaseConnector
 from cosapp.ports.mode_variable import ModeVariable
 from cosapp.utils.testing import assert_keys, get_args
+from cosapp.drivers import EulerExplicit
+from cosapp.recorders import DataFrameRecorder
 
 
 class BasicMultimodeSystem(System):
@@ -251,7 +254,7 @@ def test_MultimodeSystem_modevar_connection(mixed, child1, child2, mapping, expe
         mixed.connect(mixed[child1], mixed[child2], mapping)
 
 
-def test_MultimodeSystem_modevar_connection_in_in(mixed):
+def test_MultimodeSystem_modevar_connection_in_in(mixed: System):
     """Input/input connections (thus causing pulling) involving
     mode variables and continuous time variables.
 
@@ -301,3 +304,69 @@ def test_MultimodeSystem_modevar_pulling_attr():
     assert isinstance(m, ModeVariable)
     assert m.unit == ''
     assert m.description == 'System state'
+
+
+def test_MultimodeSystem_mode_manager():
+    """Test a pattern in which a mode manager transfers
+    a mode variable to a sibling multimode system.
+
+    The multimode system is expected to be in synch with
+    the mode manager at each transition.
+    """
+    class ModeManager(System):
+        def setup(self):
+            self.add_inward('x', 0.0)
+            self.add_event('pif', trigger="x > 1")
+            self.add_event('paf', trigger="x < 1")
+            self.add_event('zap', trigger="x > 2")
+            self.add_outward_modevar('mode', init=0, dtype=int)
+
+        def transition(self) -> None:
+            if self.pif.present:
+                self.mode = 1
+            if self.paf.present:
+                self.mode = 0
+            if self.zap.present:
+                self.mode = 2
+    
+    class MultimodeSystem(System):
+        def setup(self):
+            self.add_inward_modevar("mode", value=2)
+            self.add_outward_modevar("state", init="get_state(mode)")
+
+        @staticmethod
+        def get_state(mode) -> float:
+            if mode == 0:
+                state = "A"
+            elif mode == 1:
+                state = "B"
+            elif mode == 2:
+                state = "C"
+            else:
+                raise ValueError
+            return state
+
+        def transition(self) -> None:
+            self.state = self.get_state(self.mode)
+
+    class TopSystem(System):
+        def setup(self) -> None:
+            self.add_child(ModeManager('manager'))
+            self.add_child(MultimodeSystem('foo'))
+
+            self.connect(self.manager, self.foo, 'mode')
+    
+    s = TopSystem('s')
+    driver = s.add_driver(EulerExplicit(dt=0.1, time_interval=(0, 1)))
+    driver.add_recorder(DataFrameRecorder(), period=driver.dt)
+    driver.set_scenario(
+        values={
+            'manager.x': '3 * t',  # mode changes @ t=1/3 and 2/3
+        }
+    )
+
+    s.run_drivers()
+
+    data = driver.recorder.export_data()
+    assert all(data['foo.mode'] == data['manager.mode'])
+    assert all(list(map(s.foo.get_state, data['foo.mode'])) == data['foo.state'])
