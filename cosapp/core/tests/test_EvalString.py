@@ -320,3 +320,16 @@ def test_EvalString_variables(eval_context, expression, expected: Dict[str, Set[
     e = EvalString(expression, eval_context)
     assert e.variables() == expected['variables']
     assert e.variables(include_const=True) == all_required
+
+
+def test_EvalString_enum(eval_context):
+    """Test the evaluation of enum members."""
+    from enum import Enum
+
+    class Mode(Enum):
+        A = 0
+        B = 1
+
+    s = EvalString(Mode.A, eval_context)
+    assert s.constant
+    assert s.eval() is Mode.A
