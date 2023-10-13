@@ -19,6 +19,7 @@ from typing import (
     Any, Callable, ClassVar, Dict, FrozenSet,
     Iterable, Iterator, List, Type,
     Optional, Tuple, Union, TypeVar,
+    Collection,
 )
 from types import MappingProxyType
 
@@ -1513,7 +1514,7 @@ class System(Module, TimeObserver):
     def add_child(self,
         child: AnySystem,
         execution_index: Optional[int] = None,
-        pulling: Optional[Union[str, List[str], Dict[str, str]]] = None,
+        pulling: Optional[Union[str, Collection[str], Dict[str, str]]] = None,
         desc: str = "",
     ) -> AnySystem:
         """Add a child `System` to the current `System`.
@@ -1545,7 +1546,7 @@ class System(Module, TimeObserver):
         """
         # Type validation
         check_arg(child, 'child', System)
-        check_arg(pulling, 'pulling', (type(None), str, list, dict, set))
+        check_arg(pulling, 'pulling', (type(None), str, Collection))
 
         child = super().add_child(child, execution_index, desc)
 
