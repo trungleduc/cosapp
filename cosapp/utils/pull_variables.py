@@ -1,12 +1,12 @@
 import logging
-from typing import Any, List, Union, Sequence, Dict
+from typing import Any, Union, Collection, Dict
 
 logger = logging.getLogger(__name__)
 
 
 def pull_variables(
     child: "cosapp.systems.System", 
-    pulling: Union[str, List[str], Dict[str, str]],
+    pulling: Union[str, Collection[str], Dict[str, str]],
 ):
     """Pull variables from child to the parent.
 
@@ -62,9 +62,12 @@ def pull_variables(
             f"{parent.name}.{child.name}.{child_var}",
         )
 
+    # Transform pulling into a name mapping (dict)
     if isinstance(pulling, str):
-        pulling = [pulling]
-    if isinstance(pulling, Sequence):
+        pulling = {pulling: pulling}
+    elif isinstance(pulling, dict):
+        pass
+    elif isinstance(pulling, Collection):
         pulling = dict(zip(pulling, pulling))
 
     for child_attr_name, parent_attr_name in pulling.items():

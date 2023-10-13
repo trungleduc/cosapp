@@ -278,20 +278,20 @@ def test_System___setattr__():
 
 
 def test_System___contains__():
-    Top = DummySystemFactory("Top",
-        inwards = get_args('x', 1.0),
-        outwards = get_args('y', 0.0),
-        properties = get_args('const', 0.123),
-        events = get_args('boom', trigger="y > x"),
-    )
     Sub = DummySystemFactory("Sub",
         inputs = get_args(DummyPort, 'p_in'),
         outputs = get_args(DummyPort, 'p_out'),
         modevars_in = get_args('m_in', True),
         modevars_out = get_args('m_out', init=0, dtype=int),
     )
+    Top = DummySystemFactory("Top",
+        children = get_args(Sub('sub'), pulling=['p_in', 'p_out', 'm_out']),
+        inwards = get_args('x', 1.0),
+        outwards = get_args('y', 0.0),
+        properties = get_args('const', 0.123),
+        events = get_args('boom', trigger="y > x"),
+    )
     top = Top("top")
-    top.add_child(Sub('sub'), pulling=['p_in', 'p_out', 'm_out'])
 
     assert "x" in top
     assert "y" in top
@@ -354,21 +354,20 @@ def test_System__repr__():
 
 
 def test_System_ports():
-    Top = DummySystemFactory("Top",
-        inwards = get_args('x', 1.0),
-        outwards = get_args('y', 0.0),
-        properties = get_args('const', 0.123),
-        events = get_args('boom', trigger="y > x"),
-    )
     Sub = DummySystemFactory("Sub",
         inputs = get_args(DummyPort, 'p_in'),
         outputs = get_args(DummyPort, 'p_out'),
         modevars_in = get_args('m_in', True),
         modevars_out = get_args('m_out', init=0, dtype=int),
     )
+    Top = DummySystemFactory("Top",
+        children = get_args(Sub('sub'), pulling={'p_in': 'q_in', 'm_out': 'mod_out'}),
+        inwards = get_args('x', 1.0),
+        outwards = get_args('y', 0.0),
+        properties = get_args('const', 0.123),
+        events = get_args('boom', trigger="y > x"),
+    )
     top = Top('top')
-    sub = top.add_child(Sub('sub'), pulling={'p_in': 'q_in', 'm_out': 'mod_out'})
-
     assert set(map(get_name, top.ports())) == {
         'inwards',
         'outwards',
@@ -376,7 +375,7 @@ def test_System_ports():
         'modevars_out',
         'q_in',
     }
-    assert set(map(get_name, sub.ports())) == {
+    assert set(map(get_name, top.sub.ports())) == {
         'inwards',
         'outwards',
         'modevars_in',
@@ -389,12 +388,6 @@ def test_System_ports():
 def test_System__dir__():
     """Test function dir(), useful for autocompletion
     """
-    Top = DummySystemFactory("Top",
-        inwards = get_args('x', 1.0),
-        outwards = get_args('y', 0.0),
-        properties = get_args('const', 0.123),
-        events = get_args('boom', trigger="y > x"),
-    )
     Sub = DummySystemFactory("Sub",
         inputs = get_args(DummyPort, 'p_in'),
         outputs = get_args(DummyPort, 'p_out'),
@@ -404,9 +397,17 @@ def test_System__dir__():
     Foo = DummySystemFactory("Foo",
         inwards = get_args('x', np.zeros(3)),
     )
+    Top = DummySystemFactory("Top",
+        children = [
+            get_args(Sub('sub'), pulling={'p_in': 'q_in', 'm_out': 'mod_out'}),
+            get_args(Foo('foo'), pulling={'x': 'u'}),
+        ],
+        inwards = get_args('x', 1.0),
+        outwards = get_args('y', 0.0),
+        properties = get_args('const', 0.123),
+        events = get_args('boom', trigger="y > x"),
+    )
     top = Top('top')
-    top.add_child(Sub('sub'), pulling={'p_in': 'q_in', 'm_out': 'mod_out'})
-    top.add_child(Foo('foo'), pulling={'x': 'u'})
 
     members = set(dir(top)) - set(dir(System))
     assert members == {
@@ -537,6 +538,10 @@ def test_System_add_child():
 
 
 def test_System_add_child_pulling(caplog, DummyFactory):
+    """Test pulling given as a name or a name mapping (dictionary).
+    Note: collections of strings, such as list, tuple or sets, are
+    tested in `test_System_add_child_pulling_collection`.
+    """
     caplog.set_level(logging.DEBUG)
 
     s = System("s")
@@ -580,31 +585,6 @@ def test_System_add_child_pulling(caplog, DummyFactory):
     assert s_in.direction is s2.inputs['in_'].direction
     connectors = s.connectors()
     assert s_in is connectors["in_ -> sub.in_"].source
-
-    # Use list of str
-    s = System("s")
-    s2 = s.add_child(SubSystem("sub"), pulling=["in_", "out"])
-    assert_keys(s.inputs, 'in_', 'inwards', 'modevars_in')
-    # Check pulled symbol 'in_'
-    s_in = s.inputs['in_']
-    assert s_in is s.inputs['in_']
-    assert s_in is not s2.inputs['in_']
-    assert isinstance(s_in, type(s2.inputs['in_']))
-    assert s_in.direction is s2.inputs['in_'].direction
-    connectors = s.connectors()
-    assert set(connectors) == {
-        "in_ -> sub.in_",
-        "sub.out -> out",
-    }
-    assert s_in is connectors["in_ -> sub.in_"].source
-    # Check pulled symbol 'out'
-    assert_keys(s.outputs, 'outwards', 'modevars_out', 'out')
-    s_out = s.outputs['out']
-    assert s_out is s.outputs['out']  # check that assignment did not create a copy!
-    assert s_out is not s2.outputs['out']
-    assert isinstance(s_out, type(s2.outputs['out']))
-    assert s_out.direction is s2.outputs['out'].direction
-    assert s2.outputs["out"] is connectors["sub.out -> out"].source
 
     # Pulling from 2 children IN to same IN
     s = System("s")
@@ -733,6 +713,38 @@ def test_System_add_child_pulling(caplog, DummyFactory):
     s = TopSystem("s")
     with pytest.raises(TypeError):
         s.add_child(Driver("dummy"))
+
+
+@pytest.mark.parametrize("collection", [list, tuple, set, lambda s: dict(zip(s, s))])
+def test_System_add_child_pulling_collection(collection):
+    """Test pulling given as a collection of strings,
+    as defined by `collections.abc.Collection` (sized, iterable container).
+    Related to https://gitlab.com/cosapp/cosapp/-/issues/127
+    """
+    # Use list of str
+    s = System("s")
+    s2 = s.add_child(SubSystem("sub"), pulling=collection(["in_", "out"]))
+    assert set(s.inputs) == {'in_', 'inwards', 'modevars_in'}
+    # Check pulled symbol 'in_'
+    s_in = s.inputs['in_']
+    assert s_in is s.inputs['in_']
+    assert s_in is not s2.inputs['in_']
+    assert isinstance(s_in, type(s2.inputs['in_']))
+    assert s_in.direction is s2.inputs['in_'].direction
+    connectors = s.connectors()
+    assert set(connectors) == {
+        "in_ -> sub.in_",
+        "sub.out -> out",
+    }
+    assert s_in is connectors["in_ -> sub.in_"].source
+    # Check pulled symbol 'out'
+    assert set(s.outputs) == {'outwards', 'modevars_out', 'out'}
+    s_out = s.outputs['out']
+    assert s_out is s.outputs['out']  # check that assignment did not create a copy!
+    assert s_out is not s2.outputs['out']
+    assert isinstance(s_out, type(s2.outputs['out']))
+    assert s_out.direction is s2.outputs['out'].direction
+    assert s2.outputs["out"] is connectors["sub.out -> out"].source
 
 
 @pytest.mark.parametrize("args", [
