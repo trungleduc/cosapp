@@ -914,30 +914,6 @@ def test_System_add_data(DummyFactory):
     assert details.scope == Scope.PRIVATE
 
 
-# @pytest.mark.parametrize("inputs, inwards, error", [
-#     (get_args(System, "s"), None, TypeError),
-#     (get_args(VPort("p", PortType.IN), "s"), None, TypeError),
-#     (get_args(VPort, None), None, TypeError),
-#     (get_args(VPort, "p", variables=[24, "a"]), None, TypeError),
-#     (get_args(VPort, "b"), get_args("b"), ValueError),
-# ])
-# def test_System_add_input_error(inputs, inwards, error):
-#     with pytest.raises(error):
-#         DummySystemFactory("Dummy", inputs=inputs, inwards=inwards)
-
-
-# @pytest.mark.parametrize("outputs, inwards, error", [
-#     (get_args(System, "s"), None, TypeError),
-#     (get_args(VPort("p", PortType.IN), "s"), None, TypeError),
-#     (get_args(VPort, None), None, TypeError),
-#     (get_args(VPort, "p", variables=[24, "a"]), None, TypeError),
-#     (get_args(VPort, "b"), get_args("b"), ValueError),
-# ])
-# def test_System_add_output_error(outputs, inwards, error):
-#     with pytest.raises(error):
-#         DummySystemFactory("Dummy", outputs=outputs, inwards=inwards)
-
-
 @pytest.mark.parametrize("port_kind", ["inputs", "outputs"])
 @pytest.mark.parametrize("case_data, error", [
     # in values below, "io_port" key will be substituted by `port_kind`
@@ -967,27 +943,66 @@ def test_System_input_output_error(DummyFactory, port_kind, case_data, error):
         DummyFactory("dummy", **ctor_data)
 
 
-@pytest.mark.parametrize("data_kind", ["inwards", "outwards"])
-@pytest.mark.parametrize("port_kind", ["inputs", "outputs"])
-@pytest.mark.parametrize("case_data, match", [
-    # in values below, "io_port" key will be substituted by `port_kind`
-    # in values below, "io_data" key will be substituted by `data_kind`
-    (
-        dict(
-            io_port = get_args(VPort, "foo"),
-            io_data = get_args("foo"),
-        ),
-        "dummy.foo already exists"
-    ),
-])
-def test_System_existing_name(DummyFactory, port_kind, data_kind, case_data, match):
-    # swap keys "io_port" and `port_kind` (either "inputs or "outputs")
-    # swap keys "io_data" and `data_kind` (either "inwards or "outwards")
-    ctor_data = case_data.copy()
-    ctor_data[port_kind] = ctor_data.pop("io_port", None)
-    ctor_data[data_kind] = ctor_data.pop("io_data", None)
-    with pytest.raises(ValueError, match=match):
-        DummyFactory("dummy", **ctor_data)
+@pytest.mark.parametrize(
+    "first, end", [
+        (dict(inwards='x'), "already exists as an inward"),
+        (dict(outwards='x'), "already exists as an outward"),
+        (dict(inputs=get_args(DummyPort, 'x')), "already exists as an input DummyPort"),
+        (dict(outputs=get_args(DummyPort, 'x')), "already exists as an output DummyPort"),
+        (dict(properties=get_args('x', 1)), "already exists as a read-only property"),
+        (dict(events='x'), "already exists as an event"),
+    ]
+)
+@pytest.mark.parametrize(
+    "second, start", [
+        (dict(inwards='x'), "cannot add inward 'x'"),
+        (dict(outwards='x'), "cannot add outward 'x'"),
+        (dict(inputs=get_args(VPort, 'x')), "cannot add VPort 'x'"),
+        (dict(outputs=get_args(VPort, 'x')), "cannot add VPort 'x'"),
+        (dict(properties=get_args('x', 1)), "cannot add read-only property 'x'"),
+        (dict(events='x'), "cannot add event 'x'"),
+    ]
+)
+def test_System_existing_name(first, second, start, end):
+    """Test error message raised with incompatible system configurations.
+    Two different attributes, both named 'x', are added to a System class.
+    Related to https://gitlab.com/cosapp/cosapp/-/issues/128
+    """
+    def get_kind(d: dict) -> str:
+        return list(d)[0]
+    
+    key1 = get_kind(first)
+    key2 = get_kind(second)
+
+    if key1 == key2:
+        settings = {key1: [first[key1], second[key2]]}
+    else:
+        settings = {key1: first[key1], key2: second[key2]}
+    
+    Foo = DummySystemFactory("Foo", **settings)
+
+    with pytest.raises(ValueError, match=f"{start}.*{end}"):
+        Foo('foo')
+
+
+def test_System_pulling_error():
+    """Related to https://gitlab.com/cosapp/cosapp/-/issues/128
+    """
+    class Foo(System):
+        def setup(self):
+            self.add_inward('a')
+
+    class Bar(System):
+        def setup(self):
+            self.add_outward('a')
+
+    class Composite(System):
+        def setup(self):
+            self.add_child(Foo('foo'), pulling=['a'])
+            self.add_child(Bar('bar'), pulling=['a'])
+
+    with pytest.raises(ValueError, match="cannot add outward 'a'; s\.a already exists as an inward"):
+        Composite('s')
 
 
 @pytest.mark.parametrize("kind1", ["inwards", "outwards"])
@@ -1019,7 +1034,7 @@ def test_System_existing_data(DummyFactory, kind1, kind2):
     ),
     (
         dict(io_data = get_args("s1", "tag", dtype=float)),
-        dict(error=TypeError, match=r"Cannot set .*\.s1 of type float with a str")
+        dict(error=TypeError, match=r"Cannot set .* of type float with a str")
     ),
     (
         dict(io_data = [get_args("s1", 0.1), get_args("s1", 0.1)]),
