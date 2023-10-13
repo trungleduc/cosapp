@@ -176,7 +176,7 @@ def DummySystemFactory(
     """
     # mapping option / method
     # for example: `inputs` <-> `add_input`
-    struct_method_mapping = {
+    method_mapping = {
         "inputs": "add_input",
         "outputs": "add_output",
         "inwards": "add_inward",
@@ -187,32 +187,23 @@ def DummySystemFactory(
         "rates": "add_rate",
         "properties": "add_property",
         "children": "add_child",
-    }
-    extra_method_mapping = {
         "events": "add_event",
         "unknowns": "add_unknown",
         "equations": "add_equation",
         "targets": "add_target",
         "design_methods": "add_design_method",
     }
-    unknown_keys = set(settings).difference(
-        struct_method_mapping,
-        extra_method_mapping,
-    )
+    unknown_keys = set(settings).difference(method_mapping)
+
     if unknown_keys:
         warnings.warn(
             f"settings {sorted(unknown_keys)} are not supported."
         )
 
-    def attribute_dict(methods: Dict[str, str]) -> Dict[str, ArgsKwargs]:
-        """Create attribute dict according to attributes required in `settings`"""
-        return {
-            methods[name]: ctor_data
-            for name, ctor_data in settings.items() if name in methods
-        }
-
-    struct_methods = attribute_dict(struct_method_mapping)
-    extra_methods = attribute_dict(extra_method_mapping)
+    methods = {
+        method_mapping[name]: ctor_data
+        for name, ctor_data in settings.items() if name in method_mapping
+    }
 
     base_message = "argument `base` must be a type derived from `System`"
 
@@ -230,21 +221,17 @@ def DummySystemFactory(
     class Prototype(base):
         def setup(self, **kwargs):
             super().setup(**kwargs)
-            def add_attributes(method_dict: dict):
-                for method_name, values in method_dict.items():
-                    if values is None:
-                        continue
-                    if not isinstance(values, list):
-                        values = [values]
-                    for info in values:
-                        try:
-                            args, kwargs = info  # expects a list of (tuple, dict)
-                        except ValueError:
-                            args, kwargs = [info], {}  # fallback
-                        getattr(self, method_name)(*args, **kwargs)
-            # Add inputs, outputs, transients, etc.
-            add_attributes(struct_methods)
-            # Add unknowns, equations & design methods
-            add_attributes(extra_methods)
+
+            for method_name, values in methods.items():
+                if values is None:
+                    continue
+                if not isinstance(values, list):
+                    values = [values]
+                for info in values:
+                    try:
+                        args, kwargs = info  # expects a list of (tuple, dict)
+                    except ValueError:
+                        args, kwargs = [info], {}  # fallback
+                    getattr(self, method_name)(*args, **kwargs)
     
     return type(classname, (Prototype,), {})

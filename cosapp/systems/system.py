@@ -510,14 +510,24 @@ class System(Module, TimeObserver):
             variable_ref.value = value
 
     def __contains__(self, item: str) -> bool:
-        return any(
-            item in collection
-            for collection in (
-                self.name2variable,
-                self.__readonly,
-                self.__events,
-            )
-        )
+        try:
+            self.__find(item)
+        except AttributeError:
+            return False
+        else:
+            return True
+
+    def __find(self, name: str) -> Any:
+        for collection in (
+            self.name2variable,
+            self.__readonly,
+            self.__events,
+        ):
+            try:
+                return collection[name]
+            except KeyError:
+                continue
+        raise AttributeError(name)
 
     def __getitem__(self, name: str) -> Any:
         try:
@@ -608,7 +618,7 @@ class System(Module, TimeObserver):
         """Create new read-only property `name`, set to `value`"""
         self.__lock_check("add_property")
         name = Variable.name_check(name)
-        self.__check_attr(name, f"cannot add read-only property {name!r};")
+        self.__check_attr(name, f"cannot add read-only property {name!r}")
         self.__readonly[name] = value
         self._add_member(name)
         cls = self.__class__
@@ -723,11 +733,7 @@ class System(Module, TimeObserver):
         port : `BasePort`
             instance of a port class
         """
-        if port.name in self:
-            ptype = type(port).__qualname__
-            raise ValueError(
-                f"Port {ptype} cannot be added as there already exists an object within system named {port.name!r}"
-            )
+        self.__check_attr(port.name, f"cannot add {type(port).__qualname__} {port.name!r}")
 
         port.owner = self
         port.description = desc
@@ -765,12 +771,41 @@ class System(Module, TimeObserver):
 
     def __check_attr(self, name: str, prefix: str = "") -> None:
         """Raises ValueError if attribute `name` already exists in system"""
-        if name in self:
-            message = f"{self.name}.{name} already exists"
-            prefix = prefix.strip()
-            if prefix:
-                message = f"{prefix} {message}"
-            raise ValueError(message)
+        try:
+            obj = self.__find(name)
+        except AttributeError:
+            return  # attribute does not exist - OK
+        
+        if isinstance(obj, VariableReference):
+            if obj.context is self:
+                value = obj.value
+                if isinstance(value, Port):
+                    pdir = "input" if value.is_input else "output"
+                    suffix = f"as an {pdir} {type(value).__name__}"
+                elif isinstance(value, System):
+                    suffix = f"as a sub-system {type(value).__name__}"
+                else:
+                    port = obj.mapping
+                    if port is self.inputs[System.INWARDS]:
+                        suffix = "as an inward"
+                    elif port is self.outputs[System.OUTWARDS]:
+                        suffix = "as an outward"
+            else:
+                suffix = ""
+
+        elif isinstance(obj, Event):
+            suffix = f"as an event"
+
+        else:
+            suffix = "as a read-only property"
+
+        message = f"{self.name}.{name} already exists"
+        prefix = prefix.strip()
+        if prefix:
+            message = f"{prefix}; {message}"
+        if suffix:
+            message = f"{message} {suffix}"
+        raise ValueError(f"{message}.")
 
     def add_inward(self,
         definition: Union[str, Dict[str, Any]],
@@ -854,7 +889,7 @@ class System(Module, TimeObserver):
             scope: Scope = Scope.PRIVATE,
         ) -> None:
 
-            self.__check_attr(name, f"cannot add inward {name!r};")
+            self.__check_attr(name, f"cannot add inward {name!r}")
 
             inputs = self.inputs
 
@@ -1138,7 +1173,7 @@ class System(Module, TimeObserver):
         >>> system.add_rate('dUdt', source='U')  # dUdt defined as dU/dt
         """
         check_arg(name, "name", str)
-        self.__check_attr(name, f"cannot add rate {name!r};")
+        self.__check_attr(name, f"cannot add rate {name!r}")
 
         _, src_value, dtype = TimeDerivative.source_type(source, self)
 
@@ -1797,7 +1832,7 @@ class System(Module, TimeObserver):
         # Type and name validation
         check_arg(name, 'name', str)
         name = Variable.name_check(name)
-        self.__check_attr(name, f"cannot add event {name!r};")
+        self.__check_attr(name, f"cannot add event {name!r}")
 
         # Event creation
         self.__events[name] = event = Event(name, self, desc, trigger, final)
@@ -1868,7 +1903,7 @@ class System(Module, TimeObserver):
 
         # Type validation
         check_arg(name, 'name', str)
-        self.__check_attr(name, f"cannot add inward {name!r};")
+        self.__check_attr(name, f"cannot add inward {name!r}")
 
         port = self.inputs[System.MODEVARS_IN]
         port.add_mode_variable(name, value, unit, dtype, desc, scope=scope)
@@ -1936,7 +1971,7 @@ class System(Module, TimeObserver):
 
         # Type validation
         check_arg(name, 'name', str)
-        self.__check_attr(name, f"cannot add outward {name!r};")
+        self.__check_attr(name, f"cannot add outward {name!r}")
     
         port = self.outputs[System.MODEVARS_OUT]
         port.add_mode_variable(name, value, unit, dtype, desc, init=init, scope=scope)
