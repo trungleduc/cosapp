@@ -1,5 +1,15 @@
 # History
 
+## 0.15.2 (2023-10-14)
+
+### Bug fixes
+
+- Fix crash with `VisJs` rendering of sub-systems (MR [#252](https://gitlab.com/cosapp/cosapp/-/merge_requests/252)).
+- Fix minor bug in `EvalString` (MR [#253](https://gitlab.com/cosapp/cosapp/-/merge_requests/253)).
+- Fix bad synchronization of mode variables during transitions (MR [#254](https://gitlab.com/cosapp/cosapp/-/merge_requests/254)).
+- Improve error message when pulling variables with different roles (MR [#255](https://gitlab.com/cosapp/cosapp/-/merge_requests/255)).
+- Fix `TypeError` when passing `pulling` argument as a tuple in `System.add_child` (MR [#256](https://gitlab.com/cosapp/cosapp/-/merge_requests/256)).
+
 ## 0.15.1 (2023-09-18)
 
 ### New features & API changes
