@@ -8,8 +8,8 @@ from struct import pack, unpack
 from threading import Timer
 from typing import Any, Dict, Optional
 
-import numpy.distutils
-from numpy.distutils.exec_command import find_executable
+import shutil
+from shutil import which
 
 from cosapp.systems.system import System
 from cosapp.utils.json import JSONEncoder
@@ -189,10 +189,7 @@ class TCPSystem(ExternalSystem):
         if not command:
             raise TypeError(f"Executable of external system {self.name!r} is not defined")
 
-        # Suppress message from find_executable function, we'll handle it
-        numpy.distutils.log.set_verbosity(-1)
-
-        command_full_path = find_executable(command)
+        command_full_path = which(command)
         if not command_full_path:
             raise ValueError(f"Requested command '{command}' cannot be found")
 

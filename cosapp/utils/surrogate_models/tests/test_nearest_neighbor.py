@@ -311,8 +311,8 @@ class TestRBFInterpolator1D(unittest.TestCase):
         self.assertTrue(np.allclose(mu, expected_y, rtol=1e-8, atol=1e-12))
 
     def test_jacobian(self):
-        from distutils.version import LooseVersion
-        if LooseVersion(np.__version__) >= LooseVersion("1.14"):
+        from packaging.version import Version
+        if Version(np.__version__) >= Version("1.14"):
             raise unittest.SkipTest("This test doesn't work in numpy 1.14.")
 
         test_x = np.array([[0.5], [2.5], [1.0]])
@@ -402,8 +402,8 @@ class TestRBFInterpolatorND(unittest.TestCase):
         self.assertTrue(np.allclose(mu, expected_y, rtol=1e-6))
 
     def test_jacobian(self):
-        from distutils.version import LooseVersion
-        if LooseVersion(np.__version__) >= LooseVersion("1.14"):
+        from packaging.version import Version
+        if Version(np.__version__) >= Version("1.14"):
             raise unittest.SkipTest("This test doesn't work in numpy 1.14.")
 
         test_x = np.array([[0.5, 0.5],
