@@ -1357,11 +1357,11 @@ class System(Module, TimeObserver):
         # MappingProxyType forbids external modification
         return MappingProxyType(self._math.rates)
 
-    def events(self) -> Iterator["cosapp.multimode.event.Event"]:
+    def events(self) -> Iterator[Event]:
         """Iterator on all events locally defined on system."""
         yield from self.__events.values()
 
-    def all_events(self) -> Iterator["cosapp.multimode.event.Event"]:
+    def all_events(self) -> Iterator[Event]:
         """Recursive iterator on all events in complete system tree."""
         for elem in self.tree():
             yield from elem.events()
