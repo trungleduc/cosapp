@@ -82,6 +82,25 @@ class QuadraticFunction(System):
         self.y = self.k * self.x**2 - self.a
 
 
+class AbcdFunction(System):
+    """Simple function x -> (a, b, c, d)
+    used in tests on singular problems.
+    """
+    def setup(self):
+        self.add_inward('x', np.ones(4))
+        self.add_outward('a', 0.0)
+        self.add_outward('b', 0.0)
+        self.add_outward('c', 0.0)
+        self.add_outward('d', 0.0)
+
+    def compute(self) -> None:
+        x = self.x
+        self.a = x[0] + x[1]
+        self.b = x[3]
+        self.c = x[3]**2
+        self.d = x[0] + x[3]
+
+
 @pytest.mark.parametrize(
     "method", NonLinearMethods
 )
@@ -1604,3 +1623,81 @@ def test_NonLinearSolver_ndarray_residue(shape):
 
     assert s.x == pytest.approx(np.full(shape, 0.2))
     assert s.y == pytest.approx(np.full(shape, 2.0))
+
+
+def test_NonLinearSolver_singular_problem_1(caplog):
+    """Singular problem, owing to unaffected residue.
+    """
+    system = QuadraticFunction('system')
+    solver = system.add_driver(NonLinearSolver('solver'))
+
+    solver.add_equation(["y == 2", "k == 1"])
+    solver.add_unknown(["x", "a"])
+
+    system.x = 1.0
+    system.a = -0.5
+    system.k = 0.1
+
+    caplog.clear()
+    with caplog.at_level(logging.ERROR, NonLinearSolver.__name__):
+        system.run_drivers()
+
+    assert solver.results.success == False
+    assert len(caplog.records) == 1
+    message = caplog.records[0].msg
+    assert re.match(
+        r".*residue.* not influenced: \['k == 1'\]",
+        message,
+        flags=re.DOTALL,  # match "\n" with "."
+    )
+
+
+def test_NonLinearSolver_singular_problem_2(caplog):
+    """Same as `test_NonLinearSolver_singular_problem_1`,
+    with several unaffected residues.
+    """
+    f = AbcdFunction('f')
+
+    f.x = np.r_[1.0, 2.0, 3.0, 4.0]
+
+    solver = f.add_driver(NonLinearSolver('solver'))
+    solver.add_equation(["a == 0", "b == 0", "c == 0"])
+    solver.add_unknown(["x[:3]"])
+
+    caplog.clear()
+    with caplog.at_level(logging.ERROR, NonLinearSolver.__name__):
+        f.run_drivers()
+
+    assert solver.results.success == False
+    assert len(caplog.records) == 1
+    message = caplog.records[0].msg
+    assert re.match(
+        r".*residue.* not influenced: \['b == 0', 'c == 0'\]",
+        message,
+        flags=re.DOTALL,  # match "\n" with "."
+    )
+
+
+def test_NonLinearSolver_singular_problem_3(caplog):
+    """Singular problem, owing to unknown with no influence.
+    """
+    f = AbcdFunction('f')
+
+    f.x = np.r_[1.0, 2.0, 3.0, 4.0]
+
+    solver = f.add_driver(NonLinearSolver('solver'))
+    solver.add_equation(["a == 1", "d == 1"])
+    solver.add_unknown(["x[0]", "x[2]"])
+
+    caplog.clear()
+    with caplog.at_level(logging.ERROR, NonLinearSolver.__name__):
+        f.run_drivers()
+
+    assert solver.results.success == False
+    assert len(caplog.records) == 1
+    message = caplog.records[0].msg
+    assert re.match(
+        r".*parameter.* no influence: \['x\[2\]'\]",
+        message,
+        flags=re.DOTALL,  # match "\n" with "."
+    )
