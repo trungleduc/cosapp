@@ -20,4 +20,4 @@ dependencies:
   - ipykernel
   - plotly
   - pyfmi
-  - pythonfmu~=0.6.0
+  - pythonfmu<0.6.3

@@ -5,7 +5,7 @@ stages:
   - deploy
 
 variables:
-  COSAPP_DEP: jsonschema numpy scipy pandas wrapt pytest jinja2 openpyxl pyfmi pythonfmu~=0.6.0
+  COSAPP_DEP: jsonschema numpy scipy pandas wrapt pytest jinja2 openpyxl pyfmi pythonfmu<0.6.3
   USER: "cosapp_test"
 
 # Test script for all OS
