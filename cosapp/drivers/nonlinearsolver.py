@@ -340,13 +340,15 @@ class NonLinearSolver(AbstractSolver):
 
                 error_desc = getattr(results, 'jac_errors', {})
                 if error_desc:
-                    if (indices := error_desc.get('unknowns', [])):
+                    indices = error_desc.get('unknowns', [])
+                    if len(indices) > 0:
                         unknown_names = self.problem.unknown_names()
                         error_msg += (
                             f" \nThe {len(indices)} following parameter(s)"
-                            f" have no influence: {[unknown_names[i] for i in indices]} \n{indices}"
+                            f" have no influence: {[unknown_names[i] for i in indices]}"
                         )
-                    if (indices := error_desc.get('residues', [])):
+                    indices = error_desc.get('residues', [])
+                    if len(indices) > 0:
                         residue_names = self.problem.residue_names()
                         error_msg += (
                             f" \nThe {len(indices)} following residue(s)"
