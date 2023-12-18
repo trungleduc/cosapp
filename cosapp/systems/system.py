@@ -485,10 +485,18 @@ class System(Module, TimeObserver):
 
     def __getattr__(self, name: str) -> Any:
         try:  # Faster than testing `if name in self`
-            # Faster to duplicate __getitem__ call than calling it
             variable_ref = self.name2variable[name]
         except KeyError:
-            return super().__getattribute__(name)
+            try:
+                return super().__getattribute__(name)
+            except AttributeError as error:
+                # Last try: checkout read-only properties
+                # Note: checked last, as access is less likely than
+                # `name2variable` and `super().__getattribute__()`.
+                try:
+                    return self.__readonly[name]
+                except KeyError:
+                    raise error
         else:
             return variable_ref.value
 
@@ -497,7 +505,9 @@ class System(Module, TimeObserver):
             # Faster to duplicate __setitem__ call than calling it
             variable_ref = super().__getattribute__("name2variable")[name]
         except KeyError:
-            if hasattr(self, name):
+            if name in self.__readonly:
+                raise AttributeError(f"can't set attribute {self.name}.{name}")
+            elif hasattr(self, name):
                 super().__setattr__(name, value)
             else:
                 raise AttributeError(

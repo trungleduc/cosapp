@@ -249,32 +249,125 @@ def test_System__init__bad_name(name, error):
 
 
 def test_System___getattr__():
-    s = TopSystem("test")
-    assert s.sub is s.children["sub"]
-    assert s.out is s.outputs["out"]
-    assert s.in_ is s.inputs["in_"]
-    assert s.in_.Pt is s.inputs["in_"].Pt
-    assert s.sub.in_ is s.children["sub"].inputs["in_"]
-    assert s.sub.out.W is s.children["sub"].outputs["out"].W
-    assert s.sub.sloss is s.children["sub"].inputs["inwards"].sloss
+    """Test getter via bracket operator [] on systems
+    (in particular, with composite keys of the kind 'a.b.c').
+    """
+    Sub = DummySystemFactory("Sub",
+        inputs = get_args(PtWPort, 'f_in'),
+        outputs = get_args(PtWPort, 'f_out'),
+        inwards = get_args('loss', 0.0),
+        modevars_in = get_args('m_in', True),
+        modevars_out = get_args('m_out', init=0, dtype=int),
+        events = get_args('beep'),
+        properties = get_args('pi', 3.14),
+    )
+    Dummy = DummySystemFactory("Dummy",
+        children = get_args(
+            Sub('sub'),
+            pulling={
+                'f_in': 'flow_in',
+                'f_out': 'flow_out',
+                'm_in': 'm_in',
+                'm_out': 'm_out',
+            },
+        ),
+        inwards = get_args('x', 1.0),
+        outwards = get_args('y', 0.0),
+        properties = get_args('const', 0.123),
+        events = get_args('boom', trigger="y > x"),
+    )
+    top = Dummy("top")
+    assert getattr(top, "parent") is top.parent
+    # sub-systems
+    assert top.sub is top.children["sub"]
+    assert getattr(top, "sub") is top.sub
+    # Ports
+    assert getattr(top, "flow_out") is top.outputs["flow_out"]
+    assert getattr(top, "flow_in") is top.inputs["flow_in"]
+    assert getattr(top, "flow_in.Pt") is top.inputs["flow_in"].Pt
+    assert getattr(top, "sub.f_in") is top.children["sub"].inputs["f_in"]
+    assert getattr(top, "sub.f_out.W") == top.children["sub"].outputs["f_out"].W
+    assert getattr(top.sub, "loss") == top.children["sub"].inputs["inwards"].loss
+    assert getattr(top, "sub.loss") == top.children["sub"].inputs["inwards"].loss
+    assert getattr(top, "flow_out") is top.flow_out
+    assert getattr(top, "sub.f_out") is top.sub.f_out
+    assert getattr(top.sub, "f_out") is top.sub.f_out
+    assert getattr(top, "flow_in") is top.flow_in
+    assert getattr(top, "sub.f_in") is top.sub.f_in
+    assert getattr(top.sub, "f_in") is top.sub.f_in
+    assert getattr(top.sub, "f_in.Pt") == top.sub.f_in.Pt
+    assert getattr(top, "sub.f_in.Pt") == top.sub.f_in.Pt
+    assert getattr(top, "sub.f_in").Pt == top.sub.f_in.Pt
+    # Read-only properties
+    assert getattr(top.sub, "pi") == 3.14
+    assert getattr(top, "sub.pi") == 3.14
+    assert getattr(top, "const") == 0.123
+    # Events
+    assert getattr(top, "boom") is top.boom
+    assert getattr(top.sub, "beep") is top.sub.beep
+    # assert getattr(top, "sub.beep") is s.sub.beep
 
     with pytest.raises(AttributeError):
-        _ = s.sub.sloss1
+        top.sub.foo
+
+    with pytest.raises(AttributeError):
+        getattr(top, "sub.foo")
+
+    with pytest.raises(AttributeError):
+        getattr(top.sub, "foo")
+
+    assert getattr(top, "sub.foo", None) is None
 
 
 def test_System___setattr__():
-    s = TopSystem("test")
-    s.out.Pt = 123456.0
-    s.sub.inwards.sloss = 0.9
-    assert s.out.Pt == 123456.0
-    assert s.sub.inwards.sloss == 0.9
+    """Test setter via bracket operator [] on systems
+    (in particular, with composite keys of the kind 'a.b.c').
+    """
+    Sub = DummySystemFactory("Sub",
+        inputs = get_args(PtWPort, 'f_in'),
+        outputs = get_args(PtWPort, 'f_out'),
+        inwards = get_args('loss', 0.0),
+        modevars_in = get_args('m_in', True),
+        modevars_out = get_args('m_out', init=0, dtype=int),
+        events = get_args('beep'),
+        properties = get_args('pi', 3.14),
+    )
+    Dummy = DummySystemFactory("Dummy",
+        children = get_args(
+            Sub('sub'),
+            pulling={
+                'f_in': 'flow_in',
+                'f_out': 'flow_out',
+                'm_in': 'm_in',
+                'm_out': 'm_out',
+            },
+        ),
+        inwards = get_args('x', 1.0),
+        outwards = get_args('y', 0.0),
+        properties = get_args('const', 0.123),
+        events = get_args('boom', trigger="y > x"),
+    )
+    top = Dummy("top")
+    setattr(top, "flow_out.Pt", 123456.7)
+    assert top.flow_out.Pt == 123456.7
+    setattr(top.sub, "loss", 0.1)
+    assert top.sub.loss == 0.1
+    setattr(top, "sub.loss", 0.2)
+    assert top.sub.loss == 0.2
+    setattr(top, "sub.inwards.loss", 0.3)
+    assert top.sub.loss == 0.3
+    setattr(top.sub, "f_in.Pt", 9.99e5)
+    assert top.sub.f_in.Pt == 9.99e5
+    
+    with pytest.raises(AttributeError, match="can't set attribute|no setter"):
+        setattr(top, "const", 2.3)
 
-    s.sub.sloss = 0.95
-    assert s.sub.sloss == 0.95
+    with pytest.raises(AttributeError, match="can't set attribute|no setter"):
+        setattr(top, "sub.pi", 2.3)
 
     # Forbid creating new attributes
     with pytest.raises(AttributeError):
-        s.sub.sloss1 = 1.0
+        top.sub.foo = 1.0
 
 
 def test_System___contains__():
@@ -323,27 +416,110 @@ def test_System___contains__():
 
 
 def test_System___getitem__():
-    s = TopSystem("test")
-    assert s["parent"] is s.parent
-    assert s["sub"] is s.children["sub"]
-    assert s["sub"] is s.sub
-    assert s["out"] is s.outputs["out"]
-    assert s["in_"] is s.inputs["in_"]
-    assert s["in_.Pt"] == s.inputs["in_"].Pt
-    assert s["sub.in_"] is s.children["sub"].inputs["in_"]
-    assert s["sub.out.W"] == s.children["sub"].outputs["out"].W
-    assert s["const"] == s.const
-    assert s["const"] == 0.123
-    assert s["name"] == s.name
-    assert s["top_k"] == s.top_k
+    """Test getter via bracket operator [] on systems
+    (in particular, with composite keys of the kind 'a.b.c').
+    """
+    Sub = DummySystemFactory("Sub",
+        inputs = get_args(PtWPort, 'f_in'),
+        outputs = get_args(PtWPort, 'f_out'),
+        inwards = get_args('loss', 0.0),
+        modevars_in = get_args('m_in', True),
+        modevars_out = get_args('m_out', init=0, dtype=int),
+        events = get_args('beep'),
+        properties = get_args('pi', 3.14),
+    )
+    Dummy = DummySystemFactory("Dummy",
+        children = get_args(
+            Sub('sub'),
+            pulling={
+                'f_in': 'flow_in',
+                'f_out': 'flow_out',
+                'm_in': 'm_in',
+                'm_out': 'm_out',
+            },
+        ),
+        inwards = get_args('x', 1.0),
+        outwards = get_args('y', 0.0),
+        properties = get_args('const', 0.123),
+        events = get_args('boom', trigger="y > x"),
+    )
+    top = Dummy("top")
+    assert top["parent"] is top.parent
+    # sub-systems
+    assert top.sub is top.children["sub"]
+    assert top["sub"] is top.sub
+    # Ports
+    assert top["flow_in"] is top.inputs["flow_in"]
+    assert top["flow_out"] is top.outputs["flow_out"]
+    assert top["flow_in"] is top.flow_in
+    assert top["flow_out"] is top.flow_out
+    assert top["flow_in.Pt"] == top.inputs["flow_in"].Pt
+    assert top.sub.f_in is top.children["sub"].inputs["f_in"]
+    assert top.sub.f_out.W == top.children["sub"].outputs["f_out"].W
+    assert top.sub.loss == top.children["sub"].inputs["inwards"].loss
+    assert top.sub.loss == top.children["sub"].inputs["inwards"].loss
+    assert top["sub.f_out"] is top.sub.f_out
+    assert top.sub["f_out"] is top.sub.f_out
+    assert top["sub.f_in"] is top.sub.f_in
+    assert top.sub["f_in"] is top.sub.f_in
+    assert top.sub["f_in.Pt"] == top.sub.f_in.Pt
+    assert top["sub.f_in.Pt"] == top.sub.f_in.Pt
+    assert top["sub.f_in"].Pt == top.sub.f_in.Pt
+    # Read-only properties
+    assert top.sub["pi"] == 3.14
+    assert top["sub.pi"] == 3.14
+    assert top["const"] == 0.123
+    # Events
+    assert top["boom"] is top.boom
+    assert top.sub["beep"] is top.sub.beep
+    # assert s["sub.beep"] is s.sub.beep
+
+    with pytest.raises(KeyError):
+        top["sub.foo"]
+
+    with pytest.raises(KeyError):
+        top.sub["foo"]
 
 
-def test_System__setitem__():
-    s = TopSystem("test")
-    s["out.Pt"] = 123456.0
-    s["sub.inwards.sloss"] = 0.9
-    assert s.out.Pt == 123456.0
-    assert s.sub.inwards.sloss == 0.9
+def test_System___setitem__():
+    """Test setter via bracket operator [] on systems
+    (in particular, with composite keys of the kind 'a.b.c').
+    """
+    Sub = DummySystemFactory("Sub",
+        inputs = get_args(PtWPort, 'f_in'),
+        outputs = get_args(PtWPort, 'f_out'),
+        inwards = get_args('loss', 0.0),
+        modevars_in = get_args('m_in', True),
+        modevars_out = get_args('m_out', init=0, dtype=int),
+        events = get_args('beep'),
+        properties = get_args('pi', 3.14),
+    )
+    Dummy = DummySystemFactory("Dummy",
+        children = get_args(
+            Sub('sub'),
+            pulling={
+                'f_in': 'flow_in',
+                'f_out': 'flow_out',
+                'm_in': 'm_in',
+                'm_out': 'm_out',
+            },
+        ),
+        inwards = get_args('x', 1.0),
+        outwards = get_args('y', 0.0),
+        properties = get_args('const', 0.123),
+        events = get_args('boom', trigger="y > x"),
+    )
+    top = Dummy("top")
+    top["flow_out.Pt"] = 123456.7
+    top["sub.inwards.loss"] = 0.9
+    assert top.flow_out.Pt == 123456.7
+    assert top.sub.inwards.loss == 0.9
+    
+    with pytest.raises(AttributeError, match="read-only"):
+        top["const"] = 2.3
+
+    with pytest.raises(AttributeError, match="read-only"):
+        top["sub.pi"] = 2.3
 
 
 def test_System__repr__():
