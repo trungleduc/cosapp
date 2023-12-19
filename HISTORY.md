@@ -1,5 +1,18 @@
 # History
 
+## 0.15.3 (2023-12-19)
+
+### Bug fixes and code quality
+
+- Fix minor bug in `NonLinearSolver` (MR [#261](https://gitlab.com/cosapp/cosapp/-/merge_requests/261)).
+- Fix incorrect return type hints in `System` (MR [#259](https://gitlab.com/cosapp/cosapp/-/merge_requests/259)).
+- Improve support for read-only properties in system getters and setters (MR [#264](https://gitlab.com/cosapp/cosapp/-/merge_requests/264)).
+
+### Maintenance
+
+- Remove deprecated dependency for compatibility with Python 3.12 (MR [#258](https://gitlab.com/cosapp/cosapp/-/merge_requests/258)).
+- Force `pythonfmu` < 0.6.3 in dependency list, to prevent a crash during tests (MR [#262](https://gitlab.com/cosapp/cosapp/-/merge_requests/262)). Temporary fix until root cause is identified.
+
 ## 0.15.2 (2023-10-14)
 
 ### Bug fixes

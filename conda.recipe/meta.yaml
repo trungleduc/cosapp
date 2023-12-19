@@ -1,6 +1,6 @@
 {% set name = "cosapp" %}
 # This needs to be updated manually => otherwise the source file won't be found
-{% set version = "0.15.2" %}
+{% set version = "0.15.3" %}
 
 package:
   name: {{ name }}
@@ -18,7 +18,7 @@ requirements:
   host:
     - python>=3.9
   run:
-    - python>=3.7
+    - python>=3.8
     - pandas
     - jsonschema
     - numpy>=1.12
@@ -30,7 +30,7 @@ test:
     - coverage
     - jinja2
     - pytest
-    - pythonfmu~=0.6.0
+    - pythonfmu<0.6.3
     - watchdog
     - openpyxl
   commands:
