@@ -1701,3 +1701,16 @@ def test_NonLinearSolver_singular_problem_3(caplog):
         message,
         flags=re.DOTALL,  # match "\n" with "."
     )
+
+
+def test_NonLinearSolver_rates():
+    """Related to https://gitlab.com/cosapp/cosapp/-/issues/138
+    """
+    class SystemWithRate(System):
+        def setup(self):
+            self.add_inward("v", np.zeros(3))
+            self.add_rate("dvdt", source="v")
+
+    s = SystemWithRate("s")
+    s.add_driver(NonLinearSolver("solver"))
+    s.run_drivers()
