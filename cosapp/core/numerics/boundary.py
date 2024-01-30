@@ -4,6 +4,7 @@ from typing import Any, Dict, Optional, Union, Tuple, Type
 from types import SimpleNamespace
 
 import abc
+import copy
 import numpy
 
 from cosapp.core.eval_str import EvalString
@@ -46,6 +47,13 @@ class Boundary:
 
         self.mask = info.mask
         self.set_default_value(default, self.mask)
+
+    def copy(self) -> Boundary:
+        boundary = copy.copy(self)
+        boundary._default_value = copy.copy(self._default_value)
+        boundary.__info = copy.copy(self.__info)
+        boundary.__info.mask = copy.copy(self.mask)
+        return boundary
 
     @staticmethod
     def parse(
@@ -410,7 +418,7 @@ class Unknown(Boundary):
         except KeyError:  # boundary does not exist in the current context
             return str(self.default_value)
 
-    def copy(self) -> "Unknown":
+    def copy(self) -> Unknown:
         """Copy the unknown object.
 
         Returns
@@ -612,7 +620,7 @@ class TimeUnknown(Boundary, AbstractTimeUnknown):
             raise ValueError(f"{name} must be strictly positive")
         return eval_string
 
-    def copy(self) -> "TimeUnknown":
+    def copy(self) -> TimeUnknown:
         """Copy time-dependent unknown object.
 
         Returns
@@ -705,6 +713,15 @@ class TimeDerivative(Boundary):
         self.source = source
         self.initial_value = initial_value
         self.reset()
+
+    def copy(self) -> TimeDerivative:
+        der = super().copy()
+        der.__src = copy.copy(self.__src)
+        der.__shape = copy.copy(self.__shape)
+        der.__initial = copy.copy(self.__initial)
+        der.__previous = copy.copy(self.__previous)
+        der.__type = self.__type
+        return der
 
     def __str__(self) -> str:
         try:

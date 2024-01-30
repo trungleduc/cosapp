@@ -4,6 +4,7 @@ import numpy as np
 from cosapp.systems import System
 from cosapp.core.numerics.boundary import Boundary
 from cosapp.ports.port import Port, PortType
+from cosapp.utils.testing import get_args
 from contextlib import nullcontext as does_not_raise
 
 
@@ -261,3 +262,55 @@ def test_Boundary_value(a, name, kwargs, data):
         with pytest.raises(error):
             x.value = value
         assert a.is_clean(PortType.IN)
+
+
+@pytest.mark.parametrize("ctor_data", [
+    (get_args('in_.m')),
+    (get_args('x')),
+    (get_args('inwards.x')),
+    (get_args('y')),
+    (get_args('y[0]')),
+    (get_args('y[1]')),
+    (get_args('y[:]')),
+    (get_args('x', default=4.)),
+    (get_args('y', default=[0, 0])),
+    (get_args('y', default=np.zeros(2))),
+    (get_args('y', default=1.234)),
+    (get_args('y[1]', default=np.array([-2.]))),
+    (get_args('y[1]', default=[-2.])),
+    (get_args('y[1]', default=-2.)),
+    (get_args('y[1:]', default=-2.)),
+    (get_args('y[:-1]', default=-2.)),
+    (get_args('y[:]', default=np.array([-2., 1.]))),
+    (get_args('y[:]', default=[-2., 1.])),
+    (get_args('x', mask=[False])),
+    (get_args('x', mask=[True])),
+    (get_args('y', mask=[True, False])),
+    (get_args('y', mask=(False, False))),
+    (get_args('y', mask=(True, True))),
+    (get_args('y', mask=np.full(2, True))),
+    (get_args('u[::2]')),
+    (get_args('u[::2]', default=[1., 2., 3.])),
+])
+def test_Boundary_copy(a, ctor_data):
+    args, kwargs = ctor_data
+    old = Boundary(a, *args, **kwargs)
+    new = old.copy()
+
+    assert isinstance(new, Boundary)
+    assert new is not old
+    assert new.ref is old.ref
+    assert new.port is old.port
+    assert new.context is old.context
+    assert new.name == old.name
+    assert new.variable == old.variable
+    assert new.basename == old.basename
+    assert np.array_equiv(new.mask, old.mask)
+    assert np.array_equal(new.value, old.value)
+    assert np.array_equal(new.default_value, old.default_value)
+    if old.mask is not None:
+        assert new.mask is not old.mask
+    if isinstance(old.value, np.ndarray):
+        assert new.value is not old.value
+    if isinstance(old.default_value, np.ndarray):
+        assert new.default_value is not old.default_value
