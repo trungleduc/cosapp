@@ -226,3 +226,34 @@ def test_TimeDerivative_to_dict(bogus, name, options, expected):
     assert der_dict["name"] == expected.get("name", name)
     assert der_dict["source"] == expected.get("source", str(options["source"]))
     assert der_dict["initial_value"] == expected.get("initial", str(der.initial_value_expr))
+
+
+@pytest.mark.parametrize("ctor_data", [
+    get_args('dh_dt', source=-1),
+    get_args('v', source='-0.1 * x'),
+    get_args('dh_dt', source='x[-1]'),
+    get_args('h', source=0.5),
+])
+def test_TimeDerivative_copy(bogus, ctor_data):
+    args, kwargs = ctor_data
+    old = TimeDerivative(bogus, *args, **kwargs)
+    new = old.copy()
+
+    assert isinstance(new, TimeDerivative)
+    assert new is not old
+    assert new.ref is old.ref
+    assert new.port is old.port
+    assert new.context is old.context
+    assert np.array_equiv(new.mask, old.mask)
+    assert np.array_equal(new.value, old.value)
+    assert np.array_equal(new.default_value, old.default_value)
+    if old.mask is not None:
+        assert new.mask is not old.mask
+    if isinstance(old.value, np.ndarray):
+        assert new.value is not old.value
+    if isinstance(old.default_value, np.ndarray):
+        assert new.default_value is not old.default_value
+    assert str(old.source_expr) == str(new.source_expr)
+    assert str(old.initial_value_expr) == str(new.initial_value_expr)
+    assert old.source_expr is not new.source_expr
+    assert old.initial_value_expr is not new.initial_value_expr
