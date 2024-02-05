@@ -24,11 +24,11 @@ requirements:
     - numpy>=1.12
     - scipy
     - wrapt
+    - jinja2
 
 test:
   requires:
     - coverage
-    - jinja2
     - pytest
     - pythonfmu<0.6.3
     - watchdog
