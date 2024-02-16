@@ -5,7 +5,7 @@ stages:
   - deploy
 
 variables:
-  COSAPP_DEP: jsonschema numpy scipy pandas wrapt pytest jinja2 openpyxl pyfmi pythonfmu<0.6.3
+  COSAPP_DEP: jsonschema numpy scipy pandas wrapt pytest jinja2 pyfmi pythonfmu<0.6.3
   USER: "cosapp_test"
 
 # Test script for all OS
@@ -57,13 +57,6 @@ variables:
     - ".linux_common_env"
   stage: deploy
 
-linux_py38:
-    extends: 
-     - ".linux_env"
-     - ".test_script"
-    variables:
-      PYTHON_VERSION: "3.8"
-
 linux_py39:
     extends: 
      - ".linux_env"
@@ -72,10 +65,17 @@ linux_py39:
       PYTHON_VERSION: "3.9"
 
 linux_py310:
+    extends: 
+     - ".linux_env"
+     - ".test_script"
+    variables:
+      PYTHON_VERSION: "3.10"
+
+linux_py311:
   extends: 
     - ".linux_env"
   variables:
-    PYTHON_VERSION: "3.10"
+    PYTHON_VERSION: "3.11"
   script:
     - mamba create -y -n cosapp python=$PYTHON_VERSION
     - source activate cosapp
@@ -94,26 +94,12 @@ linux_py310:
    - pushes
    - merge_requests
 
-# windows_py37:
+# windows_py311:
 #     extends: 
 #      - ".windows_env"
 #      - ".test_script"
 #     variables:
-#       PYTHON_VERSION: "3.7"
-
-# windows_py38:
-#     extends: 
-#      - ".windows_env"
-#      - ".test_script"
-#     variables:
-#       PYTHON_VERSION: "3.8"
-
-# windows_py39:
-#     extends: 
-#      - ".windows_env"
-#      - ".test_script"
-#     variables:
-#       PYTHON_VERSION: "3.9"
+#       PYTHON_VERSION: "3.11"
 
 
 #Deployment jobs
@@ -123,7 +109,7 @@ build_doc:
     - ".linux_env"
   variables:
     BUILDDIR: _build
-    PYTHON_VERSION : "3.10"
+    PYTHON_VERSION : "3.11"
   script:
     - mamba env create --name cosapp --file docs/environment.yml
     - source activate cosapp
@@ -146,7 +132,7 @@ build_pkg:
     - ".linux_env"
   variables:
     JOB_DEP: conda-build conda-verify
-    PYTHON_VERSION : "3.10"
+    PYTHON_VERSION : "3.11"
   script:
     - mamba create -y -n cosapp python=$PYTHON_VERSION
     - source activate cosapp

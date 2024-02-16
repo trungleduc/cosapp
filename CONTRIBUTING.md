@@ -19,13 +19,13 @@ If you are reporting a bug, please include:
 
 ### Fix Bugs
 
-Look through the GitLab issues for bugs. Anything tagged with "Bug" and "To do" is open to whoever
-wants to implement it.
+Look through the GitLab issues for bugs.
+Anything tagged with `bug` and `to do` is open to whoever wants to implement it.
 
 ### Implement Features
 
-Look through the GitLab issues for features. Anything tagged with "Enhancement"
-and "To do" is open to whoever wants to implement it.
+Look through the GitLab issues for features.
+Anything tagged with `enhancement` and `to do` is open to whoever wants to implement it.
 
 ### Write Documentation
 
@@ -46,38 +46,43 @@ If you wish to propose a feature:
 Ready to contribute? Here's how to set up `cosapp` for local development.
 
 1. Fork the `cosapp` repo on GitLab.
+
 2. Clone your fork locally:
-```
-git clone https://gitlab.com/your_login/cosapp.git
-```
+    ```
+    git clone https://gitlab.com/your_login/cosapp.git
+    ```
+
 3. Install your local copy into a conda environment. Assuming you have conda installed, this is how you set up your fork for local development::
-```
-conda create -n cosapp python scipy pandas jsonschema pytest
-cd cosapp/
-python -m pip install -e .
-```
+    ```
+    conda create -n cosapp python=3.11 scipy pandas wrapt jsonschema pytest
+    cd cosapp/
+    python -m pip install -e .
+    ```
+
 4. Create a branch for local development::
-```
-git checkout -b name-of-your-branch
-```
-   If your revision tackles an existing issue, starting your branch name by the issue number will automatically close the issue after your branch is merged.
-   For example, if issue 37 concerns a solver problem, say, you may name your branch `37-solver-fix`, e.g.
-   Alternatively, you can specify the general category of your revision, followed by its short name, as in `feature/lightsaber`, `bugfix/solver`, `doc/tutorials`, *etc.*
+    ```
+    git checkout -b name-of-your-branch
+    ```
+    If your revision tackles an existing issue, starting your branch name by the issue number will automatically close the issue after your branch is merged.
+    For example, if issue 37 concerns a solver problem, say, you may name your branch `37-solver-fix`, *e.g.*
+    Alternatively, you can specify the general category of your revision, followed by its short name, as in `feature/lightsaber`, `bugfix/solver`, `doc/tutorials`, *etc.*
 
-   Now you can make your changes locally.
+    Now you can make your changes locally.
 
-5. When you're done, check that your revisions pass the tests, by running:
-```
-pytest
-```
+5. When you are done, check that your revisions pass the tests, by running:
+    ```
+    pytest
+    ```
+
 6. Commit your changes and push your branch to GitLab:
-```
-git add .
-git commit -m "Your detailed description of your changes."
-git push origin name-of-your-branch
-```
+    ```
+    git add .
+    git commit -m "Brief description of your changes"
+    git push origin name-of-your-branch
+    ```
+
 7. Submit a pull request through the GitLab website.
-   Go to https://gitlab.com/cosapp/cosapp/-/branches, and click the "Merge Request" button next to your branch name.
+    Go to https://gitlab.com/cosapp/cosapp/-/branches, and click the "Merge Request" button next to your branch name.
 
 ## Merge Request Guidelines
 
