@@ -1,5 +1,24 @@
 # History
 
+
+## 0.15.4 (2024-02-28)
+
+### Bug fixes and code quality
+
+- Fix bug raised in `NonLinearSolver` for systems with rates (MR [#268](https://gitlab.com/cosapp/cosapp/-/merge_requests/268)).
+- Minor refactoring pass (MR [#274](https://gitlab.com/cosapp/cosapp/-/merge_requests/274)).
+
+### Maintenance
+
+- Drop Python 3.8 support and add Python 3.11 test pipeline (MR [#270](https://gitlab.com/cosapp/cosapp/-/merge_requests/270)).
+- Update installation and contribution guidelines (MR [#270](https://gitlab.com/cosapp/cosapp/-/merge_requests/270)).
+- Update dependency list (MRs [#269](https://gitlab.com/cosapp/cosapp/-/merge_requests/269) and [#270](https://gitlab.com/cosapp/cosapp/-/merge_requests/270)).
+
+### JOSS article
+
+Publication of an article on CoSApp in the [Journal of Open-Source Software](https://joss.theoj.org/), referenced to version 0.15.4 (MR [#271](https://gitlab.com/cosapp/cosapp/-/merge_requests/271)).
+
+
 ## 0.15.3 (2023-12-19)
 
 ### Bug fixes and code quality
@@ -13,6 +32,7 @@
 - Remove deprecated dependency for compatibility with Python 3.12 (MR [#258](https://gitlab.com/cosapp/cosapp/-/merge_requests/258)).
 - Force `pythonfmu` < 0.6.3 in dependency list, to prevent a crash during tests (MR [#262](https://gitlab.com/cosapp/cosapp/-/merge_requests/262)). Temporary fix until root cause is identified.
 
+
 ## 0.15.2 (2023-10-14)
 
 ### Bug fixes
@@ -22,6 +42,7 @@
 - Fix bad synchronization of mode variables during transitions (MR [#254](https://gitlab.com/cosapp/cosapp/-/merge_requests/254)).
 - Improve error message when pulling variables with different roles (MR [#255](https://gitlab.com/cosapp/cosapp/-/merge_requests/255)).
 - Fix `TypeError` when passing `pulling` argument as a tuple in `System.add_child` (MR [#256](https://gitlab.com/cosapp/cosapp/-/merge_requests/256)).
+
 
 ## 0.15.1 (2023-09-18)
 
@@ -36,6 +57,7 @@
 - Fix bug with recorders inspecting systems with iterators (MRs [#246](https://gitlab.com/cosapp/cosapp/-/merge_requests/246) and [#247](https://gitlab.com/cosapp/cosapp/-/merge_requests/247)).
 - Fix bug with `NonLinearSolver` with NumPy array residues (MR [#248](https://gitlab.com/cosapp/cosapp/-/merge_requests/248)).
 - Fix initialization bug of targets involving expressions (MR [#249](https://gitlab.com/cosapp/cosapp/-/merge_requests/249)).
+
 
 ## 0.15.0 (2023-07-20)
 
