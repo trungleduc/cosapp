@@ -4,7 +4,7 @@ import pytest
 import numpy as np
 
 from cosapp.base import System
-from cosapp.tests.library.systems import BouncingBall
+from cosapp.tests.library.systems import BouncingBall, PointMass
 from cosapp.drivers import NonLinearSolver, RunSingleCase, RungeKutta
 from cosapp.recorders import DataFrameRecorder
 from typing import Tuple

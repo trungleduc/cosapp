@@ -386,7 +386,7 @@ class VisJsRenderer(BaseRenderer):
         return {"visJS": vis_js, "visCSS": vis_css}
     
     @classmethod
-    def html_template(cls) -> "Template":
+    def html_template(cls):
         """
         Return the Jinja template used to create HTML file.
 

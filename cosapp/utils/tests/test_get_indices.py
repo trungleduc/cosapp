@@ -51,7 +51,7 @@ def test_get_indices_scalar():
     # TODO: ideally, cases below should work (basename is reformatted into `x.y.z`) - OK for now
     # ("hat['one'].a", dict(mask=[True, True, True], basename="hat.one.a", selector="")),
     # ("hat['one'].a[1:]", dict(mask=[False, True, True], basename="hat.one.a", selector="[1:]")),
-    # ("hat['one.a'][1:]", dict(mask=[True, True, True], basename="hat.one.a", selector="[1:")),
+    # ("hat['one.a'][1:]", dict(mask=[False, True, True], basename="hat.one.a", selector="[1:]")),
 ])
 def test_get_indices_array_1D(name, expected: Dict[str, Any]):
     """Test `get_indices` with vector variables"""

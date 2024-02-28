@@ -308,6 +308,8 @@ def test_EvalString_locals(eval_context, expression, expected):
         dict(variables={'x', 'sub.z', 'sub.in_.q', 'out.q'}, constants={'g'}),
     ),
     ("out.q + sub.z * sub.in_.q + B52.in_.q", dict(variables={'sub.z', 'sub.in_.q', 'out.q', 'B52.in_.q'})),
+    ("out.q + exp(sub.z * sub.in_.q) + cos(B52.in_.q)", dict(variables={'sub.z', 'sub.in_.q', 'out.q', 'B52.in_.q'})),
+    ("out.q * exp(-y[1] / 2)", dict(variables={'y', 'out.q'})),
     ("out. q + sub  .z * sub . in_.q + out  . q", dict(variables={'sub.z', 'sub.in_.q', 'out.q'})),
     ("len(out)", dict(variables=set())),
 ])
