@@ -1,0 +1,56 @@
+{
+    "@context": "https://raw.githubusercontent.com/codemeta/codemeta/master/codemeta.jsonld",
+    "@type": "Code",
+    "author": [
+      {
+        "@id": "0000-0002-6964-0044",
+        "@type": "Person",
+        "email": "etienne.lac@safrangroup.com",
+        "name": "Étienne Lac",
+        "affiliation": "Safran Tech, Digital Sciences & Technologies Department, Rue des Jeunes Bois, Châteaufort, 78114 Magny-Les-Hameaux, France"
+      },
+      {
+        "@type": "Person",
+        "email": "guy.de-spiegeleer@twiinit.com",
+        "given-name": "Guy",
+        "non-dropping-particle": "De",
+        "surname": "Spiegeleer",
+        "affiliation": "twiinIT, France"
+      },
+      {
+        "@type": "Person",
+        "email": "adrien.delsalle@twiinit.com",
+        "name": "Adrien Delsalle",
+        "affiliation": "twiinIT, France"
+      },
+      {
+        "@type": "Person",
+        "email": "frederic.collonval@webscit.com",
+        "name": "Frédéric Collonval",
+        "affiliation": "WebScIT"
+      },
+      {
+        "@type": "Person",
+        "email": "trung.le@quantstack.net",
+        "name": "Duc-Trung Lê",
+        "affiliation": "QuantStack"
+      },
+      {
+        "@id": "",
+        "@type": "Person",
+        "email": "mathias.malandain@inria.fr",
+        "name": "Mathias Malandain",
+        "affiliation": "Inria centre at Rennes University, France"
+      }
+    ],
+    "identifier": "",
+    "codeRepository": "https://gitlab.com/cosapp/cosapp",
+    "datePublished": "2024-xx-xx",
+    "dateModified": "2024-xx-xx",
+    "dateCreated": "2023-12-xx",
+    "description": "CoSApp: a Python library to create, simulate and design complex systems.",
+    "keywords": "MDAO, System simulation, System design",
+    "license": "Apache 2.0 License",
+    "title": "CoSApp",
+    "version": "0.15.4"
+  }
