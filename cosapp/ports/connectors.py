@@ -437,7 +437,7 @@ def MakeDirectConnector(classname: str, transform: Optional[Callable]=None, **kw
     """Connector factory using a simple transfer function, with no unit conversion.
     """
     if transform is None:
-        transfer_attr = lambda sink, name, value: setattr(sink, name, value)
+        transfer_attr = setattr
     else:
         transfer_attr = lambda sink, name, value: setattr(sink, name, transform(value))
 

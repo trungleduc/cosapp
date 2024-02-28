@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 def pull_variables(
     child: "cosapp.systems.System", 
     pulling: Union[str, Collection[str], Dict[str, str]],
-):
+) -> None:
     """Pull variables from child to the parent.
 
     Parameters
@@ -16,8 +16,6 @@ def pull_variables(
         `System` asking to pull variables to its parent
     pulling: str or List[str] or Dict[str, str]
         Map of child ports to pulled ports at the parent system level
-    selection: str or List[str] or Dict[str, str]
-
     """
     from cosapp.systems import System
     from cosapp.ports.port import BasePort, Port
