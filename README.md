@@ -4,6 +4,8 @@ The primary goal of **CoSApp** is to help technical departments in the design of
 To do so, the framework allows the simulation of various systems representing the different parts of the final product in a common environment.
 The benefit is the ability for each subsystem team to carry out design study with a direct feedback at product level.
 
+[![DOI](https://joss.theoj.org/papers/10.21105/joss.06292/status.svg)](https://doi.org/10.21105/joss.06292)
+
 The main features are:
 
 ### Butterfly effect
