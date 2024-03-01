@@ -32,7 +32,7 @@ affiliations:
     index: 2
   - name: WebScIT, France
     index: 3
-  - name: QuantStack
+  - name: QuantStack, France
     index: 4
   - name: Inria centre at Rennes University, France
     index: 5
@@ -54,7 +54,7 @@ CoSApp handles steady-state simulation, as well as time-dependent dynamic system
 The design of industrial products is usually a complex process, involving experts from multiple disciplines, and the interaction of many different components. 
 Multidisciplinary Design Analysis and Optimization (MDAO) plays a crucial role in this process, by accounting for strong coupling between various components at early design stages, where the only way to assess the final product is to rely on physical simulation models.
 In this context, flexibility, rather than sheer performance, is key to assessing the value of new concepts and guiding design choices.
-Moreover, a clear separation between simulation models and resolution tools (solvers, optimizers, *etc.*) must be enforced to enable agile design processes.
+Moreover, a clear separation between simulation models and resolution tools (solvers, optimizers, etc.) must be enforced to enable agile design processes.
 
 CoSApp addresses these needs by providing a user-friendly and comprehensive framework for creating both stand-alone and composite computational models, and solving mathematical problems based on specific design criteria.
 In particular, constraints can be added interactively in CoSApp workflows, which offers several advantages:
@@ -71,7 +71,7 @@ There exist many MDAO frameworks.
 Among open-source, general-purpose libraries, three stand out in particular: OpenMDAO [@Gray2019a], GEMSEO [@gemseo_paper] and OpenModelica [@openmodelica.org:fritzson:mic:2020].
 
 OpenMDAO and GEMSEO are Python frameworks focused on optimization.
-They adopt a *causal* approach, meaning that each model (referred to as *component* in OpenMDAO, and *discipline* in GEMSEO) has a predefined input/output interface associated with a transfer function representing causality.
+They adopt a *causal* approach, meaning that each model (referred to as *component* in OpenMDAO, and a *discipline* in GEMSEO) has a predefined input/output interface associated with a transfer function representing causality.
 Both packages offer a large choice of numerical methods to solve and optimize multidisciplinary systems.
 Noticeably, they can take advantage of system-level gradients, when available (either coded inside the models or computed by automatic differentiation), which allows them to handle large numbers of unknowns (tens of thousands).
 At present, CoSApp evaluates gradients using finite differences, which limits the size of problems it can tackle (a few hundreds of unknowns, typically, which proves to be sufficient in early design phases).
@@ -159,7 +159,7 @@ Such simulations are referred to as *continuous-time* simulations.
 
 Discontinuities, however, can be introduced with the occurrence of *events*, defined within a system.
 Events are triggerable objects that activate when a certain condition is detected in their owner system.
-Upon the occurrence of an event, systems may transition from one mode to another, possibly undergoing structural recomposition (new sub-system tree, new constraints, *etc.*).
+Upon the occurrence of an event, systems may transition from one mode to another, possibly undergoing structural recomposition (new sub-system tree, new constraints, etc.)
 
 A tailor-made algorithm tracks event occurrences (including event cascades and subsequent system transitions), and updates the system during continous-time phases between events.
 This algorithm is said to be *hybrid*, as it handles both continuous- and discrete-time (event-based) evolutions of the system.
@@ -178,12 +178,12 @@ In the following section, we illustrate multi-point design of a CoSApp model wit
 
 ## Multi-point design of a supersonic nozzle
 
-![Schematic representation of possible flow conditions in a supersonic nozzle, depending on atmospheric pressure. Left: normal shock in the diverging part; middle: oblique shock at outlet; right: isentropic Prandtl-Meyer expansion at outlet. Subsonic flow regime is omitted.\label{fig:nozzle}](images/nozzle.png)
+![Schematic representation of possible flow conditions in a supersonic nozzle, depending on atmospheric pressure. Left: normal shock in the diverging part; middle: oblique shock at outlet; right: isentropic Prandtl-Meyer expansion at outlet. The subsonic flow regime is omitted.\label{fig:nozzle}](images/nozzle.png)
 
 ### Design phase
 
-In the next code block, we consider a model named `NozzleAero` (not shown) which computes the flow regime (mass flowrate, Mach number, thrust, *etc.*) of a supersonic nozzle (\autoref{fig:nozzle}), given inlet flow conditions (stored in input port `flow_in`) and the atmospheric pressure at the outlet (stored as variable `p_atm`).
-In this example, two key parameters, namely nozzle throat area and exit section area, are jointly calculated to meet thrust targets at ground level ($p_{\rm atm} = 1\,{\rm bar}$) and in vacuum ($p_{\rm atm} = 0$).
+In the next code block, we consider a model named `NozzleAero` (not shown) which computes the flow regime (mass flowrate, Mach number, thrust, etc.) of a supersonic nozzle (\autoref{fig:nozzle}), given inlet flow conditions (stored in input port `flow_in`) and the atmospheric pressure at the outlet (stored as variable `p_atm`).
+In this example, two key parameters, namely nozzle throat area and exit section area, are jointly calculated to meet thrust targets at ground level ($p_{\text{atm}} = 1\,\text{bar}$) and in vacuum ($p_{\text{atm}} = 0$).
 
 ```python
 from propulsion.systems import NozzleAero
