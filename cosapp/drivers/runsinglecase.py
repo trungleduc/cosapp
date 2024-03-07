@@ -129,8 +129,15 @@ class RunSingleCase(IterativeCase):
 
     def setup_run(self):
         """Method called once before starting any simulation."""
+        self.problem = None
         super().setup_run()
-        
+        if self.problem is None:
+            self._assemble_problem()
+
+    def _assemble_problem(self) -> None:
+        """Create the mathematical problem defined on case,
+        by assembling the owner problem with locally defined constraints.
+        """
         raw = self.__raw_problem
         # Transfer problem copies from `raw` to `processed`
         processed = raw.copy(prune=False)
@@ -170,8 +177,7 @@ class RunSingleCase(IterativeCase):
 
         # Set offdesign variables
         design_unknowns = set(self.design.unknowns)
-        problem = self.get_problem()
-        for name, unknown in problem.unknowns.items():
+        for name, unknown in self.problem.unknowns.items():
             if name in design_unknowns:
                 continue
             if not numpy.array_equal(unknown.value, unknown.default_value):
@@ -200,10 +206,8 @@ class RunSingleCase(IterativeCase):
             The full mathematical problem to solve for the case
         """
         if self.problem is None:
-            logger.warning("RunSingleCase.get_problem called with no prior call to RunSingleCase.setup_run.")
-            return MathematicalProblem(self.name, self.owner)
-        else:
-            return self.problem
+            self._assemble_problem()
+        return self.problem
 
     def set_values(self, modifications: Dict[str, Any]) -> None:
         """Enter the set of variables defining the case, from a dictionary of the kind {'variable1': value1, ...}

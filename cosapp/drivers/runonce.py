@@ -147,13 +147,14 @@ class RunOnce(Driver):
 
         if not owner.is_standalone() and owner.parent is None:
             owner.open_loops()  # Force loops opening to test if the owner needs a solver
+            problem = self.get_problem()
 
-            if not self.get_problem().is_empty():
+            if not problem.is_empty():
                 logger.warning(
-                    "Required iterations detected, not taken into account in {} driver.".format(
-                        type(self).__qualname__
-                    )
+                    f"A mathematical problem on system {owner.full_name()!r} was detetected,"
+                    f" but will not be solved by {type(self).__qualname__} driver {self.full_name()!r}."
                 )
+                logger.debug(f"Problem:\n{problem}")
 
             owner.close_loops()
 

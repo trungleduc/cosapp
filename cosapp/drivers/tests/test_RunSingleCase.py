@@ -1,12 +1,14 @@
 import pytest
 import numpy as np
+import logging
 
 from cosapp.systems import System
+from cosapp.drivers import runonce
 from cosapp.drivers import RunSingleCase
 from cosapp.core.numerics.basics import MathematicalProblem
 from cosapp.core.numerics.boundary import Boundary
 from cosapp.core.numerics.residues import Residue
-from cosapp.utils.testing import assert_keys, assert_all_type
+from cosapp.utils.testing import DummySystemFactory, get_args, assert_keys, assert_all_type
 
 
 # TODO unit tests for vectors
@@ -39,7 +41,7 @@ def test_RunSingleCase_setup():
     assert d.offdesign.is_empty()
 
 
-def test_RunSingleCase_setup_run(ExtendedMultiply):
+def test_RunSingleCase_setup_run(caplog, ExtendedMultiply):
     def Dummy(name):
         return ExtendedMultiply(name, unknown=["p_in.x", "K2"])
 
@@ -85,6 +87,39 @@ def test_RunSingleCase_setup_run(ExtendedMultiply):
         unknown = d.problem.unknowns[key]
         assert unknown.name == name
         assert unknown.context is s.mult
+
+
+def test_RunSingleCase_setup_run_log(caplog, ExtendedMultiply):
+    def warning_msg(name: str):
+        return f"A mathematical problem on system {name!r} was detetected, but will not be solved by RunSingleCase driver"
+
+    # Simple system
+    Dummy = DummySystemFactory(
+        "Dummy",
+        inwards=get_args('x', 0.0),
+        outwards=get_args('y', np.ones(2)),
+    )
+
+    simple = Dummy('simple')
+    runner = simple.add_driver(RunSingleCase('runner'))
+
+    caplog.clear()
+    with caplog.at_level(logging.WARNING, logger=runonce.__name__):
+        simple.call_setup_run()
+        assert len(caplog.text) == 0
+
+    # Same, with design point constraints
+    runner.add_equation("y == [x, exp(-x)]")
+    debug_msg = '\n'.join([
+        'Problem:',
+        'Equations [2]',
+        '  y == [x, exp(-x)]',
+    ])
+    caplog.clear()
+    with caplog.at_level(logging.DEBUG, logger=runonce.__name__):
+        simple.call_setup_run()
+        assert warning_msg('simple') in caplog.text
+        assert debug_msg in caplog.text
 
 
 def test_RunSingleCase__precompute_boundary_cdts(ExtendedMultiply):
