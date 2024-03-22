@@ -354,6 +354,28 @@ def test_find_system_properties_simple(include_const, expected):
     assert actual == expected
 
 
+def test_find_variables_subsystem():
+    """Related to https://gitlab.com/cosapp/cosapp/-/issues/143
+    """
+    top = System("top")
+    top.add_child(SystemWithProps("foo"))
+
+    options = dict(
+        includes=["*in_.*", "*out.*"],
+        excludes=[],
+    )
+    actual_top = set(find_variables(top, **options))
+    actual_foo = set(find_variables(top.foo, **options))
+    assert actual_top == {
+        'foo.in_.x', 'foo.in_.y', 'foo.in_.xy_ratio',
+        'foo.out.x', 'foo.out.y', 'foo.out.xy_ratio',
+    }
+    assert actual_foo == {
+        'in_.x', 'in_.y', 'in_.xy_ratio',
+        'out.x', 'out.y', 'out.xy_ratio',
+    }
+
+
 def test_find_variables_events():
     """Check that events are not picked up by `find_variables`."""
     class Bar(System):
