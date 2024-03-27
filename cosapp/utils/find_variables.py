@@ -122,19 +122,6 @@ def find_variables(
 
         ports.add(port)
         result.update(find_matches(name, ref.value))
-    
-    # Find matches among port properties
-    Port_cls_attr = get_attributes(Port)
-
-    for port in ports:
-        if not isinstance(port, Port):
-            continue  # exclude `inwards` and `outwards` extensible ports
-        port_properties = get_attributes(port) - Port_cls_attr - set(port._variables)
-        port_name = port.full_name(trim_root=True)
-        for name in port_properties:
-            result.update(
-                find_matches(f"{port_name}.{name}", getattr(port, name))
-            )
 
     # Find matches among system properties
     system_properties = find_system_properties(system, include_const)
