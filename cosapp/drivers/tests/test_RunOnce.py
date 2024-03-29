@@ -10,8 +10,8 @@ from cosapp.drivers import RunOnce
 from cosapp.drivers import runonce
 from cosapp.core.numerics.boundary import Boundary
 from cosapp.recorders import DataFrameRecorder
-from cosapp.tests.library.systems import Fan, Mixer21
-from cosapp.utils.testing import assert_keys, assert_all_type
+from cosapp.tests.library.systems import Fan
+from cosapp.utils.testing import DummySystemFactory, get_args, assert_keys, assert_all_type
 
 # <codecell>
 
@@ -172,29 +172,79 @@ def test_RunOnce_get_problem(ExtendedMultiply):
 
 
 def test_RunOnce_setup_run(caplog, ExtendedMultiply):
-    def Dummy(name):
-        return ExtendedMultiply(name, unknown=["p_in.x"])
-
     caplog.clear()
     logging.disable(logging.NOTSET)  # enable all logging levels
 
-    s = Dummy('mult')
-    s.add_driver(RunOnce('runner'))
+    def warning_msg(name: str):
+        return f"A mathematical problem on system {name!r} was detetected, but will not be solved by RunOnce driver"
 
-    expected_msg = "Required iterations detected, not taken into account in RunOnce driver."
+    # Simple system
+    Dummy = DummySystemFactory(
+        "Dummy",
+        inwards=get_args('x', 0.0),
+        outwards=get_args('y', np.ones(2)),
+    )
+    s = Dummy('s')
+    s.add_driver(RunOnce('runner'))
 
     caplog.clear()
     with caplog.at_level(logging.WARNING, logger=runonce.__name__):
         s.call_setup_run()
-        assert expected_msg in caplog.text
+        assert len(caplog.text) == 0
 
-    m = Mixer21('merger')
-    m.add_driver(RunOnce('runner'))
+    # System with intrinsic constraints
+    DummyWithProblem = DummySystemFactory(
+        "DummyWithProblem",
+        inwards=get_args('x', 0.0),
+        outwards=get_args('y', np.ones(2)),
+        unknowns='x',
+        equations='y == [0, 0]',
+    )
+    dummy = DummyWithProblem('dummy')
+    dummy.add_driver(RunOnce('runner'))
     caplog.clear()
     with caplog.at_level(logging.WARNING, logger=runonce.__name__):
-        m.call_setup_run()
-        assert expected_msg in caplog.text
+        dummy.call_setup_run()
+        assert warning_msg('dummy') in caplog.text
+        assert 'Problem:' not in caplog.text
 
+    # Same with lower-level logger
+    caplog.clear()
+    debug_msg = '\n'.join([
+        'Problem:',
+        'Unknowns [1]',
+        '  x = 0.0',
+        'Equations [2]',
+        '  y == [0, 0]',
+    ])
+    with caplog.at_level(logging.DEBUG, logger=runonce.__name__):
+        dummy.call_setup_run()
+        assert warning_msg('dummy') in caplog.text
+        assert debug_msg in caplog.text
+
+    # System with loops
+    A = DummySystemFactory("A", inwards=get_args('x', 0.0), outwards=get_args('y', 0.0))
+    B = DummySystemFactory("B", inwards=get_args('u', 0.0), outwards=get_args('v', 0.0))
+    class Cyclic(System):
+        def setup(self) -> None:
+            a = self.add_child(A('a'))
+            b = self.add_child(B('b'))
+            self.connect(a, b, {'y': 'u', 'x': 'v'})
+    
+    cyclic = Cyclic('cyclic')
+    cyclic.add_driver(RunOnce('runner'))
+    caplog.clear()
+    debug_msg = '\n'.join([
+        'Problem:',
+        'Unknowns [1]',
+        '  a.x = 0.0',
+        'Equations [1]',
+        '  a.x == b.v (loop)',
+    ])
+    with caplog.at_level(logging.DEBUG, logger=runonce.__name__):
+        cyclic.call_setup_run()
+        assert warning_msg('cyclic') in caplog.text
+        assert debug_msg in caplog.text
 
 def test_RunOnce__precompute(ExtendedMultiply):
     s = ExtendedMultiply('mult')
