@@ -4,8 +4,6 @@ The primary goal of **CoSApp** is to help technical departments in the design of
 To do so, the framework allows the simulation of various systems representing the different parts of the final product in a common environment.
 The benefit is the ability for each subsystem team to carry out design study with a direct feedback at product level.
 
-[![DOI](https://joss.theoj.org/papers/10.21105/joss.06292/status.svg)](https://doi.org/10.21105/joss.06292)
-
 The main features are:
 
 ### Butterfly effect
@@ -25,6 +23,18 @@ Have a look at the [introduction](https://cosapp.readthedocs.io/en/stable/tutori
 
 This code is the property of Safran SA.
 It uses code coming from various open-source projects (see [LICENSE](https://gitlab.com/cosapp/cosapp/blob/master/LICENSE.rst) file).
+
+# Citing
+
+If you use CoSApp, please cite us!
+
+Lac *et al.* (2024), [CoSApp: a Python library to create, simulate and design complex systems](https://doi.org/10.21105/joss.06292), Journal of Open Source Software 9(94), 6292. 
+
+BibTeX entry:
+
+```bibtex
+@article{Lac.etal:joss2024, author={Étienne Lac and Guy {De Spiegeleer} and Adrien Delsalle and Frédéric Collonval and Duc-Trung Lê and Mathias Malandain}, title={CoSApp: a Python library to create, simulate and design complex systems}, journal={Journal of Open Source Software}, year={2024}, volume={9}, number={94}, pages={6292}, doi={10.21105/joss.06292}, publisher={The Open Journal}}
+```
 
 # Try it now!
 
