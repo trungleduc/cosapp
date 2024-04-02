@@ -1625,6 +1625,7 @@ def test_NonLinearSolver_ndarray_residue(shape):
     assert s.y == pytest.approx(np.full(shape, 2.0))
 
 
+@pytest.mark.filterwarnings("ignore:.*Singular matrix.")
 def test_NonLinearSolver_singular_problem_1(caplog):
     """Singular problem, owing to unaffected residue.
     """
@@ -1652,6 +1653,7 @@ def test_NonLinearSolver_singular_problem_1(caplog):
     )
 
 
+@pytest.mark.filterwarnings("ignore:.*Singular matrix.")
 def test_NonLinearSolver_singular_problem_2(caplog):
     """Same as `test_NonLinearSolver_singular_problem_1`,
     with several unaffected residues.
@@ -1678,6 +1680,7 @@ def test_NonLinearSolver_singular_problem_2(caplog):
     )
 
 
+@pytest.mark.filterwarnings("ignore:.*Singular matrix.")
 def test_NonLinearSolver_singular_problem_3(caplog):
     """Singular problem, owing to unknown with no influence.
     """

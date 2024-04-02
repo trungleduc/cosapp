@@ -13,7 +13,7 @@ from typing import (
 from collections.abc import Collection
 
 from cosapp.core.eval_str import EvalString
-from cosapp.core.numerics.basics import MathematicalProblem, SolverResults
+from cosapp.core.numerics.basics import SolverResults
 from cosapp.core.numerics.boundary import Unknown
 from cosapp.drivers.abstractsolver import AbstractSolver
 from cosapp.drivers.optionaldriver import OptionalDriver
@@ -208,12 +208,12 @@ class Optimizer(AbstractSolver):
         return str(self._objective) if self._objective else None
 
     def add_unknown(self,
-            name: Union[str, Iterable[Union[dict, str, Unknown]]],
-            max_abs_step: Number = numpy.inf,
-            max_rel_step: Number = numpy.inf,
-            lower_bound: Number = -numpy.inf,
-            upper_bound: Number = numpy.inf
-    ) -> "MathematicalProblem":
+        name: Union[str, Iterable[Union[dict, str, Unknown]]],
+        max_abs_step: Number = numpy.inf,
+        max_rel_step: Number = numpy.inf,
+        lower_bound: Number = -numpy.inf,
+        upper_bound: Number = numpy.inf
+    ) -> None:
         """Add unknown variables.
 
         You can set variable one by one or provide a list of dictionary to set multiple variable at once. The
@@ -296,8 +296,8 @@ class Optimizer(AbstractSolver):
         self.touch_unknowns()
 
     def _expression_wrapper(self, expression: EvalString) -> Callable[[numpy.ndarray], float]:
-        """Wrapper around objective and constraint expression to propagate the x values in the
-            `System` owner.
+        """Wrapper around objective and constraint expression to propagate
+        the unknown x values in the owner system.
 
         Parameters
         ----------
@@ -309,20 +309,11 @@ class Optimizer(AbstractSolver):
         Callable[[numpy.ndarray], float]
             Callable objective function usable by scipy.optimize.minimize
         """
-        if self.children:
-            def wrapper(x: numpy.ndarray, *args) -> float:
-                modified = self._update_unknowns(x)
-                if modified:
-                    for driver in self.children.values():
-                        driver.run_once()
-                return expression.eval()
-
-        else:
-            def wrapper(x: numpy.ndarray, *args) -> float:
-                modified = self._update_unknowns(x)
-                if modified:
-                    self.owner.run_children_drivers()
-                return expression.eval()
+        def wrapper(x: numpy.ndarray, *args) -> float:
+            modified = self._update_unknowns(x)
+            if modified:
+                self._update_system()
+            return expression.eval()
 
         return wrapper
 
@@ -344,12 +335,7 @@ class Optimizer(AbstractSolver):
         x = numpy.asarray(x)
         logger.debug(f"Call fresidues with x = {x!r}")
         self.set_iteratives(x)
-
-        if self.children:
-            for subdriver in self.children.values():
-                subdriver.run_once()
-        else:
-            self.owner.run_children_drivers()
+        self._update_system()
 
         objective = self._objective.eval()
         logger.debug(f"Objective: {objective!r}")
@@ -362,7 +348,7 @@ class Optimizer(AbstractSolver):
         modified = not numpy.array_equal(x, self.__current_x)
 
         if modified:
-            x = numpy.asarray(x)
+            self.__current_x = x = numpy.array(x)  # force copy
             counter = 0
             for unknown in self.problem.unknowns.values():
                 if unknown.mask is None:
@@ -374,8 +360,6 @@ class Optimizer(AbstractSolver):
                     counter += n
                 # Set variable to new x
                 unknown.set_to_default()
-
-            self.__current_x = numpy.array(x)  # force copy
 
         return modified
 

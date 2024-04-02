@@ -307,7 +307,7 @@ Here is the sequence diagram for a transient simulation with explicit time integ
             solver->>+solver: _set_time(start_time)
             solver->>clock: time = t
             solver->>solver: Update boundary conditions
-            solver->>solver: _update_children()
+            solver->>solver: _update_system()
                Note right of solver: Solve children drivers
             solver->>solver: _update_rates()
          deactivate solver
@@ -317,7 +317,7 @@ Here is the sequence diagram for a transient simulation with explicit time integ
             solver->>+solver: _set_time(time)
                solver->>clock: time = t
                solver->>solver: Update boundary conditions
-               solver->>solver: _update_children()
+               solver->>solver: _update_system()
                   Note right of solver: Solve children drivers
                solver->>solver: _update_rates()
             deactivate solver
