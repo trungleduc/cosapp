@@ -77,7 +77,7 @@ class {{ class_name }}FMU(Fmi2Slave):
         self.__driver._precompute()
         self.__driver.compute_before()
         self.__driver._initialize()
-        self.__driver._update_children()
+        self.__driver._update_system()
 
     def __restore(self):
         self.__driver._postcompute()

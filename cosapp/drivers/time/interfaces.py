@@ -415,7 +415,7 @@ class ExplicitTimeDriver(Driver):
         dt = t - self.time
         self.__clock.time = t
         self.__scenario.update_values()
-        self._update_children()
+        self._update_system()
         self._update_rates(dt)
 
     def __reset_time(self) -> None:
@@ -455,10 +455,11 @@ class ExplicitTimeDriver(Driver):
         for transient in self._transients.values():
             transient.reset()
 
-    def _update_children(self) -> None:
-        """Execute sub-drivers, if any, or owner's subsystem drivers"""
+    def _update_system(self) -> None:
+        """Update owner system by executing sub-drivers, if any, or owner's subsystem drivers"""
         if self.children:
             for driver in self.children.values():
+                logger.debug(f"Call {driver.name}.run_once()")
                 driver.run_once()
         else:
             self.owner.run_children_drivers()
@@ -474,7 +475,7 @@ class ExplicitTimeDriver(Driver):
         if synch_needed:
             # Re-run dynamic system with updated (synchronized) rates
             # Equivalent to a single step fixed-point solver
-            self._update_children()
+            self._update_system()
 
     @abc.abstractmethod
     def _update_transients(self, dt: Number) -> None:

@@ -173,6 +173,15 @@ class AbstractSolver(Driver):
             else:
                 logger.debug(f"Skip {self.name} execution - Inactive")
 
+    def _update_system(self) -> None:
+        """Update owner system by executing sub-drivers, if any, or owner's subsystem drivers"""
+        if self.children:
+            for subdriver in self.children.values():
+                logger.debug(f"Call {subdriver.name}.run_once()")
+                subdriver.run_once()
+        else:
+            self.owner.run_children_drivers()
+
     def _precompute(self) -> None:
         # TODO we should check that all variables are of numerical types
         super()._precompute()

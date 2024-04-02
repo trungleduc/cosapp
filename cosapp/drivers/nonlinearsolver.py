@@ -283,14 +283,7 @@ class NonLinearSolver(AbstractSolver):
         x = numpy.asarray(x)
         logger.debug(f"Call fresidues with x = {x!r}")
         self.set_iteratives(x)
-
-        if self.children:
-            for subdriver in self.children.values():
-                logger.debug(f"Call {subdriver.name}.run_once()")
-                subdriver.run_once()
-        else:
-            self.owner.run_children_drivers()
-
+        self._update_system()
         self.__builder.update_residues()
         residues = self.problem.residue_vector()
         logger.debug(f"Residues: {residues!r}")
