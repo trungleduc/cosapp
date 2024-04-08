@@ -140,7 +140,7 @@ def test_DynamicSystem_add_transient_compatibility(transient, der, error):
 def test_DynamicSystem_transient_unknowns(funky, groovy):
     def check_keys(system, keys):
         context_msg = f"system {system!r}"
-        problem = system.assembled_problem()
+        problem = system.assembled_time_problem()
         assert set(problem.transients.keys()) == set(keys), context_msg
 
     check_keys(funky, ['x', 'foo'])
@@ -232,7 +232,7 @@ def test_DynamicSystem_add_rate(jazzy):
 def test_DynamicSystem_rates(funky, groovy, jazzy):
     def check_keys(system, keys):
         context_msg = f"system {system!r}"
-        problem = system.assembled_problem()
+        problem = system.assembled_time_problem()
         assert set(problem.rates.keys()) == set(keys), context_msg
 
     check_keys(funky, [])
@@ -241,7 +241,7 @@ def test_DynamicSystem_rates(funky, groovy, jazzy):
 
 
 def test_DynamicSystem_get_unsolved_problem(groovy):
-    problem = groovy.assembled_problem()
+    problem = groovy.assembled_time_problem()
 
     assert len(problem.transients) == 4
     assert "F" in problem.transients
@@ -271,7 +271,7 @@ def test_DynamicSystem_get_unsolved_problem_with_pulling(funky):
 
     jazzy = System("jazzy")
     jazzy.add_child(GroovySystem("groovy"), pulling=["G", "x"])
-    problem = jazzy.assembled_problem()
+    problem = jazzy.assembled_time_problem()
 
     assert len(problem.transients) == 4
     assert "groovy.F" in problem.transients

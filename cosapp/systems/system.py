@@ -31,7 +31,7 @@ from cosapp.patterns.visitor import Visitor
 from cosapp.core.module import Module, CommonPorts
 from cosapp.core.eval_str import EvalString
 from cosapp.core.variableref import VariableReference
-from cosapp.core.numerics.basics import MathematicalProblem
+from cosapp.core.numerics.basics import MathematicalProblem, TimeProblem
 from cosapp.core.numerics.boundary import TimeDerivative, TimeUnknown, Unknown
 from cosapp.core.time import TimeObserver
 from cosapp.ports.enum import PortType, Scope, Validity
@@ -162,7 +162,7 @@ class System(Module, TimeObserver):
     """
 
     __slots__ = (
-        '__context_lock', '_is_tree_clean', '_locked', '_math',
+        '__context_lock', '_is_tree_clean', '_locked', '_math', '_time_pb',
         'design_methods', 'drivers', 'inputs', 'outputs', 'name2variable',
         '__readonly', '__events', '_meta', '__runner', '__input_mapping',
         '__loop_problem', '__child_connectors', '__pulling_connectors',
@@ -230,6 +230,7 @@ class System(Module, TimeObserver):
         from cosapp.drivers import Driver
 
         self._math = self.new_problem(name)
+        self._time_pb = TimeProblem(name, self)
         self.__loop_problem = self.new_problem('loop')
         self.drivers = collections.OrderedDict()  # type: Dict[str, Driver]
         self.design_methods = dict()  # type: Dict[str, MathematicalProblem]
@@ -1150,7 +1151,7 @@ class System(Module, TimeObserver):
             #  See https://gitlab.safrantech.safran/cosapp/cosapp/issues/179
             self.add_inward(name, value=deepcopy(value), desc=desc, dtype=dtype)
 
-        self._math.add_transient(name, der, max_time_step, max_abs_step)
+        self._time_pb.add_transient(name, der, max_time_step, max_abs_step)
 
     def add_rate(self,
             name: str,
@@ -1240,7 +1241,7 @@ class System(Module, TimeObserver):
             
             self.add_inward(name, value=value, desc=desc, dtype=dtype)
 
-        self._math.add_rate(name, source, initial_value)
+        self._time_pb.add_rate(name, source, initial_value)
 
     def is_input_var(self, name: str) -> bool:
         """Returns `True` if `name` is the name of an input variable, `False` otherwise"""
@@ -1280,7 +1281,7 @@ class System(Module, TimeObserver):
         return lambda s: s
 
     def _precompute(self) -> None:
-        for rate in self._math.rates.values():
+        for rate in self._time_pb.rates.values():
             rate.touch()  # ensured that system is recomputed at first time step
 
     def check(self, name: Optional[str] = None) -> Union[Dict[str, Validity], Validity]:
@@ -1359,13 +1360,13 @@ class System(Module, TimeObserver):
     def transients(self):
         """Returns a dictionary containing all transient unknowns in current system tree"""
         # MappingProxyType forbids external modification
-        return MappingProxyType(self._math.transients)
+        return MappingProxyType(self._time_pb.transients)
 
     @property
     def rates(self):
         """Returns a dictionary containing all time derivatives (rates) in current system tree"""
         # MappingProxyType forbids external modification
-        return MappingProxyType(self._math.rates)
+        return MappingProxyType(self._time_pb.rates)
 
     def events(self) -> Iterator[Event]:
         """Iterator on all events locally defined on system."""
@@ -1426,61 +1427,45 @@ class System(Module, TimeObserver):
         problem = self.new_problem('off-design')
 
         # Make shallow copy of `self._math` properties
-        for name in ('residues', 'deferred_residues', 'unknowns', 'transients', 'rates'):
+        for name in ('residues', 'deferred_residues', 'unknowns'):
             attr = getattr(problem, name)
             attr.update(getattr(self._math, name))
 
-        def transfer_unknown(unknown, name):
+        def transfer_unknown(unknown: Unknown, new_name: str):
             options = {
                 attr: getattr(unknown, attr)
                 for attr in ('max_abs_step', 'max_rel_step', 'lower_bound', 'upper_bound')
             }
-            problem.add_unknown(name, **options)
+            problem.add_unknown(new_name, **options)
 
-        def transfer_transient(unknown, name):
-            ref = unknown.context.name2variable[unknown.basename]
-            problem.add_transient(name, 
-                der = unknown.der,
-                max_time_step = unknown.max_time_step_expr,
-                pulled_from = unknown.pulled_from or ref,
-            )
+        children: dict[str, System] = self.children
 
-        def transfer_rate(unknown, name):
-            problem.add_rate(name,
-                source = unknown.source_expr,
-                initial_value = unknown.initial_value_expr,
-            )
-
-        for child in self.children.values():
+        for child in children.values():
             if child.is_standalone():
                 continue
 
             child_problem = child.assembled_problem()
             connectors = self.__child_connectors.get(child.name, [])
-            transfer_items = [
-                (child_problem.unknowns, transfer_unknown),
-                (child_problem.transients, transfer_transient),
-                (child_problem.rates, transfer_rate),
-            ]
+            unknowns = child_problem.unknowns
 
             for connector in connectors:
-                # Transfer unknowns, transients and rates to parent (when necessary)
-                for unknowns, transfer in transfer_items:
-                    for name in list(unknowns.keys()):
-                        unknown = unknowns[name]
-                        port = unknown.port
-                        connected = (
-                            port.owner in self.children.values()
-                            and port is connector.sink 
-                            and unknown.variable in connector.sink_variables()
-                        )
-                        if connected:
-                            # Port is connected => remove unknown
-                            unknowns.pop(name)
-                            if connector.source.owner is self:
-                                # Transfer unknown to parent level
-                                src = connector.source_variable(unknown.variable)
-                                transfer(unknown, f"{connector.source.name}.{src}")
+                # Transfer unknowns to parent (when necessary)
+                for name in list(unknowns.keys()):
+                    unknown = unknowns[name]
+                    port = unknown.port
+                    connected = (
+                        port.owner in self.children.values()
+                        and port is connector.sink 
+                        and unknown.variable in connector.sink_variables()
+                    )
+                    if connected:
+                        # Port is connected => remove unknown
+                        unknowns.pop(name)
+                        pulled = connector.source.owner is self
+                        if pulled:
+                            # Transfer unknown to parent level
+                            src = connector.source_variable(unknown.variable)
+                            transfer_unknown(unknown, f"{connector.source.name}.{src}")
 
                 # Prune target equations defined as weak if target is connected
                 origin = connector.source.owner
@@ -1504,6 +1489,79 @@ class System(Module, TimeObserver):
             problem.extend(child_problem, copy=False)
 
         return problem.extend(self.__loop_problem)
+
+    def assembled_time_problem(self) -> TimeProblem:
+        """Returns the consolidated transient problem, assembled from the entire system tree.
+
+        Returns
+        -------
+        TimeProblem
+            The assembled time problem.
+        """
+        problem = TimeProblem('off-design', self)
+
+        # Make shallow copy of `self._math` properties
+        for name in ('transients', 'rates'):
+            attr: dict = getattr(problem, name)
+            attr.update(getattr(self._time_pb, name))
+
+        def transfer_transient(transient: TimeUnknown, name: str):
+            ref = transient.context.name2variable[transient.basename]
+            problem.add_transient(name, 
+                der = transient.der,
+                max_time_step = transient.max_time_step_expr,
+                pulled_from = transient.pulled_from or ref,
+            )
+
+        def transfer_rate(rate: TimeDerivative, name: str):
+            problem.add_rate(name,
+                source = rate.source_expr,
+                initial_value = rate.initial_value_expr,
+            )
+
+        popped: list[tuple[str, str]] = list()
+
+        for child in self.children.values():
+            child_problem = child.assembled_time_problem()
+            connectors = self.__child_connectors.get(child.name, [])
+            transfer_items = [
+                (child_problem.transients, transfer_transient),
+                (child_problem.rates, transfer_rate),
+            ]
+
+            for connector in connectors:
+                # Transfer transients and rates to parent (when necessary)
+                for unknowns, transfer in transfer_items:
+                    for name in list(unknowns.keys()):
+                        unknown: Unknown = unknowns[name]
+                        port = unknown.port
+                        connected = (
+                            port.owner in self.children.values()
+                            and port is connector.sink 
+                            and unknown.variable in connector.sink_variables()
+                        )
+                        if connected:
+                            # Port is connected => remove unknown
+                            unknowns.pop(name)
+                            if connector.source.owner is self:
+                                # Transfer unknown to parent level
+                                src = connector.source_variable(unknown.variable)
+                                transfer(unknown, f"{connector.source.name}.{src}")
+                            else:
+                                popped.append(unknown.contextual_name())
+
+            problem.extend(child_problem, copy=False)
+
+        if popped:
+            if len(popped) == 1:
+                message = f"variable {popped[0]!r} is connected to an output"
+            else:
+                message = f"variables {popped} are connected to outputs"
+            warnings.warn(
+                f"In {self.full_name()}, time-dependent {message} and will not be computed."
+            )
+
+        return problem
 
     def get_unsolved_problem(self) -> MathematicalProblem:
         """Returns the consolidated mathematical problem, assembled from

@@ -1,23 +1,32 @@
 from __future__ import annotations
+import abc
 import logging
+import numpy
+from itertools import chain
 from collections import OrderedDict
 from numbers import Number
 from dataclasses import dataclass, field
 from typing import (
-    Any, Dict, Iterable, Optional,
-    Sequence, Union, Tuple, List,
-    Set, Callable, NamedTuple,
+    Any, Union, Iterable, Optional,
+    Dict, Tuple, List, Set,
+    Callable, NamedTuple,
+    TYPE_CHECKING, TypeVar,
 )
-
-import numpy
+if TYPE_CHECKING:
+    from cosapp.systems import System
 
 from cosapp.core.variableref import VariableReference
 from cosapp.core.numerics.boundary import Boundary, Unknown, TimeUnknown, TimeDerivative
 from cosapp.core.numerics.residues import Residue, DeferredResidue
+from cosapp.core.numerics.utils import TransferHelper
 from cosapp.utils.naming import natural_varname
 from cosapp.utils.helpers import check_arg
 
 logger = logging.getLogger(__name__)
+
+
+Self = TypeVar("Self", bound="BaseProblem")
+TimeVar = TypeVar("TimeVar", TimeUnknown, TimeDerivative)
 
 
 def default_array_factory(shape=0, dtype=float):
@@ -79,7 +88,7 @@ class WeakDeferredResidue(NamedTuple):
         return self.deferred.target
 
     @property
-    def context(self):
+    def context(self) -> System:
         """System: evaluation context of residue"""
         return self.deferred.context
 
@@ -101,7 +110,7 @@ class WeakDeferredResidue(NamedTuple):
         return self.deferred.make_residue(reference)
 
 
-class MathematicalProblem:
+class BaseProblem(abc.ABC):
     """Container object for unknowns and equations.
 
     Parameters
@@ -111,16 +120,110 @@ class MathematicalProblem:
     context : cosapp.systems.System
         Context in which the mathematical problem will be evaluated.
     """
-    def __init__(self, name: str, context: Optional["System"]) -> None:
+    def __init__(self, name: str, context: Optional[System]) -> None:
         from cosapp.systems import System
         check_arg(context, 'context', (System, type(None)))
-        # TODO add point label to associate set of equations with Single Case
         self._name = name  # type: str
         self._context: System = context
+
+    @property
+    def name(self) -> str:
+        """str : Mathematical system name."""
+        return self._name
+
+    @property
+    def context(self) -> System:
+        """cosapp.systems.System or None: Context in which mathematical objects are evaluated."""
+        return self._context
+
+    @context.setter
+    def context(self, context: Optional[System]):
+        if self._context is None:
+            from cosapp.systems import System
+            check_arg(context, 'context', (System, type(None)))
+            self._context = context
+        elif context is not self._context:
+            raise ValueError(f"Context is already set to {self._context.name!r}.")
+
+    def _check_context(self, attr_name: str) -> None:
+        if self._context is None:
+            raise AttributeError(f"Owner System is required to define {attr_name}.")
+
+    @abc.abstractmethod
+    def is_empty(self) -> bool:
+        pass
+
+    @abc.abstractmethod
+    def extend(
+        self: Self,
+        other: Self,
+        copy = True,
+        overwrite = False,
+        **kwargs,
+    ) -> Self:
+        """Extend the current problem with another one.
+
+        Parameters
+        ----------
+        - other [BaseProblem]:
+            The other mathematical system to add
+        - copy [bool, optional]:
+            Should the objects be copied; default is `True`.
+        - overwrite [bool, optional]:
+            If `False` (default), common attributes raise `ValueError`.
+            If `True`, attributes are silently overwritten.
+
+        Returns
+        -------
+        BaseProblem
+            The resulting problem
+        """
+        return self
+
+    @abc.abstractmethod
+    def clear(self) -> None:
+        """Clear all mathematical elements in problem."""
+        pass
+
+    def copy(self: Self) -> Self:
+        """Copy the problem into a new one.
+
+        Returns
+        -------
+        BaseProblem
+            The duplicated problem.
+        """
+        new = type(self)(self.name, self.context)
+        new.extend(self, copy=True)
+        return new
+
+    @abc.abstractmethod
+    def to_dict(self) -> Dict[str, Any]:
+        """Returns a JSONable representation of the problem.
+        
+        Returns
+        -------
+        dict[str, Any]
+            JSONable representation
+        """
+        pass
+
+
+class MathematicalProblem(BaseProblem):
+    """Container object for unknowns and equations.
+
+    Parameters
+    ----------
+    name : str
+        Name of the mathematical problem
+    context : cosapp.systems.System
+        Context in which the mathematical problem will be evaluated.
+    """
+    def __init__(self, name: str, context: Optional[System]) -> None:
+        super().__init__(name, context)
+        # TODO add point label to associate set of equations with Single Case
         self._unknowns = OrderedDict()  # type: Dict[str, Unknown]
         self._residues = OrderedDict()  # type: Dict[str, Residue]
-        self._transients = OrderedDict()  # type: Dict[str, TimeUnknown]
-        self._rates = OrderedDict()  # type: Dict[str, TimeDerivative]
         self._targets = OrderedDict()  # type: Dict[str, WeakDeferredResidue]
 
     def __repr__(self) -> str:
@@ -151,23 +254,6 @@ class MathematicalProblem:
         return "\n".join(lines) if lines else "empty problem"
 
     @property
-    def name(self) -> str:
-        """str : Mathematical system name."""
-        return self._name
-
-    @property
-    def context(self) -> Optional['cosapp.systems.System']:
-        """cosapp.systems.System or None: Context in which mathematical objects are evaluated."""
-        return self._context
-
-    @context.setter
-    def context(self, context: Optional['cosapp.systems.System']):
-        if self._context is None:
-            self._context = context
-        elif context is not self._context:
-            raise ValueError(f"Context is already set to {self._context.name!r}.")
-
-    @property
     def residues(self) -> Dict[str, Residue]:
         """Dict[str, Residue]: Residue dictionary defined in problem."""
         return self._residues
@@ -185,7 +271,7 @@ class MathematicalProblem:
         """numpy.ndarray: Unknown values stacked into a vector."""
         return self.__as_vector(self.unknowns)
 
-    def __as_vector(self, collection: dict):
+    def __as_vector(self, collection: dict[str, Union[Unknown, Residue]]):
         values = tuple(
             numpy.ravel(element.value) for element in collection.values()
         )
@@ -243,7 +329,7 @@ class MathematicalProblem:
         return (self.n_unknowns, self.n_equations)
 
     def is_empty(self) -> bool:
-        return self.shape == (0, 0)
+        return self.n_unknowns == self.n_equations == 0
 
     def add_unknown(self,
         name: Union[str, Iterable[Union[dict, str, Unknown]]],
@@ -278,8 +364,8 @@ class MathematicalProblem:
         MathematicalProblem
             The modified MathematicalSystem
         """
-        self.__check_context("unknowns")
-        context = self.context
+        self._check_context("unknowns")
+        context = self._context
 
         def add_unknown(
             name: str,
@@ -366,7 +452,7 @@ class MathematicalProblem:
         MathematicalProblem
             The modified MathematicalSystem
         """
-        self.__check_context("equations")
+        self._check_context("equations")
         context = self.context
 
         def add_residue(equation, name=None, reference=1):
@@ -409,7 +495,7 @@ class MathematicalProblem:
         MathematicalProblem
             The modified MathematicalSystem
         """
-        self.__check_context("targets")
+        self._check_context("targets")
         context = self.context
 
         def register(name, reference=1):
@@ -461,95 +547,16 @@ class MathematicalProblem:
         """Dict[str, WeakDeferredResidue]: Dict of deferred residues defined for this system."""
         return self._targets
 
-    @property
-    def transients(self) -> Dict[str, TimeUnknown]:
-        """Dict[str, TimeUnknown] : Unknown time-dependent numerical features defined for this system."""
-        return self._transients
-
-    def add_transient(self,
-        name: str,
-        der: Any,
-        max_time_step: Union[Number, str] = numpy.inf,
-        max_abs_step: Union[Number, str] = numpy.inf,
-        pulled_from: Optional[VariableReference] = None,
-    ) -> MathematicalProblem:
-        """Add a time-dependent unknown.
-
-        Parameters
-        ----------
-        name : str
-            Name of the new time-dependent (transient) variable
-        der : Any
-            Name of the variable or evaluable expression defining the time derivative of transient variable
-        max_time_step : Number or evaluable expression (str), optional
-            Maximal time step for the time integration of the transient variable; numpy.inf by default.
-        max_abs_step : Number or evaluable expression compatible with transient variable, optional
-            Maximum variable step admissible over one time step; numpy.inf by default.
-        pulled_from : VariableReference, optional
-            Original time unknown before pulling; None by default.
-
-        Returns
-        -------
-        MathematicalProblem
-            The modified MathematicalSystem
-        """
-        self.__check_context("transient unknowns")
-
-        if name in self._transients:
-            raise ArithmeticError(f"Variable {name!r} is already defined as a time-dependent unknown of {self.name!r}.")
-
-        self._transients[name] = TimeUnknown(
-            self.context,
-            name,
-            der,
-            max_time_step,
-            max_abs_step,
-            pulled_from=pulled_from,
-        )
-        return self
-
-    @property
-    def rates(self) -> Dict[str, TimeDerivative]:
-        """Dict[str, TimeDerivative] : Time derivatives computed during system evolution."""
-        return self._rates
-
-    def add_rate(self, name: str, source: Any, initial_value: Any = None) -> MathematicalProblem:
-        """Add a time derivative.
-
-        Parameters
-        ----------
-        name : str
-            Name of the new time-dependent (transient) variable
-        source : Any
-            Name of the variable or evaluable expression whose time derivative will be computed
-
-        Returns
-        -------
-        MathematicalProblem
-            The modified MathematicalSystem
-        """
-        self.__check_context("rates")
-
-        if name in self._rates:
-            raise ArithmeticError(f"Variable {name!r} is already defined as a time-dependent unknown of {self.name!r}.")
-
-        self._rates[name] = TimeDerivative(self.context, name, source, initial_value)
-        return self
-
-    def __check_context(self, name: str):
-        if self.context is None:
-            raise AttributeError(f"Owner System is required to define {name}.")
-
     def extend(self,
         other: MathematicalProblem,
         copy = True,
+        overwrite = False,
         unknowns = True,
         equations = True,
-        overwrite = False,
         unknown_wrapper: Optional[Callable[[str], str]] = None,
         residue_wrapper: Optional[Callable[[str], str]] = None,
     ) -> MathematicalProblem:
-        """Extend the current mathematical system with the other one.
+        """Extend the current mathematical problem with another one.
 
         Parameters
         ----------
@@ -557,18 +564,18 @@ class MathematicalProblem:
             The other mathematical system to add
         - copy [bool, optional]:
             Should the objects be copied; default is `True`.
+        - overwrite [bool, optional]:
+            If `False` (default), common unknowns/equations raise `ValueError`.
+            If `True`, attributes are silently overwritten.
         - unknowns [bool, optional]:
             If `False`, unknowns are discarded; default is `True`.
         - equations [bool, optional]:
             If `False`, equations are discarded; default is `True`.
-        - overwrite [bool, optional]:
-            If `False` (default), common unknowns/equations raise `ValueError`.
-            If `True`, attributes are silently overwritten.
 
         Returns
         -------
         MathematicalProblem
-            The resulting mathematical system
+            The merged mathematical problem
         """
         no_wrapping = (unknown_wrapper is residue_wrapper is None)
         if other is self and not copy and no_wrapping:
@@ -579,68 +586,39 @@ class MathematicalProblem:
         if residue_wrapper is None:
             residue_wrapper = lambda key: key
 
-        from cosapp.systems import System
         context: System = self.context
+        other_context: System = other.context
 
-        sys_paths: Dict[int, str] = dict()
+        helper = TransferHelper(context)
+        var_key_format = TransferHelper.variable_key_format
 
-        def get_path(system: System) -> str:
-            nonlocal sys_paths
-            key = id(system)
-            try:
-                path = sys_paths[key]
-            except KeyError:
-                sys_paths[key] = path = context.get_path_to_child(system)
-            return path
-
-        def var_key_format(path: str, varname: str):
-            return f"{path}.{varname}" if path else varname
-
-        def res_key_format(path: str, eqname: str):
-            return f"{path}: {eqname}" if path else eqname
-
-        def make_key(obj: Union[Boundary, Residue], key_format, wrapper) -> str:
-            """Generic key formatter for unknowns and residues."""
-            path = get_path(obj.context)
-            key = key_format(path, obj.name)
-            return wrapper(key)
-
-        def variable_key(variable: Boundary) -> str:
-            """Generate dict key from `variable` context."""
-            return make_key(variable, var_key_format, unknown_wrapper)
-
-        def residue_key(residue: Residue) -> str:
-            """Generate dict key from `residue` context."""
-            return make_key(residue, res_key_format, residue_wrapper)
-
-        get = (lambda obj: obj.copy()) if copy else (lambda obj: obj)
-
-        def transfer_unknowns(kind: str):
-            """Transfer unknowns from other mathematical problem"""
-            source = getattr(other, kind)
-            destination = getattr(self, kind)
-            for unknown in source.values():
-                key = variable_key(unknown)
-                if not overwrite and key in destination:
-                    raise ValueError(f"{key!r} already exists in {self.name!r}.")
-                destination[key] = get(unknown)
+        def transfer(attr_name: str, transfer_func: Callable, name_wrapper: Callable[[str], str]):
+            source: dict = getattr(other, attr_name)
+            destination: dict = getattr(self, attr_name)
+            transferred = transfer_func(
+                source.values(),
+                name_wrapper=name_wrapper,
+                copy=copy,
+            )
+            if not overwrite:
+                common = set(destination).intersection(transferred)
+                if common:
+                    if len(common) == 1:
+                        message = f"{common.pop()!r} already exists"
+                    else:
+                        message = f"{sorted(common)} already exist"
+                    raise ValueError(f"{message} in {self.name!r}.")
+            destination.update(transferred)
 
         if unknowns:
-            transfer_unknowns('unknowns')
-            transfer_unknowns('transients')
-            transfer_unknowns('rates')
+            transfer('unknowns', helper.transfer_unknowns, unknown_wrapper)
 
         if equations:
-            residues = self._residues
-            for name, residue in other.residues.items():
-                key = residue_key(residue)
-                if not overwrite and key in residues:
-                    raise ValueError(f"{key!r} already exists in {self.name!r}.")
-                residues[key] = get(residue)
+            transfer('residues', helper.transfer_residues, residue_wrapper)
 
-            connectors = list(self.context.incoming_connectors())
-            name2variable = other.context.name2variable
-            path = get_path(other.context)
+            connectors = list(context.incoming_connectors())
+            name2variable = other_context.name2variable
+            path = helper.path_finder.get_path(other_context)
 
             for deferred in other._targets.values():
                 targetted = list(deferred.variables)[0]
@@ -665,7 +643,7 @@ class MathematicalProblem:
                                 # target is an expression involving `targetted`
                                 name = name.replace(var_key_format(path, targetted), alias_name)
                             logger.info(
-                                f"Target on {original!r} will be based on {name!r} in the context of {self.context.full_name()!r}"
+                                f"Target on {original!r} will be based on {name!r} in the context of {context.full_name()!r}"
                             )
                             break
                 self.add_target(name, weak=deferred.weak)
@@ -676,20 +654,17 @@ class MathematicalProblem:
         """Clear all mathematical elements in this problem."""
         self._unknowns.clear()
         self._residues.clear()
-        self._transients.clear()
-        self._rates.clear()
         self._targets.clear()
 
     def copy(self, activate_targets=False) -> MathematicalProblem:
-        """Copy the `MathematicalSystem` object.
+        """Copy the `MathematicalProblem` object.
 
         Returns
         -------
         MathematicalProblem
             The duplicated mathematical problem.
         """
-        new = MathematicalProblem(self.name, self.context)
-        new.extend(self, copy=True)
+        new = super().copy()
         if activate_targets:
             new.activate_targets()
         return new
@@ -699,23 +674,24 @@ class MathematicalProblem:
         
         Returns
         -------
-        Dict[str, Any]
+        dict[str, Any]
             JSONable representation
         """
+        def value_to_dict(items: tuple[str, Union[Unknown, Residue]]):
+            return items[0], items[1].to_dict()
+
         return {
-            "unknowns": dict((name, unknown.to_dict()) for name, unknown in self.unknowns.items()),
-            "equations": dict((name, equation.to_dict()) for name, equation in self.residues.items()),
-            "transients": dict((name, transient.to_dict()) for name, transient in self.transients.items()),
-            "rates": dict((name, rate.to_dict()) for name, rate in self.rates.items())
+            "unknowns": dict(map(value_to_dict, self.unknowns.items())),
+            "equations": dict(map(value_to_dict, self.residues.items()))
         }
 
     def validate(self) -> None:
-        """Verifies that there are as much unknowns as equations defined.
+        """Verifies that there are as many unknowns as equations defined.
 
         Raises
         ------
         ArithmeticError
-            If the mathematical system is not closed.
+            If the mathematical problem is not square.
         """
         n_unknowns, n_equations = self.shape
         if n_unknowns != n_equations:
@@ -726,3 +702,194 @@ class MathematicalProblem:
             logger.error(f"Residues: {list(self.residues) + list(self.deferred_residues)}")
             logger.error(f"Variables: {list(self.unknowns)}")
             raise ArithmeticError(msg)
+
+
+class TimeProblem(BaseProblem):
+    """Container object for time-dependent variables.
+
+    Parameters
+    ----------
+    name : str
+        Name of the mathematical problem
+    context : cosapp.systems.System
+        Context in which the mathematical problem will be evaluated.
+    """
+    def __init__(self, name: str, context: Optional[System]) -> None:
+        super().__init__(name, context)
+        self._transients = OrderedDict()  # type: Dict[str, TimeUnknown]
+        self._rates = OrderedDict()  # type: Dict[str, TimeDerivative]
+
+    def __repr__(self) -> str:
+        lines = []
+        indent = "  "
+        if self._transients:
+            lines.append(f"Transients")
+            lines.extend(
+                f"{indent}{transient.name} (derivative: {transient.der})"
+                for transient in self._transients.values()
+            )
+        if self._rates:
+            lines.append(f"Rates")
+            lines.extend(
+                f"{indent}{rate.name} (source: {rate.source_expr})"
+                for rate in self._rates.values()
+            )
+        return "\n".join(lines) if lines else "empty time problem"
+
+    @property
+    def transients(self) -> Dict[str, TimeUnknown]:
+        """Dict[str, TimeUnknown] : Unknown time-dependent numerical features defined for this system."""
+        return self._transients
+
+    def is_empty(self) -> bool:
+        return len(self._transients) == len(self._rates) == 0
+
+    def add_transient(self,
+        name: str,
+        der: Any,
+        max_time_step: Union[Number, str] = numpy.inf,
+        max_abs_step: Union[Number, str] = numpy.inf,
+        pulled_from: Optional[VariableReference] = None,
+    ) -> TimeProblem:
+        """Add a time-dependent unknown.
+
+        Parameters
+        ----------
+        name : str
+            Name of the new time-dependent (transient) variable
+        der : Any
+            Name of the variable or evaluable expression defining the time derivative of transient variable
+        max_time_step : Number or evaluable expression (str), optional
+            Maximal time step for the time integration of the transient variable; numpy.inf by default.
+        max_abs_step : Number or evaluable expression compatible with transient variable, optional
+            Maximum variable step admissible over one time step; numpy.inf by default.
+        pulled_from : VariableReference, optional
+            Original time unknown before pulling; None by default.
+
+        Returns
+        -------
+        MathematicalProblem
+            The modified MathematicalSystem
+        """
+        self._check_context("transient unknowns")
+
+        if name in self._transients:
+            raise ArithmeticError(
+                f"Variable {name!r} is already defined as a time-dependent unknown of {self.name!r}."
+            )
+
+        self._transients[name] = TimeUnknown(
+            self.context,
+            name,
+            der,
+            max_time_step,
+            max_abs_step,
+            pulled_from=pulled_from,
+        )
+        return self
+
+    @property
+    def rates(self) -> Dict[str, TimeDerivative]:
+        """Dict[str, TimeDerivative] : Time derivatives computed during system evolution."""
+        return self._rates
+
+    def add_rate(self, name: str, source: Any, initial_value: Any = None) -> TimeProblem:
+        """Add a time derivative.
+
+        Parameters
+        ----------
+        name : str
+            Name of the new time-dependent (transient) variable
+        source : Any
+            Name of the variable or evaluable expression whose time derivative will be computed
+
+        Returns
+        -------
+        MathematicalProblem
+            The modified MathematicalSystem
+        """
+        self._check_context("rates")
+
+        if name in self._rates:
+            raise ArithmeticError(
+                f"Variable {name!r} is already defined as a time-dependent unknown of {self.name!r}."
+            )
+
+        self._rates[name] = TimeDerivative(self.context, name, source, initial_value)
+        return self
+
+    @property
+    def n_unknowns(self) -> int:
+        """int: Number of unknowns."""
+        return sum(
+            numpy.size(unknown.value) 
+            for unknown in chain(self._transients.values(), self._rates.values())
+        )
+
+    def extend(self,
+        other: TimeProblem,
+        copy = True,
+        overwrite = False,
+    ) -> TimeProblem:
+        """Extend the current mathematical system with the other one.
+
+        Parameters
+        ----------
+        - other [MathematicalProblem]:
+            The other mathematical system to add
+        - copy [bool, optional]:
+            Should the objects be copied; default is `True`.
+        - unknowns [bool, optional]:
+            If `False`, unknowns are discarded; default is `True`.
+        - equations [bool, optional]:
+            If `False`, equations are discarded; default is `True`.
+        - overwrite [bool, optional]:
+            If `False` (default), common unknowns/equations raise `ValueError`.
+            If `True`, attributes are silently overwritten.
+
+        Returns
+        -------
+        MathematicalProblem
+            The resulting mathematical system
+        """
+        if other is self and not copy:
+            return self  # quick return
+
+        helper = TransferHelper(self.context)
+
+        def transfer_unknowns(attr_name: str):
+            """Transfer unknowns from other time problem"""
+            source: Dict[str, TimeVar] = getattr(other, attr_name)
+            unknowns: Dict[str, TimeVar] = getattr(self, attr_name)
+            transferred_unknowns = helper.transfer_unknowns(source.values(), copy=copy)
+            if not overwrite:
+                common = set(unknowns).intersection(transferred_unknowns)
+                if common:
+                    raise ValueError(f"{sorted(common)} already exist in {self.name!r}.")
+            unknowns.update(transferred_unknowns)
+
+        transfer_unknowns('transients')
+        transfer_unknowns('rates')
+
+        return self
+
+    def clear(self) -> None:
+        """Clear all mathematical elements in this problem."""
+        self._transients.clear()
+        self._rates.clear()
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Returns a JSONable representation of the mathematical problem.
+        
+        Returns
+        -------
+        Dict[str, Any]
+            JSONable representation
+        """
+        def value_to_dict(items: tuple[str, TimeVar]):
+            return items[0], items[1].to_dict()
+
+        return {
+            "transients": dict(map(value_to_dict, self._transients.items())),
+            "rates": dict(map(value_to_dict, self._rates.items()))
+        }

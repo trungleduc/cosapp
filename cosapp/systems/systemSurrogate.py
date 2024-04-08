@@ -1,3 +1,4 @@
+from __future__ import annotations
 import numpy
 import collections
 import pickle
@@ -7,10 +8,13 @@ import warnings
 from numbers import Number
 from collections import OrderedDict
 from typing import (
+    TYPE_CHECKING,
     NoReturn, Any, Dict, List,
     Iterable, NamedTuple, Union,
     Optional, Type,
 )
+if TYPE_CHECKING:
+    from cosapp.systems import System
 
 from cosapp.utils.surrogate_models.base import SurrogateModel
 from cosapp.ports.enum import PortType
@@ -92,7 +96,7 @@ class SystemSurrogate:
     __slots__ = ('__owner', '__state', '__need_doe')
 
     def __init__(self,
-        owner: "cosapp.systems.System",
+        owner: System,
         data_in: Union[pandas.DataFrame, Dict[str, Any]],
         model: Type[SurrogateModel],
         data_out: Optional[Union[pandas.DataFrame, Dict[str, Any]]] = None,
@@ -138,16 +142,16 @@ class SystemSurrogate:
         logger.debug(f"System surrogate initialized")
 
     @property
-    def owner(self)-> "cosapp.systems.System":
+    def owner(self) -> System:
         return self.__owner
 
     @property
-    def state(self)-> SystemSurrogateState:
+    def state(self) -> SystemSurrogateState:
         """SystemSurrogateState: inner state of system surrogate"""
         return self.__state
 
     @property
-    def model_type(self)-> Type[SurrogateModel]:
+    def model_type(self) -> Type[SurrogateModel]:
         return self.__state.model.get_type()
 
     @property
@@ -322,7 +326,7 @@ class SystemSurrogate:
             pickle.dump(self.__state, fp)
 
     @classmethod
-    def load(cls, owner: "cosapp.systems.System", filename: str) -> "SystemSurrogate":
+    def load(cls, owner: System, filename: str) -> SystemSurrogate:
         """Load system surrogate from file"""
         logger.debug(f"Loading metamodel from {filename}")
         from cosapp.systems import System
@@ -347,7 +351,7 @@ class SystemSurrogate:
                 f"{list(unknowns.difference(state.doe_in))}"
             )
 
-    def __get_owner_connections(self) -> "OrderedDict[str, list]":
+    def __get_owner_connections(self) -> Dict[str, list]:
         return get_dependent_connections(self.__owner)
 
 
@@ -359,12 +363,12 @@ def flatten(iterable: Iterable) -> Iterable:
             yield elem
 
 
-def get_dependent_connections(system: "cosapp.systems.System") -> Dict[str, PortType]:
+def get_dependent_connections(system: System) -> Dict[str, PortType]:
     """This function returns a dictionnary mapping variable names to a port direction.
     Keys are absolute paths to connected inputs and all outputs.
     Values are owner port direction.
     """
-    from cosapp.base import System
+    from cosapp.systems import System
 
     def get_connections(system: System, head_system: System) -> Dict[str, PortType]:
         """Recursive inner version of `get_dependent_connections`"""
@@ -406,9 +410,8 @@ def get_dependent_connections(system: "cosapp.systems.System") -> Dict[str, Port
     return get_connections(system, system)
 
 
-def get_unknowns_transients(system: "cosapp.systems.System") -> set:
-    res = set()
-    problem = system.assembled_problem()
-    for collection in (problem.unknowns, problem.transients):
-        res.update(collection)
-    return res
+def get_unknowns_transients(system: System) -> set[str]:
+    return set.union(
+        set(system.assembled_problem().unknowns),
+        set(system.assembled_time_problem().transients),
+    )
