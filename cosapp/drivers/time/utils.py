@@ -9,7 +9,7 @@ import numpy, numpy.polynomial
 
 from cosapp.core.eval_str import EvalString
 from cosapp.core.variableref import VariableReference
-from cosapp.core.numerics.boundary import AbstractTimeUnknown, TimeUnknown
+from cosapp.core.numerics.boundary import AbstractTimeUnknown, TimeUnknown, TimeDerivative
 from cosapp.ports.port import ExtensiblePort
 from cosapp.systems.system import System
 from cosapp.utils.helpers import check_arg
@@ -288,7 +288,7 @@ class TimeVarManager:
 
     @property
     def problem(self):
-        """Mathematical problem handled by manager"""
+        """Time problem handled by manager"""
         return self.__problem
 
     @context.setter
@@ -309,7 +309,7 @@ class TimeVarManager:
         return self.__transients
 
     @property
-    def rates(self) -> Dict[str, "TimeDerivative"]:
+    def rates(self) -> Dict[str, TimeDerivative]:
         """
         Dictionary of all rate variables in current system, linking each
         variable (key) to its associated TimeDerivative object (value).
@@ -319,7 +319,7 @@ class TimeVarManager:
     def update_transients(self) -> None:
         """Update the transient variable dictionary (see property `transients` for details)"""
         context = self.__context
-        problem = context.assembled_problem()
+        problem = context.assembled_time_problem()
         context_transients = problem.transients
         ders = dict()
         reference2name = dict()
@@ -563,7 +563,7 @@ class SystemInterpolator:
         check_arg(driver, 'driver', ExplicitTimeDriver)
         self.__owner = driver
         self.__system = system = driver.owner
-        problem = system.assembled_problem()
+        problem = system.assembled_time_problem()
         self.__transients = transients = problem.transients
         self.__interp = dict.fromkeys(transients, None)
 

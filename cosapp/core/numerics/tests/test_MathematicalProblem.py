@@ -63,7 +63,6 @@ def test_MathematicalProblem__init__():
     assert m.context is None
     assert len(m.unknowns) == 0
     assert len(m.residues) == 0
-    assert len(m.transients) == 0
     assert len(m.deferred_residues) == 0
     assert m.is_empty()
 
@@ -74,27 +73,6 @@ def test_MathematicalProblem_name(test_objects: Tuple[System, MathematicalProble
         setattr(m, 'name', 'banana')
 
 
-def test_MathematicalProblem_context():
-    sa, sb = SystemA('a'), SystemB('b')
-
-    m = MathematicalProblem('sa', None)
-    assert m.context is None
-    m.context = sa
-    assert m.context is sa
-    with pytest.raises(ValueError, match="Context is already set to .*"):
-        m.context = sb
-    assert m.context is sa
-
-    with no_exception():
-        m.context = m.context
-
-    m = MathematicalProblem('test', sa)
-    assert m.context is sa
-    with pytest.raises(ValueError, match="Context is already set to .*"):
-        m.context = sb
-    assert m.context is sa
-
-
 def test_MathematicalProblem_noSetters(test_objects: Tuple[System, MathematicalProblem]):
     s, m = test_objects
 
@@ -103,10 +81,6 @@ def test_MathematicalProblem_noSetters(test_objects: Tuple[System, MathematicalP
     
     with pytest.raises(AttributeError):
         m.residues = OrderedDict(a=Residue(s, "a == 0"))
-    
-    ds = DynamicSystemC('ds')
-    with pytest.raises(AttributeError):
-        m.transients = [TimeUnknown(ds, "A", "2.5 * q"), ]
 
 
 def test_MathematicalProblem_residue_vector(test_objects: Tuple[System, MathematicalProblem]):
@@ -245,7 +219,6 @@ def test_MathematicalProblem_add_methods():
     assert m.context is s
     assert list(m.unknowns) == ['a', 'c']
     assert list(m.residues) == ['g == 0', 'h equation']
-    assert list(m.transients) == []
 
     unknown = m.unknowns['c']
     assert isinstance(unknown, Unknown)
@@ -520,28 +493,6 @@ def test_MathematicalProblem_add_unknown_repeated(test_objects: Tuple[System, Ma
     assert m.unknowns['a'].max_abs_step == 1
 
 
-def test_MathematicalProblem_add_transient():
-    s = DynamicSystemC('s')
-    m = MathematicalProblem('test', s)
-    m.add_transient('A', der='q')
-    assert list(m.transients) == ['A']
-    A = m.transients['A']
-    assert isinstance(A.value, Number)
-    assert A.context is s
-    assert A.name == 'A'
-    assert A.d_dt == 1
-
-    m.add_transient('x', der='v / q**2')
-    assert list(m.transients) == ['A', 'x']
-    x = m.transients['x']
-    assert isinstance(x.value, np.ndarray)
-    s.v = np.r_[1, 2, 3]
-    s.q = 2.0
-    assert x.context is s
-    assert x.name == 'x'
-    assert x.d_dt == pytest.approx(np.r_[0.25, 0.5, 0.75], rel=1e-15)
-
-
 def test_MathematicalProblem_extend():
     def local_test_objects():
         r, s = SystemA('r'), SystemB('s')
@@ -596,8 +547,6 @@ def test_MathematicalProblem_extend():
     assert mr.context is r
     assert list(mr.unknowns) == ['a', 'c', 's.y']
     assert list(mr.residues) == ['g == 0', 'h equation', 's: v == 0']
-    assert len(mr.transients) == 0
-    assert len(mr.rates) == 0
     assert len(mr.deferred_residues) == 2
     assert all(
         isinstance(obj.deferred, DeferredResidue)
@@ -617,8 +566,6 @@ def test_MathematicalProblem_extend():
     assert mr.context is r
     assert list(mr.unknowns) == ['a', 'c', 's.y']
     assert list(mr.residues) == ['g == 0', 'h equation', 's: v == 0']
-    assert len(mr.transients) == 0
-    assert len(mr.rates) == 0
     assert len(mr.deferred_residues) == 2
     assert all(
         isinstance(obj.deferred, DeferredResidue)
@@ -638,8 +585,6 @@ def test_MathematicalProblem_extend():
     assert mr.context is r
     assert list(mr.unknowns) == ['a', 'c', 's.y']
     assert list(mr.residues) == ['g == 0', 'h equation', 's: v == 0']
-    assert len(mr.transients) == 0
-    assert len(mr.rates) == 0
     assert len(mr.deferred_residues) == 2
     assert all(
         isinstance(obj.deferred, DeferredResidue)
@@ -682,8 +627,6 @@ def test_MathematicalProblem_extend_partial():
     assert mr.context is r
     assert list(mr.unknowns) == ['a', 'c', 's.y']
     assert list(mr.residues) == ['g == 0', 'h equation']
-    assert len(mr.transients) == 0
-    assert len(mr.rates) == 0
     assert len(mr.deferred_residues) == 1
     assert all(
         isinstance(obj.deferred, DeferredResidue)
@@ -701,8 +644,6 @@ def test_MathematicalProblem_extend_partial():
     assert mr.context is r
     assert list(mr.unknowns) == ['a', 'c', 's.y']
     assert list(mr.residues) == ['g == 0', 'h equation']
-    assert len(mr.transients) == 0
-    assert len(mr.rates) == 0
     assert len(mr.deferred_residues) == 1
     assert all(
         isinstance(obj.deferred, DeferredResidue)
@@ -720,8 +661,6 @@ def test_MathematicalProblem_extend_partial():
     assert mr.context is r
     assert list(mr.unknowns) == ['a', 'c']
     assert list(mr.residues) == ['g == 0', 'h equation', 's: v == 0']
-    assert len(mr.transients) == 0
-    assert len(mr.rates) == 0
     assert len(mr.deferred_residues) == 2
     assert all(
         isinstance(obj.deferred, DeferredResidue)
@@ -739,8 +678,6 @@ def test_MathematicalProblem_extend_partial():
     assert mr.context is r
     assert list(mr.unknowns) == ['a', 'c']
     assert list(mr.residues) == ['g == 0', 'h equation', 's: v == 0']
-    assert len(mr.transients) == 0
-    assert len(mr.rates) == 0
     assert len(mr.deferred_residues) == 2
     assert all(
         isinstance(obj.deferred, DeferredResidue)
@@ -885,8 +822,6 @@ def test_MathematicalProblem_clear(test_objects: Tuple[System, MathematicalProbl
     assert not m.is_empty()
     assert list(m.unknowns) == ['a', 'c']
     assert list(m.residues) == ['g == 0', 'h equation']
-    assert len(m.transients) == 0
-    assert len(m.rates) == 0
     assert len(m.deferred_residues) == 0
 
     for unknown in m.unknowns.values():
@@ -898,22 +833,10 @@ def test_MathematicalProblem_clear(test_objects: Tuple[System, MathematicalProbl
     assert name in m.residues
     assert m.residues[name].context is s
     assert m.residues[name].name is name
-
-    m.add_transient('d', der='g**2')
-    assert list(m.transients) == ['d']
-    assert list(m.rates) == []
-    assert list(m.deferred_residues) == []
-    assert not m.is_empty()
-
-    m.add_rate('a', source='b[0]')
-    assert list(m.transients) == ['d']
-    assert list(m.rates) == ['a']
     assert list(m.deferred_residues) == []
     assert not m.is_empty()
 
     m.add_target('g')
-    assert list(m.transients) == ['d']
-    assert list(m.rates) == ['a']
     assert [deferred.target for deferred in m.deferred_residues.values()] == ['g']
     assert not m.is_empty()
 
@@ -922,8 +845,6 @@ def test_MathematicalProblem_clear(test_objects: Tuple[System, MathematicalProbl
     assert m.context is s
     assert len(m.unknowns) == 0
     assert len(m.residues) == 0
-    assert len(m.transients) == 0
-    assert len(m.rates) == 0
     assert len(m.deferred_residues) == 0
 
 
@@ -985,15 +906,11 @@ def test_MathematicalProblem_to_dict(test_objects: Tuple[System, MathematicalPro
 
     problem_dict = problem.to_dict()
 
-    assert "unknowns" in problem_dict
-    assert len(problem_dict["unknowns"]) == 2
+    assert set(problem_dict) == {"unknowns", "equations"}
+    assert set(problem_dict["unknowns"]) == {"a", "c"}
     assert problem_dict["unknowns"]["a"] == problem.unknowns["a"].to_dict()
-    assert "equations" in problem_dict
-    assert len(problem_dict["equations"]) == 2
+    assert set(problem_dict["equations"]) == {"g == 0", "h equation"}
     assert problem_dict["equations"]["g == 0"] == problem.residues["g == 0"].to_dict()
-    assert "transients" in problem_dict
-    assert "rates" in problem_dict
-    assert len(problem_dict) == 4
 
 
 def test_MathematicalProblem_validate(test_objects: Tuple[System, MathematicalProblem]):

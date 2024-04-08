@@ -4,7 +4,7 @@ import numpy as np
 
 from cosapp.systems import System
 from cosapp.drivers.time.utils import TimeVarManager
-from cosapp.core.numerics.basics import MathematicalProblem
+from cosapp.core.numerics.basics import TimeProblem
 from .conftest import (
     ScalarOde, VectorOde,
     PointMass, PointMassWithPorts,
@@ -34,7 +34,7 @@ def test_TimeVarManager_get_tree(ders, expected):
 def test_TimeVarManager__init__(system, expected):
     m = TimeVarManager(system)
     assert m.context is system
-    assert isinstance(m.problem, MathematicalProblem)
+    assert isinstance(m.problem, TimeProblem)
     assert m.problem.context is system
     assert set(m.transients.keys()) == set(expected.get("transients", []))
     assert set(m.rates.keys()) == set(expected.get("rates", []))

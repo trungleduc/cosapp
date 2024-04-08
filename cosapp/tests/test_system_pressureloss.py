@@ -287,5 +287,5 @@ def test_system222_redundant(system222):
     solver.add_child(RunSingleCase("case"))
     solver.case.add_unknown(["p2.s21.x", "s1.x"])
 
-    with pytest.raises(ValueError, match="'p2\.s21\.x' already exists in 'offdesign'"):
+    with pytest.raises(ValueError, match="\['p2\.s21\.x', 's1\.x'\] already exist in 'offdesign'"):
         s.run_drivers()
