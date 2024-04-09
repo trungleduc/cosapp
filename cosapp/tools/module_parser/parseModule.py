@@ -164,6 +164,7 @@ def get_data_from_class(
         fixed_size_port = isinstance(port, Port)
         if fixed_size_port:
             portDict['pack'] = package_name or modname.split('.', maxsplit=1)[0]
+            portDict['mod'] = get_shortest_import_path(ptype.__module__, ptype)
         else:
             portDict['pack'] = sysPackage
         
@@ -185,7 +186,7 @@ def get_data_from_class(
     def get_port_var(port: BasePort):
         return list(map(get_var_data, port.variables()))
 
-    def get_shortest_import_path(modulePath: str, dtype: Type[System]) -> str:
+    def get_shortest_import_path(modulePath: str, dtype: type) -> str:
         pathParts = modulePath.split('.')
         className = dtype.__name__
 

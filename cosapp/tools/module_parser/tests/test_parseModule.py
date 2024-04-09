@@ -106,9 +106,10 @@ def test_get_data_from_class_system():
                 ]
             },
             {
+                'name': 'p_in',
                 'type': 'AbPort',
                 'pack': 'bogusModule',
-                'name': 'p_in',
+                'mod': 'bogusModule.systemAndPort',
             },
         ],
         'outputs':
@@ -126,9 +127,10 @@ def test_get_data_from_class_system():
                 ],
             },
             {
+                'name': 'p_out',
                 'type': 'XyzPort',
                 'pack': 'bogusModule',
-                'name': 'p_out',
+                'mod': 'bogusModule.systemAndPort',
             },
         ],
     }
@@ -153,6 +155,7 @@ def test_get_data_from_class_port():
     assert data == {
             "name": "XyzPort",
             "pack": "bogusModule",
+            "mod": "bogusModule.systemAndPort",
             "variables":
             [
                 {
@@ -336,9 +339,10 @@ def test_get_data_from_module_includes_excludes(expectedSystems):
                     },],
                 },
                 {
+                    'name': 'p_in',
                     'type': 'AbPort',
                     'pack': 'bogusModule',
-                    'name': 'p_in'
+                    'mod': 'bogusModule.systemAndPort',
                 },
             ],
             'outputs':
@@ -354,9 +358,10 @@ def test_get_data_from_module_includes_excludes(expectedSystems):
                     },],
                 },
                 {
+                    'name': 'p_out',
                     'type': 'XyzPort',
                     'pack': 'bogusModule',
-                    'name': 'p_out'
+                    'mod': 'bogusModule.systemAndPort',
                 },
             ],
         },
@@ -366,6 +371,7 @@ def test_get_data_from_module_includes_excludes(expectedSystems):
         {
             "name": "XyzPort",
             "pack": "bogusModule",
+            "mod": "bogusModule.systemAndPort",
             "variables":
             [
                 {
@@ -385,6 +391,7 @@ def test_get_data_from_module_includes_excludes(expectedSystems):
         {
             "name": "AbPort",
             "pack": "bogusModule",
+            "mod": "bogusModule.systemAndPort",
             "variables":
             [
                 {
@@ -428,8 +435,9 @@ def test_get_data_from_module_child():
             'inputs':
             [{
                 'name': 'p_in_parent',
-                'pack': 'bogusModule.systemWithChildPulling',
                 'type': 'AbPort',
+                'pack': 'bogusModule.systemWithChildPulling',
+                'mod': 'bogusModule.systemAndPort',
             },],
         },
         {
@@ -451,9 +459,10 @@ def test_get_data_from_module_child():
                     },],
                 },
                 {
+                    'name': 'p_in',
                     'type': 'AbPort',
                     'pack': 'bogusModule.systemWithChildPulling',
-                    'name': 'p_in'
+                    'mod': 'bogusModule.systemAndPort',
                 },
             ],
             'outputs':
@@ -469,9 +478,10 @@ def test_get_data_from_module_child():
                     },],
                 },
                 {
+                    'name': 'p_out',
                     'type': 'XyzPort',
                     'pack': 'bogusModule.systemWithChildPulling',
-                    'name': 'p_out'
+                    'mod': 'bogusModule.systemAndPort',
                 },
             ],
         },
@@ -481,6 +491,7 @@ def test_get_data_from_module_child():
         {
             'name': 'AbPort',
             'pack': 'bogusModule.systemWithChildPulling',
+            'mod': 'bogusModule.systemAndPort',
             'desc': '|  |  |\n---|---\n  **a**: 1 | &nbsp;\n  **b**: [0. 0. 0.] | &nbsp;',
             'variables': [
                 {
@@ -494,6 +505,7 @@ def test_get_data_from_module_child():
         {
             "name": "XyzPort",
             "pack": "bogusModule.systemWithChildPulling",
+            "mod": "bogusModule.systemAndPort",
             "desc": '|  |  |\n---|---\n  **x**: 3 | x var\n  **y**: 2 K | &nbsp;\n  **z**: 1 | &nbsp;',
             "variables":
             [
@@ -542,9 +554,10 @@ def expectedSystems():
                     },],
                 },
                 {
+                    'name': 'p_in',
                     'type': 'AbPort',
                     'pack': 'bogusModule',
-                    'name': 'p_in'
+                    'mod': 'bogusModule.systemAndPort',
                 },
             ],
             'outputs':
@@ -560,9 +573,10 @@ def expectedSystems():
                     },],
                 },
                 {
+                    'name': 'p_out',
                     'type': 'XyzPort',
                     'pack': 'bogusModule',
-                    'name': 'p_out'
+                    'mod': 'bogusModule.systemAndPort',
                 },
             ],
         },
@@ -594,8 +608,9 @@ def expectedSystems():
             'inputs':
             [{
                 'name': 'p_in_parent',
-                'pack': 'bogusModule',
                 'type': 'AbPort',
+                'pack': 'bogusModule',
+                'mod': 'bogusModule.systemAndPort',
             },],
         },
     ]
@@ -607,6 +622,7 @@ def expectedPorts():
         {
             "name": "XyzPort",
             "pack": "bogusModule",
+            "mod": "bogusModule.systemAndPort",
             "variables":
             [
                 {
@@ -626,6 +642,7 @@ def expectedPorts():
         {
             "name": "AbPort",
             "pack": "bogusModule",
+            "mod": "bogusModule.systemAndPort",
             "variables":
             [
                 {
@@ -640,12 +657,14 @@ def expectedPorts():
         {
             "name": "BogusPort",
             "pack": "bogusModule",
+            "mod": "bogusModule.systemAndPort",
             "variables": [],
             "desc": '|  |  |\n---|---',
         },
         {
             "name": "BogusSinglePort",
             "pack": "bogusModule",
+            "mod": "bogusModule.port",
             "variables": [],
             "desc": '|  |  |\n---|---',
         }
