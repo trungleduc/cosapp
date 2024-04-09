@@ -183,7 +183,7 @@ class TwoWayCircuitWithEq(System):
     def compute(self):
         self.deltaV = self.elec_in.V - self.elec_out.V
         I = self.elec_in.I
-        self.Requiv = self.deltaV / I if abs(I) > 0 else numpy.nan
+        self.Requiv = self.deltaV / I if I != 0 else numpy.nan
 
     def transition(self):
         if self.switch.present:
@@ -191,7 +191,7 @@ class TwoWayCircuitWithEq(System):
             self.reconfig()
 
     def reconfig(self):
-        problem = self._math
+        problem = self.problem
         if not self.upbranch and problem.is_empty():
             self.add_unknown("R0.R").add_equation("R0.R == 500")
         else:
