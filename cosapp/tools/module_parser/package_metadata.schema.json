@@ -1,6 +1,6 @@
 {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "id": "0-1-0/modulePackage.schema.json",
+    "id": "0-2-0/modulePackage.schema.json",
     "title": "Schema for package data for CoSApp Creator",
     "description": "JSON of a package containing name, systems and ports",
     "type": "object",
@@ -25,11 +25,10 @@
             "items": { "$ref": "#/$defs/portClass" }
         }
     },
-    "required": [ "name" ],
     "additionalProperties": false,
     "$defs": {
         "portVariable": {
-            "description": "Variable in ports",
+            "description": "Variable in a port",
             "properties": {
                 "name": { "type": "string" },
                 "desc": { "type": "string" },
@@ -44,6 +43,7 @@
                 "name": { "type": "string" },
                 "pack": { "type": "string" },
                 "desc": { "type": "string" },
+                "mod": { "type": "string" },
                 "variables": {
                     "type": "array",
                     "items": { "$ref": "#/$defs/portVariable" }
@@ -52,7 +52,7 @@
             "patternProperties": {
                 "^type$": { "type": "string" }
             },
-            "required": [ "name", "type", "pack" ],
+            "required": ["name", "type", "pack"],
             "additionalProperties": false
         },
         "mathProblemDataType": {
@@ -85,13 +85,14 @@
                 "name": { "type": "string" },
                 "pack": { "type": "string" },
                 "desc": { "type": "string" },
+                "mod": { "type": "string" },
                 "variables": {
                     "type": "array",
                     "items": { "$ref": "#/$defs/portVariable" }
                 },
                 "kwargs" : { "type": "object" }
             },
-            "required": [ "name", "pack", "variables"],
+            "required": ["name", "pack", "variables", "mod"],
             "additionalProperties": false
         },
         "systemClass": {
@@ -113,7 +114,7 @@
                 "kwargs" : { "type": "object" },
                 "mathProblem": { "$ref": "#/$defs/mathProblem" }
             },
-            "required": [ "name", "className", "pack", "mod" ],
+            "required": ["name", "className", "pack", "mod"],
             "additionalProperties": false
         }
     }
