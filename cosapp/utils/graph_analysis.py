@@ -45,7 +45,7 @@ def get_free_inputs(system: System) -> Dict[str, VariableReference]:
                 continue
             sink_name = get_portname(sink)
             if source.is_output:
-                bound_inputs |= set(
+                bound_inputs.update(
                     f"{sink_name}.{target}"
                     for target in connector.sink_variables()
                 )
@@ -58,7 +58,7 @@ def get_free_inputs(system: System) -> Dict[str, VariableReference]:
 
         for child in system.children.values():
             child_inputs, child_bound_inputs = recursive_search(child, head)
-            bound_inputs |= child_bound_inputs
+            bound_inputs.update(child_bound_inputs)
             for key, alias in child_inputs.items():
                 try:
                     # Check if `ref` is already mapped in parent

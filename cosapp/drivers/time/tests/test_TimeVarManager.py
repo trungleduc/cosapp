@@ -5,12 +5,7 @@ import numpy as np
 from cosapp.systems import System
 from cosapp.drivers.time.utils import TimeVarManager
 from cosapp.core.numerics.basics import TimeProblem
-from .conftest import (
-    ScalarOde, VectorOde,
-    PointMass, PointMassWithPorts,
-    ExpRampOde, DampedMassSpring,
-    CoupledTanks,
-    )
+from .conftest import PointMass, PointMassWithPorts
 
 
 @pytest.mark.parametrize("ders, expected", [
