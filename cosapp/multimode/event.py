@@ -208,6 +208,10 @@ class Event:
         self._state.reset()
         self._present = False
 
+    def cancel(self) -> None:
+        """Cancels the event."""
+        self._present = False
+
     def reevaluate(self) -> None:
         """Reevaluates the current state of the event; used to update information
         about zero-crossing events after an integration time step was interrupted by
@@ -307,7 +311,7 @@ class ZeroCrossingEvent(EventState):
             next_value = self.value()
             return self.zero_detected(next_value)
         return False
-        
+
     def lock(self) -> None:
         """Locks the event"""
         self._locked = True
@@ -323,6 +327,7 @@ class ZeroCrossingEvent(EventState):
         self._prev = self._curr
         self._curr = None
 
+    @property
     def is_primitive(self) -> bool:
         return True
 

@@ -323,39 +323,44 @@ class ExplicitTimeDriver(Driver):
                         for name, data in tr_data.items()
                     }
                 )
-                occur = stepper.first_discrete_step()  # first step: root finding + non-primitive events
+                occurring = stepper.first_discrete_step()  # first step: root finding + non-primitive events
                 record_data()
                 record_event()
                 stepper.reevaluate_primitive_events()
                 self.transition()
-                record_event(occur.event.contextual_name)
-                record = EventRecord(occur.time, [occur.event])
-                all_events = set(stepper.present_events())
+                record_event(occurring.event.contextual_name)
+                record = EventRecord(occurring.time, [occurring.event])
+                event_cascade = set(stepper.present_events())
                 stepper.tick()
                 stepper.set_events()
 
-                while stepper.event_detected(): # following steps: event cascade
+                while stepper.event_detected():  # following steps: event cascade
                     events = stepper.discrete_step()
-                    all_events.update(events)
+                    event_cascade.update(events)
                     self.transition()
                     stamp = ", ".join(event.contextual_name for event in events)
                     record_event(stamp)
                     stepper.tick()
                     stepper.set_events()
 
-                record.events.extend(all_events - {occur.event})
+                record.events.extend(event_cascade - {occurring.event})
                 self.__recorded_events.append(record)
                 for transient in self._transients.values():
                     transient.touch()
                 for event in record.events:
                     event.context.set_dirty(PortType.IN)
-                self._set_time(occur.time)
+                self._set_time(occurring.time)
                 self._synch_transients()
-                record_data(occur.event.contextual_name)
-                must_stop = any(event.final for event in all_events)
-                next_t = occur.time
+                record_data(occurring.event.contextual_name)
+                must_stop = any(event.final for event in event_cascade)
+                next_t = occurring.time
                 dt = next_t - t
 
+                # Reevaluate transient values and derivatives @ occur.time,
+                # in case one or more primitive events were dropped
+                for key, var in owner_transients.items():
+                    tr_data[key][2:4] = value_and_derivative(var)
+            
             else:
                 next_t = t + dt
                 stepper.reevaluate_primitive_events()
