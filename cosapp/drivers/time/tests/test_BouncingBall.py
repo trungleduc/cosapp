@@ -217,3 +217,46 @@ def test_BouncingBall_frictionless(ball: BouncingBall):
     # Check rebound point (before transition, hence -2 index)
     assert v[-2, :] == pytest.approx(v_exact(t_rebound), rel=1e-14)
     assert x[-2, :] == pytest.approx(x_exact(t_rebound), rel=1e-14)
+
+
+def test_BouncingBall_close_events():
+    """Set of n falling points, with closely occuring contacts.
+    """
+    class Marbles(System):
+        def setup(self, n_points=2):
+            self.add_property('n_points', n_points)
+
+            for i in range(n_points):
+                self.add_child(BouncingBall(f"p{i}"), pulling=["g", "cf"])
+
+    s = Marbles('s', n_points=2)
+
+    driver = s.add_driver(RungeKutta(order=2))
+    driver.time_interval = (0, 2)
+    driver.dt = 1.0
+
+    vz = -1.0
+
+    driver.set_scenario(
+        init={
+            'p0.x': [0., 0., 1.1],   # expected to hit the ground @ t = 1.1
+            'p1.x': [1., 0., 1.11],  # expected to hit the ground @ t = 1.11
+            'p0.v': [0., 0., vz],
+            'p1.v': [0., 0., vz],
+        },
+        values={
+            'g': np.zeros(3),  # no gravity: rectilinear movement
+            'cf': 0.0,  # frictionless motion
+        }
+    )
+
+    s.run_drivers()
+
+    recorded_events = driver.recorded_events
+    assert len(recorded_events) == 2
+    assert len(recorded_events[0].events) == 1
+    assert len(recorded_events[1].events) == 1
+    assert recorded_events[0].events[0] is s.p0.rebound
+    assert recorded_events[0].time == pytest.approx(-1.1 / vz, rel=1e-12)
+    assert recorded_events[1].events[0] is s.p1.rebound
+    assert recorded_events[1].time == pytest.approx(-1.11 / vz, rel=1e-12)

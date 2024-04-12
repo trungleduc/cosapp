@@ -370,3 +370,41 @@ def test_MultimodeSystem_mode_manager():
     data = driver.recorder.export_data()
     assert all(data['foo.mode'] == data['manager.mode'])
     assert all(list(map(s.foo.get_state, data['foo.mode'])) == data['foo.state'])
+
+
+def test_MultimodeSystem_close_events():
+    """Test event occurence within the time step directly following another event"""
+    class TwoEventSystem(System):
+        def setup(self) -> None:
+            self.add_event('foo')
+            self.add_event('bar')
+    
+    s = TwoEventSystem('s')
+
+    driver = s.add_driver(EulerExplicit(dt=0.1, time_interval=(0, 0.3)))
+
+    # Set triggers in two different time steps
+    s.foo.trigger = "t == 0.12"
+    s.bar.trigger = "t == 0.23"
+    s.run_drivers()
+
+    assert len(driver.recorded_events) == 2
+    assert len(driver.recorded_events[0].events) == 1
+    assert driver.recorded_events[0].time == 0.12
+    assert driver.recorded_events[0].events[0] is s.foo 
+    assert driver.recorded_events[1].time == 0.23
+    assert len(driver.recorded_events[1].events) == 1
+    assert driver.recorded_events[1].events[0] is s.bar 
+
+    # Set both triggers within the same time step
+    s.foo.trigger = "t == 0.12"
+    s.bar.trigger = "t == 0.13"
+    s.run_drivers()
+
+    assert len(driver.recorded_events) == 2
+    assert len(driver.recorded_events[0].events) == 1
+    assert driver.recorded_events[0].time == 0.12
+    assert driver.recorded_events[0].events[0] is s.foo
+    assert driver.recorded_events[1].time == 0.13
+    assert len(driver.recorded_events[1].events) == 1
+    assert driver.recorded_events[1].events[0] is s.bar

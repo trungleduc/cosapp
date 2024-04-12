@@ -103,7 +103,7 @@ class DiscreteStepper():
         """
         # TODO: Possibility of several events at the same time (up to rounding errors)?
         # For instance, if an event occurs every 0.2s and another event every s...
-        triggered_events = list(filter(lambda e: e.present, self._primitives))
+        triggered_events = list(filter(lambda event: event.present, self._primitives))
         primal = TimedEvent.empty()
         for event in triggered_events:
             time = self.trigger_time(event)
@@ -111,6 +111,11 @@ class DiscreteStepper():
                 primal = TimedEvent(event, time)
         self._state[primal.event] = True
         self._sysview.exec(primal.time)
+        # Cancel primitive events that occured after primal event
+        for event in triggered_events:
+            if event is not primal.event:
+                event.cancel()
+                event.reevaluate()
         return primal
 
     def event_detected(self) -> bool:
