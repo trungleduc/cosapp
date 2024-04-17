@@ -1,12 +1,16 @@
 """
 Event handling and discrete stepping
 """
+from __future__ import annotations
 import scipy.optimize
 from math import inf
 
-from typing import NamedTuple, Iterator, List, Dict, Tuple
+from typing import NamedTuple, Iterator, List, Dict, Tuple, TYPE_CHECKING
 from cosapp.multimode.event import Event
 from cosapp.utils import partition
+if TYPE_CHECKING:
+    from cosapp.drivers import Driver
+    from cosapp.drivers.time.utils import SystemInterpolator
 
 
 class TimedEvent(NamedTuple):
@@ -26,7 +30,7 @@ class DiscreteStepper():
         '_interval', '_nonprimitives', '_primitives',
     )
 
-    def __init__(self, driver: "Driver"):
+    def __init__(self, driver: Driver):
         # Local import to avoid cyclic dependency
         from cosapp.drivers.time.utils import SystemInterpolator
 
@@ -54,6 +58,12 @@ class DiscreteStepper():
         for event in self.events():
             event.reset()
 
+    def initialize(self) -> None:
+        """Update event list, and initialize all events"""
+        self.set_events()
+        for event in self.events():
+            event.initialize()
+
     def events(self) -> Iterator[Event]:
         """Iterator on handled events"""
         return self._state.keys()
@@ -63,8 +73,8 @@ class DiscreteStepper():
         return filter(lambda event: event.present, self.events())
 
     @property
-    def sysview(self) -> "SystemInterpolator":
-        """SystemInterpolator: system interpolator"""
+    def sysview(self) -> SystemInterpolator:
+        """SystemInterpolator: system interpolator used for event time finding"""
         return self._sysview
 
     @property

@@ -1,6 +1,7 @@
 import pytest
 
 import numpy as np
+from typing import Type
 from cosapp.drivers.time.utils import TimeUnknownStack, TimeVarManager
 from cosapp.systems import System
 from .conftest import PointMass, PointMassWithPorts, DevilCase
@@ -8,7 +9,7 @@ from .conftest import PointMass, PointMassWithPorts, DevilCase
 
 @pytest.fixture(scope="function")
 def make_case():
-    def factory(cls, name, **options):
+    def factory(cls: Type[System], name, **options):
         system = cls(name, **options)
         manager = TimeVarManager(system)
         return system, manager

@@ -438,7 +438,7 @@ class ExplicitTimeDriver(Driver):
         logger.debug("Reset rates")
         for rate in self._rates.values():
             rate.reset()
-        self.__stepper.reset()
+        self.__stepper.initialize()
     
     def __init_modevars(self):
         """Force init value of output mode vars or owner system."""

@@ -219,8 +219,15 @@ def test_BouncingBall_frictionless(ball: BouncingBall):
     assert x[-2, :] == pytest.approx(x_exact(t_rebound), rel=1e-14)
 
 
-def test_BouncingBall_close_events():
-    """Set of n falling points, with closely occuring contacts.
+@pytest.mark.parametrize("z0, z1, z2", [
+    (0.1, 0.11, 0.77),  # All contacts expected within the first time step
+    (1.1, 1.11, 1.77),  # All contacts expected within the second time step
+    (0.6, 1.11, 1.77),
+])
+def test_BouncingBall_close_events(z0, z1, z2):
+    """Set of 3 falling balls, with closely occuring contacts.
+    Parameters z0 < z1 < z3 denote the initial heights of the points.
+    All points have a vertical velocity of -1.
     """
     class Marbles(System):
         def setup(self, n_points=2):
@@ -229,20 +236,21 @@ def test_BouncingBall_close_events():
             for i in range(n_points):
                 self.add_child(BouncingBall(f"p{i}"), pulling=["g", "cf"])
 
-    s = Marbles('s', n_points=2)
+    s = Marbles('s', n_points=3)
 
-    driver = s.add_driver(RungeKutta(order=2))
-    driver.time_interval = (0, 2)
-    driver.dt = 1.0
+    driver = s.add_driver(RungeKutta(order=2, time_interval=(0, 2), dt=1.0))
 
     vz = -1.0
+    z0, z1, z2 = sorted((z0, z1, z2))
 
     driver.set_scenario(
         init={
-            'p0.x': [0., 0., 1.1],   # expected to hit the ground @ t = 1.1
-            'p1.x': [1., 0., 1.11],  # expected to hit the ground @ t = 1.11
+            'p0.x': [0., 0., z0],  # expected to hit the ground @ t = -z0 / vz
+            'p1.x': [1., 0., z1],  # expected to hit the ground @ t = -z1 / vz
+            'p2.x': [2., 0., z2],  # expected to hit the ground @ t = -z2 / vz
             'p0.v': [0., 0., vz],
             'p1.v': [0., 0., vz],
+            'p2.v': [0., 0., vz],
         },
         values={
             'g': np.zeros(3),  # no gravity: rectilinear movement
@@ -253,10 +261,36 @@ def test_BouncingBall_close_events():
     s.run_drivers()
 
     recorded_events = driver.recorded_events
-    assert len(recorded_events) == 2
+    assert len(recorded_events) == 3
     assert len(recorded_events[0].events) == 1
     assert len(recorded_events[1].events) == 1
+    assert len(recorded_events[2].events) == 1
     assert recorded_events[0].events[0] is s.p0.rebound
-    assert recorded_events[0].time == pytest.approx(-1.1 / vz, rel=1e-12)
+    assert recorded_events[0].time == pytest.approx(-z0 / vz, rel=1e-14)
     assert recorded_events[1].events[0] is s.p1.rebound
-    assert recorded_events[1].time == pytest.approx(-1.11 / vz, rel=1e-12)
+    assert recorded_events[1].time == pytest.approx(-z1 / vz, rel=1e-14)
+    assert recorded_events[2].events[0] is s.p2.rebound
+    assert recorded_events[2].time == pytest.approx(-z2 / vz, rel=1e-14)
+
+
+def test_BouncingBall_early_stop(ball: BouncingBall):
+    """Bouncing ball case with stop criterion occurring in the first time step.
+    """
+    driver = ball.add_driver(RungeKutta(order=2))
+    driver.time_interval = (0, 1)
+    driver.dt = 1.0
+
+    # Define a simulation scenario
+    driver.set_scenario(
+        init = {'x': [0, 0, 2], 'v': [8, 0, 9.5]},
+        values = {'mass': 1.0, 'cf': 0.0},
+        stop = "t == 0.123",
+    )
+
+    ball.run_drivers()
+
+    assert len(driver.recorded_events) == 1
+    record = driver.recorded_events[-1]
+    assert len(record.events) == 1
+    assert record.time == pytest.approx(0.123, rel=1e-15)
+    assert record.events[0] is driver.scenario.stop

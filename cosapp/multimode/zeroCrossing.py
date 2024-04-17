@@ -1,5 +1,5 @@
+from __future__ import annotations
 import enum
-import re
 from typing import Dict, NamedTuple
 from cosapp.utils.helpers import check_arg
 
@@ -30,19 +30,19 @@ class ZeroCrossing(NamedTuple):
     direction: EventDirection
 
     @classmethod
-    def up(cls, expression: str) -> "ZeroCrossing":
+    def up(cls, expression: str) -> ZeroCrossing:
         return cls(expression, EventDirection.UP)
- 
+
     @classmethod
-    def down(cls, expression: str) -> "ZeroCrossing":
+    def down(cls, expression: str) -> ZeroCrossing:
         return cls(expression, EventDirection.DOWN)
- 
+
     @classmethod
-    def updown(cls, expression: str) -> "ZeroCrossing":
+    def updown(cls, expression: str) -> ZeroCrossing:
         return cls(expression, EventDirection.UPDOWN)
- 
+
     @classmethod
-    def from_comparison(cls, expression: str) -> "ZeroCrossing":
+    def from_comparison(cls, expression: str) -> ZeroCrossing:
         """Interpret an expression of the kind 'lhs <op> rhs'
         as a `ZeroCrossing` object, where <op> is one of
         comparison operators:

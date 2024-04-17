@@ -1,8 +1,10 @@
+from __future__ import annotations
 from collections.abc import MutableMapping
 from numbers import Number
 from typing import (
     Any, Dict, List, Optional, Callable,
     Iterator, TypeVar, Union, Tuple,
+    TYPE_CHECKING,
 )
 
 import numpy, numpy.polynomial
@@ -14,6 +16,9 @@ from cosapp.ports.port import ExtensiblePort
 from cosapp.systems.system import System
 from cosapp.utils.helpers import check_arg
 from cosapp.drivers.time.scenario import TimeAssignString
+if TYPE_CHECKING:
+    from cosapp.drivers.time.interfaces import ExplicitTimeDriver
+
 
 T = TypeVar('T')
 
@@ -121,7 +126,7 @@ class TimeUnknownStack(AbstractTimeUnknown):
 
     def reset(self) -> None:
         """Reset stack value from original system variables"""
-        self.__value = numpy.array(list(map(lambda t: t.value, self.__transients))).ravel()
+        self.__value = numpy.ravel([var.value for var in self.__transients])
         self.touch()
 
     def touch(self) -> None:
@@ -348,8 +353,7 @@ class TimeVarManager:
                     lambda name: context_transients[name], 
                     map(lambda reference: reference2name[reference], branch[:-1])
                 )
-                transients[stack_name] = TimeUnknownStack(
-                    stack_context, stack_name, list(transients_stack))
+                transients[stack_name] = TimeUnknownStack(stack_context, stack_name, list(transients_stack))
             else:  # first-order time derivative -> use current unknown
                 root_name = reference2name[root]
                 transients[root_name] = context_transients[root_name]
@@ -558,7 +562,7 @@ class SystemInterpolator:
     """Class providing a continuous time view on a system,
     by replacing transient variables by time functions.
     """
-    def __init__(self, driver: "ExplicitTimeDriver"):
+    def __init__(self, driver: ExplicitTimeDriver):
         from cosapp.drivers.time.interfaces import ExplicitTimeDriver
         check_arg(driver, 'driver', ExplicitTimeDriver)
         self.__owner = driver
