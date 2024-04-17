@@ -1,12 +1,15 @@
+from __future__ import annotations
 import abc
 import logging, warnings
 from numpy import bool_ as numpy_bool
-from typing import Any, Union, Optional
+from typing import Any, Union, Optional, TYPE_CHECKING
 
 from .zeroCrossing import ZeroCrossing
 from cosapp.core.eval_str import EvalString
 from cosapp.utils.naming import NameChecker, CommonPorts
 from cosapp.utils.helpers import check_arg
+if TYPE_CHECKING:
+    from cosapp.systems import System
 
 logger = logging.getLogger(__name__)
 
@@ -29,10 +32,13 @@ class EventState(abc.ABC):
 
     @property
     def is_primitive(self) -> bool:
-        """bool: `True` if event triggering is self contained, `False` otherwise"""
+        """bool: `True` if event triggering condition is self-contained, `False` otherwise"""
         return False
 
     def reset(self) -> None:
+        pass
+
+    def initialize(self) -> None:
         pass
 
     def reevaluate(self) -> None:
@@ -63,9 +69,9 @@ class Event:
     def __init__(
         self,
         name: str,
-        context: "cosapp.systems.System",
+        context: System,
         desc: str = "",
-        trigger: Optional[Union[str, ZeroCrossing, EventState, "Event"]] = None,
+        trigger: Optional[Union[str, ZeroCrossing, EventState, Event]] = None,
         final: bool = False,
     ):
         """`Event` constructor.
@@ -104,12 +110,12 @@ class Event:
 
     @property
     def name(self) -> str:
-        """str : Event name"""
+        """str: Event name"""
         return self._name
 
     @property
     def contextual_name(self) -> str:
-        """str : Join context system name and event name.
+        """str: Join context system name and event name.
 
         If the event has no context, only its name is returned.
         """
@@ -142,20 +148,21 @@ class Event:
         return ".".join(path)
 
     @property
-    def context(self) -> "cosapp.systems.System":
+    def context(self) -> System:
+        """System: context in which the event is defined"""
         return self._context
 
     @property
     def desc(self) -> str:
-        """str : Event description"""
+        """str: Event description"""
         return self._desc
 
     @property
-    def trigger(self) -> Union[ZeroCrossing, EventState, "Event"]:
+    def trigger(self) -> Union[ZeroCrossing, EventState, Event]:
         return self._trigger
 
     @trigger.setter
-    def trigger(self, trigger: Union[EventState, ZeroCrossing, str, "Event"]):
+    def trigger(self, trigger: Union[EventState, ZeroCrossing, str, Event]):
         state = None
         if isinstance(trigger, str):
             trigger = ZeroCrossing.from_comparison(trigger)
@@ -212,6 +219,10 @@ class Event:
         """Cancels the event."""
         self._present = False
 
+    def initialize(self) -> None:
+        """Initialize the event using current state of owner system."""
+        self._state.initialize()
+
     def reevaluate(self) -> None:
         """Reevaluates the current state of the event; used to update information
         about zero-crossing events after an integration time step was interrupted by
@@ -232,7 +243,7 @@ class Event:
         """bool : Indicates whether the event has to be triggered in the next discrete step"""
         return self._present ^ self._state.to_emit()
 
-    def filter(self, condition: str) -> "FilteredEvent":
+    def filter(self, condition: str) -> FilteredEvent:
         """Filters event with an additional boolean condition.
         
         Parameters:
@@ -248,7 +259,7 @@ class Event:
         return FilteredEvent(self, condition)
 
     @staticmethod
-    def merge(*events: "Event") -> "MergedEvents":
+    def merge(*events: Event) -> MergedEvents:
         """Merges events into a trigger condition.
         
         Parameters:
@@ -287,8 +298,20 @@ class ZeroCrossingEvent(EventState):
         self.reset()
 
     def reset(self) -> None:
+        """Reset the event, in such a way that the event will not occur
+        after the next zero-crossing function evaluation.
+        """
         self._prev = self._curr = None
         self._locked = False
+
+    def initialize(self) -> None:
+        """Initialize the event using the current value of the zero-crossing function.
+        If the value is nil, it is discarded, and the event is simply reset.
+        This prevents the event from occurring at the beginning of a simulation.
+        """
+        self.reset()
+        if (value := self.value()) != 0.:
+            self._prev = value
 
     def value(self) -> float:
         """Evaluates and returns the zero-crossing function defining the event."""
