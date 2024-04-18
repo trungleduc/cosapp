@@ -9,7 +9,7 @@ dependencies:
   - pandas
   - wrapt
   - jinja2
-  - sphinx
+  - sphinx<7.3
   - nbsphinx
   - sphinx-copybutton
   - sphinx-mdinclude
