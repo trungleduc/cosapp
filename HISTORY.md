@@ -1,6 +1,27 @@
 # History
 
 
+## 0.16.0 (2024-04-18)
+
+### Bug fixes and code quality
+
+- Primary events triggered within the same time step are now correctly captured (MR [#287](https://gitlab.com/cosapp/cosapp/-/merge_requests/287)).
+  A bug persists when several primary events occur at the exact same time, though, as only one will be retained.
+- Fix bug preventing events from occurring during the first time step of a simulation (MR [#288](https://gitlab.com/cosapp/cosapp/-/merge_requests/288)).
+- Fix a bug causing recorders to crash when inspecting ports with properties (MR [#282](https://gitlab.com/cosapp/cosapp/-/merge_requests/282)).
+- Algebraic and time-dependent problems are now dissociated (MR [#284](https://gitlab.com/cosapp/cosapp/-/merge_requests/284)). As a consequence, invoking `self.problem.clear()` during transitions, for instance, no longer affects time-dependent unknowns such as transients.
+- Fix ambiguous warning message raised by `RunSingleCase` (MR [#279](https://gitlab.com/cosapp/cosapp/-/merge_requests/279)).
+- Various refactoring passes (MRs [#283](https://gitlab.com/cosapp/cosapp/-/merge_requests/283) and [#286](https://gitlab.com/cosapp/cosapp/-/merge_requests/286)).
+
+### Maintenance
+
+- Updated description inside the conda recipe (MR [#276](https://gitlab.com/cosapp/cosapp/-/merge_requests/276)).
+- Pin `pytest` version due to a bug in version 8.1 (MR [#280](https://gitlab.com/cosapp/cosapp/-/merge_requests/280)).
+- Add a "Citing" section in the main README file (MR [#281](https://gitlab.com/cosapp/cosapp/-/merge_requests/281)).
+- The module parser was updated (MR [#285](https://gitlab.com/cosapp/cosapp/-/merge_requests/285)).
+- Force `sphinx` < 7.3 in the documentation building environment, owing to an incompatibility with `sphinx-mdinclude` (MR [#289](https://gitlab.com/cosapp/cosapp/-/merge_requests/289)). This is a temporary patch until root cause is fixed.
+
+
 ## 0.15.4 (2024-02-28)
 
 ### Bug fixes and code quality
