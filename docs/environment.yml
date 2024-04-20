@@ -1,4 +1,4 @@
-name: cosapp
+name: cosapp_docs
 channels:
   - conda-forge
   - defaults
@@ -9,10 +9,10 @@ dependencies:
   - pandas
   - wrapt
   - jinja2
-  - sphinx<7.3
+  - sphinx
   - nbsphinx
   - sphinx-copybutton
-  - sphinx-mdinclude
+  - sphinx-mdinclude>0.5.3
   - sphinxcontrib-mermaid
   - watchdog
   - requests_ntlm
