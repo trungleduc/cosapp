@@ -138,7 +138,7 @@ def system_to_md(system: System) -> str:
             if len(port) > 0:
                 formatter = PortMarkdownFormatter(port)
                 port_doc = formatter.content(contextual=False)
-                port_doc[0] = f"- {port_doc[0]}"
+                port_doc[0] = f"\n- {port_doc[0]}"
                 port_docs.extend(port_doc)
         if port_docs:
             doc.extend(["", f"### {header.title()}", ""])
