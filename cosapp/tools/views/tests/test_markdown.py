@@ -2,6 +2,7 @@ import pytest
 
 from cosapp.ports import Port, PortType
 from cosapp.systems import System
+from cosapp.utils.testing import DummySystemFactory, get_args
 from cosapp.tools.views.markdown import system_to_md, port_to_md, PortMarkdownFormatter
 
 # <codecell> Local test classes
@@ -117,6 +118,37 @@ def test_system_to_md():
     s = NewS("s")
     markdown = system_to_md(s)
     assert "**Tags**" in markdown
+
+
+def test_system_to_md_newlines():
+    """Check the presence of new lines before specific entries,
+    such as bullet items and tables, to ensure correct Markdown rendering.
+    """
+    class XmPort(Port):
+        def setup(self) -> None:
+            self.add_variable('x', 0.0, unit='mm')
+            self.add_variable('m', 0.0, unit='kg', desc='mass')
+    
+    Foo = DummySystemFactory(
+        "Foo",
+        inwards=[get_args('x', 0.0), get_args('y', 0.0)],
+        outwards=[get_args('z', 0.0)],
+        inputs=[get_args(XmPort, 'p1_in'), get_args(XmPort, 'p2_in')],
+        outputs=[get_args(XmPort, 'p1_out'), get_args(XmPort, 'p2_out')],
+    )
+
+    foo = Foo('foo')
+    markdown = system_to_md(foo)
+
+    # Ports in bullet list
+    assert "\n\n- `p1_in`: XmPort" in markdown
+    assert "\n\n- `p2_in`: XmPort" in markdown
+    assert "\n\n- `p1_out`: XmPort" in markdown
+    assert "\n\n- `p2_out`: XmPort" in markdown
+    # div headers for ports
+    assert markdown.count("\n\n<div class='cosapp-port-table'") == 6
+    # table headers for port variables
+    assert markdown.count("\n\n|  |  |") == 6
 
 
 @pytest.mark.parametrize("direction", PortType)
