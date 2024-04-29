@@ -288,6 +288,7 @@ class ExplicitTimeDriver(Driver):
         manager = self.__var_manager
         owner_transients = manager.problem.transients
         self.__recorded_events = []
+        stepper.initialize()
 
         def value_and_derivative(var: TimeUnknown):
             return (
@@ -438,7 +439,6 @@ class ExplicitTimeDriver(Driver):
         logger.debug("Reset rates")
         for rate in self._rates.values():
             rate.reset()
-        self.__stepper.initialize()
     
     def __init_modevars(self):
         """Force init value of output mode vars or owner system."""
