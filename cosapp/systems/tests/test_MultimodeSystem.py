@@ -408,3 +408,65 @@ def test_MultimodeSystem_close_events():
     assert driver.recorded_events[1].time == 0.13
     assert len(driver.recorded_events[1].events) == 1
     assert driver.recorded_events[1].events[0] is s.bar
+
+
+def test_MultimodeSystem_event_init():
+    """Test checking that the system is up-to-date when primary events are initialized.
+    """
+    class Kinematics(System):
+        def setup(self):
+            self.add_inward('v', np.zeros(2))
+            self.add_transient('x', der='v')
+
+    class Wall(System):
+        def setup(self):
+            self.add_inward('x', np.zeros(2), desc='Point on the wall')
+            self.add_inward('n_dir', np.r_[1., 1.], desc='Normal direction')
+            self.add_outward('n', np.r_[0., 0.], desc='Unit normal vector')
+
+        def compute(self) -> None:
+            self.n = self.n_dir / np.linalg.norm(self.n_dir)
+        
+        def distance(self, point) -> float:
+            """Signed distance to wall"""
+            return self.n.dot(np.asarray(point) - self.x)
+
+    class Assembly(System):
+        def setup(self):
+            self.add_child(Kinematics('kinematics'), pulling=['x', 'v'])
+            self.add_child(Wall('wall'))
+            self.add_event('rebound', trigger='wall.distance(x) == 0')
+
+        def transition(self) -> None:
+            if self.rebound.present:
+                n = self.wall.n
+                v = self.v
+                v -= (2 * v.dot(n)) * n
+
+    s = Assembly('s')
+
+    driver = s.add_driver(EulerExplicit('driver', time_interval=(0, 1), dt=1.0))
+    driver.set_scenario(
+        init={
+            'x': [0., 0.],
+        },
+        values={
+            'v': [1., 0.],
+            'wall.x': [0.25, 0.],
+            'wall.n_dir': [-1., 0.],
+        },
+        stop=s.rebound,
+    )
+    # Initialize the wall normal with an **incorrect** value.
+    # If the system is not up-to-date, the actual distance to the wall
+    # will be not be correctly initialized, and the rebound will be missed.
+    s.wall.n[:] = [1., 0.]
+
+    s.run_drivers()
+
+    assert len(driver.recorded_events) == 1
+    record = driver.recorded_events[-1]
+    assert len(record.events) == 2
+    assert record.events[0] is s.rebound
+    assert record.events[1] is driver.scenario.stop
+    assert record.time == pytest.approx(0.25, rel=1e-15)
