@@ -6,7 +6,11 @@ import copy
 import logging
 import weakref
 from types import MappingProxyType
-from typing import Callable, Dict, Iterable, Iterator, List, Optional, Tuple, Union, Any, Type
+from typing import (
+    Callable, Iterable, Iterator,
+    Collection, Mapping, Dict, List, Tuple,
+    Optional, Union, Any, Type,
+)
 
 from cosapp.ports import units
 from cosapp.ports.port import BasePort, Port
@@ -293,27 +297,42 @@ class BaseConnector(abc.ABC):
         return target, origin
 
     @staticmethod
-    def format_mapping(mapping: Union[str, List[str], Dict[str, str]]) -> Dict[str, str]:
+    def format_mapping(mapping: Union[str, Collection[str], Dict[str, str]], /) -> Dict[str, str]:
         """Returns suitable name mapping for connectors,
         from different kinds of argument `mapping`.
 
         Parameters:
         -----------
-        - mapping, Union[str, List[str], Dict[str, str]]:
+        - mapping [str | list[str] | dict[str, str] | None]:
             Name mapping, given as either a string (single variable),
-            a list of strings, or a full name mapping, as a dictionary.
+            a collection of strings, or a full name mapping, as a dictionary.
         
         Returns:
         --------
-        Dict[str, str]: suitable mapping for connectors.
+        dict[str, str]: name mapping suitable for connectors.
         """
-        if isinstance(mapping, str):
-            mapping = {mapping: mapping}
-        elif isinstance(mapping, MappingProxyType):
-            mapping = dict(mapping)
-        elif not isinstance(mapping, dict):
-            mapping = dict(zip(mapping, mapping))
-        return mapping
+        name_mapping = {}
+        if not isinstance(mapping, Iterable):
+            raise TypeError(
+                f"name mappings must be either str, collection[str|dict] or dict[str, str]; got {mapping!r}."
+            )
+        if mapping:
+            if isinstance(mapping, str):
+                name_mapping = {mapping: mapping}
+            elif isinstance(mapping, Mapping):
+                name_mapping = mapping
+            elif isinstance(mapping, Collection):
+                name_mapping = dict()
+                for obj in mapping:
+                    if isinstance(obj, str):
+                        name_mapping[obj] = obj
+                    elif isinstance(obj, Mapping):
+                        name_mapping.update(obj)
+                    else:
+                        raise TypeError(
+                            f"when given as a collection, a name mapping may only contain str or dict[str, str] items; got {mapping!r}."
+                        )
+        return name_mapping
 
 
 class Connector(BaseConnector):

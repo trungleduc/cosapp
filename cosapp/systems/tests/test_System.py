@@ -767,7 +767,7 @@ def test_System_add_child_pulling(caplog, DummyFactory):
     s.add_child(SubSystem("sub_a"), pulling={"in_": "entry"})
     s.add_child(SubSystem("sub_b"), pulling={"in_": "entry"})
 
-    with pytest.raises(KeyError):
+    with pytest.raises(AttributeError, match="'SubSystem' object has no attribute 'here'"):
         s.add_child(SubSystem("sub_c"), pulling=["here"])
 
     assert_keys(s.inputs, 'entry', 'inwards', 'modevars_in')
