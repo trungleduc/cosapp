@@ -1,11 +1,15 @@
+from __future__ import annotations
 import logging
-from typing import Any, Union, Collection, Dict
+from typing import Any, Union, Collection, Dict, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from cosapp.systems import System
 
 logger = logging.getLogger(__name__)
 
 
 def pull_variables(
-    child: "cosapp.systems.System", 
+    child: System, 
     pulling: Union[str, Collection[str], Dict[str, str]],
 ) -> None:
     """Pull variables from child to the parent.
@@ -13,12 +17,13 @@ def pull_variables(
     Parameters
     ----------
     child: System
-        `System` asking to pull variables to its parent
-    pulling: str or List[str] or Dict[str, str]
-        Map of child ports to pulled ports at the parent system level
+        `System` exposing variables to its parent API.
+    pulling [str | collection[str] | dict[str, str]]:
+        Map of child ports to pulled ports at the parent system level.
     """
     from cosapp.systems import System
     from cosapp.ports.port import BasePort, Port
+    from cosapp.ports.connectors import BaseConnector
     from cosapp.utils.naming import CommonPorts
 
     parent: System = child.parent
@@ -60,16 +65,10 @@ def pull_variables(
             f"{parent.name}.{child.name}.{child_var}",
         )
 
-    # Transform pulling into a name mapping (dict)
-    if isinstance(pulling, str):
-        pulling = {pulling: pulling}
-    elif isinstance(pulling, dict):
-        pass
-    elif isinstance(pulling, Collection):
-        pulling = dict(zip(pulling, pulling))
+    name_mapping = BaseConnector.format_mapping(pulling)
 
-    for child_attr_name, parent_attr_name in pulling.items():
-        child_attr = child[child_attr_name]
+    for child_attr_name, parent_attr_name in name_mapping.items():
+        child_attr = getattr(child, child_attr_name)
 
         if isinstance(child_attr, Port):
             if parent_attr_name not in parent:
@@ -80,14 +79,14 @@ def pull_variables(
                     f"{parent.name}.{child_attr.contextual_name}",
                 )
             else:
-                pulled_port = parent[parent_attr_name]
+                pulled_port = getattr(parent, parent_attr_name)
             
             parent.connect(child_attr, pulled_port)
 
-        else:  # ExtensiblePort (inwards or outwards)
-            if isinstance(child_attr, BasePort):  # Pulling all inwards or outwards
+        else:  # inwards, outwards, or mode variables
+            if isinstance(child_attr, BasePort):  # Pulling all variables
                 port_name = child_attr.name
-                parent_port = parent[port_name]
+                parent_port = getattr(parent, port_name)
 
                 for varname, value in child_attr.items():
                     if varname not in parent_port:

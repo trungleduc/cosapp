@@ -295,6 +295,8 @@ def test_BaseConnector__repr__():
 
 
 @pytest.mark.parametrize("data, expected", [
+    ([], {}),
+    ('', {}),
     ('x', {'x': 'x'}),
     (['x', 'y'], {'x': 'x', 'y': 'y'}),  # list
     (('x', 'y'), {'x': 'x', 'y': 'y'}),  # tuple
@@ -304,10 +306,23 @@ def test_BaseConnector__repr__():
         MappingProxyType({'x': 'a', 'y': 'b', 'z': 'c'}),
         {'x': 'a', 'y': 'b', 'z': 'c'},
     ),
+    # Mixed collections of str and str/str mappings
+    (['x', 'y', {'a': 'u', 'b': 'v'}], {'x': 'x', 'y': 'y', 'a': 'u', 'b': 'v'}),
+    (['x', {'a': 'u', 'b': 'v'}, 'y'], {'x': 'x', 'y': 'y', 'a': 'u', 'b': 'v'}),
+    (['x', {'a': 'u'}, 'y', MappingProxyType({'b': 'v'})], {'x': 'x', 'y': 'y', 'a': 'u', 'b': 'v'}),
+    # Erroneous cases
+    (0, pytest.raises(TypeError)),
+    (None, pytest.raises(TypeError)),
+    (['x', ['y', 'z']], pytest.raises(TypeError)),
 ])
 def test_BaseConnector_format_mapping(data, expected):
     """Test static method `BaseConnector.format_mapping`"""
-    assert BaseConnector.format_mapping(data) == expected
+    if isinstance(expected, dict):
+        assert BaseConnector.format_mapping(data) == expected
+    
+    else:
+        with expected:
+            BaseConnector.format_mapping(data)
 
 
 def test_BaseConnector_empty():
