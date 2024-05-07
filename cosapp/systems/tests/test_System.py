@@ -923,6 +923,44 @@ def test_System_add_child_pulling_collection(collection):
     assert s2.outputs["out"] is connectors["sub.out -> out"].source
 
 
+def test_System_add_child_pulling_mixed(caplog):
+    """Test pulling given as a name or a name mapping (dictionary).
+    Note: collections of strings, such as list, tuple or sets, are
+    tested in `test_System_add_child_pulling_collection`.
+    """
+    caplog.set_level(logging.DEBUG)
+    
+    s = System("s")
+    s2 = s.add_child(SubSystem("sub"), pulling=[{"in_": "entry"}, "out"])
+
+    records = list(filter(lambda record: record.levelno == logging.DEBUG, caplog.records))
+    assert len(records) == 2
+    pattern = r"Port s\.\w+ has been duplicated from s\.sub\.\w+ - including validation range and scope."
+    for record in records:
+        assert re.match(pattern, record.message)
+
+    assert_keys(s.inputs, 'inwards', 'modevars_in', 'entry')
+    entry = s.inputs['entry']
+    assert entry is s.inputs['entry']  # check that assignment did not create a copy!
+    assert entry is not s2.inputs["in_"]
+    assert isinstance(entry, type(s2.inputs["in_"]))
+    assert entry.direction is s2.inputs["in_"].direction
+    connectors = s.connectors()
+    assert set(connectors) == {
+        "entry -> sub.in_",
+        "sub.out -> out",
+    }
+    assert entry is connectors["entry -> sub.in_"].source
+
+    assert_keys(s.outputs, 'outwards', 'modevars_out', 'out')
+    s_out = s.outputs['out']
+    assert s_out is s.outputs['out']  # check that assignment did not create a copy!
+    assert s_out is not s2.outputs['out']
+    assert isinstance(s_out, type(s2.outputs['out']))
+    assert s_out.direction is s2.outputs['out'].direction
+    assert s2.outputs["out"] is connectors["sub.out -> out"].source
+
+
 @pytest.mark.parametrize("args", [
     PtWPort("p", PortType.IN),
     (System("sub"), "first"),
