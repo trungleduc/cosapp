@@ -1,7 +1,7 @@
 import pytest
 
 from cosapp.base import System
-from cosapp.tools.views.hierarchy import hierarchy_content
+from cosapp.tools.views.hierarchy import hierarchy_content, hierarchy
 from typing import List
 
 
@@ -87,6 +87,7 @@ def composite():
 def test_hierarchy_top(composite, options, expected):
     content = hierarchy_content(composite, **options)
     assert content == expected
+    assert hierarchy(composite, **options) == "\n".join(content)
 
 
 def test_hierarchy_sub(composite):
