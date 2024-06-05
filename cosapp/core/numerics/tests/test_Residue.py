@@ -1,7 +1,7 @@
 import pytest
 import numpy as np
 
-from cosapp.systems import System
+from cosapp.base import System, Port
 from cosapp.core.numerics.residues import Residue
 from cosapp.utils.testing import get_args
 
@@ -13,10 +13,50 @@ class LocalSystem(System):
         self.add_inward('c', np.array([1., 2.]))
 
 
+class XyzPort(Port):
+    def setup(self):
+        self.add_variable('x', 0.)
+        self.add_variable('y', 0.)
+        self.add_variable('z', np.array([1., 2.]))
+
+
+class XyzSystem(System):
+    def setup(self):
+        self.add_input(XyzPort, 'p_in')
+        self.add_output(XyzPort, 'p_out')
+        self.add_inward('u', np.array([1., 2.]))
+        self.add_outward('v', np.array([1., 2.]))
+
+
 @pytest.fixture
 def system():
     """Evaluation context for residues"""
     return LocalSystem('system')
+
+
+@pytest.fixture
+def composite():
+    """Generates test system tree:
+
+                 a
+         ________|________
+        |        |        |
+       aa       ab        ac
+      __|__           ____|____
+     |     |         |    |    |
+    aaa   aab       aca  acb  acc
+    """
+    def add_children(parent: System, **children):
+        prefix = parent.name
+        for name, sysclass in children.items():
+            parent.add_child(sysclass(f"{prefix}{name}"))
+
+    a = XyzSystem('a')
+    add_children(a, a=XyzSystem, b=LocalSystem, c=XyzSystem)
+    add_children(a.aa, a=XyzSystem, b=XyzSystem)
+    add_children(a.ac, a=XyzSystem, b=XyzSystem, c=XyzSystem)
+
+    return a
 
 
 @pytest.mark.parametrize("expression, exception", [
@@ -199,3 +239,31 @@ def test_Residue_to_dict(system, options, expected):
     assert r_dict["equation"] == options["equation"]
     assert r_dict["reference"] == expected.get("reference", "1")
     assert r_dict["name"] == options.get("name", options["equation"])
+
+
+@pytest.mark.parametrize("args_kwargs, expected", [
+    (get_args("u[0] == 0"), {"u"}),
+    (get_args("u[0] == aa.p_out.x"), {"u", "aa.p_out.x"}),
+    (get_args("u[0] == aa.p_out.x * ac.v[-1]"), {"u", "ac.v", "aa.p_out.x"}),
+    (get_args("ac.u[0] == aa.aab.p_out.x"), {"ac.u", "aa.aab.p_out.x"}),
+    (get_args("ac.u[0] + cos(aa.aab.p_out.x) == aa.aab.p_out.x"), {"ac.u", "aa.aab.p_out.x"}),
+    (get_args("ac.u[0] + cos(aa.aab.p_out.x) == -2 * aa.p_in.y"), {"ac.u", "aa.aab.p_out.x",  "aa.p_in.y"}),
+])
+def test_Residue_variables_head(composite, args_kwargs, expected):
+    """Test property `Residue.variables` for equations defined in head system."""
+    args, kwargs = args_kwargs
+    r = Residue(composite, *args, **kwargs)
+    assert r.variables == expected
+
+
+def test_Residue_variables_subsystems(composite):
+    """Test property `Residue.variables` for equations defined in subsystems."""
+    a = composite
+    r = Residue(a, "ac.u[0] == ac.acb.p_out.x")
+    assert r.context is a
+    assert r.variables == {"ac.u", "ac.acb.p_out.x"}
+
+    # Same equation, defined in subsystem a.ac
+    r = Residue(a.ac, "u[0] == acb.p_out.x")
+    assert r.context is a.ac
+    assert r.variables == {"u", "acb.p_out.x"}

@@ -223,6 +223,7 @@ class Residue(AbstractResidue):
         super().__init__(context, "temp")
         self.__sides = None   # type: EvalString
         self.__equation = ""  # type: str
+        self.__varnames = frozenset()
         self.__set_equation(equation)
         self._name = name or self.equation
 
@@ -235,6 +236,11 @@ class Residue(AbstractResidue):
     def equation(self) -> str:
         """str: Equation defining the residue"""
         return self.__equation
+
+    @property
+    def variables(self):
+        """frozenset: set of variable names involved in residue."""
+        return self.__varnames
 
     @staticmethod
     def split_equation(equation: str) -> Tuple[str, str]:
@@ -268,6 +274,7 @@ class Residue(AbstractResidue):
         else:
             self.__sides = sides
             self.__equation = f"{lhs} == {rhs}"
+            self.__varnames = sides.variables(include_const=False)
 
     def __str__(self) -> str:
         name = self.__equation or self._name
