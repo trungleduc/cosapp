@@ -1,1 +1,1 @@
-from .hierarchy import show_hierarchy
+from .hierarchy import show_tree
