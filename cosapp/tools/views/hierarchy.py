@@ -41,7 +41,7 @@ def hierarchy_content(system: System, depth=None, show_class=False) -> List[str]
 
 def hierarchy(system: System, depth=None, show_class=False) -> str:
     """Generates the hierarchical representation of a system tree as a string.
-    Used in `show_hierarchy`, which simply prints out the character string.
+    Used in `show_tree`, which simply prints out the character string.
 
     Parameters:
     -----------
@@ -58,7 +58,7 @@ def hierarchy(system: System, depth=None, show_class=False) -> str:
     return "\n".join(content)
 
 
-def show_hierarchy(system: System, depth=None, show_class=False) -> None:
+def show_tree(system: System, depth=None, show_class=False) -> None:
     """Print a hierarchical representation of a system tree.
 
     Parameters:
@@ -71,7 +71,7 @@ def show_hierarchy(system: System, depth=None, show_class=False) -> None:
     Example:
     --------
     >>> head = Head('head')
-    >>> show_hierarchy(head)
+    >>> show_tree(head)
     head
     └── child1
         └── child11
@@ -83,7 +83,7 @@ def show_hierarchy(system: System, depth=None, show_class=False) -> None:
         ├── child21
         └── :
 
-    >>> show_hierarchy(head, depth=2, show_class=True)
+    >>> show_tree(head, depth=2, show_class=True)
     head [Head]
     └── child1 [Child1]
         ├── child11 [..]
