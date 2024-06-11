@@ -122,3 +122,8 @@ ENV/
 # pyfmi
 /**/*_log.txt
 /**/*_result.mat
+
+
+jupyterlite/*.gz
+jupyterlite/*.db
+jupyterlite/contents

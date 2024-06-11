@@ -169,3 +169,21 @@ deploy:
       - dist/
   only:
     - tags
+
+pages:
+  extends: 
+  - ".deploy_env"
+  stage: deploy
+  variables:
+    PYTHON_VERSION: "3.9" 
+  script:
+    - mamba install -y pip "jupyterlite-core>=0.3.0,<0.4.0" "jupyterlite-xeus>=0.1.8,<0.2" ipywidgets jupyter_server
+    - python setup.py sdist
+    - cd jupyterlite
+    - python build.py
+    - mv dist/ ../public
+  artifacts:
+    paths:
+      - public
+  only:
+    - master
