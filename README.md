@@ -41,3 +41,4 @@ BibTeX entry:
 Run a Jupyter Lab instance with binder to try out CoSApp features through examples.
 
 [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gl/cosapp%2Fcosapp/master?urlpath=lab/tree/docs/tutorials)
+[![lite-badge](https://jupyterlite.rtfd.io/en/latest/_static/badge.svg)]( https://cosapp.gitlab.io/cosapp/)
