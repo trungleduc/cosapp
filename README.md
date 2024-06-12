@@ -33,7 +33,17 @@ Lac *et al.* (2024), [CoSApp: a Python library to create, simulate and design co
 BibTeX entry:
 
 ```bibtex
-@article{Lac.etal:joss2024, author={Étienne Lac and Guy {De Spiegeleer} and Adrien Delsalle and Frédéric Collonval and Duc-Trung Lê and Mathias Malandain}, title={CoSApp: a Python library to create, simulate and design complex systems}, journal={Journal of Open Source Software}, year={2024}, volume={9}, number={94}, pages={6292}, doi={10.21105/joss.06292}, publisher={The Open Journal}}
+@article{Lac.etal:joss2024,
+    author={Étienne Lac and Guy {De Spiegeleer} and Adrien Delsalle and Frédéric Collonval and Duc-Trung Lê and Mathias Malandain},
+    title={CoSApp: a Python library to create, simulate and design complex systems},
+    journal={Journal of Open Source Software},
+    year={2024},
+    volume={9},
+    number={94},
+    pages={6292},
+    doi={10.21105/joss.06292},
+    publisher={The Open Journal}
+}
 ```
 
 # Try it now!
