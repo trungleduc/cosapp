@@ -1,6 +1,7 @@
 """
 Classes connecting `Port` of foreign `System` to transfer variable values.
 """
+from __future__ import annotations
 import abc
 import copy
 import logging
@@ -10,11 +11,14 @@ from typing import (
     Callable, Iterable, Iterator,
     Collection, Mapping, Dict, List, Tuple,
     Optional, Union, Any, Type,
+    TYPE_CHECKING,
 )
 
 from cosapp.ports import units
 from cosapp.ports.port import BasePort, Port
 from cosapp.utils.helpers import check_arg, is_numerical
+if TYPE_CHECKING:
+    from cosapp.systems import System
 
 logger = logging.getLogger(__name__)
 
@@ -196,6 +200,47 @@ class BaseConnector(abc.ABC):
     def source_variable(self, sink_variable: str) -> str:
         """Returns the name of the source variable associated to `sink_variable`"""
         return self._mapping[sink_variable]
+
+    def contextual_name(self, context: Optional[System]=None, with_mapping=True) -> str:
+        """Contextual name of the connector, of the kind system[source -> sink]."""
+        name = self.name
+        sink = self.sink
+        source = self.source
+        if source.owner.parent is sink.owner.parent:
+            owner = source.owner.parent
+        elif source.owner is sink.owner.parent:
+            owner = source.owner
+        else:
+            owner = sink.owner
+        if context:
+            context_name = context.get_path_to_child(owner)
+        else:
+            context_name = owner.full_name()
+        def contextual_portname(port: Port) -> str:
+            return port.name if port.owner is owner else port.contextual_name
+        sink_name = contextual_portname(sink)
+        source_name = contextual_portname(source)
+        to = " \u27F6 "  # long right arrow
+        # to = " \u2794 "  # Heavy Wide-Headed Right Arrow
+        source_to_sink = f"{source_name}{to}{sink_name}"
+        if context_name:
+            connector_name = f"{context_name}[{source_to_sink}]"
+        else:
+            connector_name = source_to_sink
+        mapping = self.pretty_mapping() if with_mapping else ""
+        return f"{connector_name} ({mapping})" if mapping else connector_name
+
+    def pretty_mapping(self) -> str:
+        """Pretty formatting of the variable name mapping applied by the connector."""
+        mapping = ""
+        if not self.is_mirror():
+            # to = " \u2192 "  # short right arrow with spaces
+            to = "\u27F6"  # long right arrow, no spaces
+            mapping = ", ".join(
+                origin if origin == target else f"{origin}{to}{target}"
+                for target, origin in self._mapping.items()
+            )
+        return mapping
 
     def preserves_names(self) -> bool:
         """Returns `True` if connector mapping preserves variable names,

@@ -1,10 +1,12 @@
 import pytest
 from unittest import mock
 from types import MappingProxyType
+from functools import partial
 
 from cosapp.ports.connectors import BaseConnector, ConnectorError
 from cosapp.ports.port import PortType, Port
 from cosapp.systems import System
+from cosapp.utils.testing import DummySystemFactory, get_args
 
 
 @pytest.fixture(autouse=True)
@@ -626,3 +628,138 @@ def test_BaseConnector_info_system():
 
     s.parent = s2
     assert c.info() == ('system.p1', 'p2', {'z': 'z'})
+
+
+def test_BaseConnector_contextual_name():
+    Foo = DummySystemFactory(
+        "Foo",
+        inwards=[get_args('x', 0.0), get_args('u', 0.0)],
+        outwards=[get_args('v', 0.0), get_args('z', 0.0)],
+        inputs=[get_args(AbcdPort, 'a_in'), get_args(XYZPort, 'x_in'), get_args(AbcPort, 'p_in')],
+        outputs=[get_args(AbcdPort, 'a_out'), get_args(XYZPort, 'x_out'), get_args(AbcPort, 'p_out')],
+    )
+    Bar = DummySystemFactory(
+        "Bar",
+        inwards=[get_args('u', 0.0), get_args('z', 0.0)],
+        outwards=[get_args('result', 0.0)],
+        inputs=[get_args(AbcdPort, 'a_in'), get_args(XYZPort, 'x_in'), get_args(AbcPort, 'p_in')],
+        outputs=[get_args(AbcdPort, 'a_out'), get_args(XYZPort, 'x_out'), get_args(AbcPort, 'p_out')],
+    )
+    class Assembly(System):
+        """Foo-Bar assembly, with various parent/child and sibling connectors"""
+        def setup(self) -> None:
+            foo = self.add_child(Foo('foo'), pulling=['p_in', 'u', {'x': 'X'}])
+            bar = self.add_child(Bar('bar'), pulling=['p_out', {'result': 'Y'}])
+
+            self.connect(foo, bar, ['z', {'v': 'u'}])
+            self.connect(bar.x_out, foo.x_in)
+            self.connect(foo.a_out, bar.a_in, {'a': 'c', 'b': 'd'})
+
+    # Encapsulate assembly of interest into a bogus system tree s0.s1.s2
+    s0 = System('s0')
+    s1 = s0.add_child(System('s1'))
+    s2 = s1.add_child(System('s2'))
+    s3 = s2.add_child(Assembly('s3'), pulling=['X', 'Y', 'p_out'])  # assembly of interest, containing connectors
+
+    # No context specified -> context is full path s0.s1.s2.s3
+    assert set(map(BaseConnector.contextual_name, s3.all_connectors())) == {
+        # Pulling connectors
+        's0.s1.s2.s3[p_in ⟶ foo.p_in]',
+        's0.s1.s2.s3[bar.p_out ⟶ p_out]',
+        's0.s1.s2.s3[inwards ⟶ foo.inwards] (u, X⟶x)',
+        's0.s1.s2.s3[bar.outwards ⟶ outwards] (result⟶Y)',
+        # sub-system connectors
+        's0.s1.s2.s3[bar.x_out ⟶ foo.x_in]',
+        's0.s1.s2.s3[foo.a_out ⟶ bar.a_in] (a⟶c, b⟶d)',
+        's0.s1.s2.s3[foo.outwards ⟶ bar.inwards] (z, v⟶u)',
+    }
+
+    # Same without variable name mappings
+    assert set(map(partial(BaseConnector.contextual_name, with_mapping=False), s3.all_connectors())) == {
+        # Pulling connectors
+        's0.s1.s2.s3[p_in ⟶ foo.p_in]',
+        's0.s1.s2.s3[bar.p_out ⟶ p_out]',
+        's0.s1.s2.s3[inwards ⟶ foo.inwards]',
+        's0.s1.s2.s3[bar.outwards ⟶ outwards]',
+        # sub-system connectors
+        's0.s1.s2.s3[bar.x_out ⟶ foo.x_in]',
+        's0.s1.s2.s3[foo.a_out ⟶ bar.a_in]',
+        's0.s1.s2.s3[foo.outwards ⟶ bar.inwards]',
+    }
+
+    # Context is s0: connector names start with path s1.s2.s3
+    assert set(map(partial(BaseConnector.contextual_name, context=s0), s3.all_connectors())) == {
+        # Pulling connectors
+        's1.s2.s3[p_in ⟶ foo.p_in]',
+        's1.s2.s3[bar.p_out ⟶ p_out]',
+        's1.s2.s3[inwards ⟶ foo.inwards] (u, X⟶x)',
+        's1.s2.s3[bar.outwards ⟶ outwards] (result⟶Y)',
+        # sub-system connectors
+        's1.s2.s3[bar.x_out ⟶ foo.x_in]',
+        's1.s2.s3[foo.a_out ⟶ bar.a_in] (a⟶c, b⟶d)',
+        's1.s2.s3[foo.outwards ⟶ bar.inwards] (z, v⟶u)',
+    }
+
+    # Context is s0.s1: connector names start with path s2.s3
+    assert set(map(partial(BaseConnector.contextual_name, context=s1), s3.all_connectors())) == {
+        # Pulling connectors
+        's2.s3[p_in ⟶ foo.p_in]',
+        's2.s3[bar.p_out ⟶ p_out]',
+        's2.s3[inwards ⟶ foo.inwards] (u, X⟶x)',
+        's2.s3[bar.outwards ⟶ outwards] (result⟶Y)',
+        # sub-system connectors
+        's2.s3[bar.x_out ⟶ foo.x_in]',
+        's2.s3[foo.a_out ⟶ bar.a_in] (a⟶c, b⟶d)',
+        's2.s3[foo.outwards ⟶ bar.inwards] (z, v⟶u)',
+    }
+
+    # Context is s0.s1.s2: connector names start with path s3
+    assert set(map(partial(BaseConnector.contextual_name, context=s2), s3.all_connectors())) == {
+        # Pulling connectors
+        's3[p_in ⟶ foo.p_in]',
+        's3[bar.p_out ⟶ p_out]',
+        's3[inwards ⟶ foo.inwards] (u, X⟶x)',
+        's3[bar.outwards ⟶ outwards] (result⟶Y)',
+        # sub-system connectors
+        's3[bar.x_out ⟶ foo.x_in]',
+        's3[foo.a_out ⟶ bar.a_in] (a⟶c, b⟶d)',
+        's3[foo.outwards ⟶ bar.inwards] (z, v⟶u)',
+    }
+
+    # Context is s0.s1.s2.s3: brackets are omitted
+    assert set(map(partial(BaseConnector.contextual_name, context=s3), s3.all_connectors())) == {
+        # Pulling connectors
+        'p_in ⟶ foo.p_in',
+        'bar.p_out ⟶ p_out',
+        'inwards ⟶ foo.inwards (u, X⟶x)',
+        'bar.outwards ⟶ outwards (result⟶Y)',
+        # sub-system connectors
+        'bar.x_out ⟶ foo.x_in',
+        'foo.a_out ⟶ bar.a_in (a⟶c, b⟶d)',
+        'foo.outwards ⟶ bar.inwards (z, v⟶u)',
+    }
+
+    # Context is s0.s1, omitting mappings
+    assert set(map(partial(BaseConnector.contextual_name, context=s1, with_mapping=False), s3.all_connectors())) == {
+        # Pulling connectors
+        's2.s3[p_in ⟶ foo.p_in]',
+        's2.s3[bar.p_out ⟶ p_out]',
+        's2.s3[inwards ⟶ foo.inwards]',
+        's2.s3[bar.outwards ⟶ outwards]',
+        # sub-system connectors
+        's2.s3[bar.x_out ⟶ foo.x_in]',
+        's2.s3[foo.a_out ⟶ bar.a_in]',
+        's2.s3[foo.outwards ⟶ bar.inwards]',
+    }
+
+    # Check s2 connectors
+    assert set(map(BaseConnector.contextual_name, s2.all_connectors())) == {
+        # Pulling connectors
+        's0.s1.s2[inwards ⟶ s3.inwards] (X)',
+        's0.s1.s2[s3.outwards ⟶ outwards] (Y)',
+        's0.s1.s2[s3.p_out ⟶ p_out]',
+    }
+
+    # Check s2 connectors in the context of its child s3 -> error
+    with pytest.raises(ValueError, match="'s2' is not a child of 's3'"):
+        set(map(partial(BaseConnector.contextual_name, context=s3), s2.all_connectors()))
