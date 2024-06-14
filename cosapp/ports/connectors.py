@@ -24,23 +24,7 @@ logger = logging.getLogger(__name__)
 
 
 class ConnectorError(Exception):
-    """Raised if a connector cannot be created between two `Port`.
-
-    Attributes
-    ----------
-    message : str
-        Error message
-    """
-
-    def __init__(self, message: str):
-        """Instantiate a error object from the error descriptive message.
-
-        Parameters
-        ----------
-        message : str
-            Error message
-        """
-        self.message = message
+    """Raised if a connector cannot be created between two `Port`."""
 
 
 class BaseConnector(abc.ABC):
