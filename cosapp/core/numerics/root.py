@@ -309,12 +309,12 @@ class CustomSolver(BaseNumericalSolver):
             tol = 0.0
             iter_period = solver_options['tol_update_period']
             tol_to_noise = solver_options['tol_to_noise_ratio']
-            must_update_tol = lambda it: it % iter_period == 0
+            must_update_tol = lambda it, tol: it % iter_period == 0 or tol <= 0.0
         elif tol < 0:
             raise ValueError(f"Tolerance must be non-negative (got {tol})")
         else:
             tol_to_noise = None
-            must_update_tol = lambda it: False
+            must_update_tol = lambda *args: False
 
         results.trace = trace = list()
         if history:
@@ -339,9 +339,9 @@ class CustomSolver(BaseNumericalSolver):
             LogLevel.FULL_DEBUG,
             "\t".join([
                 f"iter #{it_solver}",
-                f"tol = {tol:.2e}",
+                f"{tol = :.2e}",
                 f"|R| = {r_norm}",
-                f"x = {x}",
+                f"{x = }",
             ])
         )
 
@@ -370,21 +370,21 @@ class CustomSolver(BaseNumericalSolver):
                     # Good Broyden update - source: https://nickcdryan.com/2017/09/16/broydens-method-in-python/
                     logger.log(log_level, f'Broyden update')
                     n_broyden_update += 1
-                    corr = numpy.outer((dr - jac.dot(dx)), dx) / dx.dot(dx)
+                    corr = numpy.outer(dr - jac.dot(dx), dx) / dx.dot(dx)
                     jac += corr
                     jac_lu, piv = self.lu_factor(jac)
 
-                if must_update_tol(it_solver):
+                if must_update_tol(it_solver, tol):
                     norm_J = numpy.linalg.norm(jac, numpy.inf)
                     norm_x = numpy.linalg.norm(x, numpy.inf)
                     noise = epsilon * norm_J * norm_x
                     tol = tol_to_noise * noise
                     logger.log(
                         LogLevel.FULL_DEBUG,
-                        f"iter #{it_solver}; noise level = {noise}; tol = {tol}; |J| = {norm_J}; |x| = {norm_x}"
+                        f"iter #{it_solver}; {noise = }; {tol = }; |J| = {norm_J}; |x| = {norm_x}"
                     )
                     if tol == prev_tol:
-                        logger.log(log_level, f"Numerical saturation detected at iteration {it_solver}; x = {x}")
+                        logger.log(log_level, f"Numerical saturation detected at iteration {it_solver}; {x = }")
                         break
                     prev_tol = tol
 
@@ -426,14 +426,14 @@ class CustomSolver(BaseNumericalSolver):
                     LogLevel.DEBUG,
                     "\t".join([
                         f"iter #{it_solver}",
-                        f"tol = {tol:.2e}",
+                        f"{tol = :.2e}",
                         f"|R| = {r_norm}",
-                        f"x = {x}",
+                        f"{x = }",
                     ])
                 )
 
                 if numpy.allclose(x, x_prev, rtol=rtol_x, atol=0):
-                    logger.log(log_level, f"Fixed point detected: x = {x}, dx = {x - x_prev}")
+                    logger.log(log_level, f"Fixed point detected: {x = }, dx = {x - x_prev}")
                     break
 
                 # Estimate non-linearity by comparing extrapolated and actual residues
@@ -486,9 +486,9 @@ class CustomSolver(BaseNumericalSolver):
             status = f'Converged' if results.success else 'Not converged'
             message = (
                 f"{status} ({r_norm:.4e}) in {it_solver} iterations,"
-                f" {it_jac} complete, {it_p_jac} partial Jacobian and"
-                f" {n_broyden_update} Broyden evaluation(s)"
-                f" (tol = {tol:.1e})"
+                f" {it_jac} complete, {it_p_jac} partial Jacobian"
+                f" and {n_broyden_update} Broyden evaluation(s)"
+                f" ({tol = :.1e})"
             )
             results.message = f"   -> {message}"
 
