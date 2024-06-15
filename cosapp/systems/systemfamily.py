@@ -100,25 +100,27 @@ class SystemFamily(System):
         """
         for name, port in self.inputs.items():
             if name in new_system.inputs:
-                new_system.inputs[name].morph(port)
+                port.morph_as(new_system.inputs[name])
                 port.owner = new_system
                 new_system.inputs[name] = port
             else:
                 logger.warning(
-                    '"{}" conversion: "{}" not found in #{}'
-                    ''.format(self.name, name, type(new_system).__name__)
+                    "{!r} conversion: {!r} not found in #{}".format(
+                        self.name, name, type(new_system).__name__,
+                    )
                 )
 
         for name, port in self.outputs.items():
             if name in new_system.outputs:
                 # Convert existing output ports to keep existing connections
-                new_system.outputs[name].morph(port)
+                port.morph_as(new_system.outputs[name])
                 port.owner = new_system
                 new_system.outputs[name] = port
             else:
                 logger.warning(
-                    '"{}" conversion: "{}" not found in #{}'
-                    ''.format(self.name, name, type(new_system).__name__)
+                    "{!r} conversion: {!r} not found in #{}".format(
+                        self.name, name, type(new_system).__name__,
+                    )
                 )
 
 

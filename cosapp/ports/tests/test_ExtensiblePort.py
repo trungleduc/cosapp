@@ -41,7 +41,7 @@ def test_ExtensiblePort__init__(name, direction, error):
 
 
 @pytest.mark.parametrize("direction", PortType)
-def test_ExtensiblePort_remove_variable(direction):
+def test_ExtensiblePort_pop_variable(direction, caplog):
     port = ExtensiblePort("myPort", direction)
     port.add_variable("var1", 0.0)
     port.add_variable("var2", 100.1)
@@ -53,7 +53,7 @@ def test_ExtensiblePort_remove_variable(direction):
     assert "var1" in port
     assert "var1" in port.get_details()
 
-    port.remove_variable("var1")
+    port.pop_variable("var1")
     assert len(port) == 1
     assert set(port) == {"var2"}
     assert hasattr(port, "var2")
@@ -62,4 +62,4 @@ def test_ExtensiblePort_remove_variable(direction):
     assert "var1" not in port.get_details()
 
     with pytest.raises(AttributeError):
-        port.remove_variable("var3")
+        port.pop_variable("var3")

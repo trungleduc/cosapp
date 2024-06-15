@@ -397,3 +397,16 @@ def test_Port_set_from_common(source_direction, target_direction, caplog):
         re.match("'port2' and 'source' have no common variables", record.message)
         for record in caplog.records
     )
+
+
+@pytest.mark.parametrize("direction", PortType)
+def test_Port_pop_variable(direction):
+    class XyPort(Port):
+        def setup(self):
+            self.add_variable('x')
+            self.add_variable('y')
+
+    port = XyPort('source', direction)
+
+    with pytest.raises(NotImplementedError, match="cannot remove variables from fixed-size port"):
+        port.pop_variable('x')

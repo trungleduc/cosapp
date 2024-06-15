@@ -1,7 +1,14 @@
+from __future__ import annotations
 import logging
 import copy
+import abc
 from collections import OrderedDict
-from typing import Any, Dict, Iterator, Generator, Optional, Tuple, Union, Callable, TypeVar
+from typing import (
+    Any, Dict, Tuple,
+    Optional, Union, Callable,
+    Iterator, Generator,
+    TypeVar, TYPE_CHECKING,
+)
 from types import MappingProxyType
 
 from cosapp.patterns import visitor
@@ -12,13 +19,15 @@ from cosapp.ports.mode_variable import ModeVariable
 from cosapp.utils.distributions import Distribution
 from cosapp.utils.helpers import check_arg
 from cosapp.utils.naming import NameChecker
+if TYPE_CHECKING:
+    from cosapp.systems import System
 
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 
 
-class BasePort(visitor.Component):
+class BasePort(visitor.Component, metaclass=abc.ABCMeta):
     """Base class for ports, containers gathering variables.
 
     Common users should not use this class directly.
@@ -61,12 +70,12 @@ class BasePort(visitor.Component):
         visitor.visit_port(self)
 
     @property
-    def owner(self) -> Optional["cosapp.systems.System"]:
+    def owner(self) -> System:
         """System : `System` owning the port."""
         return self._owner
 
     @owner.setter
-    def owner(self, new_owner: "cosapp.systems.System"):
+    def owner(self, new_owner: System):
         from cosapp.systems import System
 
         if not isinstance(new_owner, System):
@@ -563,7 +572,7 @@ class BasePort(visitor.Component):
 
         return port
 
-    def copy_variable_from(self, port: "BasePort", name: str, alias: Optional[str] = None) -> None:
+    def copy_variable_from(self, port: BasePort, name: str, alias: Optional[str]=None) -> None:
         """Copy variable `name` from another port into variable `alias`.
 
         Parameters
@@ -582,38 +591,65 @@ class BasePort(visitor.Component):
         self._variables[alias] = variable.copy(self, alias)
         setattr(self, alias, copy.copy(value))
 
-    def morph(self, port: "BasePort") -> None:
-        """Morph the provided port into this port.
+    def morph_as(self, port: BasePort) -> None:
+        """Morph this port into the provided port.
 
         Morphing a port is useful when converting a `System` in something equivalent. The morphing
         goal is to preserve connections and adapt the port content if needed.
 
         Parameters
         ----------
-        port : BasePort
-            The port to morph to
+        port [BasePort]:
+            The port to morph into
         """
-
         # TODO unit test for variable details when morphing
-        for name, variable in self._variables.items():
-            if name not in port:
-                port.add_variable(
-                    name,
-                    getattr(self, name),
-                    unit=variable.unit,
-                    dtype=variable.dtype,
-                    desc=variable.description,
-                    valid_range=variable.valid_range,
-                    invalid_comment=variable.invalid_comment,
-                    limits=variable.limits,
-                    out_of_limits_comment=variable.out_of_limits_comment,
-                    distribution=variable.distribution,
-                    scope=variable.scope,
-                )
+        for varname in set(self) - set(port):
+            self.pop_variable(varname)
 
-        for variable in list(port):
-            if variable not in self:
-                port.remove_variable(variable)
+        new_varnames = set(port) - set(self)
+
+        for varname in new_varnames:
+            variable = port._variables[varname]
+
+            self.add_variable(
+                varname,
+                getattr(port, varname),
+                unit=variable.unit,
+                dtype=variable.dtype,
+                desc=variable.description,
+                valid_range=variable.valid_range,
+                invalid_comment=variable.invalid_comment,
+                limits=variable.limits,
+                out_of_limits_comment=variable.out_of_limits_comment,
+                distribution=variable.distribution,
+                scope=variable.scope,
+            )
+
+    def pop_variable(self, varname: str) -> BaseVariable:
+        """Removes a variable from the port.
+
+        Parameters
+        ----------
+        - varname [str]:
+            Name of the variable to be removed
+
+        Returns
+        -------
+        - variable [BaseVariable]:
+            The popped variable
+
+        Raises
+        ------
+        `AttributeError` if the variable does not exist.
+        """
+        try:
+            variable = self._variables.pop(varname)
+        except KeyError:
+            raise AttributeError(
+                f"Variable {varname!r} does not exist in port {self.contextual_name}"
+            )
+        delattr(self, varname)
+        return variable
 
     def to_dict(self, with_def: bool = False) -> Dict[str, Union[str, Tuple[Dict[str, str], str]]]:
         """Convert this port in a dictionary.
@@ -719,27 +755,7 @@ class ModeVarPort(BasePort):
 
 class ExtensiblePort(BasePort):
     """Class describing ports with a varying number of variables."""
-
-    # TODO unused and should be removed -> to dangerous for consistency
-    def remove_variable(self, name: str) -> None:
-        """Removes a variable from the port.
-
-        Parameters
-        ----------
-        name : str
-            Name of the variable to be removed
-
-        Raises
-        ------
-        AttributeError
-            If the variable does not exists
-        """
-        if name not in self._variables:
-            raise AttributeError(
-                f"Variable {name!r} does not exist in port {self.contextual_name}"
-            )
-        delattr(self, name)
-        self._variables.pop(name)
+    pass
 
 
 class Port(BasePort):
@@ -1022,3 +1038,8 @@ class Port(BasePort):
         for name in common:
             value = getattr(source, name)
             setattr(self, name, transfer(value))
+
+    def pop_variable(self, varname: str) -> None:
+        raise NotImplementedError(
+            f"cannot remove variables from fixed-size port {type(self).__name__}."
+        )
