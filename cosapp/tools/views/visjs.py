@@ -188,11 +188,7 @@ class VisJsRenderer(BaseRenderer):
                     if connection.is_mirror():
                         edge["title"] = type(connection.source).__name__
                     else:
-                        to = "&#8594;"  # rightarrow
-                        edge["title"] = ", ".join(
-                            origin if origin == target else f"{origin}{to}{target}"
-                            for target, origin in connection.mapping.items()
-                        ).join("[]")
+                        edge["title"] = f"[{connection.pretty_mapping()}]"
 
                     # if supplier or target is top-system, set edge.length = 0
                     if (

@@ -648,7 +648,7 @@ def test_BaseConnector_contextual_name():
     class Assembly(System):
         """Foo-Bar assembly, with various parent/child and sibling connectors"""
         def setup(self) -> None:
-            foo = self.add_child(Foo('foo'), pulling=['p_in', 'u', {'x': 'X'}])
+            foo = self.add_child(Foo('foo'), pulling=['p_in', {'x': 'X'}, 'u'])
             bar = self.add_child(Bar('bar'), pulling=['p_out', {'result': 'Y'}])
 
             self.connect(foo, bar, ['z', {'v': 'u'}])
@@ -661,12 +661,23 @@ def test_BaseConnector_contextual_name():
     s2 = s1.add_child(System('s2'))
     s3 = s2.add_child(Assembly('s3'), pulling=['X', 'Y', 'p_out'])  # assembly of interest, containing connectors
 
+    # Check pretty mapping
+    assert sorted(map(BaseConnector.pretty_mapping, s3.all_connectors())) == [
+        'X⟶x, u',
+        'a, b, c',
+        'a, b, c',
+        'a⟶c, b⟶d',
+        'result⟶Y',
+        'x, y, z',
+        'z, v⟶u',
+    ]
+
     # No context specified -> context is full path s0.s1.s2.s3
     assert set(map(BaseConnector.contextual_name, s3.all_connectors())) == {
         # Pulling connectors
         's0.s1.s2.s3[p_in ⟶ foo.p_in]',
         's0.s1.s2.s3[bar.p_out ⟶ p_out]',
-        's0.s1.s2.s3[inwards ⟶ foo.inwards] (u, X⟶x)',
+        's0.s1.s2.s3[inwards ⟶ foo.inwards] (X⟶x, u)',
         's0.s1.s2.s3[bar.outwards ⟶ outwards] (result⟶Y)',
         # sub-system connectors
         's0.s1.s2.s3[bar.x_out ⟶ foo.x_in]',
@@ -692,7 +703,7 @@ def test_BaseConnector_contextual_name():
         # Pulling connectors
         's1.s2.s3[p_in ⟶ foo.p_in]',
         's1.s2.s3[bar.p_out ⟶ p_out]',
-        's1.s2.s3[inwards ⟶ foo.inwards] (u, X⟶x)',
+        's1.s2.s3[inwards ⟶ foo.inwards] (X⟶x, u)',
         's1.s2.s3[bar.outwards ⟶ outwards] (result⟶Y)',
         # sub-system connectors
         's1.s2.s3[bar.x_out ⟶ foo.x_in]',
@@ -705,7 +716,7 @@ def test_BaseConnector_contextual_name():
         # Pulling connectors
         's2.s3[p_in ⟶ foo.p_in]',
         's2.s3[bar.p_out ⟶ p_out]',
-        's2.s3[inwards ⟶ foo.inwards] (u, X⟶x)',
+        's2.s3[inwards ⟶ foo.inwards] (X⟶x, u)',
         's2.s3[bar.outwards ⟶ outwards] (result⟶Y)',
         # sub-system connectors
         's2.s3[bar.x_out ⟶ foo.x_in]',
@@ -718,7 +729,7 @@ def test_BaseConnector_contextual_name():
         # Pulling connectors
         's3[p_in ⟶ foo.p_in]',
         's3[bar.p_out ⟶ p_out]',
-        's3[inwards ⟶ foo.inwards] (u, X⟶x)',
+        's3[inwards ⟶ foo.inwards] (X⟶x, u)',
         's3[bar.outwards ⟶ outwards] (result⟶Y)',
         # sub-system connectors
         's3[bar.x_out ⟶ foo.x_in]',
@@ -731,7 +742,7 @@ def test_BaseConnector_contextual_name():
         # Pulling connectors
         'p_in ⟶ foo.p_in',
         'bar.p_out ⟶ p_out',
-        'inwards ⟶ foo.inwards (u, X⟶x)',
+        'inwards ⟶ foo.inwards (X⟶x, u)',
         'bar.outwards ⟶ outwards (result⟶Y)',
         # sub-system connectors
         'bar.x_out ⟶ foo.x_in',
