@@ -211,19 +211,20 @@ class BaseConnector(abc.ABC):
             connector_name = f"{context_name}[{source_to_sink}]"
         else:
             connector_name = source_to_sink
-        mapping = self.pretty_mapping() if with_mapping else ""
+        if with_mapping and not self.is_mirror():
+            mapping = self.pretty_mapping()
+        else:
+            mapping = ""
         return f"{connector_name} ({mapping})" if mapping else connector_name
 
     def pretty_mapping(self) -> str:
         """Pretty formatting of the variable name mapping applied by the connector."""
-        mapping = ""
-        if not self.is_mirror():
-            # to = " \u2192 "  # short right arrow with spaces
-            to = "\u27F6"  # long right arrow, no spaces
-            mapping = ", ".join(
-                origin if origin == target else f"{origin}{to}{target}"
-                for target, origin in self._mapping.items()
-            )
+        # to = " \u2192 "  # short right arrow with spaces
+        to = "\u27F6"  # long right arrow, no spaces
+        mapping = ", ".join(
+            origin if origin == target else f"{origin}{to}{target}"
+            for target, origin in self._mapping.items()
+        )
         return mapping
 
     def preserves_names(self) -> bool:
