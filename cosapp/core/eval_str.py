@@ -3,11 +3,18 @@ Module handling the execution of code provided as string by the user.
 
 This code is inspired from the OpenMDAO module openmdao.components.exec_comp.
 """
+from __future__ import annotations
 import re
 import numpy
 from enum import Enum
 from numbers import Number
-from typing import Any, Dict, Iterable, Optional, Tuple, Union, Callable, FrozenSet
+from typing import (
+    Union,Any, Dict, Tuple, FrozenSet,
+    Iterable, Optional, Callable,
+    TYPE_CHECKING,
+)
+if TYPE_CHECKING:
+    from cosapp.systems import System
 
 
 class ContextLocals(dict):
@@ -18,13 +25,12 @@ class ContextLocals(dict):
     context: System
         System whose attributes are looked up
     """
-
-    def __init__(self, context: "System", *args, **kwargs):
+    def __init__(self, context: System, *args, **kwargs):
         super().__init__(*args, *kwargs)
         self.__context = context
     
     @property
-    def context(self) -> "System":
+    def context(self) -> System:
         """cosapp.systems.System: Context of the locals"""
         return self.__context
 
@@ -251,7 +257,7 @@ class EvalString:
 
         return mapping
 
-    def __init__(self, expression: Any, context: "System") -> None:
+    def __init__(self, expression: Any, context: System) -> None:
         """Class constructor.
 
         Compiles an expression, and checks that it is evaluable within a given context.
@@ -347,7 +353,7 @@ class EvalString:
         return EvalString.__globals
 
     @property
-    def eval_context(self) -> "System":
+    def eval_context(self) -> System:
         """cosapp.systems.System: Context of string expression evaluation."""
         return self.__locals.context
 
@@ -404,7 +410,7 @@ class EvalString:
 class AssignString:
     """Create an executable assignment of the kind 'lhs = rhs' from two evaluable expressions lhs and rhs.
     """
-    def __init__(self, lhs: str, rhs: Any, context: "System") -> None:
+    def __init__(self, lhs: str, rhs: Any, context: System) -> None:
         lhs = EvalString(lhs, context)
         if lhs.constant:
             raise ValueError(
@@ -429,7 +435,7 @@ class AssignString:
         self.rhs = rhs
 
     @property
-    def eval_context(self) -> "System":
+    def eval_context(self) -> System:
         """cosapp.systems.System: Evaluation context of the assignment."""
         return self.__context
 

@@ -1,10 +1,15 @@
 """This module defines the basic class encapsulating mode variable attributes."""
+from __future__ import annotations
 import copy
-from typing import Any, Optional
+from typing import Any, Optional, TYPE_CHECKING
 
 from cosapp.ports.enum import Scope
 from cosapp.ports.variable import BaseVariable, Types
 from cosapp.utils.helpers import check_arg
+if TYPE_CHECKING:
+    from cosapp.core.eval_str import EvalString
+    from cosapp.ports.port import BasePort, ModeVarPort
+
 
 import logging
 logger = logging.getLogger(__name__)
@@ -42,7 +47,7 @@ class ModeVariable(BaseVariable):
     def __init__(
         self,
         name: str,
-        port: "cosapp.ports.ModeVarPort",
+        port: ModeVarPort,
         value: Optional[Any] = None,
         unit: str = "",
         dtype: Types = None,
@@ -101,7 +106,7 @@ class ModeVariable(BaseVariable):
         )  
 
     @property
-    def init_expr(self) -> "cosapp.core.eval_str.EvalString":
+    def init_expr(self) -> EvalString:
         """EvalString : expression of initial value"""
         return self._init
 
@@ -118,7 +123,7 @@ class ModeVariable(BaseVariable):
             except AttributeError:
                 pass
 
-    def copy(self, port: "BasePort", name: Optional[str] = None) -> "ModeVariable":
+    def copy(self, port: BasePort, name: Optional[str] = None) -> ModeVariable:
         if name is None:
             name = self.name
         return ModeVariable(

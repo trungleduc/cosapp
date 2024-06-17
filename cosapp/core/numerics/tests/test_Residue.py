@@ -237,7 +237,7 @@ def test_Residue_to_dict(system, options, expected):
 
     assert r_dict["context"] == system.contextual_name
     assert r_dict["equation"] == options["equation"]
-    assert r_dict["reference"] == expected.get("reference", "1")
+    assert r_dict["reference"] == expected.get("reference", "1.0")
     assert r_dict["name"] == options.get("name", options["equation"])
 
 

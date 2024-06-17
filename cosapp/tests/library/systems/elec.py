@@ -1,7 +1,7 @@
 """Systems from tutorials used in regression tests"""
 
-from cosapp.systems import System
-from cosapp.ports import Port
+from __future__ import annotations
+from cosapp.base import System, Port
 from typing import List
 
 
@@ -75,7 +75,7 @@ class Node(System):
         self.sum_I_out = sum(current.I for current in self.outgoing)
 
     @classmethod
-    def make(cls, parent, name, incoming: List[Dipole], outgoing: List[Dipole], pulling=None) -> "Node":
+    def make(cls, parent, name, incoming: List[Dipole], outgoing: List[Dipole], pulling=None) -> Node:
         """Factory method making appropriate connections with parent system"""
         node = cls(name, n_in=max(len(incoming), 1), n_out=max(len(outgoing), 1))
         parent.add_child(node, pulling=pulling)

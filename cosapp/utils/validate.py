@@ -1,19 +1,21 @@
-from typing import Dict, Tuple
+from __future__ import annotations
+from typing import Dict, Tuple, TYPE_CHECKING
+if TYPE_CHECKING:
+    from cosapp.base import System
 
 
-def validate(model: "System") -> Tuple[Dict[str, str], Dict[str, str]]:
+def validate(model: System) -> Tuple[Dict[str, str], Dict[str, str]]:
     """Check the validity of the provided `System`.
     
     Parameters
     ----------
-    model : cosapp.systems.System
+    - model [cosapp.base.System]:
         The system to be validated
 
     Returns
     -------
-    Tuple[Dict[str, str], Dict[str, str]]
-        Warnings and errors dictionaries - key is the variable name and value the error reason.
-    
+    tuple[dict[str, str], dict[str, str]]
+        Warning and error dictionaries; key is the variable name and value the error reason.
     """
     from cosapp.ports.enum import Validity
 

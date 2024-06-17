@@ -1,7 +1,7 @@
 from __future__ import annotations
 from abc import abstractmethod
 from numbers import Number
-from typing import Any, Dict, Optional, Tuple, FrozenSet, Union
+from typing import Any, Dict, Optional, Tuple, FrozenSet, Union, TYPE_CHECKING
 from collections.abc import Collection
 
 import numpy
@@ -9,6 +9,8 @@ import numpy
 from cosapp.core.eval_str import EvalString
 from cosapp.utils.helpers import check_arg
 from cosapp.utils.naming import natural_varname
+if TYPE_CHECKING:
+    from cosapp.systems import System
 
 
 class AbstractResidue:
@@ -21,11 +23,7 @@ class AbstractResidue:
     - name : str
         Residue name
     """
-    def __init__(
-        self,
-        context: "System",
-        name: str,
-    ):
+    def __init__(self, context: System, name: str):
         from cosapp.systems import System
         check_arg(context, "context", System)
         check_arg(name, "name", str)
@@ -93,7 +91,7 @@ class AbstractResidue:
         self._reference_value = value
 
     @property
-    def context(self) -> "System":
+    def context(self) -> System:
         """System: CoSApp system usable in string evaluation."""
         return self._context
 
@@ -199,10 +197,10 @@ class Residue(AbstractResidue):
 
     def __init__(
         self,
-        context: "System",
+        context: System,
         equation: str,
         name: Optional[str] = None,
-        reference: Union[Number, Collection, numpy.ndarray, str] = 1,
+        reference: Union[Number, Collection, numpy.ndarray, str] = 1.0,
     ):
         """Initialization parameters:
         ----------
@@ -346,7 +344,7 @@ class DeferredResidue:
     - variables: Set[str]
         Names of variables involved in the residue
     """
-    def __init__(self, context: "System", target: str, reference=1.0):
+    def __init__(self, context: System, target: str, reference=1.0):
         from cosapp.systems import System
         check_arg(context, "context", System)
         check_arg(target, "target", str)

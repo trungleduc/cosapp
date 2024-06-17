@@ -4,12 +4,14 @@ import abc
 import copy
 import pandas
 import warnings
-from typing import Union, List, Optional, NamedTuple, Any
+from typing import Union, List, Optional, NamedTuple, Any, TYPE_CHECKING
 
 from cosapp.core.signal import Signal
 from cosapp.core.eval_str import EvalString
 from cosapp.utils.helpers import is_numerical, check_arg
 from cosapp.utils.find_variables import SearchPattern, make_wishlist, find_variables
+if TYPE_CHECKING:
+    from cosapp.core.module import Module
 
 
 class SpecialColumns(NamedTuple):
@@ -165,12 +167,12 @@ class BaseRecorder(abc.ABC):
         return new
 
     @property
-    def watched_object(self) -> Optional["cosapp.core.module.Module"]:
+    def watched_object(self) -> Optional[Module]:
         """Module : The object from which data are read."""
         return self._watch_object
 
     @watched_object.setter
-    def watched_object(self, module: "cosapp.core.module.Module"):
+    def watched_object(self, module: Module):
         from cosapp.core.module import Module
 
         if not (module is None or isinstance(module, Module)):

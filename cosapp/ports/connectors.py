@@ -131,7 +131,7 @@ class BaseConnector(abc.ABC):
     def sink(self, port: BasePort) -> None:
         self._sink = self.__get_port(port, sink=True, check=True)
 
-    def __get_port(self, port: BasePort, sink: bool, check=True) -> "weakref.ref[BasePort]":
+    def __get_port(self, port: BasePort, sink: bool, check=True) -> weakref.ref[BasePort]:
         """Returns a weakref to `port`, after compatibility check with internal mapping."""
         port_type = 'sink' if sink else 'source'
 

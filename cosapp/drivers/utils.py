@@ -1,12 +1,14 @@
 from __future__ import annotations
 import enum
-from typing import Optional, Union, Dict, Tuple, List, Set, NamedTuple
+from typing import Optional, Union, Dict, Tuple, List, Set, NamedTuple, TYPE_CHECKING
 from collections.abc import Collection
 
 from cosapp.core.numerics.boundary import Unknown
 from cosapp.core.numerics.basics import MathematicalProblem
 from cosapp.utils.helpers import check_arg
 from cosapp.utils.parsing import multi_split
+if TYPE_CHECKING:
+    from cosapp.systems import System
 
 import logging
 logger = logging.getLogger(__name__)
@@ -18,12 +20,12 @@ class SystemAnalyzer:
     """
     __slots__ = ('__system',)
 
-    def __init__(self, system: Optional["cosapp.systems.System"] = None):
+    def __init__(self, system: Optional[System]=None):
         self.__reset()
         self.system = system
 
     @property
-    def system(self) -> "cosapp.systems.System":
+    def system(self) -> System:
         "System: system of interest"
         return self.__system
 
