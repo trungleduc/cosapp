@@ -21,7 +21,7 @@ requirements:
     - python>=3.8
     - pandas
     - jsonschema
-    - numpy>=1.12
+    - numpy<2
     - scipy
     - wrapt
     - jinja2
