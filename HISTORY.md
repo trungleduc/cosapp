@@ -1,6 +1,41 @@
 # History
 
 
+## 0.17.0 (2024-06-18)
+
+### New features & API changes
+
+- A JupyterLite image including CoSApp is now available in the main README file (MR [#300](https://gitlab.com/cosapp/cosapp/-/merge_requests/300)).
+- Fix a bug with primary event initialization (MR [#293](https://gitlab.com/cosapp/cosapp/-/merge_requests/293)).
+- Improved API for partial connections: name mappings can now be given as lists mixing variable names and dictionaries, which is convenient when most variable names are identical, and only a few differ (MRs [#294](https://gitlab.com/cosapp/cosapp/-/merge_requests/294), [#295](https://gitlab.com/cosapp/cosapp/-/merge_requests/295) & [#306](https://gitlab.com/cosapp/cosapp/-/merge_requests/306)).
+  Example:
+
+  ```python
+  from cosapp.base import System
+  
+  class SomeSystem(System):
+      def setup(self):
+          foo = self.add_child(Foo('foo'), pulling=['a', 'b', {'c': 'c_foo'}])
+          bar = self.add_child(Bar('bar'))
+
+          self.connect(foo, bar, ['x', 'y', {'z': 'v'}])
+  ```
+  
+- New utility function `cosapp.tools.views.show_tree` displaying the hierarchical tree of a system similar to a folder tree in a filesystem (MRs [#296](https://gitlab.com/cosapp/cosapp/-/merge_requests/296)-[#298](https://gitlab.com/cosapp/cosapp/-/merge_requests/298)).
+
+### Bug fixes and code quality
+
+- New attribute `Residue.variables` providing the names of the variables involved in the residue (MR [#299](https://gitlab.com/cosapp/cosapp/-/merge_requests/299)).
+- Minor bug fix in Newton-Raphson algorithm (MR [#303](https://gitlab.com/cosapp/cosapp/-/merge_requests/303)).
+- Fix bad markdown rendering of systems (MR [#292](https://gitlab.com/cosapp/cosapp/-/merge_requests/292)).
+- Improved type hints throughout the code (MR [#307](https://gitlab.com/cosapp/cosapp/-/merge_requests/307)).
+- Other improvements (MRs [#291](https://gitlab.com/cosapp/cosapp/-/merge_requests/291), [#301](https://gitlab.com/cosapp/cosapp/-/merge_requests/301), [#302](https://gitlab.com/cosapp/cosapp/-/merge_requests/302), [#304](https://gitlab.com/cosapp/cosapp/-/merge_requests/304), [#305](https://gitlab.com/cosapp/cosapp/-/merge_requests/305), [#307](https://gitlab.com/cosapp/cosapp/-/merge_requests/307), [#308](https://gitlab.com/cosapp/cosapp/-/merge_requests/308)).
+
+### Maintenance
+
+- Pin dependency to `numpy` v1, until full migration to v2 (MR [#310](https://gitlab.com/cosapp/cosapp/-/merge_requests/310)).
+
+
 ## 0.16.0 (2024-04-18)
 
 ### Bug fixes and code quality
