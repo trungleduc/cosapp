@@ -1,6 +1,6 @@
 from __future__ import annotations
 from numbers import Number
-from typing import Any, Dict, Optional, Union, Tuple, Type
+from typing import Any, Dict, Optional, Union, Tuple, Type, TYPE_CHECKING
 from types import SimpleNamespace
 
 import abc
@@ -13,6 +13,9 @@ from cosapp.ports.port import BasePort
 from cosapp.ports.exceptions import ScopeError
 from cosapp.utils.parsing import get_indices
 from cosapp.utils.helpers import check_arg
+
+if TYPE_CHECKING:
+    from cosapp.systems import System
 
 
 class Boundary:
@@ -32,7 +35,7 @@ class Boundary:
         If `True` (default), output variables are regarded as invalid.
     """
     def __init__(self,
-        context: "cosapp.systems.System",
+        context: System,
         name: str,
         mask: Optional[numpy.ndarray] = None,
         default: Union[Number, numpy.ndarray, None] = None,
@@ -57,7 +60,7 @@ class Boundary:
 
     @staticmethod
     def parse(
-        context: "cosapp.systems.System",
+        context: System,
         name: str,
         mask: Optional[numpy.ndarray] = None,
         inputs_only: bool = False,
@@ -124,7 +127,7 @@ class Boundary:
         return f"{self.name} := {self!s}"
 
     @property
-    def context(self) -> "cosapp.systems.System":
+    def context(self) -> System:
         """cosapp.systems.System : `System` in which the boundary is defined."""
         return self._context
 
@@ -388,7 +391,7 @@ class Unknown(Boundary):
     """
 
     def __init__(self,
-        context: "cosapp.systems.System",
+        context: System,
         name: str,
         # absolute_step: Number = 1.5e-8,  # TODO ?
         # relative_step: Number = 1.5e-8,  # TODO ?
@@ -428,7 +431,7 @@ class Unknown(Boundary):
         """
         return self.transfer(self.context, self.name)
 
-    def transfer(self, context: "cosapp.systems.System", name: str) -> Unknown:
+    def transfer(self, context: System, name: str) -> Unknown:
         """Transfer a copy of the unknown in a new context.
 
         Returns
@@ -546,7 +549,7 @@ class TimeUnknown(Boundary, AbstractTimeUnknown):
     """
 
     def __init__(self,
-        context: "cosapp.systems.System",
+        context: System,
         name: str,
         der: Any,
         max_time_step: Union[Number, str] = numpy.inf,
@@ -631,7 +634,7 @@ class TimeUnknown(Boundary, AbstractTimeUnknown):
         return TimeUnknown(self.context, self.name, self.der, self.max_time_step_expr)
 
     @staticmethod
-    def der_type(expression: Any, context: "cosapp.systems.System") -> Tuple[EvalString, Any, Type]:
+    def der_type(expression: Any, context: System) -> Tuple[EvalString, Any, Type]:
         """Static method to evaluate the type and default value of an expression used as time derivative"""
         if isinstance(expression, EvalString):
             eval_string = expression
@@ -698,7 +701,7 @@ class TimeDerivative(Boundary):
         Time derivative initial value
     """
     def __init__(self,
-        context: "cosapp.systems.System",
+        context: System,
         name: str,
         source: Any,
         initial_value: Any = None,
@@ -788,7 +791,7 @@ class TimeDerivative(Boundary):
         raise RuntimeError("Time derivatives are computed, and cannot be explicitly set")
 
     @staticmethod
-    def source_type(expression: Any, context: "cosapp.systems.System") -> Tuple:
+    def source_type(expression: Any, context: System) -> Tuple:
         """Static method to evaluate the type and default value of an expression used as rate source"""
         eval_string, value, dtype = TimeUnknown.der_type(expression, context)
         if dtype is numpy.ndarray:

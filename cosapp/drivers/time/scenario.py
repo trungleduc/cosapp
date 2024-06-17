@@ -1,3 +1,4 @@
+from __future__ import annotations
 import numpy, scipy.interpolate
 import enum
 import logging
@@ -157,7 +158,7 @@ class Scenario:
         self.owner = owner
 
     @classmethod
-    def make(cls, name: str, driver: Driver, init: Dict[str, Any], values: Dict[str, Any]) -> "Scenario":
+    def make(cls, name: str, driver: Driver, init: Dict[str, Any], values: Dict[str, Any]) -> Scenario:
         """Scenario factory"""
         scenario = cls(name, driver)
         scenario.set_init(init)

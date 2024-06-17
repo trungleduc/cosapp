@@ -7,13 +7,15 @@ import logging
 import copy
 from collections.abc import MutableSequence
 from numbers import Number
-from typing import Any, Dict, Iterable, Optional, Tuple, Union, NoReturn
+from typing import Any, Dict, Iterable, Optional, Tuple, Union, NoReturn, TYPE_CHECKING
 
 from cosapp.ports import units
 from cosapp.ports.enum import Scope, Validity, RangeType
 from cosapp.utils.distributions import Distribution
 from cosapp.utils.naming import NameChecker, CommonPorts
 from cosapp.utils.helpers import check_arg, is_numerical, get_typename
+if TYPE_CHECKING:
+    from cosapp.ports.port import BasePort
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +68,7 @@ class BaseVariable(abc.ABC):
     def __init__(
         self,
         name: str,
-        port: "cosapp.ports.port.BasePort",
+        port: BasePort,
         value: Any,
         unit: str = "",
         dtype: Types = None,
@@ -111,7 +113,7 @@ class BaseVariable(abc.ABC):
         self._scope = scope  # type: Scope
 
     @abc.abstractmethod
-    def copy(self, port: "cosapp.ports.port.BasePort", name: Optional[str] = None) -> BaseVariable:
+    def copy(self, port: BasePort, name: Optional[str]=None) -> BaseVariable:
         pass
 
     @abc.abstractmethod
@@ -296,7 +298,7 @@ class Variable(BaseVariable):
     def __init__(
         self,
         name: str,
-        port: "cosapp.ports.port.BasePort",
+        port: BasePort,
         value: Any,
         unit: str = "",
         dtype: Types = None,
@@ -844,7 +846,7 @@ class Variable(BaseVariable):
         else:  # Variable is ok
             return ""
 
-    def copy(self, port: "BasePort", name: Optional[str] = None) -> "Variable":
+    def copy(self, port: BasePort, name: Optional[str] = None) -> Variable:
         if name is None:
             name = self.name
         return Variable(

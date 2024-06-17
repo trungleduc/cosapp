@@ -2,7 +2,7 @@
 
 import os
 from typing import Dict
-from cosapp.systems import System
+from cosapp.base import System
 from cosapp.tools import templates
 from .baseRenderer import BaseRenderer
 
@@ -201,7 +201,7 @@ def d3_html(system: System, embeddable=False) -> str:
     return renderer.html_content()
 
 
-def to_d3(system: System, show: bool = True, size=435) -> None:
+def to_d3(system: System, show=True, size=435) -> None:
     """Return the representation of this system in HTML format.
 
     Returns
@@ -221,5 +221,6 @@ def to_d3(system: System, show: bool = True, size=435) -> None:
         except ImportError:
             raise ImportError("IPython needs to be installed to display the d3 figure.")
         return IFrame(filename, "99.9%", f"{size}px")
+
     else:
         return None

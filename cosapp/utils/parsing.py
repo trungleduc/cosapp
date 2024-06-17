@@ -1,9 +1,12 @@
+from __future__ import annotations
 import numpy
-from typing import Any, Optional, Tuple, List, NamedTuple
+from typing import Any, Optional, Tuple, List, NamedTuple, TYPE_CHECKING
 from collections.abc import Collection
 
 from .helpers import check_arg
 from .naming import natural_varname
+if TYPE_CHECKING:
+    from cosapp.systems import System
 
 
 class MaskedVarInfo(NamedTuple):
@@ -62,7 +65,7 @@ def find_selector(expression: str) -> Tuple[str, str]:
 
 
 # TODO should we reintegrate it as Boundary method as it is now the only used place
-def get_indices(system: "cosapp.base.System", name: str) -> MaskedVarInfo:
+def get_indices(system: System, name: str) -> MaskedVarInfo:
     """Decompose a variable specification into its base name and mask.
 
     Parameters
@@ -129,21 +132,21 @@ def get_indices(system: "cosapp.base.System", name: str) -> MaskedVarInfo:
     return MaskedVarInfo(basename, selector, mask)
 
 
-def multi_split(expression: str, separators: List[str]) -> Tuple[List[str], List[str]]:
+def multi_split(expression: str, separators: Collection[str]) -> Tuple[List[str], List[str]]:
     """Extension of `str.split`, accounting for more than one split separators.
     
     Parameters:
     -----------
     - expression [str]:
         Expression to be split.
-    - separators [List[str]]:
-        List of separators.
+    - separators [collection[str]]:
+        List/tuple/set of separators.
     
     Returns:
     --------
-    - expressions [List[str]]:
+    - expressions [list[str]]:
         List of n split expressions.
-    - separators [List[str]]:
+    - separators [list[str]]:
         Sequence of (n - 1) separators between split expressions.
 
     Examples:
@@ -168,3 +171,37 @@ def multi_split(expression: str, separators: List[str]) -> Tuple[List[str], List
         expressions = list(map(str.strip, new_list))
 
     return expressions, sep_list
+
+
+def multi_join(expressions: List[str], separators: List[str], add_space=False) -> str:
+    """Reciprocal of `multi_split`.
+    
+    Parameters:
+    -----------
+    - expressions [list[str]]:
+        Expression to be split.
+    - separators [list[str]]:
+        List of separators.
+    
+    Returns:
+    --------
+    - expression [str]:
+        Joined expression.
+
+    Examples:
+    ---------
+    >>> multi_join(['a', 'b', 'c', 'd', 'e'], ['+', '-', '-', '+'])
+    'a+b-c-d+e'
+    >>> multi_join(['a', 'b', 'c', 'd', 'e'], ['+', '-', '-', '+'], add_space=True)
+    'a + b - c - d + e'
+    """
+    if add_space:
+        join_pair = lambda separator, expression: f" {separator} {expression}"
+    else:
+        join_pair = lambda separator, expression: f"{separator}{expression}"
+    
+    output = expressions[0]
+    for separator, expression in zip(separators, expressions[1:]):
+        output += join_pair(separator, expression)
+    
+    return output

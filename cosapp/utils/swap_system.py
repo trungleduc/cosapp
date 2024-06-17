@@ -1,14 +1,18 @@
 # Copyright (C) 2023 twiinIT - All Rights Reserved
 # Licensed under the Apache License, Version 2.0
 
+from __future__ import annotations
 import copy
 import logging
+from typing import TYPE_CHECKING
 from cosapp.utils.helpers import check_arg
+if TYPE_CHECKING:
+    from cosapp.base import System
 
 logger = logging.getLogger(__name__)
 
 
-def swap_system(old_system: "System", new_system: "System", init_values=True):
+def swap_system(old_system: System, new_system: System, init_values=True):
     """Replace `old_system` by `new_system`.
 
     Parameters

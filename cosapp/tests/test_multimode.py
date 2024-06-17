@@ -1,10 +1,10 @@
 """Various integration tests with multimode systems
 """
+from __future__ import annotations
 import pytest
 import numpy
 
-from cosapp.ports import Port
-from cosapp.systems import System
+from cosapp.base import Port, System
 from cosapp.drivers import EulerExplicit, NonLinearSolver
 from cosapp.recorders import DataFrameRecorder
 from typing import List
@@ -126,7 +126,7 @@ class Node(System):
         self.sum_I_out = I * sum(I_frac)
 
     @classmethod
-    def make(cls, parent, name, incoming: List[ElecPort], outgoing: List[ElecPort], pulling=None) -> "Node":
+    def make(cls, parent, name, incoming: List[ElecPort], outgoing: List[ElecPort], pulling=None) -> Node:
         """Factory method making appropriate connections with parent system"""
         node = cls(name, n_in=max(len(incoming), 1), n_out=max(len(outgoing), 1))
         parent.add_child(node, pulling=pulling)

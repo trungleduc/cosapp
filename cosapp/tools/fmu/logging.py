@@ -1,5 +1,7 @@
+from __future__ import annotations
 import logging
 import weakref
+from weakref import ReferenceType
 from enum import IntEnum
 from functools import partial
 
@@ -35,7 +37,7 @@ class FMUForwardHandler(logging.Handler):
         self._fmu = weakref.ref(fmu, callback)
 
     @classmethod
-    def add_handler(cls, fmu: "pythonfmu.Fmi2Slave", level: int) -> "FMUForwardHandler":
+    def add_handler(cls, fmu: "pythonfmu.Fmi2Slave", level: int) -> FMUForwardHandler:
         """Add a new instance of this handler to the root logger.
         
         Parameters
@@ -58,8 +60,8 @@ class FMUForwardHandler(logging.Handler):
     @classmethod
     def remove_handler(
         cls, 
-        handler: "ReferenceType[FMUForwardHandler]", 
-        fmu: "Optional[ReferenceType[pythonfmu.Fmi2Slave]]" = None
+        handler: ReferenceType[FMUForwardHandler], 
+        fmu: "Optional[ReferenceType[pythonfmu.Fmi2Slave]]" = None,
     ) -> None:
         """Remove the instance of the provided handler on the
         root logger.
@@ -69,7 +71,7 @@ class FMUForwardHandler(logging.Handler):
         handler : weakref.ReferenceType[FMUForwardHandler]
             Weakreference object to the handler to be removed
         fmu : weakref.ReferenceType[pythonfmu.Fmi2Slave] or None
-            Weakreference object to the FMU; default None
+            Weakreference object to the FMU; default is None.
         """
         if handler() is not None:
             root_logger = logging.getLogger()
@@ -98,7 +100,7 @@ class FMUForwardHandler(logging.Handler):
         else:
             return Fmi2Status.ok
 
-    def emit(self, record: "logging.LogRecord") -> None:
+    def emit(self, record: logging.LogRecord) -> None:
         """Forward a record to the FMU logger.
         
         Parameters
