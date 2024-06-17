@@ -1,7 +1,12 @@
 """Mardown viewers for Module and Port."""
 from cosapp.ports.port import BasePort
 from cosapp.systems import System
-from typing import List, Union
+from typing import List, Dict, Union
+
+
+def upper_first(s: str) -> str:
+    """Return a copy of the input string, with the first character in upper case."""
+    return s[0].upper() + s[1:]
 
 
 class PortMarkdownFormatter:
@@ -26,8 +31,8 @@ class PortMarkdownFormatter:
         port = self.port
         name = port.full_name() if contextual else port.name
         info = type(port).__name__
-        if (desc := port.description):
-            info += f", {desc}"
+        if (desc := port.description.strip()):
+            info += f". {upper_first(desc)}"
         doc = []
         doc.append(f"`{name}`: {info}")
         doc.extend(self.var_repr())
@@ -124,15 +129,15 @@ def system_to_md(system: System) -> str:
 
     def get_child_doc(s: System) -> str:
         info = type(s).__name__
-        if (desc := s.description):
-            info += f", {desc}"
+        if (desc := s.description.strip()):
+            info += f". {upper_first(desc)}"
         return f"- `{s.name}`: {info}"
 
-    if system.children:
+    if (children := system.children):
         doc.extend(["", "### Child components", ""])
-        doc.extend(map(get_child_doc, system.children.values()))
+        doc.extend(map(get_child_doc, children.values()))
 
-    def dump_port_data(header, port_dict):
+    def dump_port_data(header, port_dict: Dict[str, BasePort]):
         port_docs = []
         for port in port_dict.values():
             if len(port) > 0:
@@ -147,8 +152,8 @@ def system_to_md(system: System) -> str:
     dump_port_data("inputs", system.inputs)
     dump_port_data("outputs", system.outputs)
 
-    if system.residues:
+    if (residues := system.residues):
         doc.extend(["", "### Residues", ""])
-        doc.append(", ".join(f"`{key}`" for key in system.residues))
+        doc.append(", ".join(f"`{key}`" for key in residues))
 
     return "\n".join(doc)
