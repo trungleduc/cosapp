@@ -91,20 +91,20 @@ class NumpySolver(BaseNumericalSolver):
 
         Parameters
         ----------
-        fun : Callable[[Sequence[float], Any], numpy.ndarray[float]]
+        - fun [callable[[sequence[float], Any], numpy.ndarray[float]]]
             Callable residues function
-        x0 : Sequence[float]
+        - x0 [sequence[float]]:
             Initial solution guess
-        args : Tuple[Any, ...]
+        - args [tuple[Any, ...]]
             Additional arguments passed to `fun`
-        jac : bool or callable, optional
+        - jac [bool or callable, optional]:
             If `jac` is a Boolean and is `True`, `fun` is assumed to return
             the value of Jacobian along with the objective function.
             If `False`, the Jacobian will be estimated numerically.
             `jac` can also be a callable returning the Jacobian of `fun`.
             In this case, it must accept the same arguments as `fun`.
             (default: `None`)
-        callback : Callable, optional
+        - callback [Callable, optional]:
             Optional callback function. It is called on every iteration as `callback(x, r)`,
             where x is the current solution and r the corresponding residual.
 
@@ -172,39 +172,42 @@ class CustomSolver(BaseNumericalSolver):
         self,
         fresidues: RootFunction,
         x0: Sequence[float],
-        args: Tuple[Union[float, str]] = (),
+        args: Tuple[Union[float, str]] = tuple(),
         jac=None,
-        recorder=None,
+        callback: Optional[Callable[[numpy.ndarray[float], numpy.ndarray[float]], None]] = None,
         **options,
     ) -> SolverResults:
         """Customized Newton-Raphson algorithm to solve `fresidues` starting with `x0`.
 
         Parameters
         ----------
-        fresidues : Callable[[Sequence[float], Any], numpy.ndarray[float]]
+        - fresidues [callable[[Sequence[float], Any], numpy.ndarray[float]]]:
             Callable residues function
-        x0 : Sequence[float]
+        - x0 [sequence[float]]:
             Initial solution guess
-        args : Tuple[Any, ...]
+        - args [tuple[Any, ...]]:
             Additional arguments for `fun`
-        options : dict, optional
+        - options [dict, optional]:
             A dictionary of problem-dependent solver options.
+        - callback [callable, optional]:
+            Optional callback function. It is called on every iteration as `callback(x, r)`,
+            where x is the current solution and r the corresponding residual.
 
         Options
         -------
-        jac_lup : (ndarray[float], ndarray[int]), optional
+        - jac_lup [ndarray[float] | ndarray[int], optional]:
             LU decomposition of Jacobian given as tuple (LU, perm) to reuse as initial direction
-        jac : ndarray, optional
+        - jac [ndarray, optional]:
             Jacobian to reuse for partial update
-        compute_jacobian : bool
+        - compute_jacobian [bool]:
             Force to update the Jacobian matrix even if the provided one is useful
-        lower_bound : numpy.ndarray
+        - lower_bound [numpy.ndarray]:
             Min values for parameters iterated by solver.
-        upper_bound : numpy.ndarray
+        - upper_bound [numpy.ndarray]:
             Max values for parameters iterated by solver.
-        abs_step : numpy.ndarray
+        - abs_step [numpy.ndarray]:
             Max absolute step for parameters iterated by solver.
-        rel_step : numpy.ndarray
+        - rel_step [numpy.ndarray]:
             Max relative step for parameters iterated by solver.
 
         Returns
@@ -286,11 +289,10 @@ class CustomSolver(BaseNumericalSolver):
         check_numerical_features('abs_step', numpy.inf)
         check_numerical_features('rel_step', numpy.inf)
 
-        it_solver = 0
-        if recorder is not None:
-            record_state = lambda iter: recorder.record_state(str(iter), 'ok',)
+        if callback is None:
+            callback = lambda x, r: None
         else:
-            record_state = lambda iter: None
+            callback(x, r)
 
         if not calc_jac:
             logger.debug('Reuse of previous Jacobian matrix')
@@ -333,6 +335,7 @@ class CustomSolver(BaseNumericalSolver):
         dr = numpy.zeros_like(r)
         dx = numpy.full_like(r, numpy.nan)
 
+        it_solver = 0
         rtol_x = 1e-14
         epsilon = numpy.finfo(numpy.float64).eps
         logger.log(
@@ -457,7 +460,7 @@ class CustomSolver(BaseNumericalSolver):
                         record["jac"] = jac.copy()
                     trace.append(record)
                 
-                record_state(it_solver)
+                callback(x, r)
 
                 if res_index_to_update:
                     factor = factor_ref
@@ -514,12 +517,13 @@ def root(
     args: Tuple[Any] = tuple(),
     method: NonLinearMethods = NonLinearMethods.POWELL,
     options: Dict[str, Any] = {},
+    callback: Optional[Callable[[], None]] = None,
 ) -> Union[SolverResults, optimize.OptimizeResult]:
 
     if method == NonLinearMethods.NR:
         solver = CustomSolver.from_options(options)
-        return solver.solve(fun, x0, args, **options)
+        return solver.solve(fun, x0, args, callback=callback, **options)
     
     else:
         solver = NumpySolver(method.value, options)
-        return solver.solve(fun, x0, args)
+        return solver.solve(fun, x0, args, callback=callback)

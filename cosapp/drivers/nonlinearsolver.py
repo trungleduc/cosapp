@@ -1,4 +1,3 @@
-import copy
 import numpy
 import abc
 import csv
@@ -57,6 +56,13 @@ class BaseSolverBuilder(abc.ABC):
             # Update design unknowns
             if self.is_design_unknown[name]:
                 unknown.set_to_default()
+
+
+class BaseSolverRecorder(abc.ABC):
+    """Abstract interface for solver recorder"""
+    @abc.abstractmethod
+    def record(self, context: str) -> None:
+        """Record owner system data using solver's recorder"""
 
 
 class NonLinearSolver(AbstractSolver):
@@ -176,7 +182,8 @@ class NonLinearSolver(AbstractSolver):
         fresidues: Callable[[Sequence[float], Union[float, str], bool], numpy.ndarray],
         x0: Sequence[float],
         args: Tuple[Union[float, str]] = (),
-        options: Optional[Dict[str, Any]] = None
+        options: Optional[Dict[str, Any]] = None,
+        callback: Optional[Callable[[], None]] = None,
     ) -> SolverResults:
 
         if self.method == NonLinearMethods.NR:
@@ -190,7 +197,7 @@ class NonLinearSolver(AbstractSolver):
             this_options['jac_lup'] = self.jac_lup
             this_options['jac'] = self.jac
 
-        results = root(fresidues, x0, args=args, method=self.method, options=this_options)
+        results = root(fresidues, x0, args=args, method=self.method, options=this_options, callback=callback)
 
         if results.jac_lup[0] is not None:
             self.jac_lup = results.jac_lup
@@ -294,7 +301,7 @@ class NonLinearSolver(AbstractSolver):
         self.__builder.update_unknowns(x)
 
     def compute(self) -> None:
-        """Run the resolution method to find free vars values that zero out residues
+        """Run the resolution method to find free variable values that cancel the residues
         """
         # Reset status
         self.status = ''
@@ -307,14 +314,27 @@ class NonLinearSolver(AbstractSolver):
             self.error_code = '9'
             raise
 
-        if len(self.initial_values) > 0:
+        try:
+            record_history = self.options['history']
+        except KeyError:
+            record_history = False
+        must_resolve = len(self.initial_values) > 0
+
+        if must_resolve:
             self.solution = {}
+
+            if record_history and self._recorder:
+                # Record system data at each solver iteration
+                callback = SolverRecorderCallback(self)
+            else:
+                callback = None
 
             # compute first order
             results = self.resolution_method(
                 self._fresidues,
                 self.initial_values,
                 options=self.options,
+                callback=callback,
             )
 
             self.__results = results
@@ -360,18 +380,13 @@ class NonLinearSolver(AbstractSolver):
             self._print_solution()
 
         else:
-            logger.debug('No parameters/residues to solve. Fallback to children execution.')
-            for child in self.children.values():
-                child.run_once()
-            self.owner.run_children_drivers()
+            logger.debug('No parameters/residues to solve. Fallback to system update.')
+            self._update_system()
 
-        if self._recorder is not None:
-            if self.children:
-                for child in self.children.values():
-                    child.run_once()
-                    self._recorder.record_state(child.name, self.status, self.error_code)
-            else:
-                self._recorder.record_state(self.name, self.status, self.error_code)
+        if not record_history or not must_resolve:
+            # Record system data at the end of the simulation
+            callback = SolverRecorderCallback(self)
+            callback.record()
 
     def log_debug_message(self,
         handler: "HandlerWithContextFilters",
@@ -724,3 +739,61 @@ class MultipointSolverBuilder(BaseSolverBuilder):
         # Nothing to do, since residues are updated
         # by `RunSingleCase` sub-drivers
         pass
+
+
+class EmptySolverRecorder(BaseSolverRecorder):
+    """Specialization for solvers with no recorder."""
+    def record(self, context: str) -> None:
+        pass
+
+
+class StandaloneSolverRecorder(BaseSolverRecorder):
+    """Solver recorder specialization for solvers with no sub-drivers."""
+    def __init__(self, solver: NonLinearSolver) -> None:
+        self._solver = solver
+
+    def record(self, context: str) -> None:
+        solver = self._solver
+        if not context:
+            context = solver.name
+        solver.recorder.record_state(context, solver.status, solver.error_code)
+
+
+class CompositeSolverRecorder(BaseSolverRecorder):
+    """Solver recorder specialization for solvers with sub-drivers."""
+    def __init__(self, solver: NonLinearSolver) -> None:
+        self._solver = solver
+
+    def record(self, context: str) -> None:
+        solver = self._solver
+        recorder = solver.recorder
+        if context:
+            context = f" ({context})"
+        for child in solver.children.values():
+            child.run_once()
+            recorder.record_state(f"{child.name}{context}", solver.status, solver.error_code)
+
+
+class SolverRecorderCallback:
+    """Callback functor to monitor solver residues"""
+    def __init__(self, solver: NonLinearSolver) -> None:
+        self.reset_iter()
+        if solver.recorder is None:
+            self.recorder = EmptySolverRecorder()
+        elif solver.children:
+            self.recorder = CompositeSolverRecorder(solver)
+        else:
+            self.recorder = StandaloneSolverRecorder(solver)
+
+    def reset_iter(self) -> None:
+        """Reset inner iteration counter"""
+        self._iter = 0
+
+    def record(self, context="") -> None:
+        """Record owner system data using solver's recorder"""
+        self.recorder.record(context)
+
+    def __call__(self, *args, **kwargs) -> None:
+        """Callback function"""
+        self.record(f"iter {self._iter}")
+        self._iter += 1
