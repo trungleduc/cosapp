@@ -15,8 +15,8 @@ from cosapp.drivers import (
     RunOnce,
     RunSingleCase,
 )
-from cosapp.ports import Port
-from cosapp.systems import System
+from cosapp.base import Port, System
+from cosapp.recorders import DataFrameRecorder
 from cosapp.utils.logging import LogFormat, LogLevel
 from cosapp.tests.library.systems import (
     Merger1d,
@@ -530,7 +530,7 @@ def test_NonLinearSolver_compute_empty(caplog, set_master_system):
     assert len(debug_messages) > 0
     assert (
         re.search(
-            r"No parameters/residues to solve. Fallback to children execution\.",
+            r"No parameters/residues to solve. Fallback to system update\.",
             debug_messages[0],
         )
         is not None
@@ -1717,3 +1717,79 @@ def test_NonLinearSolver_rates():
     s = SystemWithRate("s")
     s.add_driver(NonLinearSolver("solver"))
     s.run_drivers()
+
+
+@pytest.mark.parametrize("monitor", [True, False])
+def test_NonLinearSolver_monitor(monitor):
+    """Related to https://gitlab.com/cosapp/cosapp/-/issues/152
+    """
+    f = QuadraticFunction("f")
+
+    solver = f.add_driver(NonLinearSolver("solver"))
+    solver.add_unknown("x").add_equation("y == 0")
+
+    solver.add_recorder(DataFrameRecorder(includes=["x", "y"]))
+    solver.options['history'] = monitor
+
+    f.a = 2.0
+    f.k = 1.0
+    f.x = 1.0
+    f.run_drivers()
+
+    # Check solution
+    assert f.x == pytest.approx(np.sqrt(2), rel=1e-14)
+    assert f.y == pytest.approx(0, abs=1e-14)
+
+    data = solver.recorder.export_data()
+
+    if monitor:
+        assert len(data) > 1
+    else:
+        assert len(data) == 1
+
+    # Check that last entry is the solution
+    assert data['x'].values[-1] == f.x
+    assert data['y'].values[-1] == f.y
+
+
+@pytest.mark.parametrize("monitor", [True, False])
+def test_NonLinearSolver_monitor_multipoint(monitor):
+    """Related to https://gitlab.com/cosapp/cosapp/-/issues/152
+    """
+    f = QuadraticFunction("f")
+
+    solver = f.add_driver(NonLinearSolver("solver"))
+    point1 = solver.add_child(RunSingleCase("point1"))
+    point2 = solver.add_child(RunSingleCase("point2"))
+    
+    solver.add_unknown(['x', 'a'])
+
+    point1.add_equation('y == 0')
+    point2.add_equation('y == -1')
+
+    point1.set_values({'k': 2.0})
+    point2.set_values({'k': -0.5})
+
+    solver.add_recorder(DataFrameRecorder())
+    solver.options['history'] = monitor
+
+    f.a = 0.0
+    f.x = 1.0
+    f.run_drivers()
+
+    # Check solution
+    assert f.a == pytest.approx(0.8)
+    assert f.x == pytest.approx(np.sqrt(0.5 * 0.8))
+
+    data = solver.recorder.export_data()
+
+    if monitor:
+        assert len(data) > 2
+    else:
+        assert len(data) == 2
+
+    # Check that the last two entries correspond to the solution
+    assert data['k'].values[-2:] == pytest.approx([2.0, -0.5], abs=0)
+    assert data['a'].values[-2:] == pytest.approx([f.a, f.a], abs=0)
+    assert data['x'].values[-2:] == pytest.approx([f.x, f.x], abs=0)
+    assert data['y'].values[-2:] == pytest.approx([0.0, -1.0])
