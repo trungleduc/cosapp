@@ -2300,6 +2300,111 @@ def test_System_design(DummyFactory):
         a.design("method3")
 
 
+def test_System_pull_design_method(caplog):
+    class SystemA(System):
+        def setup(self):
+            self.add_inward('x', 0.0)
+            self.add_inward('y', 1.0)
+            self.add_outward('z', 0.0)
+
+            dsx = self.add_design_method('design_x')
+            dsx.add_unknown('x').add_equation('z == 0')
+
+            dsy = self.add_design_method('design_y')
+            dsy.add_unknown('y').add_equation(['z == x', 'x + y == cos(z)'])
+
+            foo = self.add_design_method('foo')
+            foo.add_unknown('x').add_equation('z == y')
+
+            bar = self.add_design_method('bar')
+            bar.add_unknown('y').add_equation('z == exp(-x)')
+
+    class SystemB(System):
+        def setup(self):
+            self.add_inward('x', -1.0)
+            self.add_inward('y', -2.0)
+            self.add_outward('z', 0.0)
+
+            dsx = self.add_design_method('design_x')
+            dsx.add_unknown('x').add_equation('z == 0')
+
+            dsy = self.add_design_method('design_xy')
+            dsy.add_unknown(['x', 'y']).add_equation(['z == 0', 'y == x'])
+
+            foo = self.add_design_method('foo')
+            foo.add_unknown(['x', 'y']).add_equation('z == y')
+
+    class Assembly1(System):
+        def setup(self):
+            a = self.add_child(SystemA('a'))
+            b = self.add_child(SystemB('b'))
+
+            self.pull_design_method([a, b], 'design_x')
+            self.pull_design_method(a, ['design_y', 'foo'])
+            self.pull_design_method(b, ['foo', 'bar'])
+
+    caplog.clear()
+    with caplog.at_level(LogLevel.ERROR):
+        s1 = Assembly1('s1')
+    with pytest.raises(AttributeError, match="`pull_design_method` cannot be called outside `setup`"):
+        s1.pull_design_method(s1.a, "design_xy")
+    assert caplog.messages == [
+        "Sub-system 'b' has no design method 'bar' - skipped.",
+    ]
+    assert set(s1.design_methods) == {
+        "design_x",
+        "design_y",
+        "foo",
+    }
+    assert s1.design_methods['design_x'].shape == (2, 2)
+    assert s1.design_methods['design_y'].shape == (1, 2)
+    assert s1.design_methods['foo'].shape == (3, 2)
+    assert str(s1.design_methods['foo']) == "\n".join([
+        "Unknowns [3]",
+        "  a.x = 0.0",
+        "  b.x = -1.0",
+        "  b.y = -2.0",
+        "Equations [2]",
+        "  a: z == y := -1.0",
+        "  b: z == y := 2.0",
+    ])
+
+    class Assembly2(System):
+        def setup(self):
+            a = self.add_child(SystemA('a'))
+            b = self.add_child(SystemB('b'))
+
+            self.pull_design_method([a, b], ['design_xy', {'design_x': 'design_ab'}])
+
+    caplog.clear()
+    with caplog.at_level(LogLevel.ERROR):
+        s2 = Assembly2('s2')
+    assert caplog.messages == [
+        "Sub-system 'a' has no design method 'design_xy' - skipped.",
+    ]
+    assert set(s2.design_methods) == {
+        "design_ab",
+        "design_xy",
+    }
+    assert s2.design_methods['design_ab'].shape == (2, 2)
+    assert s2.design_methods['design_xy'].shape == (2, 2)
+
+    class Assembly_TypeError(System):
+        def setup(self):
+            self.add_child(SystemA('abc'))
+            self.pull_design_method('abc', 'design_x')
+
+    with pytest.raises(TypeError, match="design methods can only be pulled from children of 's'"):
+        Assembly_TypeError('s')
+
+    class Assembly_ValueError(System):
+        def setup(self):
+            self.pull_design_method(self, 'whatever')
+
+    with pytest.raises(ValueError, match="'oops' is not a child of 'oops'"):
+        Assembly_ValueError('oops')
+
+
 def test_System_add_target(DummyFactory):
     s: System = DummyFactory('s',
         inwards = [get_args('x', 1.0), get_args('y', 0.0)],
