@@ -2100,6 +2100,44 @@ class System(Module, TimeObserver):
         self.design_methods[name] = mathpb = self.new_problem(name)
         return mathpb
 
+    def pull_design_method(self, child: Union[System, Collection[System]], name: Union[str, Collection[str], Dict[str, str]]) -> None:
+        """Add design methods to the system, by promoting exisintg sub-system design methods.
+
+        Parameters
+        ----------
+        child: System | collection[System]
+            Sub-system, or list thereof, from which design methods are pulled at system level.
+        name: str | collection[str] | dict[str, str]
+            The name of the design method(s), following the same rules as optional argument `pulling` in `System.add_child`.
+        """
+        self.__lock_check("pull_design_method")
+
+        if isinstance(child, Collection) and not isinstance(child, str):
+            child_list = child
+        else:
+            child_list = [child]
+
+        mapping = BaseConnector.format_mapping(name)
+        children = self.children.values()
+
+        for child in child_list:
+            if not isinstance(child, System):
+                raise TypeError(
+                    f"design methods can only be pulled from children of {self.name!r}; got {child!r}"
+                )
+            if not child in children:
+                raise ValueError(
+                    f"{child.name!r} is not a child of {self.name!r}"
+                )
+            for name, alias in mapping.items():
+                try:
+                    child_method = child.design_methods[name]
+                except KeyError:
+                    logger.error(f"Sub-system {child.name!r} has no design method {name!r} - skipped.")
+                else:
+                    design_method = self.design_methods.setdefault(alias, self.new_problem())
+                    design_method.extend(child_method)
+
     def design(self, method: str) -> MathematicalProblem:
         """Returns the chosen group of design equations.
 
