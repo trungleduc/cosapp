@@ -131,7 +131,7 @@ build_pkg:
   extends: 
     - ".linux_env"
   variables:
-    JOB_DEP: conda-build conda-verify
+    JOB_DEP: conda-build conda-verify pip "jupyterlite-core>=0.3.0,<0.4.0" "jupyterlite-xeus>=0.1.8,<0.2" ipywidgets jupyter_server micromamba
     PYTHON_VERSION : "3.11"
   script:
     - mamba create -y -n cosapp python=$PYTHON_VERSION
@@ -139,6 +139,8 @@ build_pkg:
     - mamba install -y $JOB_DEP
     - python setup.py sdist bdist_wheel
     - conda build -c conda-forge --no-test --output-folder ./dist conda.recipe
+    - cd jupyterlite
+    - python build.py
   artifacts:
     paths:
       - dist/
@@ -173,11 +175,13 @@ deploy:
 pages:
   extends: 
   - ".deploy_env"
+  tags: 
+    - cosapp_runner
   stage: deploy
   variables:
     PYTHON_VERSION: "3.9" 
   script:
-    - mamba install -y pip "jupyterlite-core>=0.3.0,<0.4.0" "jupyterlite-xeus>=0.1.8,<0.2" ipywidgets jupyter_server
+    - mamba install -y pip "jupyterlite-core>=0.3.0,<0.4.0" "jupyterlite-xeus>=0.1.8,<0.2" ipywidgets jupyter_server micromamba
     - python setup.py sdist
     - cd jupyterlite
     - python build.py
