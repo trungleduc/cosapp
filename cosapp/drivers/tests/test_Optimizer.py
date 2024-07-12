@@ -203,7 +203,7 @@ def test_Optimizer_compute_with_solver_1():
     s.a = 15.0
     s.x1 = 10.0
     s.x2 = 100.0
-    optim.options["ftol"] = 1.0e-5
+    optim.options["tol"] = 1.0e-5
 
     optim.set_minimum("cost")
     optim.add_unknown(["x1", "x2"])
