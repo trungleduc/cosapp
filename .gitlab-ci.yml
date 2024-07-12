@@ -18,7 +18,6 @@ variables:
     - python -m pytest
   
   only:
-   - pushes
    - merge_requests
 
 # # default windows job parameters
@@ -91,7 +90,6 @@ linux_py311:
     expire_in: 2 weeks  
 
   only:
-   - pushes
    - merge_requests
 
 # windows_py311:
