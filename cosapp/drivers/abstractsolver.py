@@ -6,7 +6,7 @@ import re
 from copy import copy
 from numbers import Number
 from typing import (
-    AnyStr, Dict, List,
+    Any, AnyStr, Dict, List,
     Callable, Optional,
     Sequence, Tuple, Union,
 )
@@ -39,7 +39,7 @@ class AbstractSolver(Driver):
         self,
         name: str,
         owner: Optional["cosapp.systems.System"] = None,
-        **kwargs
+        **options
     ) -> None:
         """Initialize driver
 
@@ -52,7 +52,7 @@ class AbstractSolver(Driver):
         **kwargs:
             Additional keywords arguments forwarded to base class.
         """
-        super().__init__(name, owner, **kwargs)
+        super().__init__(name, owner, **options)
 
         self.force_init = False  # type: bool
             # desc="Force the initial values to be used."
@@ -82,7 +82,7 @@ class AbstractSolver(Driver):
         """Reset mathematical problem"""
         self._raw_problem = MathematicalProblem(self.name, self.owner)
 
-    def _filter_options(self, kwargs, aliases: Dict[str, str] = dict()):
+    def _filter_options(self, aliases: Dict[str, str] = {}) -> Dict[str, Any]:
         """
         Translate option names into self.options using an alias dictionary, to handle cases where
         a common option name, such as 'tol', is passed to a specific solver/function with a different name.
@@ -90,18 +90,15 @@ class AbstractSolver(Driver):
         For example, in scipy.optimize.root(), the convergence criterion may be referred to as 'ftol', 'gtol'...
         depending on the invoked algorithm (Levenberg-Marquardt, Powell, Broyden's good, etc.).
         """
-        keys = list(kwargs.keys())  # make a copy of keys only
+        options = dict(self.options.items())
 
-        for key in keys:
-            value = kwargs.pop(key)
+        for name, alias in aliases.items():
             try:
-                key = aliases[key]
+                options[alias] = options.pop(name)
             except KeyError:
-                pass
-            if key in self.options:
-                self.options[key] = value
-            else:
-                raise KeyError(f"Unknown solver option {key!r}")
+                continue
+
+        return options
 
     def _get_solver_limits(self) -> Dict[str, numpy.ndarray]:
         """Returns the step limitations for all iteratives.

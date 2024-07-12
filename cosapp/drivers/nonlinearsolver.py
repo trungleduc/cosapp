@@ -88,7 +88,7 @@ class NonLinearSolver(AbstractSolver):
         name: str, 
         owner: Optional["cosapp.systems.System"] = None, 
         method: Union[NonLinearMethods, str] = NonLinearMethods.NR, 
-        **kwargs
+        **options
     ) -> None:
         """Initialize driver
 
@@ -103,22 +103,20 @@ class NonLinearSolver(AbstractSolver):
         **kwargs:
             Additional keywords arguments forwarded to base class.
         """
-        super().__init__(name, owner, **kwargs)
-
         if isinstance(method, str):
             method = NonLinearMethods[method]
         else:
             check_arg(method, 'method', NonLinearMethods)
         self.__method = method
-        self.__option_aliases = dict()
-        self.__set_method(method, **kwargs)
+
+        super().__init__(name, owner, **options)
+
         self.__trace: List[Dict[str, Any]] = list()
         self.__results: SolverResults = None
         self.__builder: BaseSolverBuilder = None
 
         self.compute_jacobian = True  # type: bool
             # desc='Should the Jacobian matrix be computed?'
-
         self.jac_lup = (None, None)  # type: Tuple[Optional[numpy.ndarray], Optional[numpy.ndarray]]
             # desc='LU decomposition of latest Jacobian matrix (if available).'
         self.jac = None  # type: Optional[numpy.ndarray]
@@ -186,18 +184,7 @@ class NonLinearSolver(AbstractSolver):
         callback: Optional[Callable[[], None]] = None,
     ) -> SolverResults:
 
-        if self.method == NonLinearMethods.NR:
-            self.options.update(self._get_solver_limits())
-
-        common_keys = set(self.options).intersection(options)
-        this_options = dict((key, options[key]) for key in common_keys)
-
-        if self.method == NonLinearMethods.NR:
-            this_options['compute_jacobian'] = self.compute_jacobian
-            this_options['jac_lup'] = self.jac_lup
-            this_options['jac'] = self.jac
-
-        results = root(fresidues, x0, args=args, method=self.method, options=this_options, callback=callback)
+        results = root(fresidues, x0, args=args, method=self.method, options=options, callback=callback)
 
         if results.jac_lup[0] is not None:
             self.jac_lup = results.jac_lup
@@ -212,7 +199,7 @@ class NonLinearSolver(AbstractSolver):
 
     def _print_solution(self) -> None:  # TODO better returning a string
         """Print the solution in the log."""
-        if self.options['verbose']:
+        if self.options['verbose'] > 0:
             # TODO move it in MathematicalProblem
             logger.info(f"Parameters [{len(self.solution)}]: ")
             for k, v in self.solution.items():
@@ -230,8 +217,7 @@ class NonLinearSolver(AbstractSolver):
 
             tol = numpy.linalg.norm(self.problem.residue_vector(), numpy.inf)
             try:
-                option = self.__option_aliases['tol']  # should never fail, in principle
-                target = self.options[option]
+                target = self.options['tol']
             except:
                 target = 0
             logger.debug(f" # Current tolerance {tol} for target {target}")
@@ -328,15 +314,14 @@ class NonLinearSolver(AbstractSolver):
                 callback = SolverRecorderCallback(self)
             else:
                 callback = None
-
+            
             # compute first order
             results = self.resolution_method(
                 self._fresidues,
                 self.initial_values,
-                options=self.options,
+                options=self._get_solver_options(),
                 callback=callback,
             )
-
             self.__results = results
             self.__trace = getattr(results, "trace", list())
 
@@ -387,6 +372,17 @@ class NonLinearSolver(AbstractSolver):
             # Record system data at the end of the simulation
             callback = SolverRecorderCallback(self)
             callback.record()
+
+    def _get_solver_options(self) -> Dict[str, Any]:
+        options = self._filter_options(self.__option_aliases)
+
+        if self.method == NonLinearMethods.NR:
+            options.update(self._get_solver_limits())
+            options['compute_jacobian'] = self.compute_jacobian
+            options['jac_lup'] = self.jac_lup
+            options['jac'] = self.jac
+
+        return options
 
     def log_debug_message(self,
         handler: "HandlerWithContextFilters",
@@ -481,63 +477,101 @@ class NonLinearSolver(AbstractSolver):
 
         return emit_record
 
-    def __set_method(self, method, **options):
-        check_arg(method, 'method', NonLinearMethods)
-
-        self.__method = method
+    def _declare_options(self):
+        """Declare solver options, and options aliases possibly necessary to use numpy functions"""
+        method = self.__method
+        options = self.options
         self.__option_aliases = dict()
 
-        if self.__method == NonLinearMethods.NR:
-            self.options.declare('tol', 'auto', dtype=(float, str), allow_none=True,
-                desc='Absolute tolerance (in max-norm) for the residual.')
-            self.options.declare('max_iter', 500, dtype=int,
-                desc='The maximum number of iterations.')
+        if method == NonLinearMethods.NR:
+            options.declare(
+                'tol', 'auto', dtype=(float, str), allow_none=True,
+                desc='Absolute tolerance (in max-norm) for the residual.',
+            )
+            options.declare(
+                'max_iter', 100, dtype=int,
+                desc='The maximum number of iterations.'
+            )
             # Note: use a power of 2 for `eps`, to guaranty machine-precision accurate gradients in linear problems
-            self.options.declare('eps', 2**(-16), dtype=float, allow_none=True, lower=2**(-30),
-                desc='Relative step length for the forward-difference approximation of the Jacobian.')
-            self.options.declare('factor', 1.0, dtype=Number, allow_none=True, lower=1e-3, upper=1.0,
-                desc='A parameter determining the initial step bound factor * norm(diag * x). Should be in interval [0.001, 1].')
-            self.options.declare('partial_jac', True, dtype=bool, allow_none=False,
-                desc='Defines if partial Jacobian updates can be computed before a complete Jacobian matrix update.')
-            self.options.declare('partial_jac_tries', 10, dtype=int, allow_none=False, lower=1, upper=10,
-                desc='Defines how many partial Jacobian updates can be tried before a complete Jacobian matrix update.')
-            self.options.declare('jac_update_tol', 0.01, dtype=float, allow_none=False, lower=0, upper=1,
-                desc='Tolerance level for partial Jacobian matrix update, based on nonlinearity estimation.')
-            self.options.declare('recorder', None, allow_none=True,
-                desc='A recorder to store solver intermediate results.')
-            self.options.declare('lower_bound', None, dtype=numpy.ndarray, allow_none=True,
-                desc='Min values for parameters iterated by solver.')
-            self.options.declare('upper_bound', None, dtype=numpy.ndarray, allow_none=True,
-                desc='Max values for parameters iterated by solver.')
-            self.options.declare('abs_step', None, dtype=numpy.ndarray, allow_none=True,
-                desc='Max absolute step for parameters iterated by solver.')
-            self.options.declare('rel_step', None, dtype=numpy.ndarray, allow_none=True,
-                desc='Max relative step for parameters iterated by solver.')
-            self.options.declare('history', False, dtype=bool, allow_none=False,
-                desc='Request saving the resolution trace.')
-            self.options.declare('tol_update_period', 4, dtype=int, lower=1, allow_none=False,
-                desc="Tolerance update period, in iteration number, when tol='auto'.")
-            self.options.declare('tol_to_noise_ratio', 16, dtype=Number, lower=1.0, allow_none=False,
-                desc="Tolerance-to-noise ratio, when tol='auto'.")
+            options.declare(
+                'eps', 2**(-16), dtype=float, allow_none=True, lower=2**(-30),
+                desc='Relative step length for the forward-difference approximation of the Jacobian.',
+            )
+            options.declare(
+                'factor', 1.0, dtype=Number, allow_none=True, lower=1e-3, upper=1.0,
+                desc='A parameter determining the initial step bound factor * norm(diag * x). Should be in interval [0.001, 1].',
+            )
+            options.declare(
+                'partial_jac', True, dtype=bool, allow_none=False,
+                desc='Defines if partial Jacobian updates can be computed before a complete Jacobian matrix update.',
+            )
+            options.declare(
+                'partial_jac_tries', 10, dtype=int, allow_none=False, lower=1, upper=10,
+                desc='Defines how many partial Jacobian updates can be tried before a complete Jacobian matrix update.',
+            )
+            options.declare(
+                'jac_update_tol', 0.01, dtype=float, allow_none=False, lower=0, upper=1,
+                desc='Tolerance level for partial Jacobian matrix update, based on nonlinearity estimation.',
+            )
+            options.declare(
+                'recorder', None, allow_none=True,
+                desc='A recorder to store solver intermediate results.',
+            )
+            options.declare(
+                'lower_bound', None, dtype=numpy.ndarray, allow_none=True,
+                desc='Min values for parameters iterated by solver.',
+            )
+            options.declare(
+                'upper_bound', None, dtype=numpy.ndarray, allow_none=True,
+                desc='Max values for parameters iterated by solver.',
+            )
+            options.declare(
+                'abs_step', None, dtype=numpy.ndarray, allow_none=True,
+                desc='Max absolute step for parameters iterated by solver.',
+            )
+            options.declare(
+                'rel_step', None, dtype=numpy.ndarray, allow_none=True,
+                desc='Max relative step for parameters iterated by solver.',
+            )
+            options.declare(
+                'history', False, dtype=bool, allow_none=False,
+                desc='Request saving the resolution trace.',
+            )
+            options.declare(
+                'tol_update_period', 4, dtype=int, lower=1, allow_none=False,
+                desc="Tolerance update period, in iteration number, when tol='auto'.",
+            )
+            options.declare(
+                'tol_to_noise_ratio', 16, dtype=Number, lower=1.0, allow_none=False,
+                desc="Tolerance-to-noise ratio, when tol='auto'.",
+            )
 
-        elif self.__method == NonLinearMethods.POWELL:
+        elif method == NonLinearMethods.POWELL:
             self.__option_aliases = {
                 'tol': 'xtol',
                 'max_eval': 'maxfev',
             }
-            self.options.declare('xtol', 1.0e-7, dtype=float,
-                desc="The calculation will terminate if the relative error between two consecutive iterations is at most tol.")
-            self.options.declare('maxfev', 0, dtype=int,
+            options.declare(
+                'tol', 1.0e-7, dtype=float,
+                desc="The calculation will terminate if the relative error between two consecutive iterations is at most tol.",
+            )
+            options.declare(
+                'max_eval', 0, dtype=int,
                 desc='The maximum number of calls to the function. If zero, assumes 100 * (N + 1),'
-                    ' where N is the number of elements in x0.')
-            self.options.declare('eps', None, dtype=float, allow_none=True,
+                    ' where N is the number of elements in x0.',
+            )
+            options.declare(
+                'eps', None, dtype=float, allow_none=True,
                 desc='A suitable step length for the forward-difference approximation of the Jacobian (for fprime=None).'
                     ' If eps is less than machine precision u, it is assumed that the relative errors in the'
-                    ' functions are of the order of u.')
-            self.options.declare('factor', 0.1, dtype=float, lower=0.1, upper=100.,
-                desc='A parameter determining the initial step bound factor * norm(diag * x). Should be in the interval [0.1, 100].')
+                    ' functions are of the order of u.',
+            )
+            options.declare(
+                'factor', 0.1, dtype=float, lower=0.1, upper=100.,
+                desc='A parameter determining the initial step bound factor * norm(diag * x). Should be in the interval [0.1, 100].',
+            )
 
-        elif self.__method == NonLinearMethods.BROYDEN_GOOD:
+        elif method == NonLinearMethods.BROYDEN_GOOD:
             self.__option_aliases = {
                 'tol': 'fatol',
                 'num_iter': 'nit',
@@ -545,22 +579,32 @@ class NonLinearSolver(AbstractSolver):
                 'min_rel_step': 'xtol',
                 'min_abs_step': 'xatol',
             }
-            self.options.declare('nit', 100, dtype=int,
-                desc='Number of iterations to perform. If omitted (default), iterate unit tolerance is met.')
-            self.options.declare('maxiter', 200, dtype=int,
-                desc='Maximum number of iterations to make. If more are needed to meet convergence, NoConvergence is raised.')
-            self.options.declare('disp', False, dtype=bool,
-                desc='Print status to stdout on every iteration.')
-            self.options.declare('fatol', 6e-6, dtype=float,
-                desc='Absolute tolerance (in max-norm) for the residual. If omitted, default is 6e-6.')
-            self.options.declare('line_search', 'armijo', dtype=str, allow_none=True,
+            options.declare(
+                'num_iter', 100, dtype=int,
+                desc='Number of iterations to perform. If omitted (default), iterate unit tolerance is met.',
+            )
+            options.declare(
+                'max_iter', 100, dtype=int,
+                desc='Maximum number of iterations to make. If more are needed to meet convergence, NoConvergence is raised.',
+            )
+            options.declare(
+                'disp', False, dtype=bool,
+                desc='Print status to stdout on every iteration.',
+            )
+            options.declare(
+                'tol', 6e-6, dtype=float,
+                desc='Absolute tolerance (in max-norm) for the residual. If omitted, default is 6e-6.',
+            )
+            options.declare(
+                'line_search', 'armijo', dtype=str, allow_none=True,
                 desc='Which type of a line search to use to determine the step '
-                    'size in the direction given by the Jacobian approximation. Defaults to ‘armijo’.')
-            self.options.declare('jac_options', {'reduction_method': 'svd'},
+                    'size in the direction given by the Jacobian approximation. Defaults to ‘armijo’.',
+            )
+            options.declare(
+                'jac_options', {'reduction_method': 'svd'},
                 dtype=dict, allow_none=True,
-                desc='Options for the respective Jacobian approximation. restart, simple or svd')
-
-        self._filter_options(options, self.__option_aliases)
+                desc='Options for the respective Jacobian approximation. restart, simple or svd',
+            )
 
     def extend(self, problem: MathematicalProblem, *args, **kwargs) -> MathematicalProblem:
         """Extend solver inner problem.

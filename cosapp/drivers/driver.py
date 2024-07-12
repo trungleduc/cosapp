@@ -4,7 +4,7 @@ Classes driving simulation on CoSApp :py:class:`~cosapp.systems.system.System`.
 from __future__ import annotations
 import logging
 import time
-from typing import Optional, TypeVar
+from typing import Optional, TypeVar, Union, List, Dict, Any
 
 from cosapp.patterns.visitor import Visitor
 from cosapp.core.module import Module
@@ -63,7 +63,7 @@ class Driver(Module):
         self,
         name: str,
         owner: Optional["cosapp.systems.System"] = None,
-        **kwargs
+        **options
     ) -> None:
         """Initialize driver
 
@@ -83,8 +83,6 @@ class Driver(Module):
         self._recorder: Optional[BaseRecorder] = None
         self.owner = owner
 
-        self.options = OptionsDictionary()  # type: OptionsDictionary
-            # "Driver options dictionary"
         self.start_time = 0.0  # type: float
             # unit="s",
             # desc="Absolute time at which the Driver execution started.",
@@ -95,11 +93,8 @@ class Driver(Module):
             # desc="Error code during the execution."
             # TODO Fred what is the code? ESI?
 
-        # TODO is tol_target really used in all cases? Is it not redundant with options parameters?
-        # self.target_tol = None # desc='Targeted maximal relative tolerance for numerical solution.')
-        # TODO is current_tol updated in all cases to a relevant value?
-        # self.current_tol = np.nan # desc='Maximal current relative tolerance of the numerical solution.')
-
+        self.options = OptionsDictionary()  # type: OptionsDictionary
+            # "Driver options dictionary"
         self.options.declare(
             "verbose",
             default=0,
@@ -108,11 +103,39 @@ class Driver(Module):
             upper=1,
             desc="Verbosity level of the driver",
         )
-        for key in self.options:
-            try:
-                self.options[key] = kwargs.pop(key)
-            except KeyError:
-                continue
+        self._declare_options()
+        for name in list(options):
+            # All options are consummed; fails if option name has not been declared
+            self.options[name] = options.pop(name)
+
+    def _declare_options(self) -> None:
+        """Hook function to declare entries in `self.options`.
+        Actual values are captured at driver construction, from keyword arguments.
+        See `OptionsDictionary.declare` for details on option declaration.
+        """
+        pass
+
+    def available_options(self, level=1) -> Union[List[str], Dict[str, Any], None]:
+        """Prints out the driver options.
+        
+        Parameters
+        ----------
+        level: int, optional
+            Level of detail displayed:
+            0: show option names only;
+            1: show options as a (name, value) dictionary (default);
+            2: print out a detailed description of the options.
+        
+        Returns
+        -------
+        list[str] | dict[str, str] | None, depending on level.
+        """
+        if level == 0:
+            return list(self.options)
+        elif level == 1:
+            return dict(self.options.items())
+        else:
+            print(self.options.__str__(width=128))
 
     def accept(self, visitor: Visitor) -> None:
         """Specifies course of action when visited by `visitor`"""

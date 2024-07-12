@@ -181,7 +181,7 @@ def test_ScipySolverHybr_option_aliases():
     solver = system.add_driver(
         NonLinearSolver("solver", method=NonLinearMethods.POWELL)
     )
-    to_test = {"maxfev": 0, "xtol": 1e-7, "factor": 0.1}
+    to_test = {"max_eval": 0, "tol": 1e-7, "factor": 0.1}
     assert {key: solver.options[key] for key in to_test} == to_test
 
     system.drivers.clear()
@@ -194,7 +194,7 @@ def test_ScipySolverHybr_option_aliases():
             factor=12.3,
         )
     )
-    to_test = {"maxfev": 99, "xtol": 1e-9, "factor": 12.3}
+    to_test = {"max_eval": 99, "tol": 1e-9, "factor": 12.3}
     assert {key: solver.options[key] for key in to_test} == to_test
 
     system.drivers.clear()
@@ -378,7 +378,7 @@ def test_ScipySolverBroyden1_option_aliases():
     solver = system.add_driver(
         NonLinearSolver("solver", method=NonLinearMethods.BROYDEN_GOOD)
     )
-    to_test =  {"nit": 100, "maxiter": 200, "fatol": 6e-6}
+    to_test =  {"num_iter": 100, "max_iter": 100, "tol": 6e-6}
     assert {key: solver.options[key] for key in to_test} == to_test
 
     system.drivers.clear()
@@ -391,7 +391,7 @@ def test_ScipySolverBroyden1_option_aliases():
             num_iter=10,
         )
     )
-    to_test =  {"nit": 10, "maxiter": 44, "fatol": 1e-9}
+    to_test =  {"num_iter": 10, "max_iter": 44, "tol": 1e-9}
     assert {key: solver.options[key] for key in to_test} == to_test
 
     system.drivers.clear()

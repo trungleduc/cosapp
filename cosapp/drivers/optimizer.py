@@ -89,7 +89,7 @@ class Optimizer(AbstractSolver):
     def __init__(self,
         name: str,
         owner: Optional["cosapp.systems.System"] = None,
-        **kwargs
+        **options
     ) -> None:
         """Initialize driver
 
@@ -102,7 +102,7 @@ class Optimizer(AbstractSolver):
         **kwargs:
             Additional keywords arguments forwarded to base class.
         """
-        super().__init__(name, owner, **kwargs)
+        super().__init__(name, owner, **options)
 
         # TODO we need to move this in an enhanced MathematicalProblem
         self._raw_constraints: Set[str] = set()  # Human-readable constraints
@@ -110,35 +110,6 @@ class Optimizer(AbstractSolver):
         self._initial_state: Dict[str, Any] = dict()
         self._objective: EvalString = None
         self.__current_x = numpy.empty(0)
-
-        self.options.declare(
-            name = 'method',
-            default = None,
-            values = self.available_methods(),
-            desc = (
-                "Type of solver."
-                " If not given, chosen to be one of 'BFGS', 'L-BFGS-B', 'SLSQP',"
-                " depending if the problem has constraints or bounds."
-            ),
-            allow_none = True,
-        )
-        self.options.declare(
-            'eps', 2**(-26), dtype=float, lower=2**(-26), upper=1.,
-            desc="Step size used for numerical approximation of the Jacobian.",
-        )
-        self.options.declare(
-            'ftol', 1.5e-8, dtype=float, lower=1e-15, upper=1.,
-            desc="Iterations stop when (f^k - f^{k+1}) / max(|f^k|, |f^{k+1}|, 1) <= ftol.",
-        )
-        self.options.declare(
-            'maxiter', 100, dtype=int, lower=1,
-            desc='Maximum number of iterations.',
-        )
-        self.options.declare(
-            'monitor', False, dtype=bool, allow_none=False,
-            desc="Defines if intermediate system state should be recorded.",
-        )
-        self._filter_options(kwargs, aliases={'tol': 'ftol', 'max_iter': 'maxiter'})
 
     def set_minimum(self, expression: str) -> None:
         """Set the scalar objective function to be minimized.
@@ -501,9 +472,12 @@ class Optimizer(AbstractSolver):
         if len(self.initial_values) > 0:
             monitored = self.options['monitor']
             BaseRecorder.paused = not monitored
+
             if monitored:
                 self._fresidues(self.initial_values)
                 self._record_data()
+
+            options = self._filter_options(aliases={'tol': 'ftol', 'max_iter': 'maxiter'})
 
             results = self.resolution_method(
                 self._fresidues,
@@ -511,7 +485,7 @@ class Optimizer(AbstractSolver):
                 args = (),
                 bounds = bounds,
                 constraints = constraints,
-                options = self.options,
+                options = options,
             )
 
             if not results.success:
@@ -582,3 +556,32 @@ class Optimizer(AbstractSolver):
         add_section("Constraints", self._raw_constraints)
 
         return "\n".join(lines)
+
+    def _declare_options(self) -> None:
+        self.options.declare(
+            name = 'method',
+            default = None,
+            values = self.available_methods(),
+            desc = (
+                "Type of solver."
+                " If not given, chosen to be one of 'BFGS', 'L-BFGS-B', 'SLSQP',"
+                " depending if the problem has constraints or bounds."
+            ),
+            allow_none = True,
+        )
+        self.options.declare(
+            'eps', 2**(-26), dtype=float, lower=2**(-26), upper=1.0,
+            desc="Step size used for numerical approximation of the Jacobian.",
+        )
+        self.options.declare(
+            'tol', 1.5e-8, dtype=float, lower=1e-15, upper=1.0,
+            desc="Iterations stop when (f^k - f^{k+1}) / max(|f^k|, |f^{k+1}|, 1) <= ftol.",
+        )
+        self.options.declare(
+            'max_iter', 100, dtype=int, lower=1,
+            desc='Maximum number of iterations.',
+        )
+        self.options.declare(
+            'monitor', False, dtype=bool, allow_none=False,
+            desc="Defines if intermediate system state should be recorded.",
+        )

@@ -210,7 +210,7 @@ def test_DataframeRecorder_restore():
     assert s.p_in.x == pytest.approx(2, rel=1e-4)
 
     s = BooleanSystem("s")
-    run = s.add_driver(RunOnce("run", method=NonLinearMethods.NR))
+    run = s.add_driver(RunOnce("run"))
     recorder = run.add_recorder(DataFrameRecorder(hold=True))
 
     s.run_drivers()
