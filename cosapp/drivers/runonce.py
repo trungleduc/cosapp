@@ -4,7 +4,7 @@ from typing import Any, Dict, Optional
 
 from cosapp.core.numerics.basics import MathematicalProblem
 from cosapp.core.numerics.boundary import Boundary
-from cosapp.drivers.driver import Driver
+from cosapp.drivers.driver import Driver, System
 
 import logging
 logger = logging.getLogger(__name__)
@@ -28,8 +28,8 @@ class RunOnce(Driver):
     def __init__(
         self,
         name: str,
-        owner: Optional["cosapp.systems.System"] = None,
-        **kwargs
+        owner: Optional[System] = None,
+        **options
     ) -> None:
         """Initialize driver
 
@@ -42,7 +42,7 @@ class RunOnce(Driver):
         **kwargs:
             Additional keywords arguments forwarded to base class.
         """
-        super().__init__(name, owner, **kwargs)
+        super().__init__(name, owner, **options)
         
         self.initial_values: Dict[str, Boundary] = dict()  # Initial guess for the iteratives
         self.solution: Dict[str, float] = dict()  # Dictionary (name, value) of the latest solution reached

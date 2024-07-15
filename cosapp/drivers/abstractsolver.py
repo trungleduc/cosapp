@@ -12,7 +12,7 @@ from typing import (
 )
 
 from cosapp.core.numerics.basics import MathematicalProblem, SolverResults
-from cosapp.drivers.driver import Driver
+from cosapp.drivers.driver import Driver, System
 from cosapp.drivers.runonce import RunOnce
 from cosapp.utils.options_dictionary import OptionsDictionary
 
@@ -38,7 +38,7 @@ class AbstractSolver(Driver):
     def __init__(
         self,
         name: str,
-        owner: Optional["cosapp.systems.System"] = None,
+        owner: Optional[System] = None,
         **options
     ) -> None:
         """Initialize driver
@@ -62,7 +62,7 @@ class AbstractSolver(Driver):
         self.solution: Dict[str, float] = {}
         self.reset_problem()
 
-    def _set_owner(self, system: Optional["cosapp.systems.System"]) -> bool:
+    def _set_owner(self, system: Optional[System]) -> bool:
         defined = self.owner is not None
         changed = super()._set_owner(system)
         if changed:

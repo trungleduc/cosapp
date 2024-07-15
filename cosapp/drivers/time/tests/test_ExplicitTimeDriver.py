@@ -9,8 +9,10 @@ from cosapp.recorders import DataFrameRecorder
 from cosapp.drivers.time import interfaces
 from cosapp.drivers.time.interfaces import ExplicitTimeDriver
 from cosapp.systems import System
+from cosapp.drivers import Driver
 from cosapp.utils.logging import LogFormat, LogLevel
 from cosapp.utils.testing import rel_error, not_raised
+from cosapp.core.signal import Slot
 
 
 @pytest.fixture(autouse=True)
@@ -199,7 +201,21 @@ def test_ExplicitTimeDriver_set_time_before_System_setup():
 
 
 def test_ExplicitTimeDriver_is_standalone():
+    class StandaloneDriver(Driver):
+        """Mock-up standalone driver"""
+        def is_standalone(self) -> bool:
+            return True
+
     driver = ExplicitTimeDriver()
+    assert not driver.is_standalone()
+
+    driver.add_child(StandaloneDriver('standalone'))
+    assert driver.is_standalone()
+
+    driver = ExplicitTimeDriver()
+    sub = driver.add_child(Driver('sub'))
+    assert not driver.is_standalone()
+    sub.add_child(StandaloneDriver('standalone'))
     assert driver.is_standalone()
 
 
@@ -596,3 +612,21 @@ def test_ExplicitTimeDriver_event_data(with_recorder):
         event_times,
         np.unique(event_data['time'])
     )
+
+
+def test_ExplicitTimeDriver_subdriver_setup():
+    s = System('s')
+
+    driver = s.add_driver(ExplicitTimeDriver('driver', time_interval=[0, 1], dt=0.5))
+    nested = driver.add_child(Driver('nested'))
+
+    with patch("cosapp.core.signal.signal.inspect"):
+        # Add bogus slots to `setup_run` and `compute` signals
+        setup_run_callback = MagicMock()
+        compute_callback = MagicMock()
+        nested.setup_ran.connect(Slot(setup_run_callback))
+        nested.computed.connect(Slot(compute_callback))
+
+        s.run_drivers()
+        assert setup_run_callback.call_count == 1
+        assert compute_callback.call_count == 3

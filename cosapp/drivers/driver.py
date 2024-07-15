@@ -1,13 +1,13 @@
 """
 Classes driving simulation on CoSApp :py:class:`~cosapp.systems.system.System`.
 """
-from __future__ import annotations
 import logging
 import time
 from typing import Optional, TypeVar, Union, List, Dict, Any
 
 from cosapp.patterns.visitor import Visitor
 from cosapp.core.module import Module
+from cosapp.systems import System
 from cosapp.recorders.recorder import BaseRecorder
 from cosapp.utils.options_dictionary import OptionsDictionary
 from cosapp.utils.naming import NameChecker, CommonPorts
@@ -16,7 +16,7 @@ from cosapp.utils.helpers import check_arg
 logger = logging.getLogger(__name__)
 
 AnyDriver = TypeVar("AnyDriver", bound="Driver")
-Recorder = TypeVar("Recorder", bound=BaseRecorder)
+AnyRecorder = TypeVar("AnyRecorder", bound=BaseRecorder)
 
 
 class Driver(Module):
@@ -62,7 +62,7 @@ class Driver(Module):
     def __init__(
         self,
         name: str,
-        owner: Optional["cosapp.systems.System"] = None,
+        owner: Optional[System] = None,
         **options
     ) -> None:
         """Initialize driver
@@ -76,8 +76,6 @@ class Driver(Module):
         - **kwargs:
             Optional keywords arguments.
         """
-        from cosapp.systems import System
-
         super().__init__(name)
         self._owner: Optional[System] = None
         self._recorder: Optional[BaseRecorder] = None
@@ -106,7 +104,13 @@ class Driver(Module):
         self._declare_options()
         for name in list(options):
             # All options are consummed; fails if option name has not been declared
-            self.options[name] = options.pop(name)
+            try:
+                self.options[name] = options.pop(name)
+            except KeyError:
+                raise RuntimeError(
+                    f"Unknown option {name!r} for {type(self).__name__}"
+                    f"; available options are: {self.available_options(0)}."
+                )
 
     def _declare_options(self) -> None:
         """Hook function to declare entries in `self.options`.
@@ -146,24 +150,28 @@ class Driver(Module):
         return f"{self.name} ({context}) - {self.__class__.__name__}"
 
     @property
-    def owner(self):
+    def owner(self) -> System:
         """System: System owning the driver and its children."""
         return self._owner
 
     @owner.setter
-    def owner(self, system: Optional["cosapp.systems.System"]) -> None:
+    def owner(self, system: Optional[System]) -> None:
         self._set_owner(system)
 
-    def _set_owner(self, system: Optional["cosapp.systems.System"]) -> bool:
+    def _set_owner(self, system: Union[System, None]) -> bool:
         """Owner setter as a protected method, to be used by derived classes.
         This prevents from calling base class `owner.setter`, which can be tricky.
+
+        Parameters
+        ----------
+        system: System | None
+            Owner system (or None).
 
         Returns
         -------
         changed [bool]:
             `True` if owner has changed, `False` otherwise.
         """
-        from cosapp.systems import System
         if system is not None:
             check_arg(system, 'owner', System)
         
@@ -265,7 +273,7 @@ class Driver(Module):
         """Alias for :py:meth:`~cosapp.drivers.driver.Driver.add_child`."""
         return self.add_child(child, execution_index, desc)
 
-    def add_recorder(self, recorder: Recorder) -> Recorder:
+    def add_recorder(self, recorder: AnyRecorder) -> AnyRecorder:
         check_arg(recorder, 'recorder', BaseRecorder)
 
         self._recorder = recorder

@@ -1,8 +1,8 @@
 import abc
 import logging
-from typing import Optional
+from typing import Optional, Union
 
-from cosapp.drivers.runonce import RunOnce
+from cosapp.drivers.runonce import RunOnce, System
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +24,7 @@ class IterativeCase(RunOnce):
 
     def __init__(self,
         name: str,
-        owner: Optional["cosapp.systems.System"] = None,
+        owner: Optional[System] = None,
         **kwargs
     ) -> None:
         """Initialize a driver
@@ -41,7 +41,7 @@ class IterativeCase(RunOnce):
         super().__init__(name, owner, **kwargs)
         self.reset_problem()
 
-    def _set_owner(self, system: Optional["cosapp.systems.System"]) -> bool:
+    def _set_owner(self, system: Union[System, None]) -> bool:
         defined = self.owner is not None
         changed = super()._set_owner(system)
         if changed:

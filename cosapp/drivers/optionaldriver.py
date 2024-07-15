@@ -1,6 +1,6 @@
 from typing import Optional
 
-from cosapp.drivers.driver import Driver
+from cosapp.drivers.driver import Driver, System
 
 
 class OptionalDriver(Driver):
@@ -25,9 +25,9 @@ class OptionalDriver(Driver):
 
     def __init__(self, 
         name: str, 
-        owner: Optional["cosapp.systems.System"] = None, 
+        owner: Optional[System] = None, 
         force: Optional[bool] = None, 
-        **kwargs
+        **options
     ) -> None:
         """Initialize driver
 
@@ -42,7 +42,7 @@ class OptionalDriver(Driver):
         **kwargs:
             Additional keywords arguments forwarded to base class.
         """
-        super().__init__(name, owner, **kwargs)
+        super().__init__(name, owner, **options)
         self._active = force
 
     def is_active(self) -> bool:

@@ -1,8 +1,7 @@
 import logging
 
-from typing import Optional
-from cosapp.utils.validate import validate
 from cosapp.drivers.optionaldriver import OptionalDriver
+from cosapp.utils.validate import validate
 
 logger = logging.getLogger(__name__)
 
@@ -25,20 +24,6 @@ class ValidityCheck(OptionalDriver):
     """
     
     __slots__ = tuple()
-
-    def __init__(self, name: str, owner: Optional["cosapp.systems.System"] = None, **kwargs) -> None:
-        """Initialize a driver
-
-        Parameters
-        ----------
-        name: str
-            Name of the `Driver`
-        owner : System, optional
-            :py:class:`~cosapp.systems.system.System` to which this driver belongs; default None
-        **kwargs : Dict[str, Any]
-            Optional keywords arguments
-        """
-        super().__init__(name, owner, **kwargs)
 
     def compute(self) -> None:
         """Report in the log the validity status for all variables
