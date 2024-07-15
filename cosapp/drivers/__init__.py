@@ -4,6 +4,7 @@ from cosapp.drivers.driver import Driver
 from cosapp.drivers.runonce import RunOnce
 from cosapp.drivers.runsinglecase import RunSingleCase
 from cosapp.drivers.nonlinearsolver import NonLinearSolver
+from cosapp.drivers.fixedpoint import FixedPointSolver
 from cosapp.drivers.optimizer import Optimizer
 from cosapp.drivers.validitycheck import ValidityCheck
 from cosapp.drivers.lineardoe import LinearDoE
