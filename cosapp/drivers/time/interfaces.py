@@ -9,7 +9,7 @@ from typing import Tuple, NamedTuple, List, Dict, Union, Optional, Any
 
 from cosapp.core.time import UniversalClock
 from cosapp.ports.enum import PortType
-from cosapp.drivers.driver import Driver, Recorder
+from cosapp.drivers.driver import Driver, System, AnyRecorder
 from cosapp.drivers.time.utils import (
     TimeUnknown,
     TimeVarManager,
@@ -49,11 +49,12 @@ class ExplicitTimeDriver(Driver):
 
     def __init__(self,
         name = "Explicit time driver",
-        owner: Optional["cosapp.systems.System"] = None,
-        time_interval: Tuple[float, float] = None,
-        dt: float = None,
+        owner: Optional[System] = None,
+        time_interval: Optional[Tuple[float, float]] = None,
+        dt: Optional[float] = None,
         record_dt: bool = False,
-        **options):
+        **options,
+    ):
         """Initialization of the driver
 
         Parameters
@@ -74,7 +75,9 @@ class ExplicitTimeDriver(Driver):
             Optional keywords arguments for generic `Driver` objects
         """
         dt_growth_rate = options.pop('max_dt_growth_rate', 2)
+
         super().__init__(name, owner, **options)
+
         self.__time_interval = None
         self.__recorded_dt = numpy.array([])
         self.__clock = UniversalClock()
@@ -90,9 +93,6 @@ class ExplicitTimeDriver(Driver):
         self.__stepper: DiscreteStepper = None
         self.__event_data: pandas.DataFrame = None
         self.__recorded_events: List[EventRecord] = []
-
-    def is_standalone(self) -> bool:
-        return True
 
     @property
     def dt(self) -> Union[None, Number]:
@@ -169,7 +169,7 @@ class ExplicitTimeDriver(Driver):
         """Scenario: the simulation scenario, defining initial and boundary conditions"""
         return self.__scenario
 
-    def add_recorder(self, recorder: Recorder, period: Optional[Number] = None) -> Recorder:
+    def add_recorder(self, recorder: AnyRecorder, period: Optional[Number] = None) -> AnyRecorder:
         """Add an internal recorder storing the time evolution of values of interest.
 
         Parameters

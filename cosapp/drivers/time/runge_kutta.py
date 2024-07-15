@@ -2,7 +2,7 @@ import numpy
 from numbers import Number
 from typing import Optional
 
-from cosapp.drivers.time.interfaces import ExplicitTimeDriver
+from cosapp.drivers.time.interfaces import ExplicitTimeDriver, System
 from cosapp.utils.helpers import check_arg
 
 
@@ -17,7 +17,7 @@ class RungeKutta(ExplicitTimeDriver):
     def __init__(
         self,
         name="RK",
-        owner: Optional["cosapp.systems.System"] = None,
+        owner: Optional[System] = None,
         order=2,
         **options
     ):

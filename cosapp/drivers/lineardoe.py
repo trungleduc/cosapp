@@ -3,7 +3,7 @@ import itertools
 from collections import OrderedDict
 from typing import Any, Dict, Optional, Union
 
-from cosapp.drivers.abstractsetofcases import AbstractSetOfCases
+from cosapp.drivers.abstractsetofcases import AbstractSetOfCases, System
 from cosapp.utils.helpers import check_arg
 
 
@@ -28,8 +28,8 @@ class LinearDoE(AbstractSetOfCases):
     def __init__(
         self,
         name: str,
-        owner: Optional["cosapp.systems.System"] = None,
-        **kwargs
+        owner: Optional[System] = None,
+        **options
     ) -> None:
         """Initialize driver
 
@@ -42,7 +42,7 @@ class LinearDoE(AbstractSetOfCases):
         **kwargs:
             Additional keywords arguments forwarded to base class.
         """
-        super().__init__(name, owner, **kwargs)
+        super().__init__(name, owner, **options)
         self.input_vars = OrderedDict()
 
     def add_input_var(self,

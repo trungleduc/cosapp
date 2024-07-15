@@ -1,5 +1,5 @@
 """
-`Driver`s for `System` optimization calculation.
+`Driver` for `System` optimization.
 """
 import numpy
 import scipy.optimize
@@ -15,7 +15,7 @@ from collections.abc import Collection
 from cosapp.core.eval_str import EvalString
 from cosapp.core.numerics.basics import SolverResults
 from cosapp.core.numerics.boundary import Unknown
-from cosapp.drivers.abstractsolver import AbstractSolver
+from cosapp.drivers.abstractsolver import AbstractSolver, System
 from cosapp.drivers.optionaldriver import OptionalDriver
 from cosapp.drivers.utils import ConstraintParser, dealias_problem
 from cosapp.recorders.recorder import BaseRecorder
@@ -88,7 +88,7 @@ class Optimizer(AbstractSolver):
 
     def __init__(self,
         name: str,
-        owner: Optional["cosapp.systems.System"] = None,
+        owner: Optional[System] = None,
         **options
     ) -> None:
         """Initialize driver

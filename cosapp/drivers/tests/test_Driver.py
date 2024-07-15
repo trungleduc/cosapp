@@ -9,19 +9,6 @@ from cosapp.utils.options_dictionary import OptionsDictionary
 from cosapp.utils.testing import get_args
 
 
-@pytest.fixture(autouse=True)
-def PatchDriver():
-    """Patch Driver to make it instanciable for tests"""
-    patcher = mock.patch.multiple(
-        Driver,
-        __abstractmethods__ = set(),
-        is_standalone = lambda self: False,
-    )
-    patcher.start()
-    yield
-    patcher.stop()
-
-
 @pytest.fixture(scope="function")
 def driver():
     """Create dummy, detached driver"""
@@ -55,6 +42,7 @@ def driver():
     (get_args(1.0), dict(error=TypeError)),
     (get_args(dict(a=True)), dict(error=TypeError)),
     (get_args(list()), dict(error=TypeError)),
+    (get_args("driver", tada=0), dict(error=RuntimeError, match="Unknown option 'tada'")),
     # Tests with specified owner:
     (get_args("foobar", System("boss")), dict()),
     (get_args("foobar", owner=System("boss")), dict()),
@@ -132,6 +120,27 @@ def test_Driver_owner():
     foo = Driver('foo')
     with pytest.raises(TypeError):
         d.owner = foo
+
+
+def test_Driver_is_standalone():
+    class StandaloneDriver(Driver):
+        """Mock-up standalone driver"""
+        def is_standalone(self) -> bool:
+            return True
+
+    driver = Driver('driver')
+    assert not driver.is_standalone()
+
+    # Test with standalone subdriver
+    driver.add_child(StandaloneDriver('standalone'))
+    assert driver.is_standalone()
+
+    # Test with standalone subdriver at level 2
+    driver = Driver('driver')
+    sub = driver.add_child(Driver('sub'))
+    assert not driver.is_standalone()
+    sub.add_child(StandaloneDriver('standalone'))
+    assert driver.is_standalone()
 
 
 def test_Driver___repr__(driver: Driver):

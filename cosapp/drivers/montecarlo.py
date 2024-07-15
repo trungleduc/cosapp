@@ -1,23 +1,24 @@
+import numpy
 import logging
 from collections import OrderedDict
 from typing import Any, Iterable, Dict, List, Optional, Union, NamedTuple
 
-import numpy
-
 from cosapp.core.numerics import sobol_seq
+from cosapp.core.variableref import VariableReference
 from cosapp.ports.port import BasePort
-from cosapp.drivers.abstractsetofcases import AbstractSetOfCases
+from cosapp.drivers.abstractsetofcases import AbstractSetOfCases, System
 from cosapp.drivers.abstractsolver import AbstractSolver
 from cosapp.utils.distributions import Distribution
 from cosapp.utils.helpers import check_arg
+from cosapp.systems.system import SystemConnector
 
 logger = logging.getLogger(__name__)
 
 
 class RandomVariable(NamedTuple):
-    variable: "VariableReference"
+    variable: VariableReference
     distribution: Distribution
-    connector: Optional["SystemConnector"] = None
+    connector: Optional[SystemConnector] = None
 
     def add_noise(self, quantile=None) -> float:
         delta = self.draw(quantile)
@@ -51,8 +52,8 @@ class MonteCarlo(AbstractSetOfCases):
 
     def __init__(self,
         name: str,
-        owner: Optional["cosapp.systems.System"] = None,
-        **kwargs
+        owner: Optional[System] = None,
+        **options
     ) -> None:
         """Initialize driver
 
@@ -65,7 +66,7 @@ class MonteCarlo(AbstractSetOfCases):
         **kwargs:
             Additional keywords arguments forwarded to base class.
         """
-        super().__init__(name, owner, **kwargs)
+        super().__init__(name, owner, **options)
         self.draws = 200  # type: int
             # desc="Number of cases performed for Montecarlo calculations."
         self.linear = False  # type: bool

@@ -12,7 +12,7 @@ from typing import (
 from cosapp.core.numerics.basics import MathematicalProblem, SolverResults
 from cosapp.core.numerics.enum import NonLinearMethods
 from cosapp.core.numerics.root import root
-from cosapp.drivers.driver import Driver
+from cosapp.drivers.driver import Driver, System
 from cosapp.drivers.abstractsolver import AbstractSolver
 from cosapp.drivers.runsinglecase import RunSingleCase
 from cosapp.drivers.utils import DesignProblemHandler
@@ -86,7 +86,7 @@ class NonLinearSolver(AbstractSolver):
 
     def __init__(self, 
         name: str, 
-        owner: Optional["cosapp.systems.System"] = None, 
+        owner: Optional[System] = None, 
         method: Union[NonLinearMethods, str] = NonLinearMethods.NR, 
         **options
     ) -> None:

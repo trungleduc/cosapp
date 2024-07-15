@@ -1,7 +1,7 @@
 import abc
-from typing import Any, Dict, Iterable, Optional, Union
+from typing import Any, Iterable, Optional
 
-from cosapp.drivers.driver import Driver
+from cosapp.drivers.driver import Driver, System
 
 
 # TODO
@@ -25,8 +25,8 @@ class AbstractSetOfCases(Driver):
     def __init__(
         self,
         name: str,
-        owner: Optional["cosapp.systems.System"] = None,
-        **kwargs
+        owner: Optional[System] = None,
+        **options
     ) -> None:
         """Initialize driver
 
@@ -39,7 +39,7 @@ class AbstractSetOfCases(Driver):
         **kwargs:
             Additional keywords arguments forwarded to base class.
         """
-        super().__init__(name, owner, **kwargs)
+        super().__init__(name, owner, **options)
         # TODO Fred - is this not too much oriented for MonteCarlo or DoE? What about a mission for which input
         # variables may not be the same on all points.
         self.cases = None  # type: Optional[Iterable[Any]]

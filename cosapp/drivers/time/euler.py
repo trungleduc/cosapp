@@ -1,14 +1,14 @@
 from numbers import Number
 from typing import Optional
 
-from cosapp.drivers.time.interfaces import ExplicitTimeDriver
+from cosapp.drivers.time.interfaces import ExplicitTimeDriver, System
 
 
 class EulerExplicit(ExplicitTimeDriver):
     def __init__(
         self,
         name="Euler",
-        owner: Optional["cosapp.systems.System"] = None,
+        owner: Optional[System] = None,
         **options
     ):
         """Initialize driver

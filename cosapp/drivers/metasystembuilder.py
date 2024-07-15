@@ -1,10 +1,10 @@
 from collections import OrderedDict
-from typing import Any, Dict, List, Set, Type, Union, Optional
+from typing import Any, Dict, List, Set, Union, Optional
 
 from cosapp.recorders import DataFrameRecorder
 from cosapp.systems import MetaSystem
 from cosapp.utils.surrogate_models import ResponseSurface
-from cosapp.drivers.driver import Driver
+from cosapp.drivers.driver import Driver, System
 from cosapp.drivers.lineardoe import LinearDoE
 from cosapp.drivers.nonlinearsolver import NonLinearSolver
 
@@ -19,8 +19,8 @@ class MetaSystemBuilder(Driver):
     def __init__(
         self,
         name: str,
-        owner: Optional["cosapp.systems.System"] = None,
-        **kwargs
+        owner: Optional[System] = None,
+        **options
     ) -> None:
         """Initialize a driver
 
@@ -33,14 +33,14 @@ class MetaSystemBuilder(Driver):
         **kwargs:
             Additional keywords arguments forwarded to base class.
         """
-        super().__init__(name, owner, **kwargs)
+        super().__init__(name, owner, **options)
 
-        self.responses = set()  # type: Set[str]
-        self.model_type = ResponseSurface  # type: Type
-        self._metasystem = None  # type: cosapp.systems.MetaSystem
+        self.responses: Set[str] = set()  # type
+        self.model_type = ResponseSurface
+        self._metasystem: System = None
 
-        self.add_child(LinearDoE("doe"))
-        self.doe.add_child(NonLinearSolver("solve"))
+        doe = self.add_child(LinearDoE("doe"))
+        doe.add_child(NonLinearSolver("solve"))
 
     def compute(self):
         includes = list(self.doe.input_vars)

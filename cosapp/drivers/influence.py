@@ -3,7 +3,7 @@ import pandas
 from typing import List, Set, Union, Optional
 
 from cosapp.drivers.abstractsetofcases import AbstractSetOfCases
-from cosapp.drivers.optionaldriver import OptionalDriver
+from cosapp.drivers.optionaldriver import OptionalDriver, System
 from cosapp.recorders.dataframe_recorder import DataFrameRecorder
 from cosapp.utils.helpers import check_arg, is_number
 from cosapp.utils.find_variables import find_variable_names
@@ -41,8 +41,8 @@ class Influence(AbstractSetOfCases):
     def __init__(
         self,
         name: str,
-        owner: Optional["cosapp.systems.System"] = None,
-        **kwargs
+        owner: Optional[System] = None,
+        **options
     ) -> None:
         """Initialize driver
 
@@ -55,7 +55,7 @@ class Influence(AbstractSetOfCases):
         **kwargs:
             Additional keywords arguments forwarded to base class.
         """
-        super().__init__(name, owner, **kwargs)
+        super().__init__(name, owner, **options)
 
         self.input_vars = ["*"]  # type: List[str]
             # desc="Variable names varying between cases"        
