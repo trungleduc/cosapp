@@ -11,9 +11,9 @@ variables:
 # Test script for all OS
 .test_script:
   script:  
-    - mamba create -y -n cosapp python=$PYTHON_VERSION
-    - source activate cosapp
-    - mamba install -y $COSAPP_DEP
+    - micromamba create -y -n cosapp python=$PYTHON_VERSION
+    - micromamba activate cosapp
+    - micromamba install -y $COSAPP_DEP
     - pip install . --trusted-host=files.pythonhosted.org
     - python -m pytest
   
@@ -38,8 +38,12 @@ variables:
 
 # default linux environment parameters
 .linux_common_env:
-  image: "condaforge/mambaforge:latest"
+  image: "mambaorg/micromamba:latest"
   before_script:
+    - eval "$(micromamba shell hook --shell bash)"
+    - micromamba activate
+    - micromamba shell init --shell bash --root-prefix=~/micromamba
+    - micromamba config append channels conda-forge
     - mkdir -p $HOME/.cosapp.d
 
 # default linux job parameters
@@ -76,9 +80,9 @@ linux_py311:
   variables:
     PYTHON_VERSION: "3.11"
   script:
-    - mamba create -y -n cosapp python=$PYTHON_VERSION
-    - source activate cosapp
-    - mamba install -y $COSAPP_DEP coverage
+    - micromamba create -y -n cosapp python=$PYTHON_VERSION
+    - micromamba activate cosapp
+    - micromamba install -y $COSAPP_DEP coverage
     - pip install .
     - coverage erase
     - coverage run -m pytest -ra
@@ -109,8 +113,8 @@ build_doc:
     BUILDDIR: _build
     PYTHON_VERSION : "3.11"
   script:
-    - mamba env create --name cosapp --file docs/environment.yml
-    - source activate cosapp
+    - micromamba env create --name cosapp --file docs/environment.yml
+    - micromamba activate cosapp
     - pip install .
     # Build the documentation
     - cd docs/
@@ -129,12 +133,12 @@ build_pkg:
   extends: 
     - ".linux_env"
   variables:
-    JOB_DEP: conda-build conda-verify pip "jupyterlite-core>=0.3.0,<0.4.0" "jupyterlite-xeus>=0.1.8,<0.2" ipywidgets jupyter_server micromamba
+    JOB_DEP: conda-build conda-verify pip jupyterlite-core jupyterlite-xeus ipywidgets jupyter_server micromamba
     PYTHON_VERSION : "3.11"
   script:
-    - mamba create -y -n cosapp python=$PYTHON_VERSION
-    - source activate cosapp
-    - mamba install -y $JOB_DEP
+    - micromamba create -y -n cosapp python=$PYTHON_VERSION
+    - micromamba activate cosapp
+    - micromamba install -y $JOB_DEP
     - python setup.py sdist bdist_wheel
     - conda build -c conda-forge --no-test --output-folder ./dist conda.recipe
     - cd jupyterlite
@@ -157,7 +161,7 @@ deploy:
     CONDA_USERNAME: cosapp
     CONDA_UPLOAD_TOKEN : $CONDA_UPLOAD_TOKEN
   script:
-    - mamba install -y $JOB_DEP -c conda-forge
+    - micromamba install -y $JOB_DEP
     - python setup.py sdist bdist_wheel
     - twine upload dist/*.tar.gz
     - twine upload dist/*.whl
@@ -177,9 +181,9 @@ pages:
     - cosapp_runner
   stage: deploy
   variables:
-    PYTHON_VERSION: "3.9" 
+    PYTHON_VERSION: "3.12" 
   script:
-    - mamba install -y pip "jupyterlite-core>=0.3.0,<0.4.0" "jupyterlite-xeus>=0.1.8,<0.2" ipywidgets jupyter_server micromamba
+    - micromamba install -y pip jupyterlite-core jupyterlite-xeus ipywidgets jupyter_server micromamba
     - python setup.py sdist
     - cd jupyterlite
     - python build.py
