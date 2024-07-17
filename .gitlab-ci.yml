@@ -8,6 +8,14 @@ variables:
   COSAPP_DEP: jsonschema numpy<2 scipy pandas wrapt pytest<8.1 jinja2 pyfmi pythonfmu<0.6.3
   USER: "cosapp_test"
 
+.job_rules:
+  rules:
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $CI_DEFAULT_BRANCH
+    - when: manual
+
 # Test script for all OS
 .test_script:
   script:  
@@ -16,9 +24,6 @@ variables:
     - micromamba install -y $COSAPP_DEP
     - pip install . --trusted-host=files.pythonhosted.org
     - python -m pytest
-  
-  only:
-   - merge_requests
 
 # # default windows job parameters
 # .windows_env:
@@ -63,6 +68,7 @@ variables:
 linux_py39:
     extends: 
      - ".linux_env"
+     - ".job_rules"
      - ".test_script"
     variables:
       PYTHON_VERSION: "3.9"
@@ -70,6 +76,7 @@ linux_py39:
 linux_py310:
     extends: 
      - ".linux_env"
+     - ".job_rules"
      - ".test_script"
     variables:
       PYTHON_VERSION: "3.10"
@@ -77,6 +84,7 @@ linux_py310:
 linux_py311:
   extends: 
     - ".linux_env"
+    - ".job_rules"
   variables:
     PYTHON_VERSION: "3.11"
   script:
@@ -93,8 +101,6 @@ linux_py311:
       - coverage/  
     expire_in: 2 weeks  
 
-  only:
-   - merge_requests
 
 # windows_py311:
 #     extends: 
@@ -104,11 +110,13 @@ linux_py311:
 #       PYTHON_VERSION: "3.11"
 
 
-#Deployment jobs
+# Deployment jobs
 build_doc:
   stage: test_docs
+  needs: []
   extends: 
     - ".linux_env"
+    - ".job_rules"
   variables:
     BUILDDIR: _build
     PYTHON_VERSION : "3.11"
@@ -123,15 +131,14 @@ build_doc:
   artifacts:
     paths:
       - docs/$BUILDDIR
-  only:
-      - master
-      - merge_requests
 
 
 build_pkg:
   stage: test_build
+  needs: []
   extends: 
     - ".linux_env"
+    - ".job_rules"
   variables:
     JOB_DEP: conda-build conda-verify pip jupyterlite-core jupyterlite-xeus ipywidgets jupyter_server micromamba
     PYTHON_VERSION : "3.11"
@@ -146,9 +153,6 @@ build_pkg:
   artifacts:
     paths:
       - dist/
-  only:
-      - master
-      - merge_requests
 
 
 deploy:
@@ -171,8 +175,10 @@ deploy:
   artifacts:
     paths:
       - dist/
-  only:
-    - tags
+  rules:
+    - if: $CI_COMMIT_TAG && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: on_success
+
 
 pages:
   extends: 
@@ -191,5 +197,6 @@ pages:
   artifacts:
     paths:
       - public
-  only:
-    - master
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: on_success
