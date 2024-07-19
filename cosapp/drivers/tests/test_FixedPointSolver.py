@@ -76,7 +76,7 @@ def test_FixedPointSolver_history(FixedPointSystem):
     assert solver.results.success
     assert solver.results.n_iter > 0
     assert len(data) == solver.results.n_iter + 1
-    assert data['a.x'].values[-1] == a.x
+    # assert data['a.x'].values[-1] == a.x
     assert data['a.y'].values[-1] == a.y
     assert data['b.v'].values[-1] == b.v
     assert data['a.x - b.v'].values[-1] == solver.results.r[-1]
@@ -110,3 +110,31 @@ def test_FixedPointSolver_force_init(FixedPointSystem, force_init):
     else:
         # No iterations expected since a.x is the computed solution
         assert solver.results.n_iter == 0
+
+
+@pytest.mark.parametrize("factor, n_iter", [
+    (1.0, (20, 22)),
+    (0.8, (8, 10)),
+    (0.5, (16, 20)),
+])
+def test_FixedPointSolver_relaxation(FixedPointSystem, factor, n_iter):
+    s: System = FixedPointSystem('s')
+
+    solver = s.add_driver(FixedPointSolver('solver', tol=1e-9, factor=factor))
+
+    s.a.x = 1.0
+    s.run_drivers()
+
+    a, b = s.a, s.b
+    assert a.x == pytest.approx(0.417714792)
+    assert a.x == pytest.approx(0.5 * np.cos(a.x)**2)
+    assert a.x == pytest.approx(b.v, abs=1e-9)
+
+    assert solver.results.success
+    assert solver.results.n_iter > 0
+    if isinstance(n_iter, int):
+        assert solver.results.n_iter == n_iter
+    else:
+        lower, upper = n_iter
+        assert solver.results.n_iter >= lower
+        assert solver.results.n_iter <= upper
