@@ -1,4 +1,5 @@
 import numpy
+import copy
 from typing import Any, Dict, List, Optional
 from dataclasses import dataclass, field
 
@@ -6,6 +7,7 @@ from cosapp.core import MathematicalProblem
 from cosapp.core.numerics.boundary import Boundary
 from cosapp.drivers.driver import Driver
 from cosapp.systems.system import System, SystemConnector
+from cosapp.ports.port import BasePort
 
 import logging
 logger = logging.getLogger(__name__)
@@ -95,6 +97,10 @@ class FixedPointSolver(Driver):
             desc='The maximum number of iterations.',
         )
         self.options.declare(
+            'factor', 1.0, dtype=float, lower=1e-3,
+            desc='Relaxation factor.'
+        )
+        self.options.declare(
             'history', False, dtype=bool,
             desc='Request saving the resolution trace.'
         )
@@ -170,8 +176,6 @@ class FixedPointSolver(Driver):
         for system in owner.tree():
             loop_connectors.extend(filter(is_open, system.all_connectors()))
 
-        owner.close_loops()
-
         if self.options['force_init']:
             self.apply_init()
 
@@ -235,20 +239,38 @@ class FixedPointSolver(Driver):
                 connector.deactivate()
 
             tol = self.options['tol']
+            factor = self.options['factor']
             max_iter = self.options['max_iter']
             record_history = self.options['history']
 
             residues = problem.residues.values()
             converged = False
 
+            if factor == 1.0:
+                def update_unknowns():
+                    for connector in loop_connectors:
+                        connector.activate()
+                        connector.transfer()
+
+            else:
+                def update_unknowns():
+                    for connector in loop_connectors:
+                        sink: BasePort = connector.sink
+                        previous_values = {
+                            varname: copy.copy(getattr(sink, varname))
+                            for varname in connector.sink_variables()
+                        }
+                        connector.activate()
+                        connector.transfer()
+                        # Apply relaxation
+                        for varname, previous in previous_values.items():
+                            current = getattr(sink, varname)
+                            setattr(sink, varname, factor * current + (1.0 - factor) * previous)
+                        connector.deactivate()
+
             try:
                 for i in range(max_iter):
                     update_system()
-                    if loop_connectors:
-                        # Reactivate connectors for fixed-point iterations
-                        for connector in loop_connectors:
-                            connector.activate()
-                        loop_connectors = []
                     for residue in residues:
                         residue.update()
                     r = problem.residue_vector()
@@ -256,6 +278,7 @@ class FixedPointSolver(Driver):
                     logger.debug(f"iteration #{i},\t{r = }")
                     if record_history:
                         record_state(f"{self.name} (iter #{i})")
+                    update_unknowns()
                     converged = r_norm < tol
                     if converged:
                         break
@@ -284,6 +307,10 @@ class FixedPointSolver(Driver):
 
         if not record_history:
             record_state(self.name, self.status, self.error_code)
+
+    def _postcompute(self) -> None:
+        self.owner.close_loops()
+        super()._postcompute()
 
     def is_standalone(self) -> bool:
         """Is this Driver able to solve a system?
