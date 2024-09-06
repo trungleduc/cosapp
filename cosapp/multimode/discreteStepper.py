@@ -96,7 +96,7 @@ class DiscreteStepper():
         This method may only be called once the list of all triggered events is known
         and the interpolation data has been set."""
         sysview = self._sysview
-        def f(t):
+        def f(t) -> float:
             sysview.exec(t)
             return event.value()
         t1, t2 = self._interval
@@ -124,7 +124,7 @@ class DiscreteStepper():
         # Cancel primitive events that occured after primal event
         for event in triggered_events:
             if event is not primal.event:
-                event.cancel()
+                event._cancel()
                 event.reevaluate()
         return primal
 
