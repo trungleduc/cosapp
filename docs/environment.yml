@@ -1,7 +1,7 @@
 name: cosapp_docs
 channels:
   - conda-forge
-  - defaults
+  - nodefaults
 dependencies:
   - python=3.11
   - numpy<2
@@ -14,7 +14,7 @@ dependencies:
   - nbsphinx
   - sphinx-copybutton
   - sphinx-mdinclude>0.5.3
-  - sphinxcontrib-mermaid
+  - sphinxcontrib-mermaid<1
   - watchdog
   - requests_ntlm
   - ipykernel

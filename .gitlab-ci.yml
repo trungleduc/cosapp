@@ -137,10 +137,10 @@ build_pkg:
   stage: test_build
   needs: []
   extends: 
-    - ".linux_env"
+    - ".linux_common_env"
     - ".job_rules"
   variables:
-    JOB_DEP: conda-build conda-verify pip jupyterlite-core jupyterlite-xeus ipywidgets jupyter_server micromamba
+    JOB_DEP: conda-build conda-verify pip setuptools jupyterlite-core jupyterlite-xeus ipywidgets jupyter_server
     PYTHON_VERSION : "3.11"
   script:
     - micromamba create -y -n cosapp python=$PYTHON_VERSION
@@ -189,7 +189,7 @@ pages:
   variables:
     PYTHON_VERSION: "3.12" 
   script:
-    - micromamba install -y pip jupyterlite-core jupyterlite-xeus ipywidgets jupyter_server micromamba
+    - micromamba install -y pip setuptools jupyterlite-core jupyterlite-xeus ipywidgets jupyter_server
     - python setup.py sdist
     - cd jupyterlite
     - python build.py
