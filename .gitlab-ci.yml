@@ -183,8 +183,6 @@ deploy:
 pages:
   extends: 
   - ".deploy_env"
-  tags: 
-    - cosapp_runner
   stage: deploy
   variables:
     PYTHON_VERSION: "3.12" 
