@@ -608,11 +608,12 @@ class FmuBuilder:
             return dest
 
         project_folder = FmuBuilder._get_project_folder(temp_dest)
-        project_files = set([Path(f) for f in project_files])
+        project_files = set(map(Path, project_files))
         project_files.update(project_folder.glob("*"))
 
         documentation_folder = FmuBuilder._get_documentation_folder(temp_dest)
-        PyFmuBuilder.build_FMU(
+        
+        fmu_path = PyFmuBuilder.build_FMU(
             FmuBuilder._get_script_file(temp_dest, system, fmu_name_suffix),
             dest=dest,
             project_files=project_files,
@@ -623,7 +624,16 @@ class FmuBuilder:
 
         shutil.rmtree(temp_dest)
 
-        return dest / f"{type(system).__name__}.fmu"
+        filename = str(fmu_path)
+
+        if filename.endswith("FMU.fmu"):
+            # Suppress rightmost occurrence of "FMU"
+            new_filename = "".join(filename.rsplit("FMU", 1))
+            fmu_path = Path(
+                shutil.move(filename, new_filename)
+            )
+
+        return fmu_path
 
 
 to_fmu = FmuBuilder.to_fmu
