@@ -25,9 +25,9 @@ Finally the flow is looping over the logger hierarchy.
       style handlerflow fill:#00000000,stroke:#00000000,color:#00000000
       logenable{Logger enabled<br />for level of call?}
       create[Create LogRecord]
-      filter{Does a filter attached<br />to logger reject the<br />record?}
+      rejected{Does a filter attached<br />to logger reject the<br />record?}
       tocurrent[Pass to handlers<br />of current logger]
-      propagate{Is propagate true<br />for current logger}
+      propagate{Is propagate true<br />for current logger?}
       parent{Is there a<br />parent logger?}
       setcurrent[Set current<br />logger to parent]
       stop([Stop])
@@ -35,9 +35,9 @@ Finally the flow is looping over the logger hierarchy.
       startlog-->|Logging call<br />in user code|logenable
       logenable-->|No|stop
       logenable-->|Yes|create
-      create-->filter
-      filter-->|Yes|stop
-      filter-->|No|tocurrent
+      create-->rejected
+      rejected-->|Yes|stop
+      rejected-->|No|tocurrent
       tocurrent-->propagate
       propagate-->|No|stop
       propagate-->|Yes|parent
@@ -74,7 +74,7 @@ This is done by passing the CoSApp object as extra attribute of a ``LogRecord`` 
 Thanks to the context manager :py:meth:`~cosapp.utils.logging.LoggerContext.log_context`, you can in CoSApp code activate
 for a method execution the context. For example, in :py:meth:`cosapp.core.module.Module.call_setup_run`:
 
-.. code::python
+.. code:: python
 
     def call_setup_run(self):
         """Execute `setup_run` recursively on all modules."""
