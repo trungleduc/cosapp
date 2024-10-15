@@ -146,7 +146,7 @@ class Boundary:
         """str : Contextual name of the boundary."""
         return self.__info.basename
 
-    def contextual_name(self, context: Optional["System"] = None) -> str:
+    def contextual_name(self, context: Optional[System] = None) -> str:
         """str : Contextual name of the boundary, relative to `context`.
         If `context` is `None` (default), uses current variable context.
         """

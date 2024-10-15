@@ -20,7 +20,7 @@ from cosapp.utils.logging import LoggerContext, LogFormat, LogLevel
 
 logger = logging.getLogger(__name__)
 
-Child = TypeVar("Child", bound="Module")
+ModuleType = TypeVar("ModuleType", bound="Module")
 
 
 class Module(LoggerContext, VisitedComponent, metaclass=abc.ABCMeta):
@@ -74,7 +74,7 @@ class Module(LoggerContext, VisitedComponent, metaclass=abc.ABCMeta):
 
     _name_check = NameChecker(excluded=CommonPorts.names())
 
-    def __init__(self, name: str):
+    def __init__(self: ModuleType, name: str):
         """`Module` constructor
 
         Parameters
@@ -84,8 +84,8 @@ class Module(LoggerContext, VisitedComponent, metaclass=abc.ABCMeta):
         """
         self._name = self._name_check(name)
         self._desc = ""
-        self.children: Dict[str, Module] = collections.OrderedDict()
-        self.parent: Optional[Module] = None
+        self.children: Dict[str, ModuleType] = collections.OrderedDict()
+        self.parent: Optional[ModuleType] = None
         self._active: bool = True
         self._compute_calls: int = 0
 
@@ -105,7 +105,7 @@ class Module(LoggerContext, VisitedComponent, metaclass=abc.ABCMeta):
         """Collection of all member names (used for autocompletion)"""
         return self.__members
 
-    def tree(self, downwards=False) -> Generator[Module, None, None]:
+    def tree(self: ModuleType, downwards=False) -> Generator[ModuleType, None, None]:
         """Generator recursively yielding all elements in module tree.
         
         Parameters:
@@ -316,7 +316,7 @@ class Module(LoggerContext, VisitedComponent, metaclass=abc.ABCMeta):
             path.append(self.name)
         return ".".join(reversed(path))
 
-    def add_child(self, child: Child, execution_index: Optional[int]=None, desc="") -> Child:
+    def add_child(self, child: ModuleType, execution_index: Optional[int]=None, desc="") -> ModuleType:
         """Add a child `Module` to the current `Module`.
 
         When adding a child `Module`, it is possible to specified its position
