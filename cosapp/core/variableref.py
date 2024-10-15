@@ -1,5 +1,9 @@
-from typing import Any, Mapping, NamedTuple, Union
+from __future__ import annotations
+from typing import Any, Mapping, NamedTuple, Union, TYPE_CHECKING
 from cosapp.utils.naming import natural_varname
+if TYPE_CHECKING:
+    from cosapp.systems import System
+    from cosapp.ports.port import BasePort
 
 
 # The real storage of a value is to its final port. Therefore the name mapping, to speed-up the
@@ -17,8 +21,8 @@ class VariableReference(NamedTuple):
     mapping : Mapping[str, Any] or BasePort
         Map object with string key
     """
-    context: "System"
-    mapping: "Union[Mapping[str, Any], BasePort]"
+    context: System
+    mapping: Union[Mapping[str, Any], BasePort]
     key: str
 
     @property
