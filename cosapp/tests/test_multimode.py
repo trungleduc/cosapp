@@ -3,6 +3,7 @@
 from __future__ import annotations
 import pytest
 import numpy
+import pandas
 
 from cosapp.base import Port, System
 from cosapp.drivers import EulerExplicit, NonLinearSolver
@@ -281,3 +282,142 @@ def test_TwoWayCircuitWithEq(case_TwoWayCircuitWithEq):
     assert [record.time for record in driver.recorded_events] == pytest.approx(
         [(2 * k + 1) * 0.5 * numpy.pi / omega for k in range(2)]
     )
+
+
+def test_MultimodeSystem_transition_order():
+    """Check mode initialisation and transition
+    across a multimode system tree.
+    """
+    class ModeManager(System):
+        def setup(self):
+            self.add_inward('x', 0.0)
+            self.add_event('pif', trigger="x > 1")
+            self.add_event('paf', trigger="x < 1")
+            self.add_outward_modevar('mode', init="0 if x < 1 else 1", dtype=int)
+
+        def transition(self) -> None:
+            if self.pif.present:
+                self.mode = 1
+            if self.paf.present:
+                self.mode = 0
+    
+    class MultimodeSystem(System):
+        def setup(self, shift=10):
+            self.add_property('shift', shift)
+            self.add_inward_modevar("m_in", value=2, dtype=int)
+            self.add_outward_modevar("m_out", init=f"m_in + {shift}", dtype=int)
+
+        def transition(self) -> None:
+            self.m_out = self.m_in + self.shift
+    
+    class MultimodeAssembly(System):
+        def setup(self):
+            a = self.add_child(MultimodeSystem('a', shift=10), pulling='m_in')
+            b = self.add_child(MultimodeSystem('b', shift=20), pulling='m_in')
+            c = self.add_child(MultimodeSystem('c', shift=30), pulling='m_out')
+
+            self.connect(b, c, {'m_out': 'm_in'})
+
+    class TopSystem(System):
+        def setup(self) -> None:
+            self.add_child(ModeManager('manager'))
+            self.add_child(MultimodeAssembly('foo'))
+
+            self.connect(self.manager, self.foo, {'mode': 'm_in'})
+    
+    s = TopSystem('s')
+    driver = s.add_driver(EulerExplicit(dt=0.1, time_interval=(0, 1)))
+    driver.add_recorder(DataFrameRecorder(excludes='*.shift'), period=driver.dt)
+    driver.set_scenario(
+        values={
+            "manager.x": "4 * t if t < 0.5 else 4 * (1 - t)",  # mode changes @ t=1/4 and 3/4
+        }
+    )
+
+    s.run_drivers()
+
+    data = driver.recorder.export_data()
+    # data = data.drop(['Section', 'Status', 'Error code'], axis=1)
+    # pandas.set_option('display.width', 200)
+    # pandas.set_option('display.max_columns', 200)
+    # print("\n", data)
+
+    expected_modes = numpy.array([0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0])
+
+    assert numpy.array_equal(data['foo.m_in'], expected_modes)
+    assert numpy.array_equal(data['foo.m_in'], data['manager.mode'])
+    assert numpy.array_equal(data['foo.a.m_in'], data['foo.m_in'])     # pulling
+    assert numpy.array_equal(data['foo.b.m_in'], data['foo.m_in'])     # pulling
+    assert numpy.array_equal(data['foo.c.m_in'], data['foo.b.m_out'])  # sibling connection
+    assert numpy.array_equal(data['foo.c.m_out'], numpy.asarray(data['foo.c.m_in']) + s.foo.c.shift)
+    assert numpy.array_equal(data['foo.a.m_out'], expected_modes + s.foo.a.shift)
+    assert numpy.array_equal(data['foo.b.m_out'], expected_modes + s.foo.b.shift)
+    assert numpy.array_equal(data['foo.c.m_out'], expected_modes + s.foo.b.shift + s.foo.c.shift)
+
+
+def test_MultimodeSystem_loop_recomposition():
+    """Check multimode system containing new loops after transition.
+    """
+    class System1(System):
+        def setup(self):
+            self.add_inward('x', 1.0)
+            self.add_inward('y', 1.0)
+            self.add_outward('z', 0.0)
+
+        def compute(self):
+            self.z = self.x + self.y
+
+    class System2(System):
+        def setup(self):
+            self.add_inward('k', 1.0)
+            self.add_inward('x', 1.0)
+            self.add_outward('y', 0.0)
+
+        def compute(self):
+            self.y = self.k + self.x**2
+
+    class MultimodeAssembly(System):
+        def setup(self):
+            a = self.add_child(System1('a'))
+            b = self.add_child(System2('b'))
+            c = self.add_child(System2('c'))
+            
+            self.add_event('click')
+
+            self.connect(a, b, {'z': 'x', 'y': 'y'})  # loop
+            self.connect(b, c, {'y': 'x'})
+
+        def transition(self):
+            if self.click.present:
+                self.connect(self.a, self.c, {'x': 'y'})
+    
+    s = MultimodeAssembly('s')
+    s.add_driver(NonLinearSolver('solver'))
+
+    s.a.x = -2.0
+    s.b.k = 1.0
+    s.c.k = -2.0
+    s.run_drivers()
+    # print("", s.drivers['solver'].problem, sep="\n")
+    assert s.drivers['solver'].results.success
+    assert s.drivers['solver'].problem.shape == (1, 1)
+
+    s.drivers.clear()
+    driver = s.add_driver(EulerExplicit(dt=1.0, time_interval=(0, 1)))
+    driver.add_child(NonLinearSolver('solver'))
+    # driver.add_recorder(DataFrameRecorder(), period=1.0)
+
+    s.click.trigger = "t == 0.4"
+
+    try:
+        s.run_drivers()
+    except:
+        raise
+    finally:
+        # data = driver.recorder.export_data()
+        # data = data.drop(['Section', 'Status', 'Error code'], axis=1)
+        # pandas.set_option('display.width', 200)
+        # pandas.set_option('display.max_columns', 200)
+        # print("", driver.solver.problem, "", data, sep="\n")
+        problem = driver.solver.problem
+        assert problem.shape == (2, 2)

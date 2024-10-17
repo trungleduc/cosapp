@@ -412,7 +412,10 @@ class ExplicitTimeDriver(Driver):
 
     def transition(self) -> None:
         """Execute owner system transition and reinitialize sub-drivers"""
-        self.owner.tree_transition()
+        owner = self.owner
+        owner.tree_transition()
+        owner.close_loops()
+        owner.open_loops()
         # Reinitialize sub-drivers after system transition
         for driver in self.children.values():
             driver.call_setup_run()
@@ -434,6 +437,7 @@ class ExplicitTimeDriver(Driver):
         self.__reset_time()
         self.__scenario.apply_init_values()
         self.__scenario.update_values()
+        self.owner.tree_transition()
         self.__init_modevars()
         self._synch_transients()
         logger.debug("Reset rates")
