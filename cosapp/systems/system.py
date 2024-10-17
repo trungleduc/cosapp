@@ -2302,10 +2302,16 @@ class System(Module, TimeObserver):
 
     def tree_transition(self) -> None:
         """Invoke transition in entire system tree"""
-        for system in self.tree():
-            system.retrieve_incoming_data()
-            with system.__free_problem:
-                system.transition()
+        for child in self.children.values():
+            # Retrieve data from sibling systems
+            for connector in self.__child_connectors.get(child.name, []):
+                connector.transfer()
+            child.tree_transition()
+        # Pull values from sub-systems
+        for connector in self.__pulling_connectors:
+            connector.transfer()
+        with self.__free_problem:
+            self.transition()
 
     def run_once(self) -> None:
         """Run the system once.
