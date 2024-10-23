@@ -577,6 +577,22 @@ class TestSwapVersions:
         assert "Could not copy ['foo.extra_in', 'foo.extra_out', 'foo.x']" in caplog.text
         assert isinstance(composite.foo, VersionA)
 
+    def test_extra_variables(self, composite, caplog):
+        """Test the handling of API mismatch."""
+        assert set(composite.foo.inwards) == {'x'}
+        assert set(composite.foo.outwards) == {'y'}
+
+        original = swap_system(composite.foo, VersionC('foo'))
+
+        assert isinstance(original, VersionA)
+        assert isinstance(composite.foo, VersionC)
+        assert set(composite.foo.inwards) == {'x', 'extra_in'}
+        assert set(composite.foo.outwards) == {'y', 'extra_out'}
+        assert 'extra_in' in composite.foo.name2variable
+        assert 'foo.extra_in' in composite.name2variable
+        assert 'extra_out' in composite.foo.name2variable
+        assert 'foo.extra_out' in composite.name2variable
+
 
 def test_swap_system_parent_error(composite):
     with pytest.raises(ValueError, match="Cannot replace top system 'composite'"):
