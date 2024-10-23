@@ -103,8 +103,6 @@ class BaseRecorder(abc.ABC):
         reference="Reference",
     )
 
-    paused = False  # type: bool
-
     def __init__(self,
         includes: SearchPattern = "*",
         excludes: Optional[SearchPattern] = None,
@@ -133,6 +131,7 @@ class BaseRecorder(abc.ABC):
         self.__expressions = None  # type: EvalString
         self._watch_object = None  # type: Optional[cosapp.core.module.Module]
         self._owner = None  # type: Optional[str]
+        self.paused = False
 
         # Signal
         self.state_recorded = Signal(
