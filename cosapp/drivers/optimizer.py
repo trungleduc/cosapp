@@ -471,7 +471,9 @@ class Optimizer(AbstractSolver):
 
         if len(self.initial_values) > 0:
             monitored = self.options['monitor']
-            BaseRecorder.paused = not monitored
+            recorder = self._recorder
+            if recorder:
+                recorder.paused = not monitored
 
             if monitored:
                 self._fresidues(self.initial_values)
@@ -500,8 +502,8 @@ class Optimizer(AbstractSolver):
                 )
                 self._print_solution()
 
-            if not monitored:
-                BaseRecorder.paused = False
+            if recorder and not monitored:
+                recorder.paused = False
                 self._record_data()
 
         else:
