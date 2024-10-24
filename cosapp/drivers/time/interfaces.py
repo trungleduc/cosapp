@@ -437,27 +437,11 @@ class ExplicitTimeDriver(Driver):
         self.__reset_time()
         self.__scenario.apply_init_values()
         self.__scenario.update_values()
-        self.owner.tree_transition()
-        self.__init_modevars()
+        self.owner.tree_init_mode()
         self._synch_transients()
         logger.debug("Reset rates")
         for rate in self._rates.values():
             rate.reset()
-    
-    def __init_modevars(self):
-        """Force init value of output mode vars or owner system."""
-        from cosapp.systems import System
-        
-        for system in self.owner.tree():
-            system.retrieve_incoming_data()
-            port = system[System.MODEVARS_OUT]
-            if len(port) > 0:
-                name = system.full_name()
-                for variable in port.variables():
-                    variable.initialize()
-                    logger.debug(
-                        f"Mode variable {name}.{variable.name} set to {variable.value}"
-                    )
 
     def _synch_transients(self):
         """Re-synch stacked unknowns with root variables"""

@@ -2313,6 +2313,32 @@ class System(Module, TimeObserver):
         with self.__free_problem:
             self.transition()
 
+    def tree_init_mode(self) -> None:
+        """Invoke mode initialization in entire system tree"""
+        for child in self.children.values():
+            # Retrieve data from sibling systems
+            for connector in self.__child_connectors.get(child.name, []):
+                connector.transfer()
+            child.tree_init_mode()
+        # Initialize output mode variables
+        port: ModeVarPort = self[System.MODEVARS_OUT]
+        if len(port) > 0:
+            name = self.full_name()
+            for variable in port.variables():
+                variable.initialize()
+                logger.debug(
+                    f"Mode variable {name}.{variable.name} set to {variable.value}"
+                )
+        # Initialize system mode
+        with self.__free_problem:
+            self.init_mode()
+
+    def init_mode(self) -> None:
+        """Initialization method for multimode systems, called at the beginning of time simulations.
+        In this context, attribute `problem` is unlocked and may be modified.
+        """
+        pass
+
     def run_once(self) -> None:
         """Run the system once.
 
