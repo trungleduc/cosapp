@@ -52,6 +52,7 @@ Modules
    cosapp.drivers.time.utils
    cosapp.drivers.abstractsetofcases
    cosapp.drivers.abstractsolver
+   cosapp.drivers.fixedpoint
    cosapp.drivers.influence
    cosapp.drivers.iterativecase
    cosapp.drivers.lineardoe

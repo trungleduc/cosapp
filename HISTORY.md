@@ -1,6 +1,34 @@
 # History
 
 
+## 0.18.0 (2024-10-24)
+
+### New features & API changes
+
+- Improved data recording mechanism for `NonLinearSolver`, to facilitate convergence path analysis (MR [#312](https://gitlab.com/cosapp/cosapp/-/merge_requests/312)).
+- New driver `FixedPointSolver`, solving algebraic loops by fixed-point iterations (MRs [#315](https://gitlab.com/cosapp/cosapp/-/merge_requests/315) & [#322](https://gitlab.com/cosapp/cosapp/-/merge_requests/322)).
+- New method `Driver.available_options`, returning the list of options available for a particular driver (MR [#316](https://gitlab.com/cosapp/cosapp/-/merge_requests/316)).
+- New method `System.pull_design_method`, to promote sub-system design methods at parent level easily (MR [#314](https://gitlab.com/cosapp/cosapp/-/merge_requests/314)).
+- Bug fix in FMU exporter (MR [#324](https://gitlab.com/cosapp/cosapp/-/merge_requests/324)).
+- Bug fixes in system transition logic (MR [#338](https://gitlab.com/cosapp/cosapp/-/merge_requests/338)).
+- New method `System.init_mode` called before each time simulation, for mode initialization (MR [#347](https://gitlab.com/cosapp/cosapp/-/merge_requests/347)).
+
+### Documentation
+
+- Fix bad rendering of tutorial notebooks on time simulations (MR [#321](https://gitlab.com/cosapp/cosapp/-/merge_requests/321)).
+- Fix bad rendering of mermaid graph in logger documentation (MR [#326](https://gitlab.com/cosapp/cosapp/-/merge_requests/326)).
+- Updated tutorial on advanced time simulations and on design methods (MR [#343](https://gitlab.com/cosapp/cosapp/-/merge_requests/343)).
+- Add a section on `FixedPointSolver` in the driver tutorial (MR [#346](https://gitlab.com/cosapp/cosapp/-/merge_requests/346)).
+
+### Maintenance and code quality
+
+- Improved type hints for drivers (MR [#318](https://gitlab.com/cosapp/cosapp/-/merge_requests/318)).
+- Updated JupyterLite image (MR [#313](https://gitlab.com/cosapp/cosapp/-/merge_requests/313)).
+- Add new test on `swap_system` (MR [#342](https://gitlab.com/cosapp/cosapp/-/merge_requests/342)).
+- Various updates of CI/CD settings (MRs [#317](https://gitlab.com/cosapp/cosapp/-/merge_requests/317), [#319](https://gitlab.com/cosapp/cosapp/-/merge_requests/319) [#320](https://gitlab.com/cosapp/cosapp/-/merge_requests/320), [#336](https://gitlab.com/cosapp/cosapp/-/merge_requests/336), [#337](https://gitlab.com/cosapp/cosapp/-/merge_requests/337)).
+- Various test improvements (MRs [#340](https://gitlab.com/cosapp/cosapp/-/merge_requests/340), [#342](https://gitlab.com/cosapp/cosapp/-/merge_requests/342)).
+
+
 ## 0.17.0 (2024-06-18)
 
 ### New features & API changes
