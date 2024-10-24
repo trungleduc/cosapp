@@ -98,11 +98,11 @@ class FixedPointSolver(Driver):
         )
         self.options.declare(
             'factor', 1.0, dtype=float, lower=1e-3,
-            desc='Relaxation factor.'
+            desc='Relaxation factor; applies: next value = factor * current + (1 - factor) * previous.'
         )
         self.options.declare(
             'history', False, dtype=bool,
-            desc='Request saving the resolution trace.'
+            desc='Should the recorder (if any) capture all iterations, or just the last one?'
         )
         self.options.declare(
             'force_init', False, dtype=bool,
