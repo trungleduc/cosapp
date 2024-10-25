@@ -10,6 +10,8 @@ variables:
 
 .job_rules:
   rules:
+    - if: $CI_COMMIT_TAG
+      when: always
     - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
       when: never
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
@@ -51,7 +53,7 @@ variables:
     - micromamba config append channels conda-forge
     - mkdir -p $HOME/.cosapp.d
 
-# default linux job parameters
+# Default linux job parameters
 .linux_env:
   extends: 
     - ".linux_common_env"
@@ -66,20 +68,20 @@ variables:
   stage: deploy
 
 linux_py39:
-    extends: 
-     - ".linux_env"
-     - ".job_rules"
-     - ".test_script"
-    variables:
-      PYTHON_VERSION: "3.9"
+  extends: 
+    - ".linux_env"
+    - ".job_rules"
+    - ".test_script"
+  variables:
+    PYTHON_VERSION: "3.9"
 
 linux_py310:
-    extends: 
-     - ".linux_env"
-     - ".job_rules"
-     - ".test_script"
-    variables:
-      PYTHON_VERSION: "3.10"
+  extends: 
+    - ".linux_env"
+    - ".job_rules"
+    - ".test_script"
+  variables:
+    PYTHON_VERSION: "3.10"
 
 linux_py311:
   extends: 
@@ -95,10 +97,10 @@ linux_py311:
     - coverage erase
     - coverage run -m pytest -ra
     - coverage report
-    - coverage html -d coverage/    
+    - coverage html -d coverage/
   artifacts:
     paths:
-      - coverage/  
+      - coverage/
     expire_in: 2 weeks  
 
 
@@ -119,20 +121,18 @@ build_doc:
     - ".job_rules"
   variables:
     BUILDDIR: _build
-    PYTHON_VERSION : "3.11"
+    PYTHON_VERSION: "3.11"
   script:
     - micromamba env create --name cosapp --file docs/environment.yml
     - micromamba activate cosapp
     - pip install .
-    # Build the documentation
     - cd docs/
     - sphinx-build -b html -d $BUILDDIR/doctrees . $BUILDDIR
-    
   artifacts:
     paths:
       - docs/$BUILDDIR
 
-
+# Package build job
 build_pkg:
   stage: test_build
   needs: []
@@ -141,7 +141,7 @@ build_pkg:
     - ".job_rules"
   variables:
     JOB_DEP: conda-build conda-verify pip setuptools jupyterlite-core jupyterlite-xeus ipywidgets jupyter_server
-    PYTHON_VERSION : "3.11"
+    PYTHON_VERSION: "3.11"
   script:
     - micromamba create -y -n cosapp python=$PYTHON_VERSION
     - micromamba activate cosapp
@@ -154,7 +154,7 @@ build_pkg:
     paths:
       - dist/
 
-
+# Deployment job
 deploy:
   extends: 
     - ".deploy_env"
@@ -163,7 +163,7 @@ deploy:
     TWINE_USERNAME: __token__
     TWINE_PASSWORD: $PYPI
     CONDA_USERNAME: cosapp
-    CONDA_UPLOAD_TOKEN : $CONDA_UPLOAD_TOKEN
+    CONDA_UPLOAD_TOKEN: $CONDA_UPLOAD_TOKEN
   script:
     - micromamba install -y $JOB_DEP
     - python setup.py sdist bdist_wheel
@@ -171,18 +171,16 @@ deploy:
     - twine upload dist/*.whl
     - conda build -c conda-forge --no-test --output-folder ./dist conda.recipe
     - anaconda -t $CONDA_UPLOAD_TOKEN upload -u $CONDA_USERNAME ./dist/noarch/cosapp*
-
   artifacts:
     paths:
       - dist/
   rules:
-    - if: $CI_COMMIT_TAG && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-      when: on_success
+    - if: $CI_COMMIT_TAG
 
 
 pages:
   extends: 
-  - ".deploy_env"
+    - ".deploy_env"
   stage: deploy
   variables:
     PYTHON_VERSION: "3.12" 
