@@ -69,7 +69,8 @@ class TestUnknown:
             assert unknown.upper_bound == get_expected('upper_bound', np.inf)
             assert unknown.max_abs_step == get_expected('max_abs_step', np.inf)
             assert unknown.max_rel_step == get_expected('max_rel_step', np.inf)
-            np.testing.assert_array_equal(unknown.mask, expected.get('mask', None))
+            if expected.get('mask', None) is None:
+                assert not hasattr(unknown, "mask")
         
         else:
             pattern = expected.get('match', None)
@@ -85,7 +86,8 @@ class TestUnknown:
         assert copy.context is original.context
         for attr in ('name', 'port', 'lower_bound', 'upper_bound', 'max_abs_step', 'max_rel_step'):
             assert getattr(copy, attr) == getattr(original, attr)
-        np.testing.assert_array_equal(copy.mask, original.mask)
+        if not original._is_scalar:
+            np.testing.assert_array_equal(copy.mask, original.mask)
 
 
     @pytest.mark.parametrize("name, options, expected", [
@@ -116,7 +118,8 @@ class TestUnknown:
         assert unknown_dict["upper_bound"] == get_expected('upper_bound', np.inf)
         assert unknown_dict["max_abs_step"] == get_expected('max_abs_step', np.inf)
         assert unknown_dict["max_rel_step"] == get_expected('max_rel_step', np.inf)
-        np.testing.assert_array_equal(unknown_dict["mask"], expected.get('mask', None))
+        if expected.get('mask', None) is None:
+            assert not hasattr(unknown_dict, "mask")
 
 
     @pytest.mark.parametrize("name", ['in_.m', 'x', 'v', 'v[::2]'])

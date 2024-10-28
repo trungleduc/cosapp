@@ -9,16 +9,6 @@ if TYPE_CHECKING:
     from cosapp.systems import System
 
 
-class MaskedVarInfo(NamedTuple):
-    basename: str
-    selector: str = ""
-    mask: Optional[numpy.ndarray] = None
-
-    @property
-    def fullname(self) -> bool:
-        return f"{self.basename}{self.selector}"
-
-
 def find_selector(expression: str) -> Tuple[str, str]:
     """Decompose a string expression into `basename` and `selector`,
     where `selector` is a suitable mask expression for an array.
@@ -62,74 +52,6 @@ def find_selector(expression: str) -> Tuple[str, str]:
         selector = expression[il:]
 
     return basename, selector
-
-
-# TODO should we reintegrate it as Boundary method as it is now the only used place
-def get_indices(system: System, name: str) -> MaskedVarInfo:
-    """Decompose a variable specification into its base name and mask.
-
-    Parameters
-    ----------
-    system : System
-        System to which variable belongs
-    name : str
-        Variable specification (variable name + optional array mask, if required)
-
-    Returns
-    -------
-    MaskedVarInfo (named tuple):
-        - basename [str]: variable name
-        - selector [str]: array selector
-        - mask [numpy.ndarray[bool]]: mask (if array) or `None`
-    """
-    check_arg(name, 'name', str)
-    name = natural_varname(name)
-
-    def check_eval(attribute: str) -> Any:
-        try:
-            value = eval(f"s.{attribute}", {}, {"s": system})
-        except AttributeError as error:
-            error.args = (f"{attribute!r} is not known in {system.name}",)
-            raise
-        except Exception as error:
-            error.args = (f"Can't evaluate {attribute!r} in {system.name}",)
-            raise
-        else:
-            return value
-
-    try:
-        basename, selector = find_selector(name)
-    except ValueError as error:
-        raise SyntaxError(error)
-
-    value = check_eval(basename)
-    mask = None
-
-    if selector:
-        # Check value is an array
-        if not (
-            isinstance(value, numpy.ndarray)
-            and numpy.issubdtype(value.dtype, numpy.number)
-            and value.size > 1
-        ):
-            raise TypeError(
-                f"Only non-empty numpy arrays can be partially selected; got '{system.name}.{name}'."
-            )
-        mask = numpy.zeros_like(value, dtype=bool)
-        # Set mask from selector string
-        try:
-            exec(f"mask{selector} = True", {}, {"mask": mask})
-        except (SyntaxError, IndexError) as error:
-            varname = f"{system.name}.{basename}"
-            error.args = (
-                f"Invalid selector {selector!r} for variable {varname!r}: {error!s}",
-            )
-            raise
-    
-    elif isinstance(value, Collection) and not isinstance(value, str):
-        mask = numpy.ones_like(value, dtype=bool)
-
-    return MaskedVarInfo(basename, selector, mask)
 
 
 def multi_split(expression: str, separators: Collection[str]) -> Tuple[List[str], List[str]]:

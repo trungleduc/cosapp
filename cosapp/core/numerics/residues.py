@@ -1,7 +1,7 @@
 from __future__ import annotations
 from abc import abstractmethod
 from numbers import Number
-from typing import Any, Dict, Optional, Tuple, FrozenSet, Union, TYPE_CHECKING
+from typing import Any, Dict, Iterable, Optional, Tuple, FrozenSet, Union, TYPE_CHECKING
 from collections.abc import Collection
 
 import numpy
@@ -144,21 +144,21 @@ class Residue(AbstractResidue):
 
     @staticmethod
     def residue_norm(
-        left: Union[Number, Collection, numpy.ndarray],
-        right: Union[Number, Collection, numpy.ndarray] = None,
+        left: Union[Number, Iterable, numpy.ndarray],
+        right: Union[Number, Iterable, numpy.ndarray] = None,
     ) -> Union[Number, numpy.ndarray]:
         """Computes the order of magnitude of left- and right-hand sides to approximate the reference value.
 
         Parameters
         ----------
-        - left : float or list of float or numpy.ndarray
+        - left : Union[Number, Iterable, numpy.ndarray]
             Left-hand side of the equation
-        - right : float or list of float or numpy.ndarray or None (default)
+        - right : Union[Number, Iterable, numpy.ndarray]
             Right-hand side of the equation if not None
 
         Returns
         -------
-        Number or numpy.ndarray
+        Union[Number, numpy.ndarray]
             An approximated reference value
         """
         a = numpy.abs(numpy.asarray(left, float))
@@ -167,32 +167,54 @@ class Residue(AbstractResidue):
         return 10 ** numpy.floor(numpy.log10(numpy.where(a == 0, 1, a)))
 
     @staticmethod
-    def evaluate_residue(
-        lhs: Union[Number, Collection, numpy.ndarray],
-        rhs: Union[Number, Collection, numpy.ndarray],
-        reference: Union[Number, Collection, numpy.ndarray, str] = 1,
-    ) -> Union[float, numpy.ndarray]:
-        """Evaluate the normalized residue from left- and right-hand sides of an equation.
+    def _evaluate_numerical_residue(
+        lhs: Union[Number, numpy.ndarray],
+        rhs: Union[Number, numpy.ndarray],
+        reference: Union[Number, numpy.ndarray] = 1,
+    ) -> Union[Number, numpy.ndarray]:
+        """Evaluate the normalized residue from number or numpy.array left- and right-hand sides of an equation.
 
         The formula depends on the left- and right-hand side value of the equation:
             residues = (lhs - rhs) / reference
 
         Parameters
         ----------
-        - lhs : Number or list of float or numpy.ndarray
+        - lhs : Union[Number, numpy.ndarray]
             Left-hand side of the equation
-        - rhs : Number or list of float or numpy.ndarray
+        - rhs : Union[Number, numpy.ndarray]
             Right-hand side of the equation
-        - reference : Number or list of float or numpy.ndarray or "norm"
+        - reference : Union[Number, numpy.ndarray]
             Reference value to normalize the equation with; default is unity
 
         Returns
         -------
-        Number or numpy.ndarray
+        Union[Number, numpy.ndarray]
             Normalized residue
         """
-        if isinstance(reference, str) and reference == "norm":  # type check avoids a warning for numpy arrays
-            reference = Residue.residue_norm(lhs, rhs)
+        return (lhs - rhs) / reference
+
+    @staticmethod
+    def _evaluate_iterable_residue(
+        lhs: Iterable,
+        rhs: Iterable,
+        reference: Union[Number, numpy.ndarray] = 1,
+    ) -> Union[Number, numpy.ndarray]:
+        """Evaluate the normalized residue from iterable left- and right-hand sides of an equation.
+
+        Parameters
+        ----------
+        - lhs : Iterable
+            Left-hand side of the equation
+        - rhs : Iterable
+            Right-hand side of the equation
+        - reference : Union[Number, numpy.ndarray]
+            Reference value to normalize the equation with; default is unity
+
+        Returns
+        -------
+        Union[Number, numpy.ndarray]
+            Normalized residue
+        """
         return (numpy.asarray(lhs) - numpy.asarray(rhs)) / numpy.asarray(reference)
 
     def __init__(
@@ -225,7 +247,9 @@ class Residue(AbstractResidue):
         self.__set_equation(equation)
         self._name = name or self.equation
 
-        if isinstance(reference, str) and reference == "norm":  # type check avoids a warning for numpy arrays
+        if (
+            isinstance(reference, str) and reference == "norm"
+        ):  # type check avoids a warning for numpy arrays
             reference = Residue.residue_norm(*self.eval_sides())
         self.reference = reference
         self.update()
@@ -272,7 +296,14 @@ class Residue(AbstractResidue):
         else:
             self.__sides = sides
             self.__equation = f"{lhs} == {rhs}"
-            self.__varnames = sides.variables(include_const=False)
+            self.__varnames = sides.variables
+
+            if isinstance(lval, numpy.ndarray) or isinstance(rval, numpy.ndarray):
+                self.residue_method = Residue._evaluate_numerical_residue
+            elif isinstance(lval, Iterable) or isinstance(rval, Iterable):
+                self.residue_method = Residue._evaluate_iterable_residue
+            else:
+                self.residue_method = Residue._evaluate_numerical_residue
 
     def __str__(self) -> str:
         name = self.__equation or self._name
@@ -291,9 +322,7 @@ class Residue(AbstractResidue):
             The updated residues
         """
         lval, rval = self.__sides.eval()
-        self._value = Residue.evaluate_residue(
-            lval, rval, self.reference
-        )
+        self._value = self.residue_method(lval, rval, self.reference)
         return self._value
 
     def copy(self) -> Residue:
@@ -369,7 +398,7 @@ class DeferredResidue:
         if lhs.constant:
             raise ValueError(f"Targetted expression {lhs!r} appears to be constant")
         self.__lhs = lhs
-        self.__vars = lhs.variables()
+        self.__vars = lhs.variables
 
     @property
     def variables(self) -> FrozenSet[str]:

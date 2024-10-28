@@ -121,13 +121,18 @@ def test_TimeDerivative___init__(bogus, ctor_data, state, expected):
             assert der.value is None 
             assert der.initial_value is None
         else:
-            if isinstance(value, (list, np.ndarray)):
+            if isinstance(value, np.ndarray):
                 assert isinstance(der.value, np.ndarray)
+                assert isinstance(der.initial_value, np.ndarray)
+                assert all(isinstance(comp, float) for comp in der.value)
+            if isinstance(value, list):
+                assert isinstance(der.value, list)
                 assert isinstance(der.initial_value, np.ndarray)
                 assert all(isinstance(comp, float) for comp in der.value)
             assert der.value == pytest.approx(value, rel=1e-14)
             assert der.initial_value == pytest.approx(value, rel=1e-14)
-        assert der.mask == expected.get('mask', None)
+        if der._is_scalar:
+            assert not hasattr(der, "mask") 
 
     else:  # erroneous case
         with pytest.raises(error, match=expected.get('match', None)):
@@ -237,17 +242,20 @@ def test_TimeDerivative_to_dict(bogus, name, options, expected):
 def test_TimeDerivative_copy(bogus, ctor_data):
     args, kwargs = ctor_data
     old = TimeDerivative(bogus, *args, **kwargs)
+    old.update(dt=1.)
     new = old.copy()
 
     assert isinstance(new, TimeDerivative)
     assert new is not old
-    assert new.ref is old.ref
     assert new.port is old.port
     assert new.context is old.context
-    assert np.array_equiv(new.mask, old.mask)
     assert np.array_equal(new.value, old.value)
     assert np.array_equal(new.default_value, old.default_value)
-    if old.mask is not None:
+    assert new._ref is not old._ref 
+    assert new._ref._obj is old._ref._obj
+    assert new._ref._key is old._ref._key
+    if not old._is_scalar:
+        assert np.array_equiv(new.mask, old.mask)
         assert new.mask is not old.mask
     if isinstance(old.value, np.ndarray):
         assert new.value is not old.value

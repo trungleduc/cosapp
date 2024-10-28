@@ -322,13 +322,11 @@ class Optimizer(AbstractSolver):
             self.__current_x = x = numpy.array(x)  # force copy
             counter = 0
             for unknown in self.problem.unknowns.values():
-                if unknown.mask is None:
-                    unknown.set_default_value(x[counter])
-                    counter += 1
-                else:
-                    n = numpy.count_nonzero(unknown.mask)
-                    unknown.set_default_value(x[counter : counter + n])
-                    counter += n
+                n = unknown.size
+                value = x[counter: counter + n] if n > 1 else x[counter]
+                unknown.update_default_value(value, checks=False)
+                counter += n
+                
                 # Set variable to new x
                 unknown.set_to_default()
 
@@ -411,8 +409,8 @@ class Optimizer(AbstractSolver):
                 except KeyError:
                     data = copy.deepcopy(unknown.value)
                 else:
-                    umask = unknown.mask if unknown.mask is not None else numpy.empty(0)
-                    bmask = boundary.mask if boundary.mask is not None else numpy.empty(0)
+                    umask = unknown.mask if not unknown._is_scalar else numpy.empty(0)
+                    bmask = boundary.mask if not boundary._is_scalar else numpy.empty(0)
                     if not numpy.array_equal(umask, bmask):
                         raise ValueError(
                             f"Unknown and initial conditions on {unknown.name!r} are not masked equally"

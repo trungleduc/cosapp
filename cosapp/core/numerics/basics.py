@@ -292,14 +292,11 @@ class MathematicalProblem(BaseProblem):
         """Tuple[str]: Names of unknowns flatten to have the same size as `unknown_vector()`."""
         names = []
         for unknown in self.unknowns.values():
-            if unknown.mask is None:
+            if unknown.is_scalar:
                 names.append(unknown.name)
             else:
                 basename = unknown.basename
-                ref_size = numpy.size(unknown.ref.value)
-                names.extend(
-                    f"{basename}[{i}]" for i in numpy.arange(ref_size)[unknown.mask.flatten()]
-                )
+                names.extend(f"{basename}[{i}]" for i in unknown.ref._mask_idx)
         return tuple(names)
 
     @property

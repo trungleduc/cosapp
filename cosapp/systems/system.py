@@ -2995,7 +2995,7 @@ class System(Module, TimeObserver):
             sink_name = sink.contextual_name
             source_name = source.contextual_name
             owner_unknowns = dict(
-                (unknown.ref, unknown)
+                (unknown.variable_reference, unknown)
                 for unknown in sink.owner.unknowns.values()
             )
             for target, origin in connector.mapping.items():

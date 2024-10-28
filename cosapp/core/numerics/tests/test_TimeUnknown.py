@@ -98,7 +98,7 @@ def test_TimeUnknown___init__(ctor_data, state, expected):
         assert u.d_dt == expected['d_dt']
         assert isinstance(u.value, expected.get('dtype', Number))
         if isinstance(u.value, Number):
-            assert u.mask is None
+            assert not hasattr(u, "mask")
         else:
             assert np.array_equal(u.mask, np.ones_like(u.value, dtype=bool))
         assert u.max_time_step == expected.get('max_time_step', np.inf)
@@ -242,11 +242,11 @@ def test_TimeUnknown_d_dt():
     assert isinstance(u.value, np.ndarray)
     assert len(u.value) == 3
 
-    u.value = 1.23
+    u.update_value(1.23)
     assert u.value == pytest.approx(np.full(3, 1.23))
 
     with pytest.raises(ValueError):
-        u.value = [0.2, 0.1]
+        u.update_value([0.2, 0.1])
     
     u.d_dt = [0, 0.5, 1]
     assert u.d_dt == pytest.approx([0, 0.5, 1])

@@ -1,0 +1,51 @@
+{
+    // The version of the config file format.
+    "version": 1,
+
+    // The name of the project being benchmarked
+    "project": "cosapp",
+
+    // The project's homepage
+    "project_url": "https://cosapp.readthedocs.io/en/latest/",
+
+    // The URL or local path of the source code repository for the
+    // project being benchmarked
+    "repo": "..",
+
+    // Customizable commands for installing and uninstalling the project.
+    "install_command": ["pip install ."],
+    "uninstall_command": ["pip uninstall -y {project}"],
+
+    // List of branches to benchmark.
+    "branches": ["master", "HEAD"], 
+
+    // The DVCS being used.  
+    "dvcs": "git",
+
+    // The tool to use to create environments.  May be "conda",
+    // "virtualenv", "mamba" (above 3.8)
+    "environment_type": "mamba",
+
+    // The Pythons you'd like to test against. 
+    "pythons": ["3.11"],
+
+    // A conda environment file that is used for environment creation.
+    "conda_environment_file": "environment.yml",
+
+    // The directory (relative to the current directory) that benchmarks are
+    // stored in.  If not provided, defaults to "benchmarks"
+    "benchmark_dir": "benchmark_suite",
+
+    // The directory (relative to the current directory) to cache the Python
+    // environments in.  If not provided, defaults to "env"
+    "env_dir": ".asv/env",
+
+    // The directory (relative to the current directory) that raw benchmark
+    // results are stored in.  If not provided, defaults to "results".
+    "results_dir": ".asv/results",
+
+    // The directory (relative to the current directory) that the html tree
+    // should be written to.  If not provided, defaults to "html".
+    "html_dir": ".asv/html"
+
+}

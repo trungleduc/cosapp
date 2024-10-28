@@ -307,13 +307,13 @@ class AbstractSolver(Driver):
                             varname = extract_varname(child, name)
                             if varname != name:  # Off-design variable
                                 try:
-                                    child.set_init({varname: numpy.asarray(value)})
+                                    child.set_init({varname: value})
                                 except:
                                     continue
                                 else:
                                     break
                             elif varname in child.design.unknowns:  # We may have a design variable
-                                child.set_init({varname: numpy.asarray(value)})
+                                child.set_init({varname: value})
                                 break
                 else:
                     child = self.children[case]
@@ -325,7 +325,7 @@ class AbstractSolver(Driver):
                     for name, value in data.items():
                         varname = extract_varname(child, name)
                         try:
-                            child.set_init({varname: numpy.asarray(value)})
+                            child.set_init({varname: value})
                         except:
                             continue
 

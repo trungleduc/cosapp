@@ -26,7 +26,6 @@ def test_EvalString_functions(ufunc_test_data):
     """Check that all tested symbols are actually implemented"""
     tested = set(ufunc_test_data)
     available = set(EvalString.available_symbols())
-    available.remove('__builtins__')
     assert tested <= available
 
 
@@ -158,26 +157,26 @@ def test_EvalString_subsystem_constant():
     sub = mid.add_child(SystemWithConstants('sub', constants={'c': 0.10}))
 
     s = EvalString('2 * c', sub)
-    assert s.variables() == set()
-    assert s.variables(include_const=True) == {'c'}
+    assert s.variables == set()
+    assert s.all_variables == {'c'}
     assert s.constant
     assert s.eval() == pytest.approx(0.2, rel=1e-14)
 
     s = EvalString('2 * sub.c', mid)
-    assert s.variables() == set()
-    assert s.variables(include_const=True) == {'sub.c'}
+    assert s.variables == set()
+    assert s.all_variables == {'sub.c'}
     assert s.constant
     assert s.eval() == pytest.approx(0.2, rel=1e-14)
 
     s = EvalString('2 * mid.sub.c', top)
-    assert s.variables() == set()
-    assert s.variables(include_const=True) == {'mid.sub.c'}
+    assert s.variables == set()
+    assert s.all_variables == {'mid.sub.c'}
     assert s.constant
     assert s.eval() == pytest.approx(0.2, rel=1e-14)
 
     s = EvalString('mid.g * mid.sub.c', top)
-    assert s.variables() == set()
-    assert s.variables(include_const=True) == {'mid.g', 'mid.sub.c'}
+    assert s.variables == set()
+    assert s.all_variables == {'mid.g', 'mid.sub.c'}
     assert s.constant
     assert s.eval() == pytest.approx(0.981, rel=1e-14)
 
@@ -221,7 +220,8 @@ def test_EvalString_nonconstant_expr(eval_context, expression, expected):
 def test_EvalString_erroneous_expr(eval_context, expression, exception):
     """Test erroneous expressions expected to raise an exception at instantiation"""
     with pytest.raises(exception):
-        EvalString(expression, eval_context)
+        eval_string = EvalString(expression, eval_context)
+        eval_string.eval()
 
 
 @pytest.mark.parametrize("expression, expected", [
@@ -286,9 +286,9 @@ def test_EvalString_string(eval_context, expression, expected):
 @pytest.mark.parametrize("expression, expected", [
     ("norm(x, inf)", {'x'}),
     ("g * cos(pi * x)", {'x', 'g'}),
-    ("g * cos(pi * x) + sub.z", {'x', 'g', 'sub'}),
-    ("g * cos(pi * x) + sub.z + out.q", {'x', 'g', 'sub', 'out'}),
-    ("g * cos(pi * x) / out.q + sub.z * sub.in_.q + out.q", {'x', 'g', 'sub', 'out'}),
+    ("g * cos(pi * x) + sub.z", {'x', 'g', 'sub_z'}),
+    ("g * cos(pi * x) + sub.z + out.q", {'x', 'g', 'sub_z', 'out_q'}),
+    ("g * cos(pi * x) / out.q + sub.z * sub.in_.q + out.q", {'x', 'g', 'out_q', 'sub_z', 'sub_in__q'}),
 ])
 def test_EvalString_locals(eval_context, expression, expected):
     e = EvalString(expression, eval_context)
@@ -296,32 +296,34 @@ def test_EvalString_locals(eval_context, expression, expected):
 
 
 @pytest.mark.parametrize("expression, expected", [
-    ("norm(x, inf)", dict(variables={'x'})),
-    ("g * cos(pi * x)", dict(variables={'x'}, constants={'g'})),
-    ("g * cos(pi * x) + sub.z", dict(variables={'x', 'sub.z'}, constants={'g'})),
+    ("norm(x, inf)", dict(attributes={'x'})),
+    ("g * cos(pi * x)", dict(attributes={'x'}, constants={'g'})),
+    ("g * cos(pi * x) + sub.z", dict(attributes={'x', 'sub.z'}, constants={'g'})),
     (
         "g * cos(pi * x) / out.q + sub.z * sub.in_.q + out.q",
-        dict(variables={'x', 'sub.z', 'sub.in_.q', 'out.q'}, constants={'g'})
+        dict(attributes={'x', 'sub.z', 'sub.in_.q', 'out.q'}, constants={'g'})
     ),
     (
         "(g * cos(pi * x), out.q, sub.z, sub.in_.q, 2 * out.q)",
-        dict(variables={'x', 'sub.z', 'sub.in_.q', 'out.q'}, constants={'g'}),
+        dict(attributes={'x', 'sub.z', 'sub.in_.q', 'out.q'}, constants={'g'}),
     ),
-    ("out.q + sub.z * sub.in_.q + B52.in_.q", dict(variables={'sub.z', 'sub.in_.q', 'out.q', 'B52.in_.q'})),
-    ("out.q + exp(sub.z * sub.in_.q) + cos(B52.in_.q)", dict(variables={'sub.z', 'sub.in_.q', 'out.q', 'B52.in_.q'})),
-    ("out.q * exp(-y[1] / 2)", dict(variables={'y', 'out.q'})),
-    ("out. q + sub  .z * sub . in_.q + out  . q", dict(variables={'sub.z', 'sub.in_.q', 'out.q'})),
-    ("len(out)", dict(variables=set())),
+    ("out.q + sub.z * sub.in_.q + B52.in_.q", dict(attributes={'sub.z', 'sub.in_.q', 'out.q', 'B52.in_.q'})),
+    ("out.q + exp(sub.z * sub.in_.q) + cos(B52.in_.q)", dict(attributes={'sub.z', 'sub.in_.q', 'out.q', 'B52.in_.q'})),
+    ("out.q * exp(-y[1] / 2)", dict(attributes={'y', 'out.q'})),
+    ("out. q + sub  .z * sub . in_.q + out  . q", dict(attributes={'sub.z', 'sub.in_.q', 'out.q'})),
+    ("len(out)", dict(attributes={"out"})),
+    ("asarray([out.q, a]).sum()", dict(attributes={'out.q', 'a'})),
+    ("sub.add_constant(a)", dict(attributes={'sub', 'a'})),
+    ("distance(x)", dict(attributes={'distance', 'x'})),
 ])
 def test_EvalString_variables(eval_context, expression, expected: Dict[str, Set[str]]):
-    """Test method `EvalString.variables()`.
-    """
+    """Test attributes collected during ast visit."""
     expected.setdefault('constants', set())
-    all_required = expected['variables'].union(expected['constants'])
+    all_required = expected['attributes'].union(expected['constants'])
     
     e = EvalString(expression, eval_context)
-    assert e.variables() == expected['variables']
-    assert e.variables(include_const=True) == all_required
+    assert e.variables == expected['attributes']
+    assert e.all_variables == all_required
 
 
 def test_EvalString_enum(eval_context):

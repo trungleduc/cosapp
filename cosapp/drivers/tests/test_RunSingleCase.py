@@ -186,7 +186,7 @@ def test_RunSingleCase_set_values(ExtendedMultiply, hat_case):
     s.run_drivers()
     assert s.K1 == 11.5
 
-    with pytest.raises(TypeError, match="Only variables can be used in mathematical algorithms"):
+    with pytest.raises(ValueError, match="Only variables can be used in mathematical algorithms"):
         d.add_value("inwards", 10.0)
 
     d.add_value("K1", 9.5)
@@ -518,9 +518,9 @@ def test_RunSingleCase_get_problem(ExtendedMultiply):
     m = d.get_problem()
     assert_keys(m.residues, "mult.p_out.x == 40", "mult.p_out.x == 30")
     residue = m.residues["mult.p_out.x == 40"]
-    assert residue.value == Residue.evaluate_residue(s.mult.p_out.x, 40.0)
+    assert residue.value == Residue._evaluate_numerical_residue(s.mult.p_out.x, 40.0)
     residue = m.residues["mult.p_out.x == 30"]
-    assert residue.value == Residue.evaluate_residue(s.mult.p_out.x, 30.0)
+    assert residue.value == Residue._evaluate_numerical_residue(s.mult.p_out.x, 30.0)
 
     # TODO write more tests
     #   - checking case of mixture of design and offdesign equations

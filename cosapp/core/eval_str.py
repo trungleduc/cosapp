@@ -6,44 +6,86 @@ This code is inspired from the OpenMDAO module openmdao.components.exec_comp.
 from __future__ import annotations
 import re
 import numpy
+import ast
 from enum import Enum
 from numbers import Number
 from typing import (
-    Union,Any, Dict, Tuple, FrozenSet,
-    Iterable, Optional, Callable,
+    Union, Any, Dict, Tuple, FrozenSet,
+    Iterable, Optional,
     TYPE_CHECKING,
 )
+from cosapp.ports.port import BasePort
 if TYPE_CHECKING:
     from cosapp.systems import System
 
 
-class ContextLocals(dict):
-    """Sub-set of context attributes.
-    
+class AstVisitor(ast.NodeTransformer):
+    """Visitor of AST python of the string expression to evaluate.
+
+    Convert initial string expression with 'object.attributes' patterns to
+    'object_attributes' relatives allowing to handle them as unique variables
+    without exploring the whole object tree during value update.
+
     Parameters
     ----------
-    context: System
-        System whose attributes are looked up
+    - context : cosapp.systems.System
+        CoSApp System to which variables in expression can be retrieved.
     """
-    def __init__(self, context: System, *args, **kwargs):
-        super().__init__(*args, *kwargs)
-        self.__context = context
+
+    def __init__(self, context: System):
+        """Initialization parameters:
+        ----------
+        - context : cosapp.systems.System
+            CoSApp System to which variables in expression can be retrieved.
+        """
+        self._context = context
+        self._vars = set()
+        self._expr_vars = {}
+
+    def map_attributes(self, attr: str, key: str = None) -> None:
+        """Generic method to reach attribute getter mapping."""
+        key = attr if key is None else key
+        self._expr_vars[key] = (self._context, attr)
+        self._vars.add(attr)
+
+        if attr in self._context.name2variable:
+            var_ref = self._context.name2variable[attr]
+            if isinstance(var_ref.mapping, BasePort):
+                self._expr_vars[key] = (var_ref.mapping, var_ref.key)
+
+    def visit_Attribute(self, node: ast.Attribute) -> Union[ast.Attribute, ast.Name]:
+        """Visit a `Attribute` and return a concatenate ast.Name if possible."""
+        # Determine the longest object.attributes path
+        attr_str = ast.unparse(node)
+        func_attr = ''
+        max_iter = len(attr_str.split("."))
+        i = 0
+        while i < max_iter and not hasattr(self._context, attr_str):
+            split_attr = attr_str.rsplit('.', maxsplit=1)
+            attr_str = split_attr[0]
+            func_attr = ".".join(split_attr[1:])
+            i += 1
+
+        # Collect variables from expression
+        if attr_str and i != max_iter:
+            key = attr_str.replace(".", "_")
+            self.map_attributes(attr_str, key)
+
+            # Return custom node
+            if func_attr:
+                ast_func = ast.parse(f"{key}.{func_attr}").body[0].value
+                return ast_func
+            else:
+                return ast.Name(id=key, ctx=ast.Load())
+
+        return self.generic_visit(node)
+
+    def visit_Name(self, node: ast.Name) -> ast.Name:
+        """Visit a `Name` and return a concatenate ast.Name if possible."""
+        if hasattr(self._context, node.id):
+            self.map_attributes(node.id)
+        return node
     
-    @property
-    def context(self) -> System:
-        """cosapp.systems.System: Context of the locals"""
-        return self.__context
-
-    def __missing__(self, key: Any) -> Any:
-        try:
-            value = getattr(self.__context, key)
-        except AttributeError:
-            raise KeyError(key)
-        else:
-            self[key] = value
-            return value
-
-
 class EvalString:
     """Create a executable statement using an expression string.
 
@@ -250,11 +292,6 @@ class EvalString:
                 names=["factorial", "erf", "erfc"]
             )
 
-        # Add residues helper function
-        from cosapp.core.numerics.residues import Residue
-        mapping["evaluate_residue"] = Residue.evaluate_residue
-        mapping["residue_norm"] = Residue.residue_norm
-
         return mapping
 
     def __init__(self, expression: Any, context: System) -> None:
@@ -268,34 +305,46 @@ class EvalString:
             raise TypeError(
                 f"Object of type {cname!r} is not a valid context to evaluate expression '{expression}'."
             )
+        self.__context = context
 
-        self.__str = EvalString.string(expression)  # type: str
+        self.__str = self.string(expression)  # type: str
         if len(self.__str) == 0:
             raise ValueError("Can't evaluate empty expressions")
 
-        code = compile(self.__str, "<string>", "eval")  # type: CodeType
+        #  Visit expression from its AST 
+        ast_from_str = ast.parse(self.__str).body[0]
+        if not isinstance(ast_from_str, (ast.Expression, ast.Expr)):
+            raise SyntaxError(f"Expression {self.__str} must be in a correct format.")
+        ast_visitor = AstVisitor(context)
+        ast_visited = ast.fix_missing_locations(ast_visitor.visit(ast_from_str.value))
+        code = compile(ast.Expression(ast_visited), "<string>", "eval")  # type: CodeType
 
         # Look for the requested variables
         global_dict = self.available_symbols()
-        self.__locals = local_dict = ContextLocals(context)  # type: ContextLocals
+        self.__locals = {}
+
+        # Modified variable names after passing in the ast visitor
+        self.__expr_vars = ast_visitor._expr_vars
+        self.__const_vars = frozenset({key.replace(".", "_"): value for key, value in context.properties.items()})
+
+        # Original variables names from the expression
+        self.__all_vars = frozenset(ast_visitor._vars)
+        self.__unconst_vars = frozenset(set(self.__all_vars) - set(context.properties))
+
         if isinstance(expression, Enum):
             etype = type(expression)
             global_dict = global_dict.copy()
             global_dict[etype.__name__] = etype
-        value = eval(code, global_dict, local_dict)
-        
-        self.__attr = None  # type: FrozenSet[str]
-        self.__vars = None  # type: FrozenSet[str]
-        
-        constants = context.properties
+
         self.__constant = False
-        if set(local_dict).issubset(constants):
+        if set(self.__expr_vars).issubset(self.__const_vars):
             self.__constant = True
         else:
-            required = self.variables(include_const=True)
-            self.__constant = required and required.issubset(constants)
+            required = set(self.__expr_vars)
+            self.__constant = required and required.issubset(self.__const_vars)
 
         if self.__constant:
+            value = eval(code, global_dict, self.locals)
             # simply return constant value
             eval_impl = lambda: value
         else:            
@@ -341,10 +390,9 @@ class EvalString:
     @property
     def locals(self) -> Dict[str, Any]:
         """Dict[str, Any]: Context attributes required to evaluate the string expression."""
-        # Read attribute values from context object
-        eval_context = self.eval_context
-        for key in self.__locals:
-            self.__locals[key] = getattr(eval_context, key)
+        # Read attribute values from context or from variable reference mapping of the context
+        for key, (port, name) in self.__expr_vars.items():
+            self.__locals[key] = getattr(port, name)
         return self.__locals
 
     @property
@@ -355,7 +403,7 @@ class EvalString:
     @property
     def eval_context(self) -> System:
         """cosapp.systems.System: Context of string expression evaluation."""
-        return self.__locals.context
+        return self.__context
 
     @property
     def constant(self) -> bool:
@@ -374,37 +422,20 @@ class EvalString:
         """
         return self.__eval()
 
-    def variables(self, include_const=False) -> FrozenSet[str]:
-        """Extracts all variables required for the evaluation of the expression,
-        with or without system constant properties.
-        
-        Parameters
-        ----------
-        include_const [bool, optional]:
-            Determines whether or not read-only properties should be included (default: `False`).
+    @property
+    def variables(self) -> FrozenSet[str]:
+        """FrozenSet[str]: Variables without system constant properties required for the evaluation of the expression."""
+        return self.__unconst_vars
 
-        Returns
-        -------
-        FrozenSet[str]:
-            Variable names as a set of strings
-        """
-        if self.__vars is None:
-            from cosapp.systems import System
-            from cosapp.ports.port import BasePort
-            names = set()
-            expression = str(self)
-            for key, obj in self.__locals.items():
-                if isinstance(obj, (System, BasePort)):
-                    names.update(f"{key}{tail}"
-                        for tail in re.findall(f"{key}(\.[\w\.]*)+", expression)
-                    )
-                else:
-                    names.add(key)
-            self.__attr = frozenset(names)
-            self.__vars = frozenset(
-                names - set(self.eval_context.properties)
-            )
-        return self.__attr if include_const else self.__vars
+    @property
+    def all_variables(self) -> FrozenSet[str]:
+        """FrozenSet[str]:  All variables required for the evaluation of the expression."""
+        return self.__all_vars
+
+    @property
+    def constants(self) -> FrozenSet[str]:
+        """FrozenSet[str]: System constant properties required for the evaluation of the expression."""
+        return self.__all_vars - self.__unconst_vars
 
 
 class AssignString:
@@ -426,7 +457,7 @@ class AssignString:
             self.__shape = None
             self.__dtype = type(value)
         self.__context = context
-        self.__lhs_vars = lhs.variables()
+        self.__lhs_vars = lhs.variables
         self.__rhs_vars = frozenset()
         self.__locals = lhs.locals.copy()
         self.__locals.update({"rhs_value": value, context.name: context})
@@ -486,7 +517,7 @@ class AssignString:
                 sides = EvalString(f"({lhs}, array({rhs}, dtype={self.__dtype}))", context)
         self.__sides = sides
         self.__constant = erhs.constant
-        self.__rhs_vars = erhs.variables()
+        self.__rhs_vars = erhs.variables
         self.__raw_sides[1] = raw_rhs
 
     @property

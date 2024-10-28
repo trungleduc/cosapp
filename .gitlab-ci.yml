@@ -5,7 +5,7 @@ stages:
   - deploy
 
 variables:
-  COSAPP_DEP: jsonschema numpy<2 scipy pandas wrapt pytest<8.1 jinja2 pyfmi pythonfmu
+  COSAPP_DEP: jsonschema numpy<2 scipy pandas wrapt pytest<8.1 jinja2 pyfmi pythonfmu asv_runner
   USER: "cosapp_test"
 
 .job_rules:

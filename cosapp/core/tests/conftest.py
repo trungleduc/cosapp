@@ -4,7 +4,6 @@ import scipy
 
 from cosapp.systems import System
 from cosapp.ports import Port
-from cosapp.core.numerics.residues import Residue
 
 # <codecell>
 
@@ -16,6 +15,9 @@ class FooBar(System):
     def setup(self):
         self.add_outward('z')
         self.add_input(BogusPort, 'in_', variables={'q': 5.})
+
+    def add_constant(self, x):
+        return 5.0 + x
 
 class Bogus(System):
     def setup(self):
@@ -29,6 +31,9 @@ class Bogus(System):
         self.add_child(FooBar('sub'))
         self.add_child(FooBar('B52'))
         self.add_output(BogusPort, 'out', variables={'q': 0.5})
+    
+    def distance(self, x):
+        return numpy.sqrt(x)
 
 @pytest.fixture(scope="function")
 def eval_context():
@@ -68,11 +73,6 @@ def ufunc_test_data():
                 'x': numpy.random.random(6),
                 'y': numpy.random.random(6),
             },
-        },
-        'evaluate_residue': {
-            'expr': 'evaluate_residue(x, y)',
-            'func': Residue.evaluate_residue,
-            'args': {'x': 25., 'y': -12.},
         },
         'fmax': {
             'expr': 'fmax(x, y)',
@@ -181,11 +181,6 @@ def ufunc_test_data():
                 'y': numpy.random.random(6) + 1.0,
             },
         },
-        'residue_norm': {
-            'expr': 'residue_norm(x, y)',
-            'func': Residue.residue_norm,
-            'args': {'x': 25., 'y': -12.},
-            },
         'round': {
             'expr': 'round(x, y)',
             'func': numpy.round,
