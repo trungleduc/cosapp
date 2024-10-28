@@ -281,6 +281,7 @@ class BaseRecorder(abc.ABC):
         for expression in set(self.__includes):
             try:
                 evaluable = EvalString(expression, context)
+                evaluable.eval()
             except:
                 includes.append(expression)
             else:

@@ -1,0 +1,9 @@
+name: cosapp-benchs
+channels:
+  - conda-forge
+dependencies:
+  - python<3.12
+  - numpy<2
+  - pytest<8.1
+  - pythonfmu<0.6.3 
+  - nbconvert

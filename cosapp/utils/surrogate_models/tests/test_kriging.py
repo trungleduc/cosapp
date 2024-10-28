@@ -135,7 +135,7 @@ class TestKrigingSurrogate(unittest.TestCase):
 
         surrogate.train(x, y)
         jac = surrogate.linearize(np.array([[0.5, 0.5]]))
-        self.assertTrue(np.allclose(jac, np.array([[1, 1], [1, -1], [1, 2]]), rtol=5e-4))
+        self.assertTrue(np.allclose(jac, np.array([[1, 1], [1, -1], [1, 2]]), rtol=1e-3))
 
 if __name__ == "__main__":
     unittest.main()

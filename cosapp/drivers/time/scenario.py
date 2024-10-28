@@ -88,7 +88,7 @@ class TimeAssignString:
             raise TypeError(
                 f"right-hand side must be a callable function; got {rhs!r}"
             )
-        Boundary.parse(context, lhs, inputs_only=True)  # checks that variable is valid
+        Boundary(context, lhs, inputs_only=True)  # checks that variable is valid
         fname = f"BC{id(rhs)}"
         assignment = f"{context.name}.{lhs} = {fname}(t)"
         self.__locals = {fname: rhs, context.name: context, 't': 0}
@@ -325,13 +325,13 @@ class Scenario:
             Free lhs and its evaluation context, usable in `AssignString`.
         """
         context = self.__context
-        info = Boundary.parse(context, lhs, inputs_only=inputs_only)  # checks that variable is valid
+        info = Boundary(context, lhs, inputs_only=inputs_only)  # checks that variable is valid
 
         if info.port.is_output:
             return (lhs, context)
 
         varname = natural_varname(info.basename)
-        variable = info.ref
+        variable = info.context.name2variable[info.basename]
         try:
             alias = context.input_mapping[varname]
         except KeyError:

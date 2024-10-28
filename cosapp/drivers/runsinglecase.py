@@ -252,7 +252,7 @@ class RunSingleCase(IterativeCase):
 
         init = {}
         for varname, value in modifications.items():
-            info = Boundary.parse(owner, varname)  # checks that variable is valid
+            info = Boundary(owner, varname, inputs_only=False)  # checks that variable is valid
             if info.port.is_input:
                 self.__case_values.append(AssignString(varname, value, owner))
             else:

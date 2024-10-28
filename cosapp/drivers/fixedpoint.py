@@ -142,7 +142,7 @@ class FixedPointSolver(Driver):
 
             if actual is not boundary:
                 # Update already existing boundary with new default value and mask
-                actual.set_default_value(boundary.default_value, boundary.mask)
+                actual.update_default_value(boundary.default_value, boundary.mask)
 
     def get_init(self) -> Dict[str, Any]:
         """Get the initial values used by the solver.

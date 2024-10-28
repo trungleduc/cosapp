@@ -2173,7 +2173,7 @@ def test_System_add_unknowns(DummyFactory):
     assert unknown.max_abs_step == np.inf
     assert unknown.lower_bound == -10
     assert unknown.upper_bound == np.inf
-    assert unknown.mask is None
+    assert not hasattr(unknown, "mask")
 
     m: System = DummyFactory(
         name="m",
@@ -2194,7 +2194,7 @@ def test_System_add_unknowns(DummyFactory):
     assert unknown.max_abs_step == 1e6
     assert unknown.lower_bound == 0
     assert unknown.upper_bound == 1e8
-    assert unknown.mask is None
+    assert not hasattr(unknown, "mask")
 
     with pytest.raises(ValueError, match="Only variables in input ports can be used as boundaries"):
         DummyFactory("dummy", base=Multiply1, unknowns=get_args("p_out.x"))

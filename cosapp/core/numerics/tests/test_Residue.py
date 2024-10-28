@@ -126,6 +126,11 @@ def test_Residue___init__Error(system, args_kwargs, expected):
     (get_args("c == [1, 0]", reference=[1, 10]), "c == [1, 0]", [0, 0.2], [1, 10]),
     (get_args("c == [1, 0]", reference="norm"), "c == [1, 0]", [0, 2], [1, 1]),
     (get_args("[a, b[0]] == [0, 2]", "weird"), "weird", [1, -1], 1),
+    (get_args("c * array([7.1e-12, -1e9]) == array([0, 0])", "foo"), "foo", np.r_[7.1e-12, -2e9], 1),
+    (get_args("c * array([7.1e-12, -1e9]) == array([0, 0])", "foo", reference="norm"), "foo", np.r_[7.1, -2], np.r_[1.e-12, 1.e+09]),
+    (get_args("c * array([0.4, -1.]) == array([-0.3, -4])", "foo", reference=10.), "foo", np.r_[0.07, 0.2], 10.),
+    (get_args("c * array([0.4, -1.]) == array([-0.3, -4])", "foo", reference=np.r_[7., 20.]), "foo" , np.r_[0.1, 0.1], np.r_[7., 20.] ),
+    (get_args("c * array([0.4, -1.]) == array([-0.3, -4])", "foo", reference="norm"), "foo" , np.r_[7, 2], np.r_[0.1, 1.]),
 ])
 def test_Residue___init__(system, args_kwargs, name, value, reference):
     args, kwargs = args_kwargs
@@ -188,14 +193,27 @@ def test_Residue_residue_norm_single(magnitude, factor):
     ((-2.5, -4), 1.5),
     ((4., 5., 4.), -0.25),
     ((np.r_[4., 0.4, -2.], np.r_[5., -0.3, -4]), np.r_[-1, 0.7, 2]),
-    ((np.r_[4., 0.4, -2.], np.r_[5., -0.3, -4], "norm"), np.r_[-1, 7, 2]),
     ((np.r_[4., 0.4, -2.], np.r_[5., -0.3, -4], 10.), np.r_[-0.1, 0.07, 0.2]),
     ((np.r_[4., 0.4, -2.], np.r_[5., -0.3, -4], np.r_[2., 7., 20.]), np.r_[-0.5, 0.1, 0.1]),
     ((np.r_[4., 7.1e-12, -2e9], np.r_[0, 0, 0]), np.r_[4, 7.1e-12, -2e9]),
-    ((np.r_[4., 7.1e-12, -2e9], np.r_[0, 0, 0], "norm"), np.r_[4, 7.1, -2]),
 ])
-def test_Residue_evaluate_residue(args, expected):
-    assert Residue.evaluate_residue(*args) == pytest.approx(expected, rel=1e-14)
+def test_Residue__evaluate_numerical_residue(args, expected):
+    assert Residue._evaluate_numerical_residue(*args) == pytest.approx(expected, rel=1e-14)
+
+
+@pytest.mark.parametrize("args, expected", [
+    (([4., 0.4, -2.], [5., -0.3, -4]), [-1, 0.7, 2]),
+    (([4., 0.4, -2.], [5., -0.3, -4], 10.), [-0.1, 0.07, 0.2]),
+    (([4., 0.4, -2.], [5., -0.3, -4], [2., 7., 20.]), [-0.5, 0.1, 0.1]),
+    (([4., 7.1e-12, -2e9], [0, 0, 0]), [4, 7.1e-12, -2e9]),
+    (((4., 0.4, -2.), (5., -0.3, -4)), [-1, 0.7, 2]),
+    (((4., 0.4, -2.), (5., -0.3, -4), 10.), [-0.1, 0.07, 0.2]),
+    (((4., 0.4, -2.), (5., -0.3, -4), (2., 7., 20.)), [-0.5, 0.1, 0.1]),
+    (((4., 0.4, -2.), (5., -0.3, -4), [2., 7., 20.]), [-0.5, 0.1, 0.1]),
+    (((4., 7.1e-12, -2e9), (0, 0, 0)), [4, 7.1e-12, -2e9]),
+])
+def test_Residue__evaluate_iterable_residue(args, expected):
+    assert Residue._evaluate_iterable_residue(*args) == pytest.approx(expected, rel=1e-14)
 
 
 @pytest.mark.parametrize("args_kwargs", [

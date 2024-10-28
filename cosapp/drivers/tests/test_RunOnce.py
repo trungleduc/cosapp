@@ -101,12 +101,12 @@ def test_RunOnce_set_init(ExtendedMultiply, hat_case):
     assert_all_type(d.initial_values, Boundary)
     value = d.initial_values['K1']
     assert value.default_value == 11.5
-    assert value.mask is None
+    assert not hasattr(value, "mask")
 
     s.run_drivers()
     assert s.K1 == 11.5
 
-    with pytest.raises(TypeError):
+    with pytest.raises(ValueError):
         d.set_init({'inwards': 10.})
 
     d.set_init({'K1': 9.5})

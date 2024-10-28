@@ -22,7 +22,7 @@ def test_ScipySolverHybr_get_residues():
     rname = "p_out.x == 100"
     residues = solver.problem.residues
     assert set(residues) == {rname}
-    assert residues[rname].value == Residue.evaluate_residue(system.p_out.x, 100.0)
+    assert residues[rname].value == Residue._evaluate_numerical_residue(system.p_out.x, 100.0)
 
 
 @pytest.mark.parametrize("method", NonLinearMethods)
@@ -220,7 +220,7 @@ def test_ScipySolverBroyden1_get_residues():
     rname = "p_out.x == 100"
     residues = solver.problem.residues
     assert set(residues) == {rname}
-    assert residues[rname].value == Residue.evaluate_residue(s.p_out.x, 100.0)
+    assert residues[rname].value == Residue._evaluate_numerical_residue(s.p_out.x, 100.0)
 
 
 def test_ScipySolverBroyden1_singlept():

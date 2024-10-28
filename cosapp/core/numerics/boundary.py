@@ -1,21 +1,199 @@
 from __future__ import annotations
+from ast import Num
 from numbers import Number
-from typing import Any, Dict, Optional, Union, Tuple, Type, TYPE_CHECKING
-from types import SimpleNamespace
+import stat
+from typing import Any, Dict, Optional, Collection, Union, Tuple, Type, NamedTuple, T, MutableSequence, TYPE_CHECKING
 
 import abc
 import copy
 import numpy
 
 from cosapp.core.eval_str import EvalString
-from cosapp.core.variableref import VariableReference
+from cosapp.core.variableref import VariableReference, MaskedVariableReference
 from cosapp.ports.port import BasePort
 from cosapp.ports.exceptions import ScopeError
-from cosapp.utils.parsing import get_indices
 from cosapp.utils.helpers import check_arg
+from cosapp.utils.naming import natural_varname
+from cosapp.utils.parsing import find_selector
 
 if TYPE_CHECKING:
     from cosapp.systems import System
+
+
+
+class AttrRef:
+    """Attribute Reference for scalar object.
+
+    In addition to System and its derivatives, manage also complex object 
+    which could be included in the evaluation context.
+
+    Parameters
+    ----------
+    obj: cosapp.systems.System
+        System in which the boundary name is defined.
+    key: str
+        Name of the boundary
+    """
+
+    def __init__(self, obj: System, key: str) -> None:
+        self._obj: Union[BasePort, Any]
+
+        name = key
+        base = ""
+        if "." in key:
+            base, key = key.rsplit('.', maxsplit=1)
+            cc = compile("obj."+base, "str", "eval")
+            obj = eval(cc, {"obj": obj})
+
+        from cosapp.systems import System
+        if isinstance(obj, System):
+            self._obj = obj.name2variable[key].mapping
+        else:
+            self._obj = obj
+
+        if isinstance(self._obj, dict):
+            raise ValueError("Only variables can be used in mathematical algorithms")
+
+        self._key: str = key
+        self._base: str = base
+        self._name: str = natural_varname(name)
+
+    @property
+    def value(self) -> Number:
+        return getattr(self._obj, self._key)
+
+    @value.setter
+    def value(self, val: Number) -> None:
+        setattr(self._obj, self._key, val)
+
+    def __copy__(self) -> AttrRef:
+        return AttrRef(self._obj, self._key)
+
+
+class MaskedAttrRef(AttrRef):
+    """Masked Attribute Reference for MutableSequence-like object.
+
+    Include a mask applying to an evaluation context vector.
+
+    Parameters
+    ----------
+    obj: cosapp.systems.System
+        System in which the boundary name is defined.
+    key: str
+        Name of the boundary
+    mask: numpy.ndarray
+        Mask of the values in the vector boundary.
+    """
+
+    def __init__(self, obj: System, key: str, mask: numpy.ndarray) -> None:
+        super().__init__(obj, key)
+        self.set_attributes(mask)
+
+    def set_attributes(self, mask: numpy.ndarray) -> None:
+        self._mask = numpy.asarray(mask)
+        self._mask_idx = self._mask.nonzero()[0]
+
+        array = getattr(self._obj, self._key)
+        self._ref_shape = (len(array),)
+        self._ref_size = len(array)
+
+    @property
+    def value(self) -> MutableSequence:
+        obj = getattr(self._obj, self._key)
+        return [obj.__getitem__(i) for i in self._mask_idx]
+
+    @value.setter
+    def value(self, val: MutableSequence):
+        obj = getattr(self._obj, self._key)
+        for i, new in zip(self._mask_idx, val):
+            obj.__setitem__(i, new)
+
+    def mask(self, mask: numpy.ndarray) -> None:
+        self._mask[:] = mask
+        self._mask_idx = mask.nonzero()[0]
+
+    def __copy__(self) -> MaskedAttrRef:
+        return MaskedAttrRef(self._obj, self._key, self._mask.copy())
+    
+    @classmethod
+    def make_from_attr_ref(
+        cls: MaskedAttrRef,
+        attr_ref: AttrRef,
+        obj: Union[BasePort, Any],
+        name: str,
+        mask: numpy.ndarray
+    ) -> MaskedAttrRef:
+        mask_ref = attr_ref.__new__(cls, obj, name, mask)
+        for key, value in vars(attr_ref).items():
+            setattr(mask_ref, key, value)
+        mask_ref.set_attributes(mask)
+        return mask_ref
+
+
+class NumpyMaskedAttrRef(AttrRef):
+    """ Masked Attribute Reference for numpy arrays.
+
+    Include a mask applying to an evaluation context vector.
+
+    Parameters
+    ----------
+    obj: cosapp.systems.System
+        System in which the boundary name is defined.
+    key: str
+        Name of the boundary
+    mask: numpy.ndarray
+        Mask of the values in the vector boundary.
+    """
+
+    def __init__(self, obj: System, key: str, mask: numpy.ndarray) -> None:
+        super().__init__(obj, key)
+        self.set_attributes(mask)
+
+    def set_attributes(self, mask: numpy.ndarray) -> None:
+        self._mask = numpy.asarray(mask)
+        self._mask_idx = self._mask.nonzero()[0]
+
+        array = getattr(self._obj, self._key)
+        self._ref_shape = array.shape
+        self._ref_size = array.size
+
+    @property
+    def value(self) -> numpy.ndarray:
+        return getattr(self._obj, self._key)[self._mask]
+
+    @value.setter
+    def value(self, val: Union[numpy.ndarray, MutableSequence]):
+        getattr(self._obj, self._key)[self._mask] = numpy.asarray(val)
+    
+    def mask(self, mask: numpy.ndarray) -> None:
+        self._mask[:] = mask
+
+    def __copy__(self) -> NumpyMaskedAttrRef:
+        return NumpyMaskedAttrRef(self._obj, self._key, self._mask.copy())
+
+    @classmethod
+    def make_from_attr_ref(
+        cls: NumpyMaskedAttrRef,
+        attr_ref: AttrRef,
+        obj: Union[BasePort, Any],
+        name: str,
+        mask: numpy.ndarray
+    ) -> NumpyMaskedAttrRef:
+        mask_ref = attr_ref.__new__(cls, obj, name, mask)
+        for key, value in vars(attr_ref).items():
+            setattr(mask_ref, key, value)
+        mask_ref.set_attributes(mask)
+        return mask_ref
+
+
+class MaskedVarInfo(NamedTuple):
+    basename: str
+    selector: str = ""
+    mask: Optional[numpy.ndarray] = None
+
+    @property
+    def fullname(self) -> bool:
+        return f"{self.basename}{self.selector}"
 
 
 class Boundary:
@@ -41,87 +219,230 @@ class Boundary:
         default: Union[Number, numpy.ndarray, None] = None,
         inputs_only: bool = True,
         **kwargs,
-    ):
+    ) -> None:
         super().__init__(**kwargs)  # for collaborative inheritance
-        self.__info = info = Boundary.parse(context, name, mask, inputs_only)
 
         self._context = context  # type: cosapp.systems.System
         self._default_value = None  # type: Union[Number, numpy.ndarray, None]
 
-        self.mask = info.mask
-        self.set_default_value(default, self.mask)
+        basename, selector = Boundary.parse_expression(name)
+        value, mask = Boundary.create_mask(context, basename, selector, mask)
+        self._name_info = MaskedVarInfo(basename, selector, mask)
+        self._ref, self._boundary_impl, self._is_scalar = Boundary.create_attr_ref(context, basename, value, mask)
+        self.find_port(inputs_only)
+
+        # Set default value if any
+        if default is not None:
+            self.update_default_value(default)
+    
+    @property
+    def is_scalar(self) -> bool:
+        """Returns whether this boundary is scalar or not."""
+        return self._is_scalar
 
     def copy(self) -> Boundary:
         boundary = copy.copy(self)
         boundary._default_value = copy.copy(self._default_value)
-        boundary.__info = copy.copy(self.__info)
-        boundary.__info.mask = copy.copy(self.mask)
+        boundary._ref = self._ref.__copy__()
         return boundary
-
+    
     @staticmethod
-    def parse(
-        context: System,
-        name: str,
-        mask: Optional[numpy.ndarray] = None,
-        inputs_only: bool = False,
-    ) -> SimpleNamespace:
-        """
-        Parse port and variable name from a name and its evaluation context.
-        Also checks that the variable belongs to an input port.
+    def parse_expression(expression: str) -> MaskedVarInfo:
+        """Decompose a variable specification into its base name and selector.
 
         Parameters
         ----------
-        - context [cosapp.systems.System]:
-            System in which the boundary is defined.
-        - name [str]:
-            Name of the boundary
-        - mask [numpy.ndarray[bool] or None, optional]:
-            Mask to apply on the variable; default is None (i.e. no mask)
-        - inputs_only [bool, optional]:
-            If `True`, output variables are regarded as invalid. Default is `False`.
+        expression : str
+            Variable specification (variable name + optional array mask, if required)
 
         Returns
         -------
-        info: SimpleNameSpace
-            Structure containing fields `varname`, `fullname`, `port` and `mask`.
+        - str: variable name
+        - str: array selector
         """
-        from cosapp.ports.port import BasePort
-        if not isinstance(name, str):
-            raise TypeError(f"Variable name {type(name).__qualname__!r} is not a string.")
+        check_arg(expression, 'expression', str)
+        expression = natural_varname(expression)
 
-        info = get_indices(context, name)
-        ref = context.name2variable[info.basename]
-        container = ref.mapping
-
-        if not isinstance(container, BasePort):
-            raise TypeError(
-                f"Only variables can be used in mathematical algorithms; got {info.basename!r} in {context.name!r}"
-            )
-        if inputs_only and not container.is_input:
-            raise ValueError(
-                f"Only variables in input ports can be used as boundaries; got {info.basename!r} in {container.contextual_name!r}."
-            )
-        # Test if type and scope are compatible with boundary status
         try:
-            container.validate(ref.key, ref.value)
-        except ScopeError:  # Type error should still be raised
-            if context is not container.owner:
-                # Only owner can set its variables
-                raise ScopeError(
-                    f"Trying to set variable {name!r} out of your scope through a boundary."
-                )
+            basename, selector = find_selector(expression)
+        except ValueError as error:
+            raise SyntaxError(error)
 
-        return SimpleNamespace(
-            name = info.fullname,  # may differ from `basename`, if masked
-            varname = ref.key,
-            basename = info.basename,
-            port = container,
-            mask = mask if mask is not None else info.mask,
-            ref = ref,
-        )
+        return basename, selector
+    
+    @staticmethod
+    def create_mask(
+        system: System,
+        basename: str,
+        selector: str,
+        mask: Optional[numpy.ndarray] = None
+    ) -> Tuple[Optional[Union[Number, Collection]], Optional[numpy.ndarray]]:
+        """Evaluate the basename expression within its context 
+        and generate a mask if a selector is specified in the fullname expression.
+
+        Parameters
+        ----------
+        - system: System
+            System to which variable belongs.
+        - basename: str
+            Variable name without any optional array mask.
+        - selector: str
+            Expression corresponding to an array mask.
+        - mask: Optional[numpy.ndarray]
+            Imposed mask to apply on the variable; default is None (i.e. no mask).
+            
+        Returns
+        -------
+        Optional[Union[Number, Collection]]
+            Value of the context variable.
+        Optional[numpy.ndarray]
+            Imposed or generated mask to apply on the variable.
+        """
+
+        # evaluate expression without mask if any
+        try:
+            value = eval(f"s.{basename}", {}, {"s": system})
+        except AttributeError as error:
+            error.args = (f"{basename!r} is not known in {system.name}",)
+            raise
+        except Exception as error:
+            error.args = (f"Can't evaluate {basename!r} in {system.name}",)
+            raise
+
+        # get or create mask
+        if mask is not None:
+            check_arg(mask, f"mask for variable {system.name!r}", (type(None), list, tuple, numpy.ndarray))
+            if isinstance(value, Number):
+                raise TypeError("A mask cannot apply on a scalar.")
+
+            return value, numpy.asarray(mask)
+
+        if selector:
+            # Check value is an array
+            if isinstance(value, numpy.ndarray) or Boundary.is_mutable_sequence(value):
+                if isinstance(value, numpy.ndarray) and not ((numpy.issubdtype(value.dtype, numpy.number) or value.size > 1)):
+                    raise ValueError(
+                            f"Only non-empty numpy arrays can be partially selected; got {value}."
+                        )
+                elif Boundary.is_mutable_sequence(value) and not len(value) > 1:
+                    raise ValueError(
+                            f"Only non-empty MutableSequence-like arrays can be partially selected; got {value}."
+                        )
+            else:
+                raise TypeError(
+                        f"Only non-empty arrays can be partially selected; got {type(value)}."
+                    )
+
+            # Set mask from selector string
+            mask = numpy.zeros_like(value, dtype=bool)
+            try:
+                exec(f"mask{selector} = True", {}, {"mask": mask})
+            except (SyntaxError, IndexError) as error:
+                varname = f"{system.name}.{basename}"
+                error.args = (
+                    f"Invalid selector {selector!r} for variable {varname!r}: {error!s}",
+                )
+                raise
+
+        elif isinstance(value, numpy.ndarray) or Boundary.is_mutable_sequence(value):
+            mask = numpy.ones_like(value, dtype=bool)
+
+        return value, mask
+
+    @staticmethod
+    def is_mutable_sequence(value: Any) -> bool:
+        """Determine if an object is MutableSequence-like."""
+        mandatory_attrs = ["__getitem__", "__setitem__", "__len__"]
+        return all([hasattr(value, attr) for attr in mandatory_attrs])
+
+    @staticmethod
+    def create_attr_ref(
+        context: System,
+        basename: str,
+        value: Optional[Union[Number, Collection]],
+        mask: Optional[numpy.ndarray] = None
+    ) -> Tuple[Union[AttrRef, NumpyMaskedAttrRef, MaskedAttrRef], AbstractBoundaryImpl, bool]:
+        """
+        Returns an `AttrRef`, `MaskedAttrRef`, or ǸumpyMaskedAttrRef` object from a name and its evaluation context.
+        The `NumpyMaskedAttrRef` derives from `AttrRef` if the context variable refers to a numpy.array and
+        `MaskedAttrRef` for a variable referring to an object similar to a MutableSequence.
+        In the two latter cases, a mask may be applied on value.
+
+        Parameters
+        ----------
+        - context: System
+            System in which the boundary is defined.
+        - basename: str
+            Name of the boundary without its mask if any.
+        - value: Optional[Union[Number, Collection]]
+            Value of the context variable.
+        - mask: Optional[numpy.ndarray]
+            Mask to apply on the variable; default is None (i.e. no mask).
+
+        Returns
+        -------
+        Union[AttrRef, NumpyMaskedAttrRef, MaskedAttrRef]
+            (Masked) Attribute Reference object.
+        AbstractBoundaryImpl
+            Object containing methods specific according to the variable type.
+        bool
+            Specify if the boundary value is a scalar.
+        """
+
+        if mask is None:
+            if value is None:
+                return AttrRef(context, basename), UndefinedBoundaryImpl(), False
+            elif isinstance(value, Number):
+                return AttrRef(context, basename), ScalarBoundaryImpl(), True
+        else:
+            if isinstance(value, numpy.ndarray):
+                return NumpyMaskedAttrRef(context, basename, mask), NumpyBoundaryImpl(), False
+            elif Boundary.is_mutable_sequence(value):
+                return MaskedAttrRef(context, basename, mask), MutableSeqBoundaryImpl(), False
+        
+        raise TypeError("Type of evaluated expression is incompatible as Boundary object handled type.")
+
+    def find_port(self, inputs_only: bool = False) -> None:
+        """
+        Find port associated to its `AttrRef`.
+        In the case of a complex object, the port containing it is retrieved and checks.
+
+        Parameters
+        ----------
+        - inputs_only [bool, optional]:
+            If `True`, output variables are regarded as invalid. Default is `False`.
+        """
+        base = self._ref._base
+        basekey = self._ref._key
+        obj = self._ref._obj
+        if not isinstance(obj, BasePort):
+            for i in range(len(base.split("."))):
+                if base in self._context.name2variable:
+                    obj = self._context.name2variable[base].mapping
+                    break
+                else:
+                    base, basekey = base.rsplit('.', maxsplit=1)
+
+        if not isinstance(obj, BasePort):
+            raise TypeError(f"Invalid port; got {type(obj)}")
+        self._port = port = obj
+
+        if not isinstance(self._ref.value, (Number, numpy.ndarray, type(None))):
+            if not Boundary.is_mutable_sequence(self._ref.value):
+                raise TypeError(
+                    f"Only numerical variables can be used in mathematical algorithms; got {self.basename!r} in {self.context.name!r}"
+                )
+        if inputs_only and not port.is_input:
+            raise ValueError(
+                f"Only variables in input ports can be used as boundaries; got {self.basename!r} in {port.contextual_name!r}."
+            )
+        if port.out_of_scope(basekey):
+            if self._context is not port.owner:
+                # Only owner can set its variables
+                raise ScopeError(f"Trying to set variable {self._ref._name!r} out of your scope through a boundary.")
 
     def __str__(self) -> str:
-        return str(self.default_value)
+        return str(self.value)
 
     def __repr__(self) -> str:
         return f"{self.name} := {self!s}"
@@ -134,17 +455,17 @@ class Boundary:
     @property
     def port(self) -> BasePort:
         """BasePort: port containing the boundary."""
-        return self.__info.port
+        return self._port
 
     @property
     def name(self) -> str:
         """str : Contextual name of the boundary."""
-        return self.__info.name
+        return self._name_info.fullname
 
     @property
     def basename(self) -> str:
         """str : Contextual name of the boundary."""
-        return self.__info.basename
+        return self._name_info.basename
 
     def contextual_name(self, context: Optional[System] = None) -> str:
         """str : Contextual name of the boundary, relative to `context`.
@@ -157,70 +478,19 @@ class Boundary:
         return f"{path}.{self.name}"
 
     @property
-    def ref(self) -> VariableReference:
+    def ref(self) -> Union[VariableReference, MaskedVariableReference]:
         """VariableReference : variable reference accessed by the boundary."""
-        return self.__info.ref
+        return self._ref
+
+    @property
+    def variable_reference(self) -> str:
+        """str : name of the variable accessed by the boundary."""
+        return self.context.name2variable[self.basename]
 
     @property
     def variable(self) -> str:
         """str : name of the variable accessed by the boundary."""
-        return self.__info.varname
-
-    @property
-    def mask(self) -> Optional[numpy.ndarray]:
-        """numpy.ndarray or None : Mask of the values in the vector boundary."""
-        return self.__info.mask
-
-    @mask.setter
-    def mask(self, mask: Union[None, numpy.ndarray]) -> None:
-        check_arg(mask, f"mask for variable {self.name!r}", (type(None), list, tuple, numpy.ndarray))
-        if mask is not None:
-            mask = numpy.asarray(mask)
-            value_array = numpy.asarray(self.ref.value)
-            if value_array.ndim == 0:
-                if mask.size != 1:
-                    raise ValueError(
-                        "Mask for variable {!r} should have size 1; got {} elements.".format(
-                            self.name, mask.size
-                        )
-                    )
-                if numpy.all(mask):
-                    mask = None
-            elif mask.shape != value_array.shape:
-                raise ValueError(
-                    "Mask shape {} for variable {!r} is wrong; expected {}.".format(
-                        mask.shape, self.name, value_array.shape
-                    )
-                )
-        self.__info.mask = mask
-
-    @property
-    def value(self) -> Union[Number, numpy.ndarray]:
-        """Number or numpy.ndarray: Current value of the boundary."""
-        # TODO: incoherent behaviour
-        # should be equivalent to:
-        # return value if mask is None else value[mask]
-        value = self.__info.ref.value
-        mask = self.mask
-        if mask is None:
-            return value
-        if numpy.any(mask):
-            return value[mask]
-        return numpy.empty(0)
-
-    @value.setter
-    def value(self, new: Union[Number, numpy.ndarray]) -> None:
-        ref = self.__info.ref
-        mask = self.mask
-
-        if mask is None:
-            if not numpy.array_equal(ref.value, new):
-                ref.value = new
-                self.touch()
-
-        elif numpy.any(mask) and not numpy.array_equal(ref.value[mask], new):
-            ref.value[mask] = new
-            self.touch()
+        return self._ref._key
 
     def touch(self) -> None:
         """Set owner port as 'dirty'."""
@@ -228,130 +498,148 @@ class Boundary:
         self.port.owner.touch()
 
     @property
-    def default_value(self) -> Union[Number, numpy.ndarray, None]:
-        """Number, numpy.ndarray or None: default value for the boundary."""
-        if self._default_value is None or self.mask is None:
-            return self._default_value
-        else:
-            return self._default_value[self.mask]
+    def mask(self) -> Optional[numpy.ndarray]:
+        """numpy.ndarray or None : Mask of the values in the vector boundary."""
+        return self._ref._mask
 
-    def set_default_value(self,
-        value: Union[Number, numpy.ndarray, None],
-        mask: Optional[numpy.ndarray] = None
-    ) -> None:
-        """Set the default value.
+    @mask.setter
+    def mask(self, mask: Optional[numpy.ndarray]) -> None:
+        if not self._is_scalar and mask is not None:
+            mask = numpy.asarray(mask)
+            if mask.shape != self._ref._ref_shape:
+                raise ValueError(f"Set mask does not fit the context array shape; got {mask.shape!r} \
+                                    to set in {self._ref._ref_shape}.")
 
-        Parameters
-        ----------
-        value : Number, numpy.ndarray or None
-            Default value
-        mask : numpy.ndarray[bool] or None, optional
-            Mask to apply on the default value; default None (i.e. no mask)
-        """
-        if value is None:
-            self._default_value = None
-            return
+            if self._default_value is not None:
+                default_size = numpy.asarray(self._default_value).size
+                if numpy.count_nonzero(mask) != default_size:
+                    raise ValueError(f"Set mask does not fit the current boundary value; got {numpy.count_nonzero(mask)!r} \
+                                    mismatching {default_size}.")
 
-        default_array = numpy.asarray(value)
-        value_array = numpy.asarray(self.ref.value)
-        if mask is not None:
-            if mask.shape != self.mask.shape:
-                raise ValueError(
-                    f"Provided mask shape {mask.shape} does not match current value shape {self.mask.shape}."
-                )
-            # Extend singleton in array or fill with nan masked default
-            if mask.shape != default_array.shape:
-                tmp = numpy.full_like(mask, numpy.nan, dtype=default_array.dtype)
-                tmp[mask] = default_array
-                default_array = tmp
-            else:
-                default_array = numpy.where(mask, default_array, value_array)
-        elif self.mask is not None:
-            if default_array.size == value_array[self.mask].size:
-                tmp = numpy.full_like(value_array, numpy.nan)
-                tmp[self.mask] = default_array
-                default_array = tmp
+            self._ref.mask(mask)
 
-            if default_array.ndim == 0:  # We have a single value masked
-                self._default_value = None
-                return
-            mask = self.mask.copy()
+    @property
+    def value(self) -> Union[Number, numpy.ndarray]:
+        return self._ref.value
 
-        if value_array.shape != default_array.shape:
-            raise ValueError(
-                f"Default value {value} has not the same shape as value {self.value}."
-            )
-
-        if self.default_value is not None:
-            old_mask = numpy.isfinite(self._default_value)
-
-            default_array, mask = self._merge_masked_array(
-                default_array, mask, self._default_value, old_mask)
-
-            self.mask = mask
-
-        elif mask is not None:
-            self.mask = numpy.ma.make_mask(numpy.logical_or(mask, self.mask))
-
-        self._default_value = default_array if default_array.ndim > 0 else default_array.tolist()
-
-    @staticmethod
-    def _merge_masked_array(
-        value: Union[Number, numpy.ndarray],
-        mask: Optional[numpy.ndarray],
-        old_value: Union[Number, numpy.ndarray],
-        old_mask: Optional[numpy.ndarray],
-    ) -> Tuple[numpy.ndarray, Optional[numpy.ndarray]]:
-        """Merge the old masked array with the new one.
-
-        Parameters
-        ----------
-        value : Union[Number, numpy.ndarray]
-            New value
-        mask : Optional[numpy.ndarray]
-            New mask
-        old_value : Union[Number, numpy.ndarray]
-            Old value
-        old_mask : Optional[numpy.ndarray]
-            Old mask
-
-        Returns
-        -------
-        (numpy.ndarray, numpy.ndarray or None)
-            The merged array with the resulting mask.
-        """
-        if mask is not None:
-            if old_mask is not None:
-                old_value = numpy.asarray(old_value)
-                tmp = numpy.full_like(mask, numpy.nan, dtype=old_value.dtype)
-                tmp[old_mask] = old_value[old_mask]
-                tmp[mask] = value[mask]
-                value = tmp
-                mask = numpy.logical_or(old_mask, mask)
-            else:  # An homogeneous value is set
-                value[~mask] = old_value
-                mask = None  # None specified indices are set to the old value
-        return value, mask
+    def update_value(self, new: Union[Number, MutableSequence, numpy.ndarray], checks: bool = True) -> None:
+        if new is not None:
+            if self._boundary_impl.update_value(self._ref.value, new, checks):
+                self._ref.value = new
+                self.touch()
 
     def set_to_default(self) -> None:
-        """Set the current value with the default one."""
-        if self._default_value is None:
-            # This is to verbose and not understable with a classical use
-            # logger.warning(f"No default value given for variable '{self.context.name}.{self.name}'. It will be skipped.")
-            return
+        if self._default_value is not None:
+            self.update_value(self._default_value, checks=False)
 
-        def apply_mask(mask: numpy.ndarray):
-            if numpy.all(mask):
-                self.value = self.default_value
-            else:
-                self.value[mask] = self.default_value[mask]
+    @property
+    def default_value(self) -> Union[Number, numpy.ndarray]:
+        return self._default_value
 
-        nan_mask = numpy.isfinite(self._default_value)
-        if self.mask is None:
-            apply_mask(nan_mask)
-        else:
-            sub_mask = nan_mask[self.mask]
-            apply_mask(sub_mask)
+    def update_default_value(self, new: Union[Number, MutableSequence, numpy.ndarray], mask: Optional[numpy.ndarray] = None, checks: bool = True) -> None:
+        if new is not None:
+            if mask is not None:
+                self.mask = mask
+            if checks:
+                self._boundary_impl.check_new_value(self._default_value, new)
+            self._default_value = new
+
+    @property
+    def size(self) -> Number:
+        return self._boundary_impl.size(self._ref.value)
+
+
+class AbstractBoundaryImpl(abc.ABC):
+    """Abstract Boundary class to manage methods specific to Boundary type."""
+
+    @abc.abstractmethod
+    def check_new_value(value: T, new: T) -> None: ...
+
+    @abc.abstractmethod
+    def update_value(ref_value: T, new: T, checks: bool = True) -> bool: ...
+
+    @abc.abstractmethod
+    def size(value: T) -> Number: ...
+
+
+class UndefinedBoundaryImpl(AbstractBoundaryImpl):
+    """Class handling undefined Boundary."""
+
+    @staticmethod
+    def check_new_value(value: T, new: T) -> None:
+        raise NotImplementedError
+
+    @staticmethod
+    def update_value(ref_value: T, new: T, checks: bool = True) -> bool:
+        raise NotImplementedError
+
+    @staticmethod
+    def size(value: T) -> Number:
+        raise NotImplementedError
+
+
+class ScalarBoundaryImpl(AbstractBoundaryImpl):
+    """Specific methods for Number Boundary."""
+
+    @staticmethod
+    def check_new_value(value: Number, new: Number) -> None:
+        if not isinstance(new, Number):
+            raise TypeError(f"Value to set is incompatible with the boundary value type; got {type(new)} \
+                            mismatching {type(value)}.")
+
+    @staticmethod
+    def update_value(ref_value: Number, new: Number, checks: bool = True) -> bool:
+        if checks:
+            ScalarBoundaryImpl.check_new_value(ref_value, new)
+        return ref_value != new
+
+    @staticmethod
+    def size(value: Number) -> Number:
+        return 1
+
+
+class MutableSeqBoundaryImpl(AbstractBoundaryImpl):
+    """Specific methods for MutableSequence-like Boundary."""
+
+    @staticmethod
+    def check_new_value(value: MutableSequence, new: MutableSequence) -> None:
+        if not Boundary.is_mutable_sequence(new):
+            raise TypeError(f"Value to set is incompatible with the boundary value type; got {type(new)} \
+                            mismatching {type(value)}.")
+        if value is not None and len(new) != len(value):
+            raise ValueError(f"Value to set does not fit the current boundary value; got {len(new)} \
+                            mismatching {len(value)}.")
+
+    @staticmethod
+    def update_value(ref_value: MutableSequence, new: MutableSequence, checks: bool = True) -> bool:
+        if checks:
+            MutableSeqBoundaryImpl.check_new_value(ref_value, new)
+        return ref_value != new
+
+    @staticmethod
+    def size(value: MutableSequence) -> Number:
+        return len(value)
+
+
+class NumpyBoundaryImpl(AbstractBoundaryImpl):
+    """Specific methods for numpy.ndarray Boundary."""
+
+    @staticmethod
+    def check_new_value(value: numpy.ndarray, new: numpy.ndarray) -> None:
+        if value is not None and not numpy.isscalar(new):
+            if value.shape != numpy.asarray(new).shape:
+                raise ValueError(f"Value to set does not fit the current boundary value; got {numpy.asarray(new).shape!r} \
+                            mismatching {value.shape}.")
+
+    @staticmethod
+    def update_value(ref_value: numpy.ndarray, new: numpy.ndarray, checks: bool = True) -> bool:
+        if checks:
+            NumpyBoundaryImpl.check_new_value(ref_value, new)
+        return not numpy.array_equal(ref_value, new)
+
+    @staticmethod
+    def size(value: numpy.ndarray) -> Number:
+        return value.size
 
 
 class Unknown(Boundary):
@@ -446,8 +734,9 @@ class Unknown(Boundary):
             max_rel_step=self.max_rel_step,
             lower_bound=self.lower_bound,
             upper_bound=self.upper_bound,
+            mask=self.mask.copy() if not self._is_scalar else None
         )
-        new.mask = None if self.mask is None else self.mask.copy()
+
         return new
 
     def to_dict(self) -> Dict[str, Any]:
@@ -466,7 +755,7 @@ class Unknown(Boundary):
             "max_rel_step": self.max_rel_step,
             "lower_bound": self.lower_bound,
             "upper_bound": self.upper_bound,
-            "mask": None if self.mask is None else self.mask.tolist()
+            "mask": None if not hasattr(self, "mask") else self.mask.tolist()
         }
 
 
@@ -662,8 +951,7 @@ class TimeUnknown(Boundary, AbstractTimeUnknown):
 
     @Boundary.value.setter
     def value(self, new: Union[Number, numpy.ndarray]) -> None:
-        super(self.__class__, self.__class__).value.fset(self, new)
-        self.touch()
+        self.update_value(new)
 
     def to_dict(self) -> Dict[str, Any]:
         """Returns a JSONable representation of the transient unknown.
@@ -710,8 +998,21 @@ class TimeDerivative(Boundary):
         self.__shape = None
         self.__previous = None
         eval_string, value, self.__type = self.source_type(source, self.context)
-        if self.__type is numpy.ndarray:
+
+        if self.__type is Number:
+            self._boundary_impl = ScalarBoundaryImpl()
+            self._is_scalar = True
+        elif self.__type is numpy.ndarray:
+            self._boundary_impl = NumpyBoundaryImpl()
             self.__shape = value.shape
+            self._is_scalar = False
+        elif Boundary.is_mutable_sequence(value):
+            self._boundary_impl = MutableSeqBoundaryImpl()
+            self.__shape = (len(value), )
+            self._is_scalar = False
+        else:
+            raise TypeError("Type of boundary value is not handle.")
+
         # Set source & initial value
         self.source = source
         self.initial_value = initial_value
@@ -783,8 +1084,12 @@ class TimeDerivative(Boundary):
 
     def __set_value(self, value: Union[Number, numpy.ndarray]):
         """Private setter for `value`"""
-        super(self.__class__, self.__class__).value.fset(self, value)
-        self.touch()
+        if self._ref.value is None and not self._is_scalar:
+            self.update_value(value)
+            mask = numpy.ones_like(value, dtype=bool)
+            self._ref = MaskedAttrRef.make_from_attr_ref(self._ref, self._ref._obj, self._ref._name, mask)
+        else:
+            self.update_value(value)
 
     @Boundary.value.setter
     def value(self, new: Union[Number, numpy.ndarray]) -> None:

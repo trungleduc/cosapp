@@ -46,13 +46,11 @@ class BaseSolverBuilder(abc.ABC):
     def update_unknowns(self, x: numpy.ndarray) -> None:
         counter = 0
         for name, unknown in self.problem.unknowns.items():
-            if unknown.mask is None:
-                unknown.set_default_value(x[counter])
-                counter += 1
-            else:
-                n = numpy.count_nonzero(unknown.mask)
-                unknown.set_default_value(x[counter : counter + n])
-                counter += n
+            n = unknown.size
+            value = x[counter] if unknown.is_scalar else x[counter: counter + n]
+            unknown.update_default_value(value, checks=False)
+            counter += n
+
             # Update design unknowns
             if self.is_design_unknown[name]:
                 unknown.set_to_default()
@@ -273,7 +271,6 @@ class NonLinearSolver(AbstractSolver):
         numpy.ndarray
             The list of residues of the `System`
         """
-        x = numpy.asarray(x)
         logger.debug(f"Call fresidues with x = {x!r}")
         self.set_iteratives(x)
         self._update_system()

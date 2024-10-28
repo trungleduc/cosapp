@@ -151,8 +151,8 @@ def test_NonLinearSolver__fresidues(set_master_system):
     residues = solver._fresidues(init)
     set_init = [var.default_value for var in solver.problem.unknowns.values()]
     assert set_init == list(init)
-    mask_unknowns = [var.mask for var in solver.problem.unknowns.values()]
-    assert mask_unknowns == list((None, None, None))
+    mask_unknowns = [var.mask for var in solver.problem.unknowns.values() if not var._is_scalar]
+    assert mask_unknowns == []
     assert isinstance(residues, np.ndarray)
     assert len(residues) == 0
 
@@ -169,8 +169,8 @@ def test_NonLinearSolver__fresidues(set_master_system):
     residues = solver._fresidues(init)
     set_init = [var.default_value for var in solver.problem.unknowns.values()]
     assert set_init == list(init)
-    mask_unknowns = [var.mask for var in solver.problem.unknowns.values()]
-    assert mask_unknowns == [None, None]
+    mask_unknowns = [var.mask for var in solver.problem.unknowns.values() if not var._is_scalar]
+    assert mask_unknowns == []
     assert isinstance(residues, np.ndarray)
     assert len(residues) == 2
 
@@ -192,8 +192,8 @@ def test_NonLinearSolver__fresidues(set_master_system):
     residues = solver._fresidues(init)
     variables = [var.default_value for var in solver.problem.unknowns.values()]
     assert variables == list(init)
-    mask_unknowns = [var.mask for var in solver.problem.unknowns.values()]
-    assert mask_unknowns == [None, None, None]
+    mask_unknowns = [var.mask for var in solver.problem.unknowns.values() if not var._is_scalar]
+    assert mask_unknowns == []
     assert isinstance(residues, np.ndarray)
     assert len(residues) == 4
     assert solver.problem.n_unknowns == 3
@@ -220,8 +220,8 @@ def test_NonLinearSolver__fresidues(set_master_system):
     residues = solver._fresidues(init)
     variables = [var.default_value for var in solver.problem.unknowns.values()]
     assert variables == list(init)
-    mask_unknowns = [var.mask for var in solver.problem.unknowns.values()]
-    assert mask_unknowns == [None, None, None, None]
+    mask_unknowns = [var.mask for var in solver.problem.unknowns.values() if not var._is_scalar]
+    assert mask_unknowns == []
     assert isinstance(residues, np.ndarray)
     assert len(residues) == 4
     assert solver.problem.n_unknowns == 4
@@ -247,8 +247,8 @@ def test_NonLinearSolver__fresidues(set_master_system):
     residues = solver._fresidues(init)
     variables = [var.default_value for var in solver.problem.unknowns.values()]
     assert variables == list(init)
-    mask_unknowns = [var.mask for var in solver.problem.unknowns.values()]
-    assert mask_unknowns == [None, None, None, None]
+    mask_unknowns = [var.mask for var in solver.problem.unknowns.values() if not var._is_scalar]
+    assert mask_unknowns == []
     assert isinstance(residues, np.ndarray)
     assert len(residues) == 4
     assert solver.problem.n_unknowns == 4

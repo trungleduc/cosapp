@@ -467,7 +467,7 @@ def test_MathematicalProblem_add_unknown(
         assert unknown.upper_bound == properties.get('upper_bound', np.inf), message
         mask = properties.get('mask', None)
         if mask is None:
-            assert unknown.mask is None, message
+            assert not hasattr(unknown, "mask"), message
         else:
             assert tuple(unknown.mask) == tuple(mask), message
 

@@ -75,15 +75,8 @@ class RunOnce(Driver):
         for variable, value in modifications.items():
             boundary = Boundary(self.owner, variable, default=value, inputs_only=False)
 
-            # Check if boundary.name already exists
-            actual = self.initial_values.setdefault(boundary.name, boundary)
-
-            if actual is not boundary:
-                # Update already existing boundary with new default value and mask
-                actual.set_default_value(boundary.default_value, boundary.mask)
-
-            # Set owner system with the init value - useful if this driver is not inside a solver
-            actual.set_to_default()
+            self.initial_values[boundary.name] = boundary
+            boundary.set_to_default()
 
             # Setting a new initial value implies, we will use the init and so the solution is cleared
             self.solution.clear()
@@ -115,8 +108,8 @@ class RunOnce(Driver):
 
                 if name in self.initial_values:
                     boundary = self.initial_values[name]
-                    umask = unknown.mask if unknown.mask is not None else numpy.empty(0)
-                    bmask = boundary.mask if boundary.mask is not None else numpy.empty(0)
+                    umask = unknown.mask if not unknown._is_scalar else numpy.empty(0)
+                    bmask = boundary.mask if not boundary._is_scalar else numpy.empty(0)
                     if not numpy.array_equal(umask, bmask):
                         raise ValueError(
                             f"Unknown and initial conditions on {unknown.name!r} are not masked equally"

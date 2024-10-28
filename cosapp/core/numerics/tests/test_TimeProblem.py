@@ -93,7 +93,7 @@ def test_TimeProblem_add_transient():
     m.add_transient('A', der='q')
     assert list(m.transients) == ['A']
     A = m.transients['A']
-    assert isinstance(A.value, Number)
+    assert isinstance(A.context[A.basename], Number)
     assert A.context is s
     assert A.name == 'A'
     assert A.d_dt == 1
@@ -101,7 +101,7 @@ def test_TimeProblem_add_transient():
     m.add_transient('x', der='v / q**2')
     assert list(m.transients) == ['A', 'x']
     x = m.transients['x']
-    assert isinstance(x.value, np.ndarray)
+    assert isinstance(x.context[x.basename], np.ndarray)
     s.v = np.r_[1, 2, 3]
     s.q = 2.0
     assert x.context is s
