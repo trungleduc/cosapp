@@ -6,8 +6,6 @@ from typing import (
     Iterator, TypeVar, Union, Tuple,
     TYPE_CHECKING,
 )
-from asv_runner.benchmarks.mark import skip_benchmark
-
 import numpy, numpy.polynomial
 
 from cosapp.core.eval_str import EvalString
@@ -468,7 +466,6 @@ class TimeStepManager:
         """
         return self.__transients.max_time_step()
 
-    @skip_benchmark
     def time_step(self, previous=None) -> float:
         """
         Compute time step, making sure that it does not exceed any transient's `max_time_step`
