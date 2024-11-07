@@ -545,15 +545,18 @@ def TwoPointCubicInterpolator(
     """
     if numpy.ndim(ys) == 1:
         return TwoPointCubicPolynomial(xs, ys, dy)
-    ys = numpy.transpose(ys)
-    dy = numpy.transpose(dy)
+    ys = numpy.asarray(ys)
+    dy = numpy.asarray(dy)
+    shape = dy.shape[1:]
+    ys = ys.reshape((2, -1))
+    dy = dy.reshape((2, -1))
     # Multi-dimensional polynomial
     fs = [
         TwoPointCubicPolynomial(xs, val, der)
-        for (val, der) in zip(ys, dy)
+        for (val, der) in zip(ys.T, dy.T)
     ]
     def ndpoly(t: float) -> numpy.ndarray:
-        return numpy.array([f(t) for f in fs])
+        return numpy.reshape([f(t) for f in fs], shape)
     return ndpoly
 
 
