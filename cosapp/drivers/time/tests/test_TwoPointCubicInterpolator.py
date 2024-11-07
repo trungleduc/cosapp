@@ -12,11 +12,17 @@ from cosapp.drivers.time.utils import TwoPointCubicInterpolator
         [[-0.7, 0.1, 0.4], [1, -0.3, 0.2]],
         [[0.22, 1.4, 0.0], [0, 0.9, -0.6]],
     ),
+    (   # (1, 3) array data
+        [[[-0.7, 0.1, 0.4]], [[1, -0.3, 0.2]]],
+        [[[0.22, 1.4, 0.0]], [[0, 0.9, -0.6]]],
+    ),
+    (   # (2, 3) array data
+        [[[-0.7, 0.1, 0.4], [1, -0.3, 0.2]], [[0.5, -0.1, 1.4], [0.0, 0.7, 0.3]]],
+        [[[0.22, 1.4, 0.0], [0, 0.9, -0.6]], [[1.23, 0.4, 0.7], [-0.8, 1.5, 0.0]]],
+    ),
 ])
 def test_TwoPointCubicInterpolator(xs, ys, dy):
-    xs = np.asarray(xs)
-    ys = np.asarray(ys)
-    dy = np.asarray(dy)
     f = TwoPointCubicInterpolator(xs, ys, dy)
 
-    assert f(xs) == pytest.approx(np.transpose(ys), abs=1e-14)
+    np.testing.assert_allclose(f(xs[0]), ys[0], rtol=1e-15, atol=1e-15)
+    np.testing.assert_allclose(f(xs[1]), ys[1], rtol=1e-15, atol=1e-15)
