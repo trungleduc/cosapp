@@ -233,11 +233,11 @@ class Event:
         """bool : Indicates whether the event was just triggered.
         
         Performs a step."""
-        old = self._present
+        already_present = self._present
         if self._state.must_emit():
             self.__emit()
         # return True whenever the event has been emitted in this step
-        return old ^ self._present
+        return already_present ^ self._present
 
     def to_trigger(self) -> bool:
         """bool : Indicates whether the event has to be triggered in the next discrete step"""
@@ -384,6 +384,11 @@ class FilteredEvent(EventState):
         self._event = event
         self._condition = expr
 
+    @property
+    def present(self) -> bool:
+        # Property `present` is necessary to use filtered events in merged events
+        return self.must_emit()
+
     def must_emit(self) -> bool:
         return self._event.present and self._condition.eval()
 
@@ -401,6 +406,11 @@ class MergedEvents(EventState):
             Any number of events
         """
         self._events = events
+
+    @property
+    def present(self) -> bool:
+        # Property `present` is necessary to reuse merged events in other merged events
+        return self.must_emit()
 
     def must_emit(self) -> bool:
         """Returns `True` if at least one event is present,

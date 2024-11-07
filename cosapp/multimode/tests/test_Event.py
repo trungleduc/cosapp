@@ -264,3 +264,60 @@ def test_Event_occurrence():
     top.run_once()
     assert top.y > top.x
     assert not top.boom.present
+
+
+def test_Event_merge():
+    """Test merged events"""
+    class Bogus(System):
+        def setup(self):
+            self.add_inward('x', 0.0)
+            self.add_outward('y', -1.0)
+
+            self.add_child(UndefinedEventSystem('s1'))
+            self.add_child(UndefinedEventSystem('s2'))
+
+            self.add_event('foo')
+            self.add_event('bar')
+
+        def compute(self) -> None:
+            self.foo.tick()
+            self.bar.tick()
+            self.y = self.x**3
+            # print(f"x = {self.x}, y = {self.y}, cos(y) = {np.cos(self.y)}")
+            # Hack: manual event stepping to mimick cascade resolution
+            self.foo.step()
+            self.bar.step()
+            self.s1.e.step()
+            self.s2.e.step()
+
+    s = Bogus("s")
+    s.foo.trigger = "x < y"
+    s.bar.trigger = "x == cos(y)"
+    s.s1.e.trigger = Event.merge(
+        s.foo,  # event
+        s.bar.filter("x > 0"),  # filtered event
+    )
+    s.s2.e.trigger = Event.merge(
+        s.bar,  # event
+        s.s1.e, # merged events
+    )
+    s.x = 0.5
+    s.run_once()
+    assert not s.foo.present
+    assert not s.bar.present
+    assert not s.s1.e.present
+    assert not s.s2.e.present
+    s.x = 0.95
+    s.run_once()
+    assert s.y >= 0
+    assert not s.foo.present
+    assert s.bar.present
+    assert s.s1.e.present
+    assert s.s2.e.present
+    s.x = 1.1
+    s.run_once()
+    assert s.y >= 0
+    assert s.foo.present
+    assert not s.bar.present
+    assert s.s1.e.present
+    assert s.s2.e.present
