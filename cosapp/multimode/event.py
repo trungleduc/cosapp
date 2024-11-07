@@ -215,8 +215,8 @@ class Event:
         self._state.reset()
         self._present = False
 
-    def cancel(self) -> None:
-        """Cancels the event."""
+    def _cancel(self) -> None:
+        """Cancels the event. For internal use only"""
         self._present = False
 
     def initialize(self) -> None:
