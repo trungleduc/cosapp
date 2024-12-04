@@ -8,6 +8,7 @@ import numpy
 from cosapp.base import Port, System
 from cosapp.drivers import EulerExplicit, NonLinearSolver
 from cosapp.recorders import DataFrameRecorder
+from cosapp.multimode import PeriodicTrigger
 from typing import List
 
 
@@ -650,3 +651,27 @@ def test_MultimodeSystem_event_init():
     assert record.events[0] is s.rebound
     assert record.events[1] is driver.scenario.stop
     assert record.time == pytest.approx(0.25, rel=1e-15)
+
+
+@pytest.mark.parametrize("t0", [0.0, 2.4, 10.0])
+@pytest.mark.parametrize("period", [0.033, 0.87, 1.123, 1.0, 2.0])
+def test_MultimodeSystem_single_periodic_event(t0, period):
+    """Test a system with a periodic event.
+    """
+    class PeriodicEventSystem(System):
+        def setup(self, period=1.0):
+            self.add_event('ping', trigger=PeriodicTrigger(period, t0=t0))
+
+    s = PeriodicEventSystem('s', period=period)
+    driver = s.add_driver(EulerExplicit(time_interval=(0, 10), dt=1.0))
+
+    try:
+        s.run_drivers()
+    except RuntimeError:
+        raise
+    finally:
+        t_end = driver.time_interval[1]
+        expected_times = numpy.arange(t0 + period, t_end * (1.0 + 1e-14), period)
+        event_times = numpy.array([record.time for record in driver.recorded_events])
+        # print("", f"{event_times = }", f"{expected_times = }", sep="\n")
+        assert event_times == pytest.approx(expected_times)

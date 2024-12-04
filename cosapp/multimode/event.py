@@ -1,8 +1,10 @@
 from __future__ import annotations
 import abc
 import logging, warnings
+from math import floor
 from numpy import bool_ as numpy_bool
 from typing import Any, Union, Optional, TYPE_CHECKING
+from numbers import Number
 
 from .zeroCrossing import ZeroCrossing
 from cosapp.core.eval_str import EvalString
@@ -162,12 +164,14 @@ class Event:
         return self._trigger
 
     @trigger.setter
-    def trigger(self, trigger: Union[EventState, ZeroCrossing, str, Event]):
+    def trigger(self, trigger: Union[EventState, ZeroCrossing, PeriodicTrigger, str, Event]):
         state = None
         if isinstance(trigger, str):
             trigger = ZeroCrossing.from_comparison(trigger)
         if isinstance(trigger, ZeroCrossing):
             state = ZeroCrossingEvent(self, trigger)
+        elif isinstance(trigger, PeriodicTrigger):
+            state = PeriodicEvent(self, trigger)
         elif isinstance(trigger, Event):
             state = SynchronizedEvent(trigger)
         elif isinstance(trigger, EventState):
@@ -285,7 +289,12 @@ class ZeroCrossingEvent(EventState):
     """Inner state of an event triggered by a zero-crossing expression"""
     def __init__(self, event: Event, zeroxing: ZeroCrossing):
         check_arg(event, 'event', Event)
-        expr = EvalString(zeroxing.expression, event.context)
+        self._event = event
+        self._set_zeroxing(zeroxing)
+        self.reset()
+
+    def _set_zeroxing(self, zeroxing: ZeroCrossing) -> None:
+        expr = EvalString(zeroxing.expression, self._event.context)
         if expr.constant:
             raise ValueError(f"Zero-crossing function {expr} is constant")
         if not isinstance(expr.eval(), float):
@@ -294,8 +303,6 @@ class ZeroCrossingEvent(EventState):
             )
         self._expr = expr
         self._direction = zeroxing.direction
-        self._event = event
-        self.reset()
 
     def reset(self) -> None:
         """Reset the event, in such a way that the event will not occur
@@ -427,3 +434,65 @@ class SynchronizedEvent(EventState):
 
     def must_emit(self) -> bool:
         return self._event.present
+
+
+class PeriodicTrigger:
+    """Inner state of an event synchronized with another event.
+    """
+    def __init__(self, period: Number, t0=0.0):
+        self.t0 = t0
+        self.period = period
+
+    @property
+    def period(self) -> float:
+        return self.__period
+
+    @period.setter
+    def period(self, period: Number) -> None:
+        check_arg(period, 'period', Number, lambda T: T > 0)
+        self.__period = float(period)
+
+
+class PeriodicEvent(ZeroCrossingEvent):
+    """Inner state of a periodic event.
+    """
+    def __init__(self, event: Event, trigger: PeriodicTrigger):
+        self._t0 = trigger.t0
+        self._period = trigger.period
+        self._counter = 1
+        self._prev_time = None
+        super().__init__(event, ZeroCrossing.up(f"t - {self.event_time()}"))
+
+    def reset(self) -> None:
+        """Reset the event, in such a way that the event will not occur
+        after the next zero-crossing function evaluation.
+        """
+        super().reset()
+        if self._counter != 1:
+            self._counter = 0
+            self._shift_trigger()
+
+    def event_time(self) -> float:
+        """Expected time of the next event occurrence."""
+        return round(self._t0 + self._counter * self._period, 14)
+
+    def tick(self):
+        super().tick()
+        period = self._period
+        time = self._event._context.time
+        event_time = self.event_time()
+        if time >= event_time:
+            self._counter = max(int((time - self._t0) / period), self._counter)
+            self._shift_trigger()
+        if time == self._prev_time:
+            raise RuntimeError(
+                f"Event {time=} is inconsistent with expected periodic trigger, possibly due to rounding error."
+            )
+        self._prev_time = time
+
+    def _shift_trigger(self) -> None:
+        """Compute next trigger condition"""
+        self._counter += 1
+        self._expr = EvalString(f"t - {self.event_time():.15}", self._event.context)
+        self._event._cancel()
+        self._prev = self.value()
