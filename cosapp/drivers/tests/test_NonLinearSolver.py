@@ -101,6 +101,28 @@ class AbcdFunction(System):
         self.d = x[0] + x[3]
 
 
+class ComplexObject:
+    def __init__(self):
+        self.x = (1., 2., 3.)
+
+    def __getitem__(self, i):
+        return self.x[i]
+
+    def __setitem__(self, i, new):
+        self.x = self.x[:i] + (new,) + self.x[i+1:]
+
+    def __len__(self):
+        return len(self.x)
+
+
+class CustomClass:
+    def __init__(self):
+        self.scalar = 1.
+        self.nparray = np.ones(3)
+        self.list = [1., 1., 1.]
+        self.complex = ComplexObject()
+
+
 @pytest.mark.parametrize(
     "method", NonLinearMethods
 )
@@ -1623,6 +1645,93 @@ def test_NonLinearSolver_ndarray_residue(shape):
 
     assert s.x == pytest.approx(np.full(shape, 0.2))
     assert s.y == pytest.approx(np.full(shape, 2.0))
+
+
+def test_NonLinearSolver_unknowns_scalar():
+    """Test solver with a scalar of a complex object as unknown."""
+    class ScalarComplexObject(System):
+        def setup(self):
+            self.add_inward('cc', CustomClass())
+            self.add_outward('y', 0.)
+
+        def compute(self):
+            self.y = 10 * self.cc.scalar
+
+    s = ScalarComplexObject('s')
+
+    solver = s.add_driver(NonLinearSolver('solver'))
+    solver.add_unknown('cc.scalar').add_equation("y == 100")
+
+    s.run_drivers()
+
+    assert s.cc.scalar == pytest.approx(10.)
+    assert s.y == pytest.approx(100.)
+
+
+def test_NonLinearSolver_unknowns_ndarray():
+    """Test solver with a numpy array of a complex object as unknown."""
+
+    class NdArrayComplexObject(System):
+        def setup(self):
+            self.add_inward('cc', CustomClass())
+            self.add_outward('y', np.zeros(3))
+
+        def compute(self):
+            self.y = 10 * self.cc.nparray
+
+    s = NdArrayComplexObject('s')
+
+    solver = s.add_driver(NonLinearSolver('solver'))
+    solver.add_unknown('cc.nparray').add_equation("y == full(3, 100.0)")
+
+    s.run_drivers()
+
+    assert s.cc.nparray == pytest.approx(np.full(3, 10.))
+    assert s.y == pytest.approx(np.full(3, 100.))
+
+
+def test_NonLinearSolver_unknowns_list():
+    """Test solver with a list of a complex object as unknown."""
+
+    class ListComplexObject(System):
+        def setup(self):
+            self.add_inward('cc', CustomClass())
+            self.add_outward('y', [0., 0.])
+
+        def compute(self):
+            self.y = [10 * val for val in self.cc.list[1:]]
+
+    s = ListComplexObject('s')
+
+    solver = s.add_driver(NonLinearSolver('solver'))
+    solver.add_unknown('cc.list[1:]').add_equation("y == [100., 100.]")
+
+    s.run_drivers()
+
+    assert s.cc.list == pytest.approx([1., 10., 10.])
+    assert s.y == pytest.approx([100., 100.])
+
+
+def test_NonLinearSolver_unknowns_custom():
+    """Test solver with a custom complex object as unknown."""
+
+    class CustomComplexObject(System):
+        def setup(self):
+            self.add_inward('cc', CustomClass())
+            self.add_outward('y', 0)
+
+        def compute(self):
+            self.y = 10. * self.cc.complex[1]
+
+    s = CustomComplexObject('s')
+
+    solver = s.add_driver(NonLinearSolver('solver'))
+    solver.add_unknown('cc.complex[1]').add_equation("y == 100.0")
+
+    s.run_drivers()
+
+    assert s.cc.complex == pytest.approx((1., 10., 3.))
+    assert s.y == pytest.approx(100.)
 
 
 @pytest.mark.filterwarnings("ignore:.*Singular matrix.")

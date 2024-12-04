@@ -95,8 +95,11 @@ def dealias_problem(problem: MathematicalProblem, name=None) -> MathematicalProb
         try:
             alias = input_mapping[contextual_name]
         except KeyError:
-            logger.warning(f"Skip connected unknown {contextual_name!r}")
-            return None
+            try:
+                alias = input_mapping[unknown.portname]
+            except KeyError:
+                logger.warning(f"Skip connected unknown {contextual_name!r}")
+                return None
         aliased = (alias is not unknown.variable_reference)
         if aliased:
             try:

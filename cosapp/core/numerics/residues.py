@@ -298,10 +298,11 @@ class Residue(AbstractResidue):
             self.__equation = f"{lhs} == {rhs}"
             self.__varnames = sides.variables
 
-            if isinstance(lval, numpy.ndarray) or isinstance(rval, numpy.ndarray):
-                self.residue_method = Residue._evaluate_numerical_residue
-            elif isinstance(lval, Iterable) or isinstance(rval, Iterable):
-                self.residue_method = Residue._evaluate_iterable_residue
+            if isinstance(lval, Iterable) or isinstance(rval, Iterable):
+                if isinstance(lval, numpy.ndarray) and isinstance(rval, numpy.ndarray):
+                    self.residue_method = Residue._evaluate_numerical_residue
+                else:
+                    self.residue_method = Residue._evaluate_iterable_residue
             else:
                 self.residue_method = Residue._evaluate_numerical_residue
 
