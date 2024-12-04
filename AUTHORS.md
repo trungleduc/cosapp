@@ -7,8 +7,8 @@
 ## Contributors
 
 * [Frédéric Collonval](https://gitlab.com/fcollonval)
-* [Adrien Delsalle](https://gitlab.com/adriendelsalle)
-* [Guy De Spiegeleer](https://gitlab.com/GuyDS)
+* [Adrien Delsalle](https://gitlab.com/adriendelsalle) (adrien.delsalle@twiinit.com)
+* [Guy De Spiegeleer](https://gitlab.com/GuyDS) (guy.de-spiegeleer@twiinit.com)
 * [Duc Trung Lê](https://gitlab.com/ductrungle)
 * Alexis Cassier (alexis.cassier@safrangroup.com)
 * Amath Waly Ndiaye
@@ -23,3 +23,4 @@
 * [Virginie Zell](https://gitlab.com/VirginieZ)
 * [Sébastien Raymond](https://gitlab.com/ssg-aero)
 * [Célia Cisternino](https://gitlab.com/celiacisternino)
+* [Gaëtan Laurens](https://gitlab.com/GtnLrs) (gaetan.laurens@twiinit.com)

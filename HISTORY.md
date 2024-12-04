@@ -1,6 +1,75 @@
 # History
 
 
+## 0.19.0 (2024-12-04)
+
+### New features & API changes
+
+- Improve the performance of unknowns and residues (MRs [#350](https://gitlab.com/cosapp/cosapp/-/merge_requests/350), [#352](https://gitlab.com/cosapp/cosapp/-/merge_requests/352)).
+  In particular, this version introduces the possiblity to declare as unknown any settable attribute of an input object (that is an object contained in an input port), which until now was only possible for input port variables.
+  Example:
+
+  ```python
+  from cosapp.base import System
+  from cosapp.drivers import NonLinearSolver
+  from dataclasses import dataclass
+
+  @dataclass
+  class Foo:
+    a: float
+    x: float
+
+  class SomeSystem(System):
+      def setup(self):
+          self.add_inward("foo", Foo(a=1.0, x=1.0))
+          self.add_outward("y", 0.0)
+
+      def compute(self):
+          self.y = self.foo.a - self.foo.x**3
+  
+  system = SomeSystem("system")
+  solver = system.add_driver(NonLinearSolver("solver"))
+
+  solver.add_unknown("foo.x")   # attribute `x` can now be manipulated by the solver
+  solver.add_equation("y == 0")
+
+  system.foo.a = -2.0
+  system.run_drivers()
+
+  import pytest, math
+  assert system.foo.x == pytest.approx(math.cbrt(system.foo.a))
+  ```
+
+- Fix bug in `TwoPointCubicInterpolator` with multidimensional arrays (MR [#355](https://gitlab.com/cosapp/cosapp/-/merge_requests/355)).
+- Allow filtered events in merged events (MR [#356](https://gitlab.com/cosapp/cosapp/-/merge_requests/356)):
+
+  ```python
+  system.event.trigger = Event.merge(
+      event_a,
+      event_b.filter("x > 0"),
+  )
+  ```
+
+- Introduction of periodic events (MR [#360](https://gitlab.com/cosapp/cosapp/-/merge_requests/360)):
+
+  ```python
+  from cosapp.multimode import PeriodicTrigger
+
+  system.event_a.trigger = PeriodicTrigger(period=2.3)
+  system.event_b.trigger = PeriodicTrigger(period=0.25, t0=0.33)
+  ```
+
+### Documentation
+
+- Add instructions on how to perform benchmarks with `asv_runner` in main README file (MR [#358](https://gitlab.com/cosapp/cosapp/-/merge_requests/358)).
+
+### Maintenance and code quality
+
+- Fix import error in JupyterLite (MR [#351](https://gitlab.com/cosapp/cosapp/-/merge_requests/351)).
+- Minor code refactoring (MR [#354](https://gitlab.com/cosapp/cosapp/-/merge_requests/354)).
+- Use public runners for all CI jobs (MR [#359](https://gitlab.com/cosapp/cosapp/-/merge_requests/359)).
+
+
 ## 0.18.0 (2024-10-24)
 
 ### New features & API changes
