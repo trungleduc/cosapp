@@ -192,7 +192,7 @@ class MaskedVarInfo(NamedTuple):
     mask: Optional[numpy.ndarray] = None
 
     @property
-    def fullname(self) -> bool:
+    def fullname(self) -> str:
         return f"{self.basename}{self.selector}"
 
 
@@ -227,9 +227,9 @@ class Boundary:
 
         basename, selector = Boundary.parse_expression(name)
         value, mask = Boundary.create_mask(context, basename, selector, mask)
-        self._name_info = MaskedVarInfo(basename, selector, mask)
         self._ref, self._boundary_impl, self._is_scalar = Boundary.create_attr_ref(context, basename, value, mask)
         self.find_port(inputs_only)
+        self._name_info = MaskedVarInfo(basename, selector, mask)
 
         # Set default value if any
         if default is not None:
@@ -411,32 +411,36 @@ class Boundary:
         ----------
         - inputs_only [bool, optional]:
             If `True`, output variables are regarded as invalid. Default is `False`.
+        
         """
-        base = self._ref._base
-        basekey = self._ref._key
+        portname = self._ref._base
+        portkey = self._ref._key
         obj = self._ref._obj
         if not isinstance(obj, BasePort):
-            for i in range(len(base.split("."))):
-                if base in self._context.name2variable:
-                    obj = self._context.name2variable[base].mapping
+            for i in range(len(portname.split("."))):
+                if portname in self._context.name2variable:
+                    obj = self._context.name2variable[portname].mapping
                     break
                 else:
-                    base, basekey = base.rsplit('.', maxsplit=1)
+                    portname = portname.rsplit('.', maxsplit=1)[0]
+        else:
+            portname = ".".join(filter(None, portname.split(".") + portkey.split(".")))         
 
         if not isinstance(obj, BasePort):
             raise TypeError(f"Invalid port; got {type(obj)}")
         self._port = port = obj
+        self._portname = portname
 
         if not isinstance(self._ref.value, (Number, numpy.ndarray, type(None))):
             if not Boundary.is_mutable_sequence(self._ref.value):
                 raise TypeError(
-                    f"Only numerical variables can be used in mathematical algorithms; got {self.basename!r} in {self.context.name!r}"
+                    f"Only numerical variables can be used in mathematical algorithms; got {portname!r} in {self.context.name!r}"
                 )
         if inputs_only and not port.is_input:
             raise ValueError(
-                f"Only variables in input ports can be used as boundaries; got {self.basename!r} in {port.contextual_name!r}."
+                f"Only variables in input ports can be used as boundaries; got {portname!r} in {port.contextual_name!r}."
             )
-        if port.out_of_scope(basekey):
+        if port.out_of_scope(portkey):
             if self._context is not port.owner:
                 # Only owner can set its variables
                 raise ScopeError(f"Trying to set variable {self._ref._name!r} out of your scope through a boundary.")
@@ -464,7 +468,7 @@ class Boundary:
 
     @property
     def basename(self) -> str:
-        """str : Contextual name of the boundary."""
+        """str : Base name of the boundary."""
         return self._name_info.basename
 
     def contextual_name(self, context: Optional[System] = None) -> str:
@@ -478,14 +482,19 @@ class Boundary:
         return f"{path}.{self.name}"
 
     @property
-    def ref(self) -> Union[VariableReference, MaskedVariableReference]:
-        """VariableReference : variable reference accessed by the boundary."""
+    def ref(self) -> Union[AttrRef, MaskedAttrRef, NumpyMaskedAttrRef]:
+        """AttrRef : attribute reference accessed by the boundary."""
         return self._ref
 
     @property
-    def variable_reference(self) -> str:
-        """str : name of the variable accessed by the boundary."""
-        return self.context.name2variable[self.basename]
+    def variable_reference(self) -> VariableReference:
+        """VariableReference : variable reference accessed by the boundary."""
+        return self.context.name2variable[self.portname]
+
+    @property
+    def portname(self) -> str:
+        """str : name of the port accessed by the boundary."""
+        return self._portname
 
     @property
     def variable(self) -> str:
@@ -614,7 +623,7 @@ class MutableSeqBoundaryImpl(AbstractBoundaryImpl):
     def update_value(ref_value: MutableSequence, new: MutableSequence, checks: bool = True) -> bool:
         if checks:
             MutableSeqBoundaryImpl.check_new_value(ref_value, new)
-        return ref_value != new
+        return not numpy.array_equal(ref_value, new)
 
     @staticmethod
     def size(value: MutableSequence) -> Number:
