@@ -94,9 +94,11 @@ def dealias_problem(problem: MathematicalProblem, name=None) -> MathematicalProb
             contextual_name = f"{context.get_path_to_child(unknown.context)}.{unknown.basename}"
         try:
             alias = input_mapping[contextual_name]
+            var_name = ""
         except KeyError:
             try:
                 alias = input_mapping[unknown.portname]
+                var_name = ".".join(list(set(unknown.basename.split(".")) - set(unknown.portname.split("."))))
             except KeyError:
                 logger.warning(f"Skip connected unknown {contextual_name!r}")
                 return None
@@ -112,7 +114,8 @@ def dealias_problem(problem: MathematicalProblem, name=None) -> MathematicalProb
                     f"; it is likely to be overwritten after the computation."
                 )
             else:
-                alias_contextual_name = f"{path}.{alias.name}" if path else alias.name
+                alias_name = f"{alias.name}.{var_name}" if var_name else alias.name
+                alias_contextual_name = f"{path}.{alias.name}" if path else alias_name
                 unknown = unknown.transfer(context, alias_contextual_name)
                 logger.info(f"Replace unknown {contextual_name!r} by {alias_contextual_name!r}")
 
