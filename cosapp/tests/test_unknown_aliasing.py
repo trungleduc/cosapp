@@ -2,6 +2,7 @@
 import pytest
 import logging, re
 from numpy import sqrt, cbrt
+from dataclasses import dataclass
 
 from cosapp.systems import System
 from cosapp.drivers import NonLinearSolver, RunSingleCase
@@ -377,3 +378,45 @@ def test_connected_unknown_changing_conf(caplog):
         'bar.y == 5.5',
         'foo.k == coupling.y (loop)',
     }
+
+
+@dataclass
+class Foo:
+    a: float
+    x: float
+
+
+class SystemWithCustomObject(System):
+    def setup(self):
+        self.add_inward("foo", Foo(a=1.0, x=1.0))
+        self.add_outward("y", 0.0)
+
+    def compute(self):
+        self.y = self.foo.a - self.foo.x**3
+
+
+class Top(System):
+    def setup(self):
+        self.add_child(SystemWithCustomObject("sub"), pulling={"foo": "bar"})
+
+
+def test_dealias_problem_with_custom_object():
+    """Test function `dealias_problem` with composite system `top` including custom object.
+    Related to https ://gitlab.com/cosapp/cosapp/-/issues/171"""
+
+    top = Top("top")
+    solver = top.add_driver(NonLinearSolver("solver"))
+
+    solver.add_unknown("sub.foo.x")
+    solver.add_equation("sub.y == 0")
+
+    top.bar.a = -2.0
+    top.bar.x = 10.0
+    top.sub.foo.a = 12.0
+    top.sub.foo.x = -5.0
+    top.run_drivers()
+
+    assert top.bar.x == pytest.approx(cbrt(top.bar.a), rel=1e-14)
+    assert top.sub.foo.x == top.bar.x
+    assert top.sub.foo.a == -2.0
+    assert top.sub.y == pytest.approx(0, abs=1e-14)
