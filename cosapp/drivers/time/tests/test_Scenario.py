@@ -8,6 +8,7 @@ from cosapp.drivers.time.scenario import Scenario, Interpolator
 from cosapp.core.eval_str import AssignString
 from cosapp.multimode.event import Event
 from cosapp.core.time import UniversalClock
+from cosapp.recorders import DataFrameRecorder
 
 
 @pytest.fixture
@@ -45,6 +46,14 @@ class AbcdSystem(System):
         self.add_inward('v', np.ones(5))
         self.add_input(AbcdPort, 'a_in')
         self.add_output(AbcdPort, 'a_out')
+
+
+class Bogus(System):
+    def setup(self):
+        self.add_inward("df")
+        self.add_transient("f", der="df")
+        self.add_inward("a_tuple", (0, 1))
+        self.add_inward("a_dict", {"a": 0, "b": 1})
 
 
 @pytest.fixture
@@ -677,3 +686,34 @@ def test_Scenario_aliasing_3(assembly, clock):
     scenario.update_values()
     assert head.alpha == 0
     assert head.bar2.x == pytest.approx(np.cos(1))
+
+
+def test_Scenario_update_values():
+
+    bogus = Bogus("bogus")
+    driver = bogus.add_driver(EulerExplicit(time_interval=(0, 1), dt=0.05))
+    driver.add_recorder(DataFrameRecorder(includes=["*", "sin(pi * t)"]), period=0.1)
+
+    driver.set_scenario(
+        init={"f": 0.0},
+        values={
+            "df": "pi * cos(pi * t)",
+            "a_tuple": "(int(10 * f), round(t, 14))",
+            "a_dict": "{'t': round(t, 14)}",
+        },
+    )
+
+    bogus.run_drivers()
+
+    data = driver.recorder.export_data()
+    assert data["a_dict"][0] == {'t': 0.0}
+    assert data["a_dict"][5] == {'t': 0.5}
+    assert data["a_dict"][10] == {'t': 1.0}
+
+    assert data["a_tuple"][0] == (0, 0)
+    assert data["a_tuple"][5] == (10, 0.5)
+    assert data["a_tuple"][10] == (1, 1.0)
+
+    assert data["df"][0] == pytest.approx(np.pi)
+    assert data["df"][5] == pytest.approx(0)
+    assert data["df"][10] == pytest.approx(-np.pi)

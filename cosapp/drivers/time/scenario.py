@@ -332,6 +332,7 @@ class Scenario:
 
         varname = natural_varname(info.basename)
         variable = info.context.name2variable[info.basename]
+
         try:
             alias = context.input_mapping[varname]
         except KeyError:
