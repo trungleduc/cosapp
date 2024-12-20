@@ -328,6 +328,7 @@ class TimeVarManager:
         ders = dict()
         reference2name = dict()
         for name, unknown in context_transients.items():
+            unknown.update_mask()
             reference = unknown.pulled_from or unknown.context.name2variable[unknown.name]
             reference2name[reference] = name
             der_context = unknown.der.eval_context

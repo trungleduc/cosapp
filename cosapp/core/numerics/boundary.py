@@ -1,15 +1,16 @@
 from __future__ import annotations
-from ast import Num
 from numbers import Number
-import stat
-from typing import Any, Dict, Optional, Collection, Union, Tuple, Type, NamedTuple, T, MutableSequence, TYPE_CHECKING
-
+from typing import (
+    Any, Dict, Optional, Collection,
+    Union, Tuple, Type, NamedTuple, T,
+    MutableSequence, TYPE_CHECKING,
+)
 import abc
 import copy
 import numpy
 
 from cosapp.core.eval_str import EvalString
-from cosapp.core.variableref import VariableReference, MaskedVariableReference
+from cosapp.core.variableref import VariableReference
 from cosapp.ports.port import BasePort
 from cosapp.ports.exceptions import ScopeError
 from cosapp.utils.helpers import check_arg
@@ -18,7 +19,6 @@ from cosapp.utils.parsing import find_selector
 
 if TYPE_CHECKING:
     from cosapp.systems import System
-
 
 
 class AttrRef:
@@ -34,16 +34,16 @@ class AttrRef:
     key: str
         Name of the boundary
     """
-
     def __init__(self, obj: System, key: str) -> None:
         self._obj: Union[BasePort, Any]
 
         name = key
-        base = ""
-        if "." in key:
-            base, key = key.rsplit('.', maxsplit=1)
-            cc = compile("obj."+base, "str", "eval")
-            obj = eval(cc, {"obj": obj})
+        try:
+            base, key = key.rsplit(".", maxsplit=1)
+        except ValueError:
+            base = ""
+        else:
+            obj = eval(f"__obj__.{base}", {"__obj__": obj})
 
         from cosapp.systems import System
         if isinstance(obj, System):
@@ -84,7 +84,6 @@ class MaskedAttrRef(AttrRef):
     mask: numpy.ndarray
         Mask of the values in the vector boundary.
     """
-
     def __init__(self, obj: System, key: str, mask: numpy.ndarray) -> None:
         super().__init__(obj, key)
         self.set_attributes(mask)
@@ -100,7 +99,7 @@ class MaskedAttrRef(AttrRef):
     @property
     def value(self) -> MutableSequence:
         obj = getattr(self._obj, self._key)
-        return [obj.__getitem__(i) for i in self._mask_idx]
+        return list(map(obj.__getitem__, self._mask_idx))
 
     @value.setter
     def value(self, val: MutableSequence):
@@ -144,7 +143,6 @@ class NumpyMaskedAttrRef(AttrRef):
     mask: numpy.ndarray
         Mask of the values in the vector boundary.
     """
-
     def __init__(self, obj: System, key: str, mask: numpy.ndarray) -> None:
         super().__init__(obj, key)
         self.set_attributes(mask)
@@ -153,7 +151,7 @@ class NumpyMaskedAttrRef(AttrRef):
         self._mask = numpy.asarray(mask)
         self._mask_idx = self._mask.nonzero()[0]
 
-        array = getattr(self._obj, self._key)
+        array: numpy.ndarray = getattr(self._obj, self._key)
         self._ref_shape = array.shape
         self._ref_size = array.size
 
@@ -222,8 +220,8 @@ class Boundary:
     ) -> None:
         super().__init__(**kwargs)  # for collaborative inheritance
 
-        self._context = context  # type: cosapp.systems.System
-        self._default_value = None  # type: Union[Number, numpy.ndarray, None]
+        self._context = context
+        self._default_value: Union[Number, numpy.ndarray, None] = None
 
         basename, selector = Boundary.parse_expression(name)
         value, mask = Boundary.create_mask(context, basename, selector, mask)
@@ -275,7 +273,7 @@ class Boundary:
         system: System,
         basename: str,
         selector: str,
-        mask: Optional[numpy.ndarray] = None
+        mask: Optional[numpy.ndarray] = None,
     ) -> Tuple[Optional[Union[Number, Collection]], Optional[numpy.ndarray]]:
         """Evaluate the basename expression within its context 
         and generate a mask if a selector is specified in the fullname expression.
@@ -290,7 +288,7 @@ class Boundary:
             Expression corresponding to an array mask.
         - mask: Optional[numpy.ndarray]
             Imposed mask to apply on the variable; default is None (i.e. no mask).
-            
+        
         Returns
         -------
         Optional[Union[Number, Collection]]
@@ -298,7 +296,6 @@ class Boundary:
         Optional[numpy.ndarray]
             Imposed or generated mask to apply on the variable.
         """
-
         # evaluate expression without mask if any
         try:
             value = eval(f"s.{basename}", {}, {"s": system})
@@ -311,16 +308,16 @@ class Boundary:
 
         # get or create mask
         if mask is not None:
-            check_arg(mask, f"mask for variable {system.name!r}", (type(None), list, tuple, numpy.ndarray))
             if isinstance(value, Number):
-                raise TypeError("A mask cannot apply on a scalar.")
+                raise TypeError("A mask cannot be applied on a scalar.")
+            check_arg(mask, "mask", (list, tuple, numpy.ndarray))
 
             return value, numpy.asarray(mask)
 
         if selector:
             # Check value is an array
             if isinstance(value, numpy.ndarray) or Boundary.is_mutable_sequence(value):
-                if isinstance(value, numpy.ndarray) and not ((numpy.issubdtype(value.dtype, numpy.number) or value.size > 1)):
+                if isinstance(value, numpy.ndarray) and not (numpy.issubdtype(value.dtype, numpy.number) or value.size > 1):
                     raise ValueError(
                             f"Only non-empty numpy arrays can be partially selected; got {value}."
                         )
@@ -388,7 +385,6 @@ class Boundary:
         bool
             Specify if the boundary value is a scalar.
         """
-
         if mask is None:
             if isinstance(value, Number):
                 return AttrRef(context, basename), ScalarBoundaryImpl(), True
@@ -799,17 +795,20 @@ class AbstractTimeUnknown(abc.ABC):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)  # for collaborative inheritance
 
-    @abc.abstractproperty
+    @property
+    @abc.abstractmethod
     def der(self) -> EvalString:
         """Expression of the time derivative, given as an EvalString"""
         pass
 
-    @abc.abstractproperty
+    @property
+    @abc.abstractmethod
     def max_time_step_expr(self) -> EvalString:
         """Expression of the maximum admissible time step, given as an EvalString."""
         pass
 
-    @abc.abstractproperty
+    @property
+    @abc.abstractmethod
     def max_abs_step_expr(self) -> EvalString:
         """Expression of the maximum absolute step in one iteration, given as an EvalString."""
         pass
@@ -889,6 +888,10 @@ class TimeUnknown(Boundary, AbstractTimeUnknown):
         self.d_dt = der
         self.max_time_step = max_time_step
         self.max_abs_step = max_abs_step
+
+    def update_mask(self) -> None:
+        ref = self._ref
+        self._mask = ref._mask = numpy.ones_like(getattr(ref._obj, ref._key), dtype=bool)
 
     def __str__(self) -> str:
         try:
