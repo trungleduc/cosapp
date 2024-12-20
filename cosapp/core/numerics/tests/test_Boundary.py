@@ -28,6 +28,9 @@ class ASyst(System):
         self.add_inward('y', np.array([1., 2.]))
         self.add_inward('u', np.zeros(5))
         self.add_inward('cc', CustomClass())
+        self.add_inward('tuple', (5., 8., 10.))
+        self.add_inward('dict', {"a": 5.})
+        self.add_inward('string', "str_value")
         self.add_child(BSyst("b"))
         self.add_outward('v')
 
@@ -170,6 +173,9 @@ def test_Boundary_parse_array_2D(selector, expected):
     ('inwards.x', dict(name='x', basename="x", variable='x', portname='x')),
     ('y', dict(name='y', basename="y", variable='y', portname='y')),
     ('y[0]', dict(name='y[0]', basename="y", variable='y', portname='y')),
+    ('tuple', dict(name='tuple', basename="tuple", variable='tuple', portname='tuple')),
+    ('dict', dict(name='dict', basename="dict", variable='dict', portname='dict')),
+    ('string', dict(name='string', basename="string", variable='string', portname='string')),
     ('cc.r[:2]', dict(name='cc.r[:2]', basename="cc.r", variable='r', portname='cc')),
     ('cc.g.d', dict(name='cc.g.d', basename="cc.g.d", variable='d', portname='cc')),
     ('b.cc.r', dict(name='b.cc.r', basename="b.cc.r", variable='r', portname='b.cc')),
@@ -248,6 +254,9 @@ def test_Boundary__init__default_mask(a, name, init_mask, final_mask):
     ('y[:]', np.array([-2., 1.])),
     ('y[:]', [-2., 1.]),
     ('u[::2]', [1., 2., 3.]),
+    ('tuple', (2., 5., 9.)),
+    ('dict', {"b": 6.}),
+    ('string', "new_value"),
     ('cc.r[:2]', [1., 2.]),
     ('cc.g.d', 15.),
     ('b.cc.r', [5., 5., 5.]),
@@ -296,9 +305,7 @@ def test_Boundary__init__attr_ref(a, name, attr_ref):
     ('outwards', dict(), pytest.raises(ValueError)),
     ('y[', dict(), pytest.raises(SyntaxError)),
     ('y(', dict(), pytest.raises(SyntaxError)),  # TODO remove this test since tuple not allowed anymore
-    ('cc.get_g()', dict(), pytest.raises(TypeError, match="Type of evaluated expression is incompatible")),
     ('cc.h[0].seq2[1]', dict(), pytest.raises(AttributeError)),
-    ('cc.g', dict(), pytest.raises(TypeError)),
 ])
 def test_Boundary___init__error(a, name, kwargs, expected):
     with expected:
@@ -413,7 +420,6 @@ def test_Boundary_set_to_default(a, name, value, context_value):
     ("y[0]", [-99], False),
     ("y[1]", [2], True),
     ("y[1]", [-99], False),
-    # ("y", dict(mask=[False, False]), dict(value=[], expected=[], context_value=[1, 2], True)),
     ('cc.r[:2]', [1., 1.], True),
     ('cc.r[:2]', [-3., 4.], False),
     ('cc.g.d', 5., False),

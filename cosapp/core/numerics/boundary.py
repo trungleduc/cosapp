@@ -390,10 +390,12 @@ class Boundary:
         """
 
         if mask is None:
-            if value is None:
-                return AttrRef(context, basename), UndefinedBoundaryImpl(), False
-            elif isinstance(value, Number):
+            if isinstance(value, Number):
                 return AttrRef(context, basename), ScalarBoundaryImpl(), True
+            elif value is None:
+                return AttrRef(context, basename), UndefinedBoundaryImpl(), True
+            else:
+                return AttrRef(context, basename), GenericBoundaryImpl(), True
         else:
             if isinstance(value, numpy.ndarray):
                 return NumpyMaskedAttrRef(context, basename, mask), NumpyBoundaryImpl(), False
@@ -431,11 +433,6 @@ class Boundary:
         self._port = port = obj
         self._portname = portname
 
-        if not isinstance(self._ref.value, (Number, numpy.ndarray, type(None))):
-            if not Boundary.is_mutable_sequence(self._ref.value):
-                raise TypeError(
-                    f"Only numerical variables can be used in mathematical algorithms; got {portname!r} in {self.context.name!r}"
-                )
         if inputs_only and not port.is_input:
             raise ValueError(
                 f"Only variables in input ports can be used as boundaries; got {portname!r} in {port.contextual_name!r}."
@@ -651,6 +648,27 @@ class NumpyBoundaryImpl(AbstractBoundaryImpl):
         return value.size
 
 
+class GenericBoundaryImpl(AbstractBoundaryImpl):
+    """Class handling undefined Boundary."""
+
+    @staticmethod
+    def check_new_value(value: T, new: T) -> None:
+        if None not in (value, new):
+            if not isinstance(type(new), type(value)):
+                raise TypeError(f"Value to set is incompatible with the boundary value type; got {type(new)} \
+                            mismatching {type(value)}.")
+
+    @staticmethod
+    def update_value(ref_value: T, new: T, checks: bool = True) -> bool:
+        if checks:
+            GenericBoundaryImpl.check_new_value(ref_value, new)
+        return ref_value != new
+
+    @staticmethod
+    def size(value: T) -> Number:
+        raise NotImplementedError
+    
+
 class Unknown(Boundary):
     """Numerical solver unknown.
 
@@ -700,6 +718,7 @@ class Unknown(Boundary):
         mask: Optional[numpy.ndarray] = None,
     ):
         super().__init__(context, name, mask, inputs_only=True)
+        self.check_numerical_type()
 
         check_arg(max_abs_step, 'max_abs_step', Number, lambda x: x > 0)
         check_arg(max_rel_step, 'max_rel_step', Number, lambda x: x > 0)
@@ -717,6 +736,13 @@ class Unknown(Boundary):
             return str(self.value)
         except KeyError:  # boundary does not exist in the current context
             return str(self.default_value)
+    
+    def check_numerical_type(self):
+        if not isinstance(self.ref.value, (Number, numpy.ndarray, type(None))):
+            if not Boundary.is_mutable_sequence(self.ref.value):
+                raise TypeError(
+                    f"Only numerical variables can be used in mathematical algorithms; got {self.portname!r} in {self.context.name!r}"
+                )
 
     def copy(self) -> Unknown:
         """Copy the unknown object.
