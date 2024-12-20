@@ -18,8 +18,9 @@ class PointDynamics(System):
         self.add_outward("acc", np.zeros(3))
 
     def compute(self):
-        self.force = self.force_ext + self.mass * self.acc_ext
-        self.acc = self.force / self.mass
+        mass = np.expand_dims(self.mass, axis=-1)
+        self.force = self.force_ext + mass * self.acc_ext
+        self.acc = self.force / mass
 
 
 class PointFriction(System):
@@ -31,7 +32,9 @@ class PointFriction(System):
         self.add_outward("force", np.zeros(3))
 
     def compute(self):
-        self.force = (-self.cf * np.linalg.norm(self.v)) * self.v
+        v = self.v
+        cf = np.expand_dims(self.cf, axis=-1)
+        self.force = (-cf * np.linalg.norm(v)) * v
 
 
 class PointMass(System):
@@ -39,12 +42,10 @@ class PointMass(System):
     """
     def setup(self):
         self.add_child(PointFriction('friction'), pulling=['cf', 'v'])
-        self.add_child(PointDynamics('dynamics'), pulling={
-            'mass': 'mass',
-            'force': 'force',
-            'acc_ext': 'g',
-            'acc': 'a',
-        })
+        self.add_child(PointDynamics('dynamics'), pulling=[
+            'mass', 'force',
+            {'acc_ext': 'g', 'acc': 'a'},
+        ])
 
         self.connect(self.friction, self.dynamics, {"force": "force_ext"})
 
@@ -294,3 +295,69 @@ def test_BouncingBall_early_stop(ball: BouncingBall):
     assert len(record.events) == 1
     assert record.time == pytest.approx(0.123, rel=1e-15)
     assert record.events[0] is driver.scenario.stop
+
+
+def test_PointMass_array():
+    """Test of `PointMass` system where N points are followed,
+    using (Nx3) 2D arrays for positions, velocities and accelerations.
+    """
+    points = PointMass("points")
+
+    points.x = np.zeros((4, 3))
+    points.v = np.zeros((4, 3))
+    points.run_once()
+
+    assert points.a.shape == (4, 3)
+    assert points.force.shape == (4, 3)
+
+    driver = points.add_driver(RungeKutta(order=2))
+    driver.time_interval = (0, 1)
+    driver.dt = 0.01
+
+    # Add a recorder to capture time evolution in a dataframe
+    driver.add_recorder(
+        DataFrameRecorder(includes=['x', 'v', 'a']),
+        period=0.05,
+    )
+    # Define a simulation scenario
+    driver.set_scenario(
+        init = {
+            'x': np.array([[0., 0., 0.], [0., 0., 0.], [0., 0., 2.], [0., 0., 0.]]),
+            'v': np.array([[8., 0., 9.5], [8., 0., 9.5], [8., 0., 3.5], [1., 0.5, 2.]]),
+        },
+        values = {'mass': np.r_[1.5, 0.2, 1.0, 1.0], 'cf': 0.2},
+    )
+
+    points.run_drivers()
+
+    # Retrieve recorded data
+    data = driver.recorder.export_data()
+    a = np.asarray(data['a'].tolist())
+    v = np.asarray(data['v'].tolist())
+    x = np.asarray(data['x'].tolist())
+
+    assert a.shape == (21, 4, 3)
+    assert v.shape == (21, 4, 3)
+    assert x.shape == (21, 4, 3)
+    assert points.a.shape == (4, 3)
+    assert points.v.shape == (4, 3)
+    assert points.x.shape == (4, 3)
+
+    assert points.a.ravel() == pytest.approx([
+        -2.83706420, 0.0, -6.50322428,
+        -0.01703309, 0.0,  0.61487034,
+        -2.45615091, 0.0, -2.64471168,
+        -0.30701886, -0.15350943, -2.18418339,
+    ])
+    assert points.v.ravel() == pytest.approx([
+        2.66437248, 0.0, -3.10549273,
+        2.13283819e-03,  0.0, -1.30537465,
+        1.53776356, 0.0, -4.48609212,
+        1.92220444e-01,  9.61102222e-02, -4.77442279,
+    ])
+    assert points.x.ravel() == pytest.approx([
+        4.52916598, 0.0,  1.76454115,
+        0.59644036, 0.0, -0.42370318,
+        3.51819274, 0.0,  0.37993761,
+        0.43977409, 0.21988705, -2.27972353,
+    ])
