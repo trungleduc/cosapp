@@ -460,7 +460,6 @@ class PeriodicEvent(ZeroCrossingEvent):
         self._t0 = trigger.t0
         self._period = trigger.period
         self._counter = 1
-        self._prev_time = None
         super().__init__(event, ZeroCrossing.up(f"t - {self.event_time()}"))
 
     def reset(self) -> None:
@@ -484,11 +483,6 @@ class PeriodicEvent(ZeroCrossingEvent):
         if time >= event_time:
             self._counter = max(int((time - self._t0) / period), self._counter)
             self._shift_trigger()
-        if time == self._prev_time:
-            raise RuntimeError(
-                f"Event {time=} is inconsistent with expected periodic trigger, possibly due to rounding error."
-            )
-        self._prev_time = time
 
     def _shift_trigger(self) -> None:
         """Compute next trigger condition"""

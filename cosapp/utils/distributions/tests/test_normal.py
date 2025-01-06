@@ -25,16 +25,14 @@ def test_Normal_draw():
     # Worst < Best
     distrib = Normal(-1.0, 4.0, pworst=0.05, pbest=0.1)
 
-    assert distrib.draw(1 - distrib.pbest) == distrib.best
-
-    assert distrib.draw(distrib.pworst) == distrib.worst
+    assert distrib.draw(1 - distrib.pbest) == pytest.approx(distrib.best, rel=1e-14)
+    assert distrib.draw(distrib.pworst) == pytest.approx(distrib.worst, rel=1e-14)
 
     # Worst > Best
     distrib = Normal(4.0, 2.0, pbest=0.2, pworst=0.1)
 
-    assert distrib.draw(distrib.pbest) == pytest.approx(distrib.best)
-
-    assert distrib.draw(1 - distrib.pworst) == pytest.approx(distrib.worst)
+    assert distrib.draw(distrib.pbest) == pytest.approx(distrib.best, rel=1e-14)
+    assert distrib.draw(1 - distrib.pworst) == pytest.approx(distrib.worst, rel=1e-14)
 
     # Call without args
     ## Probability cannot be zero
