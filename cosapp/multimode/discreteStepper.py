@@ -6,7 +6,7 @@ import scipy.optimize
 from math import inf
 
 from typing import NamedTuple, Iterator, List, Dict, Tuple, TYPE_CHECKING
-from cosapp.multimode.event import Event
+from cosapp.multimode.event import Event, EventError
 from cosapp.utils import partition
 if TYPE_CHECKING:
     from cosapp.drivers import Driver
@@ -95,14 +95,19 @@ class DiscreteStepper():
         """Returns the date at which a primitive event was triggered.
         This method may only be called once the list of all triggered events is known
         and the interpolation data has been set."""
-        sysview = self._sysview
-        def f(t) -> float:
-            sysview.exec(t)
-            return event.value()
-        t1, t2 = self._interval
-        t_event = scipy.optimize.brentq(f, t1, t2)
-        # Reset system at original state
-        sysview.exec(t1)
+        try:
+            t_event = event._trigger_time()  # implemented if event is explicitly timed
+        except EventError:
+            # Event is not a timed event; find occurrence time by root finding
+            sysview = self._sysview
+            def f(t) -> float:
+                sysview.exec(t)
+                return event.value()
+            t1, t2 = self._interval
+            t_event = scipy.optimize.brentq(f, t1, t2)
+            # Reset system at original state
+            sysview.exec(t1)
+        
         return t_event
 
     def find_primal_event(self) -> TimedEvent:
