@@ -1,6 +1,17 @@
 # History
 
 
+## 0.19.1 (2025-01-07)
+
+### Bug fixes and code quality
+
+- Fix dealiasing bug for custom objects (MR [#362](https://gitlab.com/cosapp/cosapp/-/merge_requests/362)).
+- Fix bug in `ExplicitTimeDriver.set_scenario` (MR [#363](https://gitlab.com/cosapp/cosapp/-/merge_requests/363)).
+- Fix bug with array transients (MR [#364](https://gitlab.com/cosapp/cosapp/-/merge_requests/364)).
+- Suppress unnecessary exception in `PeriodicEvent.tick` (MR [#366](https://gitlab.com/cosapp/cosapp/-/merge_requests/366)).
+- Improve the handling of timed events (MR [#367](https://gitlab.com/cosapp/cosapp/-/merge_requests/367)).
+
+
 ## 0.19.0 (2024-12-04)
 
 ### New features & API changes
