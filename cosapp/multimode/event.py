@@ -1,7 +1,6 @@
 from __future__ import annotations
 import abc
 import logging, warnings
-from math import floor
 from numpy import bool_ as numpy_bool
 from typing import Any, Union, Optional, TYPE_CHECKING
 from numbers import Number
@@ -14,6 +13,10 @@ if TYPE_CHECKING:
     from cosapp.systems import System
 
 logger = logging.getLogger(__name__)
+
+
+class EventError(Exception):
+    """Raised if an event-related error is encountered."""
 
 
 class EventState(abc.ABC):
@@ -51,6 +54,9 @@ class EventState(abc.ABC):
 
     def lock(self) -> None:
         pass
+
+    def trigger_time(self) -> float:
+        raise EventError("Event is not explicitly triggered by an occurrence time.")
 
 
 class Event:
@@ -246,6 +252,12 @@ class Event:
     def to_trigger(self) -> bool:
         """bool : Indicates whether the event has to be triggered in the next discrete step"""
         return self._present ^ self._state.to_emit()
+
+    def _trigger_time(self) -> float:
+        """Returns the trigger time, if known. Otherwise, raises `EventError`.
+        For internal use only.
+        """
+        return self._state.trigger_time()
 
     def filter(self, condition: str) -> FilteredEvent:
         """Filters event with an additional boolean condition.
@@ -460,7 +472,7 @@ class PeriodicEvent(ZeroCrossingEvent):
         self._t0 = trigger.t0
         self._period = trigger.period
         self._counter = 1
-        super().__init__(event, ZeroCrossing.up(f"t - {self.event_time()}"))
+        super().__init__(event, ZeroCrossing.up(f"t - {self.trigger_time()}"))
 
     def reset(self) -> None:
         """Reset the event, in such a way that the event will not occur
@@ -471,15 +483,15 @@ class PeriodicEvent(ZeroCrossingEvent):
             self._counter = 0
             self._shift_trigger()
 
-    def event_time(self) -> float:
+    def trigger_time(self) -> float:
         """Expected time of the next event occurrence."""
-        return round(self._t0 + self._counter * self._period, 14)
+        return self._t0 + self._counter * self._period
 
     def tick(self):
         super().tick()
         period = self._period
         time = self._event._context.time
-        event_time = self.event_time()
+        event_time = self.trigger_time()
         if time >= event_time:
             self._counter = max(int((time - self._t0) / period), self._counter)
             self._shift_trigger()
@@ -487,6 +499,6 @@ class PeriodicEvent(ZeroCrossingEvent):
     def _shift_trigger(self) -> None:
         """Compute next trigger condition"""
         self._counter += 1
-        self._expr = EvalString(f"t - {self.event_time():.15}", self._event.context)
+        self._expr = EvalString(f"t - {self.trigger_time()}", self._event.context)
         self._event._cancel()
         self._prev = self.value()
