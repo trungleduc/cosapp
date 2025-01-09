@@ -32,10 +32,10 @@ def get_free_inputs(system: System) -> Dict[str, VariableReference]:
 
         for port in system.inputs.values():
             portname = get_portname(port)
-            inputs.update({
-                f"{portname}.{name}": f"{portname}.{name}"
+            inputs.update(
+                (f"{portname}.{name}", f"{portname}.{name}")
                 for name in port
-            })
+            )
 
         for connector in system.incoming_connectors():
             if not connector.is_active:
@@ -51,10 +51,10 @@ def get_free_inputs(system: System) -> Dict[str, VariableReference]:
                 )
             else:
                 source_name = get_portname(source)
-                inputs.update({
-                    f"{sink_name}.{target}": f"{source_name}.{origin}"
+                inputs.update(
+                    (f"{sink_name}.{target}", f"{source_name}.{origin}")
                     for target, origin in connector.mapping.items()
-                })
+                )
 
         for child in system.children.values():
             child_inputs, child_bound_inputs = recursive_search(child, head)

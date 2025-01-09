@@ -1,7 +1,7 @@
 """
 Module defining the Signal class.
 """
-
+from __future__ import annotations
 import inspect
 import logging
 import threading
@@ -13,10 +13,8 @@ logger = logging.getLogger(__name__)
 
 
 class DummyLock:
+    """Class that implements a no-op instead of a re-entrant lock.
     """
-    Class that implements a no-op instead of a re-entrant lock.
-    """
-
     def __enter__(self):
         pass
 
@@ -25,17 +23,16 @@ class DummyLock:
 
 
 class Signal:
-    """
-    Define a signal by instanciating a :py:class:`Signal` object, ie.:
+    """Define a signal by instanciating a :py:class:`Signal` object, i.e.:
 
     >>> conf_pre_load = Signal()
 
-    Optionaly, you can declare a list of argument names for this signal, ie.:
+    Optionaly, you can declare a list of argument names for this signal, i.e.:
 
     >>> conf_pre_load = Signal(args=['conf'])
 
     Any callable can be connected to a Signal, it **must** accept keywords
-    (``**kwargs``) and be wrapped in a `Slot` object, ie.:
+    (``**kwargs``) and be wrapped in a `Slot` object, i.e.:
 
     >>> def yourmodule_conf(conf, **kwargs):
     ...     conf['yourmodule_option'] = 'foo'
@@ -76,18 +73,18 @@ class Signal:
 
     @property
     def slots(self) -> List[Slot]:
-        """
-        Return a list of slots for this signal.
+        """List of active slots attached to signal.
+        Updates the signal in the process.
         """
         with self.__slot_lock:
             # Do a slot clean-up
             slots = []
-            for s in self.__slots:
-                if isinstance(s, Slot) and (not s.is_alive):
+            for slot in self.__slots:
+                if isinstance(slot, Slot) and (not slot.is_alive):
                     continue
-                slots.append(s)
+                slots.append(slot)
             self.__slots = slots
-            return list(slots)
+            return list(slots)  # return a copy
 
     def connect(self, slot: Union[Slot, Callable]) -> None:
         """
@@ -125,7 +122,7 @@ class Signal:
     def emit(self, **kwargs) -> Optional[Any]:
         """
         Emit signal, which will execute every connected callback `slot`,
-        passing keyword arguments.
+        passing additional keyword arguments.
 
         If a slot returns anything other than None, then :py:meth:`emit` will
         return that value preventing any other slot from being called.
@@ -151,7 +148,7 @@ class Signal:
                 if result is not None:
                     return result
 
-    def __eq__(self, other: Union[Slot, Callable]) -> bool:
+    def __eq__(self, other: Signal) -> bool:
         """
         Return True if other has the same slots connected.
 

@@ -1,15 +1,5 @@
 import abc
-from typing import List
-
-
-class Component(metaclass=abc.ABCMeta):
-    """Abstract Base Class for visited components"""
-    __slots__ = ()
-
-    @abc.abstractmethod
-    def accept(self, visitor) -> None:
-        """Determines class-dependent course of action when visited by `visitor`"""
-        pass
+from typing import Collection
 
 
 class Visitor:
@@ -24,7 +14,17 @@ class Visitor:
         pass
 
 
-def send(visitor: Visitor, components: List[Component]):
+class Component(metaclass=abc.ABCMeta):
+    """Abstract Base Class for visited components"""
+    __slots__ = ()
+
+    @abc.abstractmethod
+    def accept(self, visitor: Visitor) -> None:
+        """Determines class-dependent course of action when visited by `visitor`"""
+        pass
+
+
+def send(visitor: Visitor, components: Collection[Component]):
     """Send a visitor to a list of generic components"""
     for component in components:
         component.accept(visitor)
