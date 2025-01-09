@@ -206,7 +206,7 @@ class Module(LoggerContext, VisitedComponent, metaclass=abc.ABCMeta):
         except:
             pass
 
-    def path_to_root(self) -> Generator[Module, None, None]:
+    def path_to_root(self: ModuleType) -> Generator[ModuleType, None, None]:
         """Generator recursively yielding all elements up to root module.
         """
         current = self
@@ -215,12 +215,12 @@ class Module(LoggerContext, VisitedComponent, metaclass=abc.ABCMeta):
             current = current.parent
             yield current
 
-    def root(self) -> Module:
+    def root(self: ModuleType) -> ModuleType:
         for root in self.path_to_root():
             continue
         return root
 
-    def path(self) -> List[Module]:
+    def path(self: ModuleType) -> List[ModuleType]:
         """Returns full path from root Module as a list.
         
         Returns
