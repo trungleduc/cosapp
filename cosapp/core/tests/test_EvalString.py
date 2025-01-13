@@ -337,3 +337,18 @@ def test_EvalString_enum(eval_context):
     s = EvalString(Mode.A, eval_context)
     assert s.constant
     assert s.eval() is Mode.A
+
+
+@pytest.mark.parametrize(
+    "expression", [
+        "norm(x, inf)",
+        "g * cos(pi * x)",
+        "g * cos(pi * x) + sub.z",
+        "g * cos(pi * x) / out.q + sub.z * sub.in_.q + out.q",
+    ]
+)
+def test_EvalString_equality(eval_context, expression):
+    """Test attributes collected during ast visit."""
+    e1 = EvalString(expression, eval_context)
+    e2 = EvalString(expression, eval_context)
+    assert e1 == e2

@@ -116,6 +116,10 @@ class AbstractResidue:
         """
         pass
 
+    @abstractmethod
+    def __eq__(self, other: AbstractResidue) -> bool:
+        """Equality method"""
+
 
 class Residue(AbstractResidue):
     """Classical residue definition based on an equality equation
@@ -310,6 +314,13 @@ class Residue(AbstractResidue):
         name = self.__equation or self._name
         return f"{name} := {self._value}"
 
+    def __eq__(self, other: Residue) -> bool:
+        try:
+            same_equation = (self.__sides == other.__sides)  # NB: EvalString.__eq__ checks that contexts are identical
+            return same_equation and self._reference_value == other._reference_value
+        except:
+            return False
+
     def eval_sides(self) -> Tuple[Any, Any]:
         """Evaluate and return left- and right-hand sides as a tuple"""
         return self.__sides.eval()
@@ -423,3 +434,10 @@ class DeferredResidue:
     def __repr__(self) -> str:
         clsname = self.__class__.__name__
         return f"{clsname}({self.context.name}, {self.target}, reference={self.reference})"
+
+    def __eq__(self, other: DeferredResidue) -> bool:
+        try:
+            same_target = (self.__lhs == other.__lhs)  # NB: EvalString.__eq__ checks that contexts are identical
+            return same_target and self.reference == other.reference
+        except:
+            return False

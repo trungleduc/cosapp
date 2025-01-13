@@ -266,7 +266,7 @@ def test_Boundary__init__default_value(a, name, value):
     assert x.default_value == pytest.approx(value, abs=0)
 
 
-@pytest.mark.parametrize("name, attr_ref", [
+@pytest.mark.parametrize("name, cls", [
     ('in_.m', AttrRef),
     ('x', AttrRef),
     ('inwards.x', AttrRef),
@@ -283,9 +283,37 @@ def test_Boundary__init__default_value(a, name, value):
     ('cc.h', MaskedAttrRef),
     ('cc.h[1].seq2', MaskedAttrRef),
 ])
-def test_Boundary__init__attr_ref(a, name, attr_ref):
+def test_Boundary_ref(a, name, cls):
     x = Boundary(a, name)
-    assert isinstance(x._ref, attr_ref)
+    assert isinstance(x._ref, cls)
+    assert isinstance(x._ref, AttrRef)
+
+
+@pytest.mark.parametrize("name", [
+    'in_.m',
+    'x',
+    'inwards.x',
+    'y',
+    'y[0]',
+    'cc.g.d',
+    'cc.r[:2]',
+    'b.cc.r',
+    'cc.get_g().x',
+    'cc.get_g().x[1]',
+    'cc.w[:2]',
+    'cc.seq',
+    'cc.seq[1]',
+    'cc.h',
+    'cc.h[1].seq2',
+])
+def test_Boundary_equality(a, name):
+    b1 = Boundary(a, name)
+    b2 = Boundary(a, name)
+    assert b1 is not b2
+    assert b1._ref is not b2._ref
+    assert b1._ref == b2._ref
+    assert b1 == b2
+
 
 @pytest.mark.parametrize("name, kwargs, expected", [
     ('_', dict(), pytest.raises(AttributeError)),

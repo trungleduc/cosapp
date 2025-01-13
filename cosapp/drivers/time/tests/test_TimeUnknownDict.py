@@ -131,16 +131,18 @@ def test_TimeUnknownDict_update(system, unknowns):
 
     vardict = TimeUnknownDict(A=a)
     assert set(vardict.keys()) == {"A"}
+    assert vardict["A"] is a
 
     vardict.update({"B": b, "C": c})
     assert set(vardict.keys()) == {"A", "B", "C"}
+    assert list(vardict.values()) == [a, b, c]
 
     d = TimeUnknown(system, 'sub2.y', der='f', max_time_step=0.1)
     other = TimeUnknownDict(D=d)
     vardict.update(other)
     assert vardict["D"] is d
     assert set(vardict.keys()) == {"A", "B", "C", "D"}
-    assert set(vardict.values()) == {a, b, c, d}
+    assert list(vardict.values()) == [a, b, c, d]
 
 
 def test_TimeUnknownDict_pop(unknowns):
@@ -214,38 +216,40 @@ def test_TimeUnknownDict_iterators(unknowns_dict, system):
     assert len(keys) == len(vardict)
     assert len(values) == len(vardict)
     assert set(keys) == {"A", "B", "C"}
-    assert set(values) == {a, b, c}
+    assert vardict["A"] == vardict["A"]
+    assert list(values) == [a, b, c]
 
     assert set(vardict.keys()) == {"A", "B", "C"}
-    assert set(vardict.values()) == {a, b, c}
+    assert list(vardict.values()) == [a, b, c]
     assert set(vardict.keys(constrained=True)) == {"C"}
-    assert set(vardict.values(constrained=True)) == {c}
+    assert list(vardict.values(constrained=True)) == [c]
 
     vardict["C2"] = vardict["C"]
     assert vardict["C2"] is c
     assert set(vardict.keys()) == {"A", "B", "C", "C2"}
-    assert set(vardict.values()) == {a, b, c}
+    assert list(vardict.values()) == [a, b, c, c]
     assert set(vardict.keys(constrained=True)) == {"C", "C2"}
-    assert set(vardict.values(constrained=True)) == {c}
+    assert list(vardict.values(constrained=True)) == [c, c]
 
     vardict["C2"] = vardict["A"]
     assert vardict["C2"] is a
     assert set(vardict.keys()) == {"A", "B", "C", "C2"}
-    assert set(vardict.values()) == {a, b, c}
+    assert list(vardict.values()) == [a, b, c, a]
     assert set(vardict.keys(constrained=True)) == {"C"}
-    assert set(vardict.values(constrained=True)) == {c}
+    assert list(vardict.values(constrained=True)) == [c]
 
     # Add new time unknown
     d = TimeUnknown(system, 'sub2.y', der='f', max_time_step=0.1)
     vardict["D"] = d
     assert set(vardict.keys()) == {"A", "B", "C", "C2", "D"}
-    assert set(vardict.values()) == {a, b, c, d}
+    assert list(vardict.values()) == [a, b, c, a, d]
     assert set(vardict.keys(constrained=True)) == {"C", "D"}
-    assert set(vardict.values(constrained=True)) == {c, d}
+    assert list(vardict.values(constrained=True)) == [c, d]
     # Check property `constrained`
     assert isinstance(vardict.constrained, dict)
     assert set(vardict.keys(constrained=True)) == set(vardict.constrained.keys())
-    assert set(vardict.values(constrained=True)) == set(vardict.constrained.values())
+    assert list(vardict.values(constrained=True)) == list(vardict.constrained.values())
+    assert dict(vardict.items(constrained=True)) == vardict.constrained
 
 
 def test_TimeUnknownDict_max_time_step(unknowns_dict):

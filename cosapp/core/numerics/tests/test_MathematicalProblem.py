@@ -3,7 +3,6 @@ import pytest
 import numpy as np
 import logging, re
 from collections import OrderedDict
-from numbers import Number
 from typing import Tuple, Dict, Any
 
 from cosapp.base import System, Port
@@ -52,8 +51,8 @@ class DynamicSystemC(System):
 
 @pytest.fixture(scope='function')
 def test_objects() -> Tuple[System, MathematicalProblem]:
-    system = SystemA('system_a')
-    return system, MathematicalProblem('math_pb', system)
+    system = SystemA('system')
+    return system, MathematicalProblem('problem', system)
 
 
 def test_MathematicalProblem__init__():
@@ -927,3 +926,42 @@ def test_MathematicalProblem_validate(test_objects: Tuple[System, MathematicalPr
     assert problem.n_unknowns == 3
     assert problem.n_equations == 3
     assert problem.validate() is None
+
+
+def test_MathematicalProblem_equality():
+    system = SystemA("system")
+    # Create reference problem
+    problem = system.new_problem("foo")
+    problem.add_equation("g == 0").add_unknown("c[:2]")
+    problem.add_equation("h == array([22., 4.2])", name="h equation", reference=24.)
+
+    # Problem copy
+    other = problem.copy()
+    assert other.shape == problem.shape
+    assert other._residues == problem._residues
+    assert other._unknowns == problem._unknowns
+    assert other._targets == problem._targets
+    assert other == problem
+
+    other.add_unknown("a")
+    assert other != problem
+
+    # New problem, extended from reference problem
+    other = system.new_problem("bar")
+    assert other.shape == (0, 0)
+    other.extend(problem, copy=True)
+    assert other == problem
+
+    # New problem, identical to reference problem
+    identical = system.new_problem("bar")
+    identical.add_equation("g == 0").add_unknown("c[:2]")
+    identical.add_equation("h == array([22., 4.2])", name="h equation", reference=24.)
+    assert identical == problem
+
+    # New problem, identical to reference problem,
+    # but defined on another system `s2`
+    s2 = SystemA("s2")
+    p2 = s2.new_problem("p2")
+    p2.add_equation("g == 0").add_unknown("c[:2]")
+    p2.add_equation("h == array([22., 4.2])", name="h equation", reference=24.)
+    assert p2 != problem

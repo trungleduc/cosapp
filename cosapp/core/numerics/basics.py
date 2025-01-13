@@ -253,6 +253,15 @@ class MathematicalProblem(BaseProblem):
             )
         return "\n".join(lines) if lines else "empty problem"
 
+    def __eq__(self, other: MathematicalProblem) -> bool:
+        try:
+            return all(
+                getattr(self, name) == getattr(other, name)
+                for name in ("_context", "_unknowns", "_residues", "_targets")
+            )
+        except:
+            return False
+
     @property
     def residues(self) -> Dict[str, Residue]:
         """Dict[str, Residue]: Residue dictionary defined in problem."""

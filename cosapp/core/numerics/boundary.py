@@ -69,6 +69,11 @@ class AttrRef:
     def __copy__(self) -> AttrRef:
         return AttrRef(self._obj, self._key)
 
+    def __eq__(self, other: AttrRef) -> bool:
+        try:
+            return self._obj is other._obj and self._key == other._key
+        except:
+            return False
 
 class MaskedAttrRef(AttrRef):
     """Masked Attribute Reference for MutableSequence-like object.
@@ -107,13 +112,19 @@ class MaskedAttrRef(AttrRef):
         for i, new in zip(self._mask_idx, val):
             obj.__setitem__(i, new)
 
-    def mask(self, mask: numpy.ndarray) -> None:
+    def set_mask(self, mask: numpy.ndarray) -> None:
         self._mask[:] = mask
         self._mask_idx = mask.nonzero()[0]
 
     def __copy__(self) -> MaskedAttrRef:
         return MaskedAttrRef(self._obj, self._key, self._mask.copy())
     
+    def __eq__(self, other: MaskedAttrRef) -> bool:
+        try:
+            return super().__eq__(other) and numpy.array_equal(self._mask, other._mask)
+        except:
+            return False
+
     @classmethod
     def make_from_attr_ref(
         cls: MaskedAttrRef,
@@ -163,11 +174,17 @@ class NumpyMaskedAttrRef(AttrRef):
     def value(self, val: Union[numpy.ndarray, MutableSequence]):
         getattr(self._obj, self._key)[self._mask] = numpy.asarray(val)
     
-    def mask(self, mask: numpy.ndarray) -> None:
+    def set_mask(self, mask: numpy.ndarray) -> None:
         self._mask[:] = mask
 
     def __copy__(self) -> NumpyMaskedAttrRef:
         return NumpyMaskedAttrRef(self._obj, self._key, self._mask.copy())
+    
+    def __eq__(self, other: MaskedAttrRef) -> bool:
+        try:
+            return super().__eq__(other) and numpy.array_equal(self._mask, other._mask)
+        except:
+            return False
 
     @classmethod
     def make_from_attr_ref(
@@ -192,6 +209,12 @@ class MaskedVarInfo(NamedTuple):
     @property
     def fullname(self) -> str:
         return f"{self.basename}{self.selector}"
+
+    def __eq__(self, other: MaskedVarInfo) -> bool:
+        try:
+            return self[:2] == other[:2] and numpy.array_equal(self.mask, other.mask)
+        except:
+            return False
 
 
 class Boundary:
@@ -444,6 +467,12 @@ class Boundary:
     def __repr__(self) -> str:
         return f"{self.name} := {self!s}"
 
+    def __eq__(self, other: Boundary) -> bool:
+        try:
+            return self._context is other._context and self._ref == other._ref
+        except:
+            return False
+
     @property
     def context(self) -> System:
         """cosapp.systems.System : `System` in which the boundary is defined."""
@@ -509,16 +538,18 @@ class Boundary:
         if not self._is_scalar and mask is not None:
             mask = numpy.asarray(mask)
             if mask.shape != self._ref._ref_shape:
-                raise ValueError(f"Set mask does not fit the context array shape; got {mask.shape!r} \
-                                    to set in {self._ref._ref_shape}.")
-
+                raise ValueError(
+                    f"Set mask does not fit the context array shape"
+                    f"; got {mask.shape!r} to set in {self._ref._ref_shape}."
+                )
             if self._default_value is not None:
                 default_size = numpy.asarray(self._default_value).size
                 if numpy.count_nonzero(mask) != default_size:
-                    raise ValueError(f"Set mask does not fit the current boundary value; got {numpy.count_nonzero(mask)!r} \
-                                    mismatching {default_size}.")
-
-            self._ref.mask(mask)
+                    raise ValueError(
+                        f"Set mask does not fit the current boundary value"
+                        f"; got {numpy.count_nonzero(mask)!r} mismatching {default_size}."
+                    )
+            self._ref.set_mask(mask)
 
     @property
     def value(self) -> Union[Number, numpy.ndarray]:
@@ -547,7 +578,7 @@ class Boundary:
             self._default_value = new
 
     @property
-    def size(self) -> Number:
+    def size(self) -> int:
         return self._boundary_impl.size(self._ref.value)
 
 
@@ -561,7 +592,7 @@ class AbstractBoundaryImpl(abc.ABC):
     def update_value(ref_value: T, new: T, checks: bool = True) -> bool: ...
 
     @abc.abstractmethod
-    def size(value: T) -> Number: ...
+    def size(value: T) -> int: ...
 
 
 class UndefinedBoundaryImpl(AbstractBoundaryImpl):
@@ -576,7 +607,7 @@ class UndefinedBoundaryImpl(AbstractBoundaryImpl):
         raise NotImplementedError
 
     @staticmethod
-    def size(value: T) -> Number:
+    def size(value: T) -> int:
         raise NotImplementedError
 
 
@@ -586,8 +617,10 @@ class ScalarBoundaryImpl(AbstractBoundaryImpl):
     @staticmethod
     def check_new_value(value: Number, new: Number) -> None:
         if not isinstance(new, Number):
-            raise TypeError(f"Value to set is incompatible with the boundary value type; got {type(new)} \
-                            mismatching {type(value)}.")
+            raise TypeError(
+                f"Value to set is incompatible with the boundary value type"
+                f"; got {type(new)} mismatching {type(value)}."
+            )
 
     @staticmethod
     def update_value(ref_value: Number, new: Number, checks: bool = True) -> bool:
@@ -596,7 +629,7 @@ class ScalarBoundaryImpl(AbstractBoundaryImpl):
         return ref_value != new
 
     @staticmethod
-    def size(value: Number) -> Number:
+    def size(value: Number) -> int:
         return 1
 
 
@@ -619,7 +652,7 @@ class MutableSeqBoundaryImpl(AbstractBoundaryImpl):
         return not numpy.array_equal(ref_value, new)
 
     @staticmethod
-    def size(value: MutableSequence) -> Number:
+    def size(value: MutableSequence) -> int:
         return len(value)
 
 
@@ -640,7 +673,7 @@ class NumpyBoundaryImpl(AbstractBoundaryImpl):
         return not numpy.array_equal(ref_value, new)
 
     @staticmethod
-    def size(value: numpy.ndarray) -> Number:
+    def size(value: numpy.ndarray) -> int:
         return value.size
 
 
@@ -651,8 +684,10 @@ class GenericBoundaryImpl(AbstractBoundaryImpl):
     def check_new_value(value: T, new: T) -> None:
         if None not in (value, new):
             if not isinstance(type(new), type(value)):
-                raise TypeError(f"Value to set is incompatible with the boundary value type; got {type(new)} \
-                            mismatching {type(value)}.")
+                raise TypeError(
+                    f"Value to set is incompatible with the boundary value type"
+                    f"; got {type(new)} mismatching {type(value)}."
+                )
 
     @staticmethod
     def update_value(ref_value: T, new: T, checks: bool = True) -> bool:
@@ -661,7 +696,7 @@ class GenericBoundaryImpl(AbstractBoundaryImpl):
         return ref_value != new
 
     @staticmethod
-    def size(value: T) -> Number:
+    def size(value: T) -> int:
         raise NotImplementedError
     
 
@@ -726,6 +761,15 @@ class Unknown(Boundary):
         self.upper_bound = upper_bound  # type: Number
         self.max_abs_step = max_abs_step  # type: Number
         self.max_rel_step = max_rel_step  # type: Number
+
+    def __eq__(self, other: Unknown) -> bool:
+        try:
+            return super().__eq__(other) and all(
+                getattr(self, name) == getattr(other, name)
+                for name in ("max_abs_step", "max_rel_step", "lower_bound", "upper_bound")
+            )
+        except:
+            return False
 
     def __str__(self) -> str:
         try:
@@ -870,7 +914,6 @@ class TimeUnknown(Boundary, AbstractTimeUnknown):
     max_time_step : float
         Max time step authorized in one iteration; default numpy.inf
     """
-
     def __init__(self,
         context: System,
         name: str,

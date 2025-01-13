@@ -413,12 +413,17 @@ class ExplicitTimeDriver(Driver):
     def transition(self) -> None:
         """Execute owner system transition and reinitialize sub-drivers"""
         owner = self.owner
-        owner.tree_transition()
-        owner.close_loops()
-        owner.open_loops()
-        # Reinitialize sub-drivers after system transition
-        for driver in self.children.values():
-            driver.call_setup_run()
+        modified_structure = owner.tree_transition()
+        if modified_structure:
+            logger.info(
+                f"System structure changed during transition @t={self.time}"
+                f"; reopen loops and reinitialize sub-drivers (if any)"
+            )
+            owner.close_loops()
+            owner.open_loops()
+            # Reinitialize sub-drivers
+            for driver in self.children.values():
+                driver.call_setup_run()
 
     def _set_time(self, t: Number) -> None:
         dt = t - self.time
