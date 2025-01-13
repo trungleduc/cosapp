@@ -274,6 +274,16 @@ def test_Residue_variables_head(composite, args_kwargs, expected):
     assert r.variables == expected
 
 
+def test_Residue_equality(composite):
+    """Test method `Residue.__eq__`."""
+    r1 = Residue(composite, "ac.u[0] == ac.acb.p_out.x")
+    r2 = Residue(composite, "ac.u[0] == ac.acb.p_out.x")
+    r3 = Residue(composite, "ac.u[0] - ac.acb.p_out.x == 0")
+    assert r1 == r1
+    assert r1 == r2
+    assert r1 != r3  # considered different, even though residue values are identical
+
+
 def test_Residue_variables_subsystems(composite):
     """Test property `Residue.variables` for equations defined in subsystems."""
     a = composite

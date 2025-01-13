@@ -6,6 +6,7 @@ from __future__ import annotations
 import collections
 import importlib
 import json
+import copy
 import logging
 import os
 import warnings
@@ -2300,18 +2301,34 @@ class System(Module, TimeObserver):
         for connector in self.incoming_connectors():
             connector.transfer()
 
-    def tree_transition(self) -> None:
-        """Invoke transition in entire system tree"""
+    def tree_transition(self) -> bool:
+        """Invoke transition in entire system tree.
+        
+        Returns
+        -------
+        bool: `True` if system structure has changed, `False` otherwise.
+        """
+        modified = False
+        original_pb = self._math.copy()
+
         for child in self.children.values():
             # Retrieve data from sibling systems
             for connector in self.__child_connectors.get(child.name, []):
                 connector.transfer()
-            child.tree_transition()
+            modified |= child.tree_transition()
+
         # Pull values from sub-systems
         for connector in self.__pulling_connectors:
             connector.transfer()
+
         with self.__free_problem:
             self.transition()
+        
+        if not modified:
+            # Check if intrinsic problem or internal structure have changed
+            modified = (self.__input_mapping is None) or (original_pb != self._math)
+        
+        return modified
 
     def tree_init_mode(self) -> None:
         """Invoke mode initialization in entire system tree"""
@@ -2821,9 +2838,8 @@ class System(Module, TimeObserver):
                 if sink.owner is self:
                     self.__pulling_connectors.append(new_connector)
                 else:
-                    target = new_connector.sink.owner.name
-                    child_connectors.setdefault(target, [])
-                    child_connectors[target].append(new_connector)
+                    child_name = new_connector.sink.owner.name
+                    child_connectors.setdefault(child_name, []).append(new_connector)
             else:
                 # Sink and source are already connected: update connector
                 connector.update_mapping(new_connector.mapping)

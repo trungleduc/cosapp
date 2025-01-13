@@ -216,15 +216,21 @@ def case_TwoWayCircuit():
     return circuit, driver
 
 
-def test_TwoWayCircuit(case_TwoWayCircuit):
+def test_TwoWayCircuit(case_TwoWayCircuit, caplog):
+    """Test multimode system with system reconfiguration (new sub-system)"""
     circuit, driver = case_TwoWayCircuit
     omega = 6
     driver.set_scenario(
         values = {
-            'elec_in.V': f"cos({omega} * t)",
+            "elec_in.V": f"cos({omega} * t)",
         }
     )
-    circuit.run_drivers()
+    with caplog.at_level("INFO", logger="cosapp.drivers.time.interfaces"):
+        circuit.run_drivers()
+
+    assert len(caplog.messages) == 2
+    for message in caplog.messages:
+        assert message.startswith("System structure changed during transition @t=")
 
     df = driver.recorder.export_data()
     # print("", df.drop(['Section', 'Status', 'Error code'], axis=1), sep="\n")
@@ -232,7 +238,7 @@ def test_TwoWayCircuit(case_TwoWayCircuit):
     for i, row in df.iterrows():
         I = row['elec_in.I']
         R = row['Requiv']
-        context = f"row #{i}, I = {I}, {list(circuit.exec_order)}"
+        context = f"row #{i}, {I = }, {list(circuit.exec_order)}"
         if I > 1e-12:
             assert R == pytest.approx(100), context
         elif I < -1e-12:
@@ -258,15 +264,21 @@ def case_TwoWayCircuitWithEq():
     return circuit, driver
 
 
-def test_TwoWayCircuitWithEq(case_TwoWayCircuitWithEq):
+def test_TwoWayCircuitWithEq(case_TwoWayCircuitWithEq, caplog):
+    """Test multimode system with system reconfiguration (intrinsic problem)"""
     circuit, driver = case_TwoWayCircuitWithEq
     omega = 6
     driver.set_scenario(
         values = {
-            'elec_in.V': f"cos({omega} * t)",
+            "elec_in.V": f"cos({omega} * t)",
         }
     )
-    circuit.run_drivers()
+    with caplog.at_level("INFO", logger="cosapp.drivers.time.interfaces"):
+        circuit.run_drivers()
+
+    assert len(caplog.messages) == 2
+    for message in caplog.messages:
+        assert message.startswith("System structure changed during transition @t=")
 
     df = driver.recorder.export_data()
     # print("", df.drop(['Section', 'Status', 'Error code'], axis=1), sep="\n")
@@ -274,7 +286,7 @@ def test_TwoWayCircuitWithEq(case_TwoWayCircuitWithEq):
     for i, row in df.iterrows():
         I = row['elec_in.I']
         R = row['Requiv']
-        context = f"row #{i}, I = {I}"
+        context = f"row #{i}, {I = }"
         if I > 1e-12:
             assert R == pytest.approx(100), context
         elif I < -1e-12:

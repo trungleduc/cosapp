@@ -437,6 +437,12 @@ class EvalString:
         """FrozenSet[str]: System constant properties required for the evaluation of the expression."""
         return self.__all_vars - self.__unconst_vars
 
+    def __eq__(self, other: EvalString) -> bool:
+        try:
+            return self.__context is other.__context and self.__str == other.__str
+        except:
+            return False
+
 
 class AssignString:
     """Create an executable assignment of the kind 'lhs = rhs' from two evaluable expressions lhs and rhs.
