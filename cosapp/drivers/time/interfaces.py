@@ -328,7 +328,7 @@ class ExplicitTimeDriver(Driver):
                 record_data()
                 record_event()
                 stepper.reevaluate_primitive_events()
-                self.transition()
+                self.transition(occurring.time)
                 record_event(occurring.event.contextual_name)
                 record = EventRecord(occurring.time, [occurring.event])
                 event_cascade = set(stepper.present_events())
@@ -338,7 +338,7 @@ class ExplicitTimeDriver(Driver):
                 while stepper.event_detected():  # following steps: event cascade
                     events = stepper.discrete_step()
                     event_cascade.update(events)
-                    self.transition()
+                    self.transition(occurring.time)
                     stamp = ", ".join(event.contextual_name for event in events)
                     record_event(stamp)
                     stepper.tick()
@@ -410,13 +410,13 @@ class ExplicitTimeDriver(Driver):
                     f"Stop criterion met at t = {last_record.time}"
                 )
 
-    def transition(self) -> None:
+    def transition(self, time: float) -> None:
         """Execute owner system transition and reinitialize sub-drivers"""
         owner = self.owner
         modified_structure = owner.tree_transition()
         if modified_structure:
             logger.info(
-                f"System structure changed during transition @t={self.time}"
+                f"System structure changed during transition @t={time}"
                 f"; reopen loops and reinitialize sub-drivers (if any)"
             )
             owner.close_loops()
@@ -424,6 +424,7 @@ class ExplicitTimeDriver(Driver):
             # Reinitialize sub-drivers
             for driver in self.children.values():
                 driver.call_setup_run()
+        self._set_time(time)
 
     def _set_time(self, t: Number) -> None:
         dt = t - self.time

@@ -687,3 +687,93 @@ def test_MultimodeSystem_single_periodic_event(t0, period):
         event_times = numpy.array([record.time for record in driver.recorded_events])
         # print("", f"{event_times = }", f"{expected_times = }", sep="\n")
         assert event_times == pytest.approx(expected_times)
+
+
+class MultimodeOde(System):
+    """Multimode ODE of the kind df/dt = df,
+    with event `snap` (undefined by default).
+    """
+    def setup(self, varname="f"):
+        self.add_inward(f"d{varname}", 0.0)
+        self.add_transient(varname, der=f"d{varname}")
+
+        self.add_event("snap")
+        self.add_outward_modevar("snapped", init=False)
+
+    def transition(self):
+        if self.snap.present:
+            self.snapped = True
+
+
+class MultimodeOdeUv(MultimodeOde):
+    """Extension of MultimodeOde with variables (u, du),
+    plus output variable v = 2u, and event `cross`.
+    """
+    def setup(self):
+        super().setup(varname="u")
+        self.add_outward("v", 0.0)
+
+        self.add_event("cross", trigger="u == v")
+    
+    def compute(self):
+        self.v = 2 * self.u
+
+
+@pytest.mark.parametrize("trigger", ["u == 0", "v == 0"])
+def test_MultimodeSystem_nested_primary_events(trigger):
+    """Test with nested primary events. One primary event, `s.ode_u.cross`,
+    is triggered by a condition based either on an input (u == 0) or an output (v == 0).
+    """
+    class MultimodeAssembly(System):
+
+        def setup(self):
+            self.add_child(MultimodeOde("ode_x"), pulling={"f": "x", "df": "dx"})
+            self.add_child(MultimodeOdeUv("ode_u"))
+
+            self.add_inward("jump", 1.0)
+            
+            self.add_event("cross", trigger="x == ode_u.v")
+
+        def transition(self):
+            if self.ode_x.snap.present:
+                self.ode_u.u += self.jump
+
+    # Create assembly and simulation case
+    s = MultimodeAssembly("s")
+
+    driver = s.add_driver(EulerExplicit())
+    driver.add_recorder(
+        DataFrameRecorder(
+            excludes=["*.snapped*", "ode_x.*", "jump"]
+        ),
+        period=0.1,
+    )
+    driver.set_scenario(
+        init={"x": 0, "ode_u.u": -0.5},
+        values={
+            "dx": "1 if not ode_x.snapped else 0",
+            "ode_u.du": "2 if not ode_u.snapped else -1",
+        },
+    )
+
+    driver.time_interval = (0, 1)
+    driver.dt = 0.1
+
+    s.ode_u.cross.trigger = trigger  # u(t) = v(t) = 0
+    s.ode_x.snap.trigger = "f > 0.55"
+    s.ode_u.snap.trigger = s.ode_u.cross
+    s.jump = 0.5
+
+    s.run_drivers()
+
+    event_records = driver.recorded_events
+    assert len(event_records) == 3
+    assert event_records[0].time == pytest.approx(0.25)
+    assert event_records[1].time == pytest.approx(0.55)
+    assert event_records[2].time == pytest.approx(0.75)
+    assert event_records[0].events[0] is s.ode_u.cross
+    assert event_records[1].events[0] is s.ode_x.snap
+    assert event_records[2].events[0] is s.ode_u.cross
+    assert set(event_records[0].events) == {s.ode_u.cross, s.ode_u.snap}
+    assert set(event_records[1].events) == {s.ode_x.snap, s.ode_u.cross, s.ode_u.snap}
+    assert set(event_records[2].events) == {s.ode_u.cross, s.ode_u.snap}
