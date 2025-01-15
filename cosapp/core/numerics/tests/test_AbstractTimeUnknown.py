@@ -34,6 +34,10 @@ class DummyTimeUnknown(AbstractTimeUnknown):
         """Reset transient unknown to a reference value"""
         pass
 
+    def touch(self):
+        """Set owner port as 'dirty'."""
+        pass
+
 
 class SubSystem(System):
     def setup(self):

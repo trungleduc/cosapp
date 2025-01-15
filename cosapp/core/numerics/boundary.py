@@ -862,6 +862,11 @@ class AbstractTimeUnknown(abc.ABC):
         """Reset transient unknown to a reference value"""
         pass
 
+    @abc.abstractmethod
+    def touch(self) -> None:
+        """Set owner port as 'dirty'."""
+        pass
+
     @property
     def d_dt(self) -> Any:
         """Value of time derivative"""

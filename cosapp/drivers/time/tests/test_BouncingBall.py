@@ -61,15 +61,17 @@ class BouncingBall(PointMass):
     """
     def setup(self):
         super().setup()
-        self.add_event('rebound', trigger="x[2] <= 0")
+        self.add_event("rebound", trigger="x[2] <= 0")
+        self.add_inward("cr", 1.0, limits=(0, 1), desc="Rebound coefficient")
 
     def transition(self):
         if self.rebound.present:
+            cr = np.clip(self.cr, 0.0, 1.0)
             v = self.v
             if abs(v[2]) < 1e-6:
-                v[2] = 0
+                v[2] = 0.0
             else:
-                v[2] *= -1
+                v[2] *= -cr
 
 
 @pytest.fixture
@@ -95,29 +97,82 @@ def ball_case(ball: BouncingBall) -> Tuple[BouncingBall, RungeKutta]:
             'x': np.array([0, 0, 0]),
             'v': np.array([8, 0, 9.5]),
         },
-        values = {'mass': 1.5, 'cf': 0.2},
+        values = {'mass': 1.5, 'cf': 0.2, 'cr': 0.98},
     )
     return ball, driver
 
 
-def test_BouncingBall(ball_case: Tuple[BouncingBall, RungeKutta]):
+def test_BouncingBall(ball_case):
     ball, driver = ball_case
 
     ball.run_drivers()
 
     # Retrieve recorded data
     data = driver.recorder.export_data()
-    x = np.asarray(data['x'].tolist())
-    # Check that all positions are above ground level,
-    # within numerical tolerance
-    assert min(x[:, 2]) > -1e-13
+
     assert len(driver.recorded_events) == 3
     assert [record.time for record in driver.recorded_events] == pytest.approx(
-        [1.457205, 2.536008, 3.441106]
+        [1.457205, 2.517932, 3.3959818]
     )
+    # Check that all positions are above ground level, within numerical tolerance
+    x = np.asarray(data['x'].tolist())
+    assert min(x[:, 2]) > -1e-13
+    # Check positions, velocities and accelerations recorded at event times
+    event_data = driver.event_data
+    assert len(event_data) == 6
+    ae = np.asarray(event_data['a'].tolist())
+    ve = np.asarray(event_data['v'].tolist())
+    xe = np.asarray(event_data['x'].tolist())
+    np.testing.assert_allclose(
+        xe, [
+            [6.416269698, 0.0, 0.0],
+            [6.416269698, 0.0, 0.0],  # no jump in x
+            [8.508373346, 0.0, 0.0],
+            [8.508373346, 0.0, 0.0],  # no jump in x
+            [9.674569363, 0.0, 0.0],
+            [9.674569363, 0.0, 0.0],  # no jump in x
+        ],
+        rtol=1e-9,
+        atol=1e-9,
+    )
+    np.testing.assert_allclose(
+        ve, [
+            [2.515184307, 0., -5.929093249],
+            [2.515184307, 0.,  5.810511384],  # jump in vz
+            [1.550781610, 0., -4.717679606],
+            [1.550781610, 0.,  4.623326014],  # jump in vz
+            [1.138267878, 0., -4.030487952],
+            [1.138267878, 0.,  3.949878193],  # jump in vz
+        ],
+        rtol=1e-9,
+    )
+    np.testing.assert_allclose(
+        ae, [
+            [-2.1598793362, 0., -4.718474119],
+            [-2.1233265999, 0., -14.71525221],  # jump in a
+            [-1.0268297864, 0., -6.686250073],
+            [-1.0083142767, 0., -12.81607486],  # jump in a
+            [-0.6356294918, 0., -7.559302200],
+            [-0.6238647968, 0., -11.97485943],  # jump in a
+        ],
+        rtol=1e-9,
+    )
+    # Check that `driver.recorder` and `driver.event_data`
+    # contain the same data at event times
+    for record in driver.recorded_events:
+        t = record.time
+        data_t = data[data["time"] == t]
+        data_e = event_data[event_data["time"] == t]
+        assert len(data_t) == 2
+        assert len(data_e) == 2
+        assert list(data_e.columns) == list(data_t.columns)
+        for name in ["a", "v", "x"]:
+            field_t = np.asarray(data_t[name].tolist())
+            field_e = np.asarray(data_e[name].tolist())
+            assert np.array_equal(field_e, field_t), f"{name} @ {t = }"
 
 
-def test_BouncingBall_final(ball_case: Tuple[BouncingBall, RungeKutta]):
+def test_BouncingBall_final(ball_case):
     """Bouncing ball case with final rebound event.
     """
     ball, driver = ball_case
@@ -152,7 +207,7 @@ def test_BouncingBall_stop(ball: BouncingBall):
             'x': np.array([0, 0, 0]),
             'v': np.array([8, 0, 9.5]),
         },
-        values = {'mass': 1.5, 'cf': 0.2},
+        values = {'mass': 1.5, 'cf': 0.2, 'cr': 0.98},
         stop = ball.rebound,
     )
 
@@ -190,7 +245,7 @@ def test_BouncingBall_frictionless(ball: BouncingBall):
     # Define a simulation scenario
     driver.set_scenario(
         init = {'x': np.array(x0), 'v': np.array(v0)},
-        values = {'mass': 1.0, 'cf': 0.0},
+        values = {'mass': 1.0, 'cf': 0.0, 'cr': 1.0},
         stop = ball.rebound,
     )
 
@@ -235,7 +290,7 @@ def test_BouncingBall_close_events(z0, z1, z2):
             self.add_property('n_points', n_points)
 
             for i in range(n_points):
-                self.add_child(BouncingBall(f"p{i}"), pulling=["g", "cf"])
+                self.add_child(BouncingBall(f"p{i}"), pulling=["g", "cf", "cr"])
 
     s = Marbles('s', n_points=3)
 
@@ -256,6 +311,7 @@ def test_BouncingBall_close_events(z0, z1, z2):
         values={
             'g': np.zeros(3),  # no gravity: rectilinear movement
             'cf': 0.0,  # frictionless motion
+            'cr': 1.0,  # lossless rebound
         }
     )
 
