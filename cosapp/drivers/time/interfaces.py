@@ -6,12 +6,13 @@ import copy
 from io import StringIO
 from numbers import Number
 from typing import Tuple, NamedTuple, List, Dict, Union, Optional, Any
+from collections.abc import Collection
 
 from cosapp.core.time import UniversalClock
-from cosapp.ports.enum import PortType
 from cosapp.drivers.driver import Driver, System, AnyRecorder
 from cosapp.drivers.time.utils import (
     TimeUnknown,
+    TimeUnknownDict,
     TimeVarManager,
     TimeStepManager,
     TwoPointCubicInterpolator,
@@ -84,7 +85,7 @@ class ExplicitTimeDriver(Driver):
         self.__recordPeriod = None
         self.__dt_manager = TimeStepManager(max_growth_rate=dt_growth_rate)
         self.__var_manager: TimeVarManager = None
-        self._transients = dict()
+        self._transients = TimeUnknownDict()
         self._rates = dict()
         self.dt = dt
         self.time_interval = time_interval
@@ -325,40 +326,34 @@ class ExplicitTimeDriver(Driver):
                     }
                 )
                 occurring = stepper.first_discrete_step()  # first step: root finding + non-primitive events
+                record = EventRecord(occurring.time, [occurring.event])
                 record_data()
                 record_event()
                 stepper.reevaluate_primitive_events()
-                self.transition(occurring.time)
+                self.transition(occurring.time, record.events)
                 record_event(occurring.event.contextual_name)
-                record = EventRecord(occurring.time, [occurring.event])
                 event_cascade = set(stepper.present_events())
                 stepper.tick()
-                stepper.set_events()
+                stepper.update_events()
 
                 while stepper.event_detected():  # following steps: event cascade
-                    events = stepper.discrete_step()
-                    event_cascade.update(events)
-                    self.transition(occurring.time)
-                    stamp = ", ".join(event.contextual_name for event in events)
+                    new_events = set(stepper.discrete_step()) - event_cascade
+                    self.transition(occurring.time, new_events)
+                    event_cascade.update(new_events)
+                    stamp = ", ".join(event.contextual_name for event in new_events)
                     record_event(stamp)
                     stepper.tick()
-                    stepper.set_events()
+                    stepper.update_events()
 
                 record.events.extend(event_cascade - {occurring.event})
                 self.__recorded_events.append(record)
-                for transient in self._transients.values():
-                    transient.touch()
-                for event in record.events:
-                    event.context.set_dirty(PortType.IN)
-                self._set_time(occurring.time)
-                self._synch_transients()
                 record_data(occurring.event.contextual_name)
                 must_stop = any(event.final for event in event_cascade)
                 next_t = occurring.time
                 dt = next_t - t
 
                 # Reevaluate transient values and derivatives @ occur.time,
-                # in case one or more primitive events were dropped
+                # in case one or more primitive events were cancelled
                 for key, var in owner_transients.items():
                     tr_data[key][2:4] = value_and_derivative(var)
             
@@ -410,7 +405,7 @@ class ExplicitTimeDriver(Driver):
                     f"Stop criterion met at t = {last_record.time}"
                 )
 
-    def transition(self, time: float) -> None:
+    def transition(self, time: float, events: Collection[Event]=()) -> None:
         """Execute owner system transition and reinitialize sub-drivers"""
         owner = self.owner
         modified_structure = owner.tree_transition()
@@ -424,7 +419,12 @@ class ExplicitTimeDriver(Driver):
             # Reinitialize sub-drivers
             for driver in self.children.values():
                 driver.call_setup_run()
+        for transient in self._transients.values():
+            transient.touch()
+        for event in events:
+            event.context.touch()
         self._set_time(time)
+        self._synch_transients()
 
     def _set_time(self, t: Number) -> None:
         dt = t - self.time

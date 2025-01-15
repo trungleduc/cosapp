@@ -38,9 +38,9 @@ class DiscreteStepper():
         self._system = driver.owner
         self._sysview = SystemInterpolator(driver)
         self._interval = None
-        self.set_events()
+        self.update_events()
 
-    def set_events(self) -> None:
+    def update_events(self) -> None:
         """Update event list from system of interest,
         and from stop criterion of owner time driver.
         """
@@ -54,13 +54,13 @@ class DiscreteStepper():
 
     def reset(self) -> None:
         """Update event list, and reset all events"""
-        self.set_events()
+        self.update_events()
         for event in self.events():
             event.reset()
 
     def initialize(self) -> None:
         """Update event list, and initialize all events"""
-        self.set_events()
+        self.update_events()
         for event in self.events():
             event.initialize()
 
@@ -155,10 +155,10 @@ class DiscreteStepper():
         which primitive event was triggered and at which date."""
         for event in self._primitives:
             event.step()
-        occur = self.find_primal_event()
+        occurring = self.find_primal_event()
         while self.__microstep():
             pass
-        return occur
+        return occurring
 
     def discrete_step(self) -> List[Event]:
         """Performs a discrete step other than the first one"""
