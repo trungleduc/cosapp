@@ -1,6 +1,18 @@
 # History
 
 
+## 0.19.2 (2025-01-23)
+
+### Bug fixes and improvements
+
+- Improve the system transition mechanism (MR [#370](https://gitlab.com/cosapp/cosapp/-/merge_requests/370)).
+- Fix bug in event cascade resolution (MRs [#371](https://gitlab.com/cosapp/cosapp/-/merge_requests/371) & [#372](https://gitlab.com/cosapp/cosapp/-/merge_requests/372)).
+
+### Maintenance and code quality
+
+- Improve type hints (MR [#369](https://gitlab.com/cosapp/cosapp/-/merge_requests/369)).
+
+
 ## 0.19.1 (2025-01-07)
 
 ### Bug fixes and code quality
