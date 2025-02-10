@@ -702,25 +702,28 @@ def test_BasePort_copy(direction1, direction2):
     assert details["var2"].scope == Scope.PRIVATE
 
 
-@pytest.mark.parametrize("direction, expected", [
-    (PortType.IN, {"dummy.x": 1.5, "dummy.y": 0.2}),
-    (PortType.OUT, {}),
-])
-def test_BasePort_to_dict(direction, expected):
+@pytest.mark.parametrize("direction", [PortType.IN, PortType.OUT])
+def test_BasePort_to_dict(direction):
     port = BasePort("dummy", direction)
     port.add_variable("x", 1.5)
     port.add_variable("y", 0.2)
-    assert port.to_dict() == expected
+    assert port.to_dict(value_only=True, with_types=False) == {
+        'name': 'dummy',
+        'variables': {'x': 1.5, 'y': 0.2},
+    }
 
-@pytest.mark.parametrize("direction, expected", [
-    (PortType.IN, {'dummy': {'__class__': 'BasePort', 'x': 1.5, 'y': 0.2}}),
-    (PortType.OUT, {'dummy': {'__class__': 'BasePort', 'x': 1.5, 'y': 0.2}}),
-])
-def test_BasePort_to_dict_with_def(direction, expected):
+
+@pytest.mark.parametrize("direction", [PortType.IN, PortType.OUT])
+def test_BasePort_to_dict_with_types(direction):
     port = BasePort("dummy", direction)
     port.add_variable("x", 1.5)
     port.add_variable("y", 0.2)
-    assert port.to_dict(True) == expected
+    assert port.to_dict(with_types=True, value_only=True) == {
+        '__class__': 'BasePort',
+        'name': 'dummy',
+        'variables': {'x': 1.5, 'y': 0.2},
+    }
+
 
 @pytest.mark.skip(reason="TODO")
 def test_BasePort___json__():

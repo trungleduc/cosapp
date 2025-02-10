@@ -9,6 +9,7 @@ import numpy
 from cosapp.core.eval_str import EvalString
 from cosapp.utils.helpers import check_arg
 from cosapp.utils.naming import natural_varname
+from cosapp.utils.state_io import object__getstate__
 if TYPE_CHECKING:
     from cosapp.systems import System
 
@@ -32,6 +33,20 @@ class AbstractResidue:
         self._context = context  # type: System
         self._name = natural_varname(name)  # type: str
         super().__init__()
+
+    def __getstate__(self) -> Union[Dict[str, Any], tuple[Optional[Dict[str, Any]], Dict[str, Any]]]:
+        """Creates a state of the object.
+
+        The state may take various forms depending on the object, see
+        https://docs.python.org/3/library/pickle.html#object.__getstate__
+        for further details.
+        
+        Returns
+        -------
+        Union[Dict[str, Any], tuple[Optional[Dict[str, Any]], Dict[str, Any]]]:
+            state
+        """
+        return object__getstate__(self)
 
     def __str__(self) -> str:
         return f"{self._name} := {self._value}"
@@ -257,6 +272,22 @@ class Residue(AbstractResidue):
             reference = Residue.residue_norm(*self.eval_sides())
         self.reference = reference
         self.update()
+
+    def __json__(self) -> Dict[str, Any]:
+        """Creates a JSONable dictionary representation of the object.
+        
+        Break circular dependency with the System by removing
+        the `_context` member from the object state.
+
+        Returns
+        -------
+        Dict[str, Any]
+            The dictionary
+        """
+        state = self.__getstate__().copy()
+        state.pop("_context")
+        state.pop("residue_method")
+        return state
 
     @property
     def equation(self) -> str:

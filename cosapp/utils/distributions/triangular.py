@@ -44,12 +44,12 @@ class Triangular(Distribution):
         self.likely = likely  # Trigger likely validation
 
     def __json__(self) -> Dict[str, Any]:
-        """Serialize the distribution object.
+        """Creates a JSONable dictionary representation of the object.
 
         Returns
         -------
         Dict[str, Any]
-            JSONable dictionary describing the distribution.
+            The dictionary
         """
         base = super().__json__()
         base.update({"likely": self.likely})

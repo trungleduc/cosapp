@@ -21,6 +21,9 @@ from cosapp.core.numerics.residues import Residue, DeferredResidue
 from cosapp.core.numerics.utils import TransferHelper
 from cosapp.utils.naming import natural_varname
 from cosapp.utils.helpers import check_arg
+from cosapp.utils.json import jsonify
+from cosapp.utils.state_io import object__getstate__
+
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +80,16 @@ class SolverResults:
     jac_errors: dict = field(default_factory=dict)
     trace: List[Dict[str, Any]] = field(default_factory=list)
 
+    def __json__(self) -> Dict[str, Any]:
+        """Creates a JSONable dictionary representation of the object.
+
+        Returns
+        -------
+        Dict[str, Any]
+            The dictionary
+        """
+        return object__getstate__(self).copy()
+
 
 class WeakDeferredResidue(NamedTuple):
     deferred: DeferredResidue
@@ -126,6 +139,42 @@ class BaseProblem(abc.ABC):
         self._name = name  # type: str
         self._context: System = context
 
+    def __getstate__(self) -> Dict[str, Any]:
+        """Creates a state of the object.
+
+        The state type depend on the object, see
+        https://docs.python.org/3/library/pickle.html#object.__getstate__
+        for further details.
+
+        Returns
+        -------
+        Dict[str, Any]:
+            state
+        """
+        return object__getstate__(self)
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        """Sets the object from a provided state.
+
+        Parameters
+        ----------
+        state : dict[str, Any]
+            State
+        """
+        self.__dict__.update(state)
+
+    def __json__(self) -> Dict[str, Any]:
+        """Creates a JSONable dictionary representation of the object.
+
+        Returns
+        -------
+        Dict[str, Any]
+            The dictionary
+        """
+        state = self.__getstate__().copy()
+        state.pop("_context")
+        return jsonify(state)
+    
     @property
     def name(self) -> str:
         """str : Mathematical system name."""

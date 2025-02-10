@@ -92,6 +92,52 @@ class BaseConnector(abc.ABC):
         self._source = self.__get_port(source, sink=False, check=False)  # type: weakref.ReferenceType[BasePort]
         self._sink = self.__get_port(sink, sink=True, check=False)  # type: weakref.ReferenceType[BasePort]
 
+    def __getstate__(self) -> Dict[str, Any]:
+        """Creates a state of the object.
+
+        The state type depend on the object, see
+        https://docs.python.org/3/library/pickle.html#object.__getstate__
+        for further details.
+
+        Returns
+        -------
+        Dict[str, Any]:
+            state
+        """
+        d = self.__dict__.copy()
+        d.update({"_source": self.source, "_sink": self.sink})
+        return d
+
+    def __json__(self) -> Dict[str, Any]:
+        """Creates a JSONable dictionary representation of the object.
+        
+        Break circular dependencies by removing some slots from the 
+        state.
+
+        Returns
+        -------
+        Dict[str, Any]
+            The dictionary
+        """
+        d = self.__dict__.copy()
+        d.pop("_source")
+        d.pop("_sink")
+        d.update({"info": self.info()})
+        return d
+
+    def __setstate__(self, state: Dict[str, Any]) -> None:
+        """Sets the object from a provided state.
+
+        Parameters
+        ----------
+        state : Dict[str, Any]
+            State
+        """
+        self.__dict__.update(state)
+        source = weakref.ref(state.pop("_source"))
+        sink = weakref.ref(state.pop("_sink"))
+        self.__dict__.update({"_source": source, "_sink": sink})
+
     @abc.abstractmethod
     def transfer(self) -> None:
         """Transfer values from `source` to `sink`."""

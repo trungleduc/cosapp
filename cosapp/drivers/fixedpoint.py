@@ -1,6 +1,6 @@
 import numpy
 import copy
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union, Optional
 from dataclasses import dataclass, field
 
 from cosapp.core import MathematicalProblem
@@ -8,6 +8,7 @@ from cosapp.core.numerics.boundary import Boundary
 from cosapp.drivers.driver import Driver
 from cosapp.systems.system import System, SystemConnector
 from cosapp.ports.port import BasePort
+from cosapp.utils.state_io import object__getstate__
 
 import logging
 logger = logging.getLogger(__name__)
@@ -45,6 +46,30 @@ class SolverResults:
     message: str = ""
     tol: float = numpy.nan
     n_iter: int = 0
+
+    def __getstate__(self) -> Union[Dict[str, Any], tuple[Optional[Dict[str, Any]], Dict[str, Any]]]:
+        """Creates a state of the object.
+
+        The state type depend on the object, see
+        https://docs.python.org/3/library/pickle.html#object.__getstate__
+        for further details.
+        
+        Returns
+        -------
+        Union[Dict[str, Any], tuple[Optional[Dict[str, Any]], Dict[str, Any]]]:
+            state
+        """
+        return object__getstate__(self)
+
+    def __json__(self) -> Dict[str, Any]:
+        """Creates a JSONable dictionary representation of the object.
+
+        Returns
+        -------
+        Dict[str, Any]
+            The dictionary
+        """
+        return self.__getstate__().copy()
 
 
 class FixedPointSolver(Driver):
@@ -88,6 +113,7 @@ class FixedPointSolver(Driver):
         self._loop_connectors: List[SystemConnector] = []
 
     def _declare_options(self) -> None:
+        super()._declare_options()
         self.options.declare(
             'tol', 1e-6, dtype=float, allow_none=False,
             desc='Absolute tolerance (in max-norm) for the residual.'
@@ -279,7 +305,7 @@ class FixedPointSolver(Driver):
                     if record_history:
                         record_state(f"{self.name} (iter #{i})")
                     update_unknowns()
-                    converged = r_norm < tol
+                    converged = bool(r_norm < tol)
                     if converged:
                         break
 

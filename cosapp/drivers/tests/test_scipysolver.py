@@ -198,7 +198,7 @@ def test_ScipySolverHybr_option_aliases():
     assert {key: solver.options[key] for key in to_test} == to_test
 
     system.drivers.clear()
-    with pytest.raises(RuntimeError, match="Unknown option 'foo'"):
+    with pytest.raises(RuntimeError, match=r"Unknown option\(s\) \['foo'\]"):
         solver = system.add_driver(
             NonLinearSolver(
                 "design",
@@ -395,7 +395,7 @@ def test_ScipySolverBroyden1_option_aliases():
     assert {key: solver.options[key] for key in to_test} == to_test
 
     system.drivers.clear()
-    with pytest.raises(RuntimeError, match="Unknown option 'max_eval'"):
+    with pytest.raises(RuntimeError, match=r"Unknown option\(s\) \['max_eval'\]"):
         system.add_driver(
             NonLinearSolver(
                 "solver",
@@ -405,7 +405,7 @@ def test_ScipySolverBroyden1_option_aliases():
         )
 
     system.drivers.clear()
-    with pytest.raises(RuntimeError, match="Unknown option 'foobar'"):
+    with pytest.raises(RuntimeError, match=r"Unknown option\(s\) \['foobar'\]"):
         system.add_driver(
             NonLinearSolver(
                 "solver",

@@ -15,6 +15,8 @@ from cosapp.ports.port import ExtensiblePort
 from cosapp.systems.system import System
 from cosapp.utils.helpers import check_arg
 from cosapp.drivers.time.scenario import TimeAssignString
+from cosapp.utils.json import jsonify
+from cosapp.utils.state_io import object__getstate__
 if TYPE_CHECKING:
     from cosapp.drivers.time.interfaces import ExplicitTimeDriver
 
@@ -91,21 +93,17 @@ class TimeUnknownStack(AbstractTimeUnknown):
         # Init self.__value
         self.reset()
 
-        expr = "asarray([{}]).ravel()"
-        get_stack = lambda args: EvalString(expr.format(", ".join(args)), self.__context)
-        self.__der = get_stack(map(lambda u: str(u.der), self.__transients))
-        self.__var_size = size
-        if size == 1:
-            self.__sub_value = lambda offset: self.__value[offset]
-        else:
-            self.__sub_value = lambda offset: self.__value[offset : offset + size]
+        def get_attribute_expr(attr):
+            args = ", ".join([str(getattr(u, attr)) for u in self.__transients])
+            if attr == "der":
+                return EvalString(f"asarray([{args}]).ravel()", self.__context)
+            else:
+                return EvalString(f"min([{args}])", self.__context)
 
-        # Set expressions of max time step and max absolute step
-        def step_expr(mapping):
-            args = ", ".join(map(mapping, self.__transients))
-            return EvalString(f"min({args})", self.__context)
-        self.__max_dt = step_expr(lambda var: str(var.max_time_step_expr))
-        self.__max_dx = step_expr(lambda var: str(var.max_abs_step_expr))
+        self.__der = get_attribute_expr("der")
+        self.__max_dt = get_attribute_expr("max_time_step_expr")
+        self.__max_dx = get_attribute_expr("max_abs_step_expr")
+        self.__var_size = size
 
     @property
     def value(self) -> numpy.ndarray:
@@ -120,8 +118,8 @@ class TimeUnknownStack(AbstractTimeUnknown):
         # Update original system variables
         size = self.__var_size
         for i, unknown in enumerate(self.__transients):
-            offset = i * size
-            unknown.update_value(self.__sub_value(offset), checks=False)
+            value = self.__value[i] if size == 1 else self.__value[i * size: size * (i+1)]
+            unknown.update_value(value, checks=False)
 
     def reset(self) -> None:
         """Reset stack value from original system variables"""
@@ -263,6 +261,16 @@ class TimeUnknownDict(MutableMapping):
     def constrained(self) -> Dict[str, AbstractTimeUnknown]:
         """Dict[str, AbstractTimeUnknown]: shallow copy of the subset of time step constrained variables."""
         return self.__constrained.copy()
+    
+    def __json__(self) -> Dict[str, Any]:
+        """Creates a JSONable dictionary representation of the object.
+        
+        Returns
+        -------
+        Dict[str, Any]
+            The dictionary
+        """
+        return object__getstate__(self).copy()
 
 
 class TimeVarManager:
@@ -284,6 +292,18 @@ class TimeVarManager:
     """
     def __init__(self, context: System):
         self.context = context
+
+    def __json__(self) -> Dict[str, Any]:
+        """Creates a JSONable dictionary representation of the object.
+
+        Returns
+        -------
+        Dict[str, Any]
+            The dictionary
+        """
+        state = object__getstate__(self).copy()
+        state.pop("_TimeVarManager__context")
+        return jsonify(state)
 
     @property
     def context(self) -> System:
@@ -484,6 +504,16 @@ class TimeStepManager:
             raise ValueError("Time step was not specified, and could not be determined from transient variables")
 
         return dt
+    
+    def __json__(self) -> Dict[str, Any]:
+        """Creates a JSONable dictionary representation of the object.
+        
+        Returns
+        -------
+        Dict[str, Any]
+            The dictionary
+        """
+        return object__getstate__(self).copy()
 
 
 def TwoPointCubicPolynomial(
@@ -573,6 +603,19 @@ class SystemInterpolator:
         problem = system.assembled_time_problem()
         self.__transients = transients = problem.transients
         self.__interp = dict.fromkeys(transients, None)
+
+    def __json__(self) -> Dict[str, Any]:
+        """Creates a JSONable dictionary representation of the object.
+
+        Returns
+        -------
+        Dict[str, Any]
+            The dictionary
+        """
+        state = object__getstate__(self).copy()
+        state.pop("_SystemInterpolator__owner")
+        state.pop("_SystemInterpolator__system")
+        return jsonify(state)
 
     @property
     def system(self) -> System:

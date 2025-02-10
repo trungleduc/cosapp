@@ -1,6 +1,7 @@
 from __future__ import annotations
 import copy
-from typing import TYPE_CHECKING
+import sys
+from typing import Any, Dict, Optional, Union, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from cosapp.base import System
@@ -67,3 +68,45 @@ def set_state(system: System, state: dict) -> None:
 
     for name, child_state in child_data.items():
         set_state(system[name], child_state)
+
+
+if sys.version_info[1] <11:
+    def object__getstate__(obj: Any) -> Union[Dict[str, Any], tuple[Optional[Dict[str, Any]], Dict[str, Any]]]:
+        """Creates a state of an object.
+
+        The state may take various forms depending on the object, see
+        https://docs.python.org/3/library/pickle.html#object.__getstate__
+        for further details.
+        
+        Parameters
+        ----------
+        obj: Any
+            Object from which the state must be constructed
+
+        Returns
+        -------
+        Union[Dict[str, Any], tuple[Optional[Dict[str, Any]], Dict[str, Any]]]:
+            state
+        """
+        def is_slot(slot, cls):
+            not_magic_slot = not (slot.startswith("__") and slot.endswith("__"))
+            cls_slot = hasattr(cls, slot)
+            priv_cls_slot = hasattr(cls, f"_{cls.__name__}{slot}")
+            return not_magic_slot and (cls_slot or priv_cls_slot)
+
+        def prefix_private_slot(slot, cls):
+            if slot.startswith("__") and not slot.endswith("__"):
+                return f"_{cls.__name__}{slot}"
+            return slot
+
+        if hasattr(obj, "__slots__"):
+            slots_names = [prefix_private_slot(slot, cls) for cls in obj.__class__.__mro__ for slot in getattr(cls, '__slots__', []) if is_slot(slot, cls)]
+            slots = {slot: getattr(obj, slot) for slot in slots_names}
+
+            if slots:
+                return getattr(obj, "__dict__", None), slots
+
+        if hasattr(obj, "__dict__"):
+            return obj.__dict__
+else:
+    object__getstate__ = object.__getstate__

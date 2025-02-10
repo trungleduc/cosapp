@@ -5,10 +5,11 @@ import logging
 from cosapp.systems import System
 from cosapp.drivers import runonce
 from cosapp.drivers import RunSingleCase
+from cosapp.recorders import DataFrameRecorder
 from cosapp.core.numerics.basics import MathematicalProblem
 from cosapp.core.numerics.boundary import Boundary
 from cosapp.core.numerics.residues import Residue
-from cosapp.utils.testing import DummySystemFactory, get_args, assert_keys, assert_all_type
+from cosapp.utils.testing import DummySystemFactory, get_args, assert_keys, assert_all_type, pickle_roundtrip, are_same, has_keys
 
 
 # TODO unit tests for vectors
@@ -619,3 +620,93 @@ def test_RunSingleCase_get_init(ExtendedMultiply):
     init_array = d.get_init()
     assert np.array_equal(init_array, [42, 22])
     d.clean_run()
+
+
+class TestRunSingleCasePickling:
+    class Dummy(System):
+        def setup(self):
+            self.add_inward('x', 0.0)
+            self.add_inward('y', 0.0)
+            self.add_outward('z', 0.0)
+
+    @pytest.fixture
+    def system(self):
+        s: System = self.Dummy('s')
+        s.add_driver(RunSingleCase('case'))
+        return s
+
+    def test_standalone(self):
+        """Test pickling of standalone driver."""
+
+        case = RunSingleCase('case')
+
+        case_copy = pickle_roundtrip(case)
+        assert are_same(case, case_copy)
+
+    def test_default(self, system):
+        """Test driver with default options."""
+
+        system_copy = pickle_roundtrip(system)
+        assert are_same(system, system_copy)
+
+    def test_design_problem(self, system):
+        """Test pickling of driver with design problem."""
+
+        case = system.drivers["case"]
+        case.design.add_unknown("x").add_equation("x == z")
+
+        case_copy = pickle_roundtrip(case)
+        assert are_same(case, case_copy)
+        assert has_keys(case_copy.design.unknowns, "x")
+        assert has_keys(case_copy.design.residues, "x == z")
+        
+        case.setup_run()
+
+    def test_offdesign_problem(self, system):
+        """Test pickling of driver with offdesign problem."""
+
+        case = system.drivers["case"]
+        case.offdesign.add_unknown("x").add_equation("x == z")
+
+        case_copy = pickle_roundtrip(case)
+        assert are_same(case, case_copy)
+        assert has_keys(case_copy.offdesign.unknowns, "x")
+        assert has_keys(case_copy.offdesign.residues, "x == z")
+
+        case.setup_run()
+        merged = case.merged_problem()
+        assert has_keys(merged.unknowns, "x")
+        assert has_keys(merged.residues, "x == z")
+
+    def test_both_problems(self, system):
+        """Test pickling of driver with design and offdesign problem."""
+
+        case = system.drivers["case"]
+        case.design.add_unknown("x").add_equation("x == z")
+        case.offdesign.add_unknown("y").add_equation("y == z")
+
+        case_copy = pickle_roundtrip(case)
+        assert are_same(case, case_copy)
+        assert has_keys(case_copy.design.unknowns, "x")
+        assert has_keys(case_copy.design.residues, "x == z")
+        assert has_keys(case_copy.offdesign.unknowns, "y")
+        assert has_keys(case_copy.offdesign.residues, "y == z")
+
+        case.setup_run()
+        merged = case.merged_problem()
+        assert has_keys(merged.unknowns, "x", "y")
+        assert has_keys(merged.residues, "x == z", "y == z")
+
+    def test_recorder(self, system):
+        """Test pickling of driver with recorder."""
+
+        case = system.drivers["case"]
+        case.add_recorder(DataFrameRecorder(hold=True, includes="a*"))
+        assert are_same(system, pickle_roundtrip(system))
+
+        s2 = pickle_roundtrip(system)
+        case2 = s2.drivers["case"]
+        assert case2.recorder.hold
+        assert case2.recorder.includes == ["a*"]
+        assert case2.recorder._owner is case2
+        assert case2.recorder._watch_object is s2

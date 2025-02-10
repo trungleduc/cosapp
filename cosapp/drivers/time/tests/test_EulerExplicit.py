@@ -1,7 +1,9 @@
+from __future__ import annotations
 import pytest
 import logging
 
 import numpy as np
+from cosapp.systems import System
 from cosapp.drivers import EulerExplicit, NonLinearSolver
 import cosapp.recorders as recorders
 

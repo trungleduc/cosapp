@@ -1,8 +1,8 @@
 import abc
 import inspect
 import weakref
-
-
+from typing import Dict, Any
+from cosapp.utils.state_io import object__getstate__
 class Observer(abc.ABC):
     """Generic interface for observers"""
     def __init__(self, subject=None):
@@ -63,7 +63,52 @@ class Subject:
 
     def __init__(self):
         self._observers = weakref.WeakSet()
-    
+
+    def __getstate__(self) -> Dict[str, Any]:
+        """Creates a state of the object.
+
+        The state type depend on the object, see
+        https://docs.python.org/3/library/pickle.html#object.__getstate__
+        for further details.
+
+        Returns
+        -------
+        Dict[str, Any]:
+            state
+        """
+        state = object__getstate__(self).copy()
+        state.update({"_observers": (self._observers.data, self._observers._pending_removals, self._observers._iterating)})
+        return state
+
+    def __setstate__(self, state: Dict[str, Any]) -> None:
+        """Sets the object from a provided state.
+
+        Parameters
+        ----------
+        state : Dict[str, Any]
+            State
+        """
+        self.__dict__.update(state)
+        data, pending_removals, iterating = state.pop("_observers")
+        observer = weakref.WeakSet()
+        observer.data = data
+        observer._pending_removals = pending_removals
+        observer._iterating = iterating
+
+        self.__dict__.update({"_observers": observer})
+
+    def __json__(self) -> Dict[str, Any]:
+        """Creates a JSONable dictionary representation of the object.
+        
+        Returns
+        -------
+        Dict[str, Any]
+            The dictionary
+        """
+        d = self.__dict__.copy()
+        d.pop("_observers")
+        return d
+
     @classmethod
     def observer_type(cls) -> type:
         """Returns the type of observers allowed to observe Subject"""

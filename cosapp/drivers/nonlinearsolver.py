@@ -2,24 +2,38 @@ import numpy
 import abc
 import csv
 from io import StringIO
-from numbers import Number
 from typing import (
-    Any, Callable, Dict, List, Optional,
-    Sequence, Tuple, Union, Iterable,
+    Any,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Sequence,
+    Tuple,
+    Union,
+    Iterable,
     TypeVar,
+    Type,
 )
 
 from cosapp.core.numerics.basics import MathematicalProblem, SolverResults
 from cosapp.core.numerics.enum import NonLinearMethods
-from cosapp.core.numerics.root import root
 from cosapp.drivers.driver import Driver, System
 from cosapp.drivers.abstractsolver import AbstractSolver
 from cosapp.drivers.runsinglecase import RunSingleCase
 from cosapp.drivers.utils import DesignProblemHandler
 from cosapp.utils.helpers import check_arg
 from cosapp.utils.logging import LogFormat, LogLevel
+from cosapp.utils.options_dictionary import HasOptions
+
+from cosapp.core.numerics.solve import (
+    AbstractNonLinearSolver,
+    NewtonRaphsonSolver,
+    ScipyRootSolver,
+)
 
 import logging
+
 logger = logging.getLogger(__name__)
 
 AnyDriver = TypeVar("AnyDriver", bound=Driver)
@@ -29,6 +43,7 @@ class BaseSolverBuilder(abc.ABC):
     """Base interface for numerical system building strategy used by `NonLinearSolver`.
     Implementations will differ for single- or multi-point design.
     """
+
     def __init__(self, solver: AbstractSolver):
         self.solver = solver
         self.problem = MathematicalProblem(solver.name, solver.owner)
@@ -58,6 +73,7 @@ class BaseSolverBuilder(abc.ABC):
 
 class BaseSolverRecorder(abc.ABC):
     """Abstract interface for solver recorder"""
+
     @abc.abstractmethod
     def record(self, context: str) -> None:
         """Record owner system data using solver's recorder"""
@@ -77,16 +93,24 @@ class NonLinearSolver(AbstractSolver):
     """
 
     __slots__ = (
-        '__method', '__option_aliases', '__trace', '__results',
-        '__design_unknowns', 'compute_jacobian', 'jac_lup', 'jac',
-        '__builder',
+        "__method",
+        "__option_aliases",
+        "__trace",
+        "__results",
+        "__design_unknowns",
+        "compute_jacobian",
+        "__builder",
+        "_solver",
     )
 
-    def __init__(self, 
-        name: str, 
-        owner: Optional[System] = None, 
-        method: Union[NonLinearMethods, str] = NonLinearMethods.NR, 
-        **options
+    def __init__(
+        self,
+        name: str,
+        owner: Optional[System] = None,
+        method: Union[
+            NonLinearMethods, Type[AbstractNonLinearSolver]
+        ] = NonLinearMethods.NR,
+        **options,
     ) -> None:
         """Initialize driver
 
@@ -96,7 +120,7 @@ class NonLinearSolver(AbstractSolver):
             Name of the `Driver`.
         owner: System, optional
             :py:class:`~cosapp.systems.system.System` to which this driver belong; defaults to `None`.
-        method : Union[NonLinearMethods, str]
+        method : Union[NonLinearMethods, Type[AbstractNonLinearSolver]]
             Resolution method to use
         **kwargs:
             Additional keywords arguments forwarded to base class.
@@ -104,26 +128,72 @@ class NonLinearSolver(AbstractSolver):
         if isinstance(method, str):
             method = NonLinearMethods[method]
         else:
-            check_arg(method, 'method', NonLinearMethods)
+            check_arg(method, "method", (NonLinearMethods, type))
         self.__method = method
-
-        super().__init__(name, owner, **options)
 
         self.__trace: List[Dict[str, Any]] = list()
         self.__results: SolverResults = None
         self.__builder: BaseSolverBuilder = None
 
         self.compute_jacobian = True  # type: bool
-            # desc='Should the Jacobian matrix be computed?'
-        self.jac_lup = (None, None)  # type: Tuple[Optional[numpy.ndarray], Optional[numpy.ndarray]]
-            # desc='LU decomposition of latest Jacobian matrix (if available).'
-        self.jac = None  # type: Optional[numpy.ndarray]
-            # desc='Latest computed Jacobian matrix (if available).'
+        # desc='Should the Jacobian matrix be computed?'
+
+        if isinstance(method, NonLinearMethods):
+            if method == NonLinearMethods.NR:
+                self._solver = NewtonRaphsonSolver()
+            elif method == NonLinearMethods.POWELL:
+                self._solver = ScipyRootSolver(method=method)
+            elif method == NonLinearMethods.BROYDEN_GOOD:
+                self._solver = ScipyRootSolver(method=method)
+            else:
+                raise ValueError("'NonLinearMethods' value is not hendled yet.")
+        elif issubclass(method, AbstractNonLinearSolver):
+            self._solver = method()
+        else:
+            raise TypeError(
+                "'method' should be either a `NonLinearMethods` or a derived class of "
+                f"'AbstractNonLinearSolver', got {method}."
+            )
+
+        super().__init__(name, owner, **options)
+
+    def _get_nested_objects_with_options(self) -> Iterable[HasOptions]:
+        """Gets nested objects having options."""
+        return (self._solver, )
+
+    @classmethod
+    def _slots_not_jsonified(cls) -> tuple[str]:
+        """Returns slots that must not be JSONified."""
+        return (
+            *super()._slots_not_jsonified(),
+            "_NonLinearSolver__builder",
+        )
 
     def reset_problem(self) -> None:
         """Reset mathematical problem"""
         super().reset_problem()
         self.__design_unknowns = dict()
+
+    @property
+    def non_linear_solver(self) -> Any:
+        return self._solver
+
+    @property
+    def linear_solver(self) -> Any:
+        return self._solver._linear_solver
+
+    @property
+    def jac(self) -> Any:
+        ls = self.linear_solver
+        if ls.need_jacobian:
+            return ls.jacobian
+        return None
+
+    @jac.setter
+    def jac(self, value) -> None:
+        ls = self.linear_solver
+        if ls.need_jacobian:
+            ls.jacobian = value
 
     @property
     def method(self) -> NonLinearMethods:
@@ -137,7 +207,9 @@ class NonLinearSolver(AbstractSolver):
         """
         return self.__results
 
-    def add_child(self, child: AnyDriver, execution_index: Optional[int]=None, desc="") -> AnyDriver:
+    def add_child(
+        self, child: AnyDriver, execution_index: Optional[int] = None, desc=""
+    ) -> AnyDriver:
         """Add a child `Driver` to the current `Driver`.
 
         When adding a child `Driver`, it is possible to specified its position in the execution order.
@@ -174,19 +246,24 @@ class NonLinearSolver(AbstractSolver):
         """
         return True
 
-    def resolution_method(self,
+    def resolution_method(
+        self,
         fresidues: Callable[[Sequence[float], Union[float, str], bool], numpy.ndarray],
         x0: Sequence[float],
         args: Tuple[Union[float, str]] = (),
         options: Optional[Dict[str, Any]] = None,
         callback: Optional[Callable[[], None]] = None,
     ) -> SolverResults:
+        """Solves the mathematical problem with a non linear method."""
 
-        results = root(fresidues, x0, args=args, method=self.method, options=options, callback=callback)
+        self._solver.set_options()  # required if options were changed after instantiation
+        self._solver.log_level = (
+            LogLevel.INFO if self.options.verbose else LogLevel.DEBUG
+        )
 
-        if results.jac_lup[0] is not None:
-            self.jac_lup = results.jac_lup
-            self.jac = results.jac
+        results = self._solver.solve(fresidues, x0, args, callback=callback)
+
+        if results.success:
             self.compute_jacobian = False
 
         return results
@@ -197,7 +274,7 @@ class NonLinearSolver(AbstractSolver):
 
     def _print_solution(self) -> None:  # TODO better returning a string
         """Print the solution in the log."""
-        if self.options['verbose'] > 0:
+        if self.options.verbose > 0:
             # TODO move it in MathematicalProblem
             logger.info(f"Parameters [{len(self.solution)}]: ")
             for k, v in self.solution.items():
@@ -215,7 +292,7 @@ class NonLinearSolver(AbstractSolver):
 
             tol = numpy.linalg.norm(self.problem.residue_vector(), numpy.inf)
             try:
-                target = self.options['tol']
+                target = self.options.tol
             except:
                 target = 0
             logger.debug(f" # Current tolerance {tol} for target {target}")
@@ -223,13 +300,15 @@ class NonLinearSolver(AbstractSolver):
     def _init_problem(self):
         """Initialize mathematical problem"""
         logger.debug(
-            "\n".join([
-                "*" * 40,
-                "*", 
-                "* Assemble mathematical problem",
-                "*",
-                "*" * 40,
-            ])
+            "\n".join(
+                [
+                    "*" * 40,
+                    "*",
+                    "* Assemble mathematical problem",
+                    "*",
+                    "*" * 40,
+                ]
+            )
         )
         run_cases = list(
             filter(
@@ -241,17 +320,19 @@ class NonLinearSolver(AbstractSolver):
             builder = MultipointSolverBuilder(self, run_cases)
         else:
             builder = StandaloneSolverBuilder(self)
-        
+
         builder.build_system()
         self.problem = builder.problem
         self.initial_values = builder.initial_values
         self.__builder = builder
         self.touch_unknowns()
         logger.debug(
-            "\n".join([
-                "Mathematical problem:",
-                f"{'<empty>' if self.problem.is_empty() else self.problem}",
-            ])
+            "\n".join(
+                [
+                    "Mathematical problem:",
+                    f"{'<empty>' if self.problem.is_empty() else self.problem}",
+                ]
+            )
         )
 
     def _fresidues(self, x: Sequence[float]) -> numpy.ndarray:
@@ -284,23 +365,19 @@ class NonLinearSolver(AbstractSolver):
         self.__builder.update_unknowns(x)
 
     def compute(self) -> None:
-        """Run the resolution method to find free variable values that cancel the residues
-        """
+        """Run the resolution method to find free variable values that cancel the residues"""
         # Reset status
-        self.status = ''
-        self.error_code = '0'
+        self.status = ""
+        self.error_code = "0"
 
         try:
             self.problem.validate()
         except ArithmeticError:
-            self.status = 'ERROR'
-            self.error_code = '9'
+            self.status = "ERROR"
+            self.error_code = "9"
             raise
 
-        try:
-            record_history = self.options['history']
-        except KeyError:
-            record_history = False
+        record_history = self.options.get("history", False)
         must_resolve = len(self.initial_values) > 0
 
         if must_resolve:
@@ -311,7 +388,7 @@ class NonLinearSolver(AbstractSolver):
                 callback = SolverRecorderCallback(self)
             else:
                 callback = None
-            
+
             # compute first order
             results = self.resolution_method(
                 self._fresidues,
@@ -323,26 +400,26 @@ class NonLinearSolver(AbstractSolver):
             self.__trace = getattr(results, "trace", list())
 
             if results.success:
-                self.status = ''
-                self.error_code = '0'
+                self.status = ""
+                self.error_code = "0"
                 logger.info(f"solver : {self.name}{results.message}")
-            
+
             else:
-                self.status = 'ERROR'
-                self.error_code = '9'
+                self.status = "ERROR"
+                self.error_code = "9"
 
                 error_msg = f"The solver failed: {results.message}"
 
-                error_desc = getattr(results, 'jac_errors', {})
+                error_desc = getattr(results, "jac_errors", {})
                 if error_desc:
-                    indices = error_desc.get('unknowns', [])
+                    indices = error_desc.get("unknowns", [])
                     if len(indices) > 0:
                         unknown_names = self.problem.unknown_names()
                         error_msg += (
                             f" \nThe {len(indices)} following parameter(s)"
                             f" have no influence: {[unknown_names[i] for i in indices]}"
                         )
-                    indices = error_desc.get('residues', [])
+                    indices = error_desc.get("residues", [])
                     if len(indices) > 0:
                         residue_names = self.problem.residue_names()
                         error_msg += (
@@ -362,7 +439,7 @@ class NonLinearSolver(AbstractSolver):
             self._print_solution()
 
         else:
-            logger.debug('No parameters/residues to solve. Fallback to system update.')
+            logger.debug("No parameters/residues to solve. Fallback to system update.")
             self._update_system()
 
         if not record_history or not must_resolve:
@@ -374,20 +451,19 @@ class NonLinearSolver(AbstractSolver):
         options = self._filter_options(self.__option_aliases)
 
         if self.method == NonLinearMethods.NR:
-            options.update(self._get_solver_limits())
-            options['compute_jacobian'] = self.compute_jacobian
-            options['jac_lup'] = self.jac_lup
-            options['jac'] = self.jac
+            self.options.update(self._get_solver_limits())
+            # self.options["compute_jacobian"] = self.compute_jacobian
 
         return options
 
-    def log_debug_message(self,
+    def log_debug_message(
+        self,
         handler: "HandlerWithContextFilters",
         record: logging.LogRecord,
-        format: LogFormat = LogFormat.RAW
+        format: LogFormat = LogFormat.RAW,
     ) -> bool:
         """Callback method on the driver to log more detailed information.
-        
+
         This method will be called by the log handler when :py:meth:`~cosapp.utils.logging.LoggerContext.log_context`
         is active if the logging level is lower or equals to VERBOSE_LEVEL. It allows
         the object to send additional log message to help debugging a simulation.
@@ -476,136 +552,14 @@ class NonLinearSolver(AbstractSolver):
 
     def _declare_options(self):
         """Declare solver options, and options aliases possibly necessary to use numpy functions"""
-        method = self.__method
-        options = self.options
+        super()._declare_options()
         self.__option_aliases = dict()
 
-        if method == NonLinearMethods.NR:
-            options.declare(
-                'tol', 'auto', dtype=(float, str), allow_none=True,
-                desc='Absolute tolerance (in max-norm) for the residual.',
-            )
-            options.declare(
-                'max_iter', 100, dtype=int,
-                desc='The maximum number of iterations.'
-            )
-            # Note: use a power of 2 for `eps`, to guaranty machine-precision accurate gradients in linear problems
-            options.declare(
-                'eps', 2**(-16), dtype=float, allow_none=True, lower=2**(-30),
-                desc='Relative step length for the forward-difference approximation of the Jacobian.',
-            )
-            options.declare(
-                'factor', 1.0, dtype=Number, allow_none=True, lower=1e-3, upper=1.0,
-                desc='A parameter determining the initial step bound factor * norm(diag * x). Should be in interval [0.001, 1].',
-            )
-            options.declare(
-                'partial_jac', True, dtype=bool, allow_none=False,
-                desc='Defines if partial Jacobian updates can be computed before a complete Jacobian matrix update.',
-            )
-            options.declare(
-                'partial_jac_tries', 10, dtype=int, allow_none=False, lower=1, upper=10,
-                desc='Defines how many partial Jacobian updates can be tried before a complete Jacobian matrix update.',
-            )
-            options.declare(
-                'jac_update_tol', 0.01, dtype=float, allow_none=False, lower=0, upper=1,
-                desc='Tolerance level for partial Jacobian matrix update, based on nonlinearity estimation.',
-            )
-            options.declare(
-                'recorder', None, allow_none=True,
-                desc='A recorder to store solver intermediate results.',
-            )
-            options.declare(
-                'lower_bound', None, dtype=numpy.ndarray, allow_none=True,
-                desc='Min values for parameters iterated by solver.',
-            )
-            options.declare(
-                'upper_bound', None, dtype=numpy.ndarray, allow_none=True,
-                desc='Max values for parameters iterated by solver.',
-            )
-            options.declare(
-                'abs_step', None, dtype=numpy.ndarray, allow_none=True,
-                desc='Max absolute step for parameters iterated by solver.',
-            )
-            options.declare(
-                'rel_step', None, dtype=numpy.ndarray, allow_none=True,
-                desc='Max relative step for parameters iterated by solver.',
-            )
-            options.declare(
-                'history', False, dtype=bool, allow_none=False,
-                desc='Request saving the resolution trace.',
-            )
-            options.declare(
-                'tol_update_period', 4, dtype=int, lower=1, allow_none=False,
-                desc="Tolerance update period, in iteration number, when tol='auto'.",
-            )
-            options.declare(
-                'tol_to_noise_ratio', 16, dtype=Number, lower=1.0, allow_none=False,
-                desc="Tolerance-to-noise ratio, when tol='auto'.",
-            )
-
-        elif method == NonLinearMethods.POWELL:
-            self.__option_aliases = {
-                'tol': 'xtol',
-                'max_eval': 'maxfev',
-            }
-            options.declare(
-                'tol', 1.0e-7, dtype=float,
-                desc="The calculation will terminate if the relative error between two consecutive iterations is at most tol.",
-            )
-            options.declare(
-                'max_eval', 0, dtype=int,
-                desc='The maximum number of calls to the function. If zero, assumes 100 * (N + 1),'
-                    ' where N is the number of elements in x0.',
-            )
-            options.declare(
-                'eps', None, dtype=float, allow_none=True,
-                desc='A suitable step length for the forward-difference approximation of the Jacobian (for fprime=None).'
-                    ' If eps is less than machine precision u, it is assumed that the relative errors in the'
-                    ' functions are of the order of u.',
-            )
-            options.declare(
-                'factor', 0.1, dtype=float, lower=0.1, upper=100.,
-                desc='A parameter determining the initial step bound factor * norm(diag * x). Should be in the interval [0.1, 100].',
-            )
-
-        elif method == NonLinearMethods.BROYDEN_GOOD:
-            self.__option_aliases = {
-                'tol': 'fatol',
-                'num_iter': 'nit',
-                'max_iter': 'maxiter',
-                'min_rel_step': 'xtol',
-                'min_abs_step': 'xatol',
-            }
-            options.declare(
-                'num_iter', 100, dtype=int,
-                desc='Number of iterations to perform. If omitted (default), iterate unit tolerance is met.',
-            )
-            options.declare(
-                'max_iter', 100, dtype=int,
-                desc='Maximum number of iterations to make. If more are needed to meet convergence, NoConvergence is raised.',
-            )
-            options.declare(
-                'disp', False, dtype=bool,
-                desc='Print status to stdout on every iteration.',
-            )
-            options.declare(
-                'tol', 6e-6, dtype=float,
-                desc='Absolute tolerance (in max-norm) for the residual. If omitted, default is 6e-6.',
-            )
-            options.declare(
-                'line_search', 'armijo', dtype=str, allow_none=True,
-                desc='Which type of a line search to use to determine the step '
-                    'size in the direction given by the Jacobian approximation. Defaults to ‘armijo’.',
-            )
-            options.declare(
-                'jac_options', {'reduction_method': 'svd'},
-                dtype=dict, allow_none=True,
-                desc='Options for the respective Jacobian approximation. restart, simple or svd',
-            )
-
-    def extend(self, problem: MathematicalProblem, *args, **kwargs) -> MathematicalProblem:
+    def extend(
+        self, problem: MathematicalProblem, *args, **kwargs
+    ) -> MathematicalProblem:
         """Extend solver inner problem.
-        
+
         Parameters
         ----------
         - problem [MathematicalProblem]:
@@ -620,9 +574,11 @@ class NonLinearSolver(AbstractSolver):
         """
         return self._raw_problem.extend(problem, *args, **kwargs)
 
-    def add_unknown(self,
+    def add_unknown(
+        self,
         name: Union[str, Iterable[Union[dict, str]]],
-        *args, **kwargs,
+        *args,
+        **kwargs,
     ) -> MathematicalProblem:
         """Add design unknown(s).
 
@@ -642,9 +598,11 @@ class NonLinearSolver(AbstractSolver):
         """
         return self._raw_problem.add_unknown(name, *args, **kwargs)
 
-    def add_equation(self,
+    def add_equation(
+        self,
         equation: Union[str, Iterable[Union[dict, str]]],
-        *args, **kwargs,
+        *args,
+        **kwargs,
     ) -> MathematicalProblem:
         """Add off-design equation(s).
 
@@ -664,9 +622,11 @@ class NonLinearSolver(AbstractSolver):
         """
         return self._raw_problem.add_equation(equation, *args, **kwargs)
 
-    def add_target(self,
+    def add_target(
+        self,
         expression: Union[str, Iterable[str]],
-        *args, **kwargs,
+        *args,
+        **kwargs,
     ) -> MathematicalProblem:
         """Add deferred off-design equation(s).
 
@@ -692,6 +652,7 @@ class StandaloneSolverBuilder(BaseSolverBuilder):
     mathematical problem is entirely defined by unknowns and
     equations declared at solver level.
     """
+
     def build_system(self):
         solver = self.solver
         system = self.solver.owner
@@ -717,6 +678,7 @@ class MultipointSolverBuilder(BaseSolverBuilder):
     equations declared at solver level, and of local design
     and off-design problems declared at case level.
     """
+
     def __init__(self, solver: NonLinearSolver, points: List[RunSingleCase]):
         super().__init__(solver)
         self.points = points
@@ -739,9 +701,7 @@ class MultipointSolverBuilder(BaseSolverBuilder):
             # If more than one `RunSingleCase` drivers are present,
             # use a name wrapper to distinguish dict entries for
             # residues and off-design unknowns in global problem
-            get_key_wrapper = lambda case: (
-               lambda key: f"{case.name}[{key}]"
-            )
+            get_key_wrapper = lambda case: (lambda key: f"{case.name}[{key}]")
         else:
             get_key_wrapper = lambda case: None
 
@@ -769,8 +729,15 @@ class MultipointSolverBuilder(BaseSolverBuilder):
             # Assemble case problems (design & off-design)
             wrapper = get_key_wrapper(point)
             problem.extend(local.design, copy=False, residue_wrapper=wrapper)
-            problem.extend(local.offdesign, copy=False, unknown_wrapper=wrapper, residue_wrapper=wrapper)
-            self.initial_values = numpy.append(self.initial_values, point.get_init(solver.force_init))
+            problem.extend(
+                local.offdesign,
+                copy=False,
+                unknown_wrapper=wrapper,
+                residue_wrapper=wrapper,
+            )
+            self.initial_values = numpy.append(
+                self.initial_values, point.get_init(solver.force_init)
+            )
 
         self.is_design_unknown = dict.fromkeys(problem.unknowns, False)
         for name in design_unknown_names:
@@ -784,12 +751,14 @@ class MultipointSolverBuilder(BaseSolverBuilder):
 
 class EmptySolverRecorder(BaseSolverRecorder):
     """Specialization for solvers with no recorder."""
+
     def record(self, context: str) -> None:
         pass
 
 
 class StandaloneSolverRecorder(BaseSolverRecorder):
     """Solver recorder specialization for solvers with no sub-drivers."""
+
     def __init__(self, solver: NonLinearSolver) -> None:
         self._solver = solver
 
@@ -802,6 +771,7 @@ class StandaloneSolverRecorder(BaseSolverRecorder):
 
 class CompositeSolverRecorder(BaseSolverRecorder):
     """Solver recorder specialization for solvers with sub-drivers."""
+
     def __init__(self, solver: NonLinearSolver) -> None:
         self._solver = solver
 
@@ -812,11 +782,14 @@ class CompositeSolverRecorder(BaseSolverRecorder):
             context = f" ({context})"
         for child in solver.children.values():
             child.run_once()
-            recorder.record_state(f"{child.name}{context}", solver.status, solver.error_code)
+            recorder.record_state(
+                f"{child.name}{context}", solver.status, solver.error_code
+            )
 
 
 class SolverRecorderCallback:
     """Callback functor to monitor solver residues"""
+
     def __init__(self, solver: NonLinearSolver) -> None:
         self.reset_iter()
         if solver.recorder is None:

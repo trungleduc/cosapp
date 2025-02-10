@@ -1,3 +1,4 @@
+import pickle
 import pytest
 
 import numpy as np
@@ -965,3 +966,27 @@ def test_MathematicalProblem_equality():
     p2.add_equation("g == 0").add_unknown("c[:2]")
     p2.add_equation("h == array([22., 4.2])", name="h equation", reference=24.)
     assert p2 != problem
+
+
+def test_MathematicalProblem_pickling():
+    """Test pickle roundtrip."""
+    m = MathematicalProblem("test", None)
+    assert m.context is None
+
+    new_m = pickle.loads(pickle.dumps(m))
+    assert new_m.__json__() == m.__json__()
+    assert new_m.context is None
+
+    # few tests to check overall validity of deserialized object
+    s = SystemA("a")
+    new_m.context = s
+    new_m.add_equation("g == 0")
+    new_m.add_unknown("a")
+    assert new_m.context is s
+    assert list(new_m.unknowns) == ["a"]
+    assert list(new_m.residues) == ["g == 0"]
+    assert new_m.shape == (1, 1)
+
+    r = new_m.residues["g == 0"]
+    r.update()
+    assert r.value == 3.5

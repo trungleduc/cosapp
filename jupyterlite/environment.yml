@@ -8,7 +8,6 @@ dependencies:
   - jsonschema
   - numpy<2
   - scipy
-  - wrapt
   - jinja2
   - plotly
   - nbformat

@@ -2,8 +2,9 @@ import pytest
 import numpy as np
 import json
 from io import StringIO
-
-from cosapp.utils.testing import assert_keys
+from typing import Any, Dict
+from cosapp.utils.testing import assert_keys, are_same, pickle_roundtrip
+from cosapp.utils.json import EncodingMetadata
 from cosapp.tests.library.systems import AllTypesSystem
 from cosapp.tests.library.ports import NumPort, V1dPort
 from cosapp.ports.port import ExtensiblePort, ModeVarPort
@@ -12,8 +13,18 @@ from cosapp.systems import System
 
 class SomeClass:
     """Regular, non-CoSApp class"""
+
     def __init__(self) -> None:
         self.x = np.linspace(-1, 1, 3)
+
+    def __json__(self) -> Dict[str, Any]:
+        return {"x": self.x}
+
+    @classmethod
+    def from_json(cls, state):
+        obj = cls()
+        obj.x = state["x"]
+        return obj
 
 
 class SystemWithProps(System):
@@ -37,11 +48,40 @@ class SystemWithKwargs(System):
             self.add_inward('r', r)
 
 
+class SubSystem(System):
+    def setup(self):
+
+        self.add_input(NumPort, "in_")
+        self.add_inward("x", 1.0)
+        self.add_output(NumPort, "out")
+        self.add_outward("y", 0.95)
+
+    def compute(self):
+        for name in self.out:
+            self.out[name] = self.in_[name] * self.inwards.sloss
+
+
+class SystemWithChildren(System):
+    def setup(self):
+
+        self.add_child(SubSystem("sub1"))
+        self.add_child(SubSystem("sub2"))
+
+
+class SystemWithConnections(System):
+    def setup(self):
+
+        sub1 = self.add_child(SubSystem("sub1"))
+        sub2 = self.add_child(SubSystem("sub2"))
+
+        self.connect(sub1.outwards, sub2.inwards, {"y": "x"})
+
+
 def test_System_load(test_library):
     # Load super simple module
     config = StringIO(
         """{
-            "$schema": "0-2-0/system.schema.json",
+            "$schema": "0-3-0/system.schema.json",
             "p1": {
             "class": "pressurelossvarious.PressureLoss0D"
             }
@@ -68,7 +108,7 @@ def test_System_load(test_library):
     # Load simple module with boundaries
     config = StringIO(
         """{
-            "$schema": "0-2-0/system.schema.json",
+            "$schema": "0-3-0/system.schema.json",
             "p1": {
             "class": "pressurelossvarious.PressureLoss0D",
             "inputs": {
@@ -101,7 +141,7 @@ def test_System_load(test_library):
     # Load simple module with properties
     config = StringIO(
         """{
-            "$schema": "0-2-0/system.schema.json",
+            "$schema": "0-3-0/system.schema.json",
             "alltype": {
             "class": "vectors.AllTypesSystem",
             "properties": {
@@ -135,7 +175,7 @@ def test_System_load(test_library):
     #   Pushing port is the only possibility - pulling port is forbidden
     config = StringIO(
         """{
-        "$schema": "0-2-0/system.schema.json",
+        "$schema": "0-3-0/system.schema.json",
         "p1": {
             "class": "pressurelossvarious.PressureLossSys",
             "subsystems": {
@@ -207,7 +247,7 @@ def test_System_load(test_library):
     #   Pushing port is the only possibility - pulling port is forbidden
     config = StringIO(
         """{
-        "$schema": "0-2-0/system.schema.json",
+        "$schema": "0-3-0/system.schema.json",
         "p1": {
             "class": "pressurelossvarious.PressureLossSys",
             "subsystems": {
@@ -313,7 +353,7 @@ def test_System_load_rename(test_library, name, expected_name):
     """Test `System.load` with specified output name"""
     config = StringIO(
         """{
-            "$schema": "0-2-0/system.schema.json",
+            "$schema": "0-3-0/system.schema.json",
             "p1": {
             "class": "pressurelossvarious.PressureLoss0D",
             "inputs": {
@@ -346,9 +386,8 @@ def test_System_load_rename(test_library, name, expected_name):
 
 def test_System_load_from_dict(test_library):
     # Load super simple module
-    d = {"p1": {"class": "pressurelossvarious.PressureLoss0D"}}
-    name, param = d.popitem()
-    s = System.load_from_dict(name, param)
+    d = {"__class__": "pressurelossvarious.PressureLoss0D", "name": "p1"}
+    s = System.load_from_dict(d)
 
     assert s.__module__ == "pressurelossvarious"
     assert s.__class__.__qualname__ == "PressureLoss0D"
@@ -367,13 +406,17 @@ def test_System_load_from_dict(test_library):
 
     # Load simple module with boundaries
     d = {
-        "p1": {
-            "class": "pressurelossvarious.PressureLoss0D",
-            "inputs": {"flnum_in.Pt": 1000000.0, "flnum_in.W": 10.0},
-        }
+        "__class__": "pressurelossvarious.PressureLoss0D",
+        "name": "p1",
+        "inputs": {"flnum_in": {"variables": {"Pt": 1000000.0, "W": 10.0}}},
     }
-    name, param = d.popitem()
-    s = System.load_from_dict(name, param)
+    decoding_metadata = {
+        "with_types": False,
+        "inputs_only": False,
+        "with_drivers": True,
+        "value_only": True,
+    }
+    s = System.load_from_dict(d, decoding_metadata)
 
     assert s.__module__ == "pressurelossvarious"
     assert s.__class__.__qualname__ == "PressureLoss0D"
@@ -395,18 +438,21 @@ def test_System_load_from_dict(test_library):
     # Load module in module - test for connector from submodule to top system
     #   Pushing port is the only possibility - pulling port is forbidden
     d = {
-        "p1": {
-            "class": "pressurelossvarious.PressureLossSys",
-            "subsystems": {"p11": {"class": "pressurelossvarious.PressureLoss0D"}},
-            "connections": [
-                ["flnum_in", "p11.flnum_in"],
-                ["p11.flnum_out", "flnum_out"],
-            ],
-            "exec_order": ["p11"],
-        }
+        "__class__": "pressurelossvarious.PressureLossSys",
+        "name": "p1",
+        "subsystems": {
+            "p11": {
+                "__class__": "pressurelossvarious.PressureLoss0D",
+                "name": "p11",
+            }
+        },
+        "connections": [
+            ["flnum_in", "p11.flnum_in"],
+            ["p11.flnum_out", "flnum_out"],
+        ],
+        "exec_order": ["p11"],
     }
-    name, param = d.popitem()
-    s = System.load_from_dict(name, param)
+    s = System.load_from_dict(d, decoding_metadata)
 
     # check parent
     assert s.__module__ == "pressurelossvarious"
@@ -461,22 +507,20 @@ def test_System_load_from_dict(test_library):
     # Load 2 modules in module - test for connector from submodule to top system
     #   Pushing port is the only possibility - pulling port is forbidden
     d = {
-        "p1": {
-            "class": "pressurelossvarious.PressureLossSys",
-            "subsystems": {
-                "p11": {"class": "pressurelossvarious.PressureLoss0D"},
-                "p12": {"class": "pressurelossvarious.PressureLoss0D"},
-            },
-            "connections": [
-                ["flnum_in", "p11.flnum_in"],
-                ["p11.flnum_out", "p12.flnum_in"],
-                ["p12.flnum_out", "flnum_out"],
-            ],
-            "exec_order": ["p11", "p12"],
-        }
+        "__class__": "pressurelossvarious.PressureLossSys",
+        "name": "p1",
+        "subsystems": {
+            "p11": {"__class__": "pressurelossvarious.PressureLoss0D", "name": "p11"},
+            "p12": {"__class__": "pressurelossvarious.PressureLoss0D", "name": "p12"},
+        },
+        "connections": [
+            ["flnum_in", "p11.flnum_in"],
+            ["p11.flnum_out", "p12.flnum_in"],
+            ["p12.flnum_out", "flnum_out"],
+        ],
+        "exec_order": ["p11", "p12"],
     }
-    name, param = d.popitem()
-    s = System.load_from_dict(name, param)
+    s = System.load_from_dict(d, decoding_metadata)
 
     # check parent
     assert s.__module__ == "pressurelossvarious"
@@ -549,25 +593,21 @@ def test_System_load_from_dict(test_library):
     assert connector.sink is s.flnum_out
 
     # Erroneous cases
-    d = {"p1": {"class": "pressurelossvarious"}}
-    name, param = d.popitem()
+    d = {"__class__": "pressurelossvarious", "name": "p1"}
     with pytest.raises(AttributeError):
-        s = System.load_from_dict(name, param)
+        System.load_from_dict(d)
 
-    d = {"p1": {"class": 1.0}}
-    name, param = d.popitem()
+    d = {"__class__": 1.0, "name": "p1"}
     with pytest.raises(TypeError):
-        s = System.load_from_dict(name, param)
+        System.load_from_dict(d)
 
-    d = {"p1": {"class": "pressurelossvarious.xx"}}
-    name, param = d.popitem()
+    d = {"__class__": "pressurelossvarious.xx", "name": "p1"}
     with pytest.raises(AttributeError):
-        s = System.load_from_dict(name, param)
+        System.load_from_dict(d)
 
-    d = {"p1": {"class": "pressurelossvarious.FalseSystem"}}
-    name, param = d.popitem()
+    d = {"__class__": "pressurelossvarious.FalseSystem", "name": "p1"}
     with pytest.raises(AttributeError):
-        s = System.load_from_dict(name, param)
+        System.load_from_dict(d)
 
 
 def test_System_serialize_with_None(tmp_path):
@@ -586,24 +626,32 @@ def test_System_serialize_with_None(tmp_path):
 
 def test_System_to_dict(test_library, config):
 
-    s = System.load(config)
+    s = System.load(
+        config,
+    )
 
-    d = s.to_dict()
-    assert_keys(d, "p1")
-    entry = d["p1"]
-    assert isinstance(entry, dict)
-    assert set(entry.keys()) == {
-        "class", "inputs", "subsystems", "connections", "exec_order",
-    }
-    assert entry["class"] == "pressurelossvarious.PressureLossSys"
-    assert entry["subsystems"]["p11"]["class"] == "pressurelossvarious.PressureLoss0D"
-    assert entry["subsystems"]["p12"]["class"] == "pressurelossvarious.PressureLoss0D"
-    assert set(entry["connections"]) == {
+    d = s.to_dict(encoding_metadata=EncodingMetadata(inputs_only=True))
+    assert isinstance(d, dict)
+    assert_keys(
+        d,
+        "__class__",
+        "__encoding_metadata__",
+        "name",
+        "inputs",
+        "connections",
+        "subsystems",
+        "exec_order",
+    )
+    assert d["name"] == "p1"
+    assert d["__class__"] == "pressurelossvarious.PressureLossSys"
+    assert d["subsystems"]["p11"]["__class__"] == "pressurelossvarious.PressureLoss0D"
+    assert d["subsystems"]["p12"]["__class__"] == "pressurelossvarious.PressureLoss0D"
+    assert set(d["connections"]) == {
         ("p11.flnum_in", "flnum_in"),
         ("p12.flnum_in", "p11.flnum_out"),
         ("flnum_out", "p12.flnum_out"),
     }
-    assert entry["exec_order"] == ["p11", "p12"]
+    assert d["exec_order"] == ["p11", "p12"]
 
     # Test partial connection
     config2 = StringIO(
@@ -633,8 +681,8 @@ def test_System_to_dict(test_library, config):
     assert "delta_p12" in s.outwards
 
     d = s.to_dict()
-    entry = d["p1"]["connections"]
-    assert entry == [
+    connections = d["connections"]
+    assert connections == [
         ('flnum_out', 'p12.flnum_out'),
         ('outwards', 'p12.outwards', {'delta_p12': 'delta_p'}),
         ('p11.flnum_in', 'flnum_in'),
@@ -643,94 +691,142 @@ def test_System_to_dict(test_library, config):
     ]
 
 
-def test_System_to_dict_with_def(test_library, config):
+def test_System_to_dict_with_types(test_library, config):
 
-    s = System.load(config)   
-    d  = s._System__to_dict(True)
-    assert_keys(d, "p1")
-    entry = d["p1"]
-    assert set(entry["inputs"].keys()) == {
-        "flnum_in", "inwards", "modevars_in",
-    }
-    assert entry["inputs"]["inwards"] == {'K11': {'value': 100.0}}
-    assert entry["inputs"]["modevars_in"] == {'__class__': 'ModeVarPort'}
-    assert entry["inputs"]["flnum_in"]["__class__"] == 'NumPort'
+    s = System.load(config)
+    d = s._System__to_dict(encoding_metadata=EncodingMetadata(with_types=True, value_only=True))
 
-    assert set(entry["outputs"].keys()) == {
-        "flnum_out", "outwards", "modevars_out",
+    assert isinstance(d, dict)
+    assert_keys(
+        d,
+        "__class__",
+        "__encoding_metadata__",
+        "name",
+        "inputs",
+        "outputs",
+        "connections",
+        "subsystems",
+        "exec_order",
+    )
+    assert d["name"] == "p1"
+    assert set(d["inputs"].keys()) == {
+        "flnum_in",
+        "inwards",
     }
-    assert entry["outputs"]["outwards"] == {'delta_p12': {'value': 0.}}
-    assert entry["outputs"]["modevars_out"] == {'__class__': 'ModeVarPort'}
-    assert entry["outputs"]["flnum_out"]["__class__"] == 'NumPort'
+    assert d["inputs"]["inwards"] == {"variables": {'K11': 100.0}}
+    assert d["inputs"]["flnum_in"]["__class__"] == 'NumPort'
+
+    assert set(d["outputs"].keys()) == {
+        "flnum_out",
+        "outwards",
+    }
+    assert d["outputs"]["outwards"] == {"variables": {'delta_p12': 0.0}}
+    assert d["outputs"]["flnum_out"]["__class__"] == 'NumPort'
 
 
 def test_System_to_dict_with_port_def(test_library, config):
 
-    s = System.load(config) 
-    port_cls_data = {}  
-    d  = s._System__to_dict(True, port_cls_data)
-    assert_keys(port_cls_data, "NumPort")
-    entry = port_cls_data["NumPort"]
-    assert set(entry.keys()) == {"Pt", "W"}
-    assert entry["Pt"] == {
-        "value": 101325.0,
-        "unit" : "Pa"
-    }
-
-
-def test_System_export_system(test_library, config):
-
-    s = System.load(config) 
-    d  = s.export_structure()
-    assert set(d.keys()) == {"Ports", "Systems"}
+    s = System.load(config)
+    d = s._System__to_dict(
+        encoding_metadata=EncodingMetadata(with_types=False, inputs_only=True, value_only=False)
+    )
+    assert_keys(
+        d,
+        "__class__",
+        "__encoding_metadata__",
+        "name",
+        "inputs",
+        "connections",
+        "subsystems",
+        "exec_order",
+    )
+    port = d["inputs"]["flnum_in"]
+    assert_keys(port, "variables")
+    vars = port["variables"]
+    assert_keys(vars, "Pt", "W")
+    assert vars["Pt"] == {"value": 101325.0, "unit": "Pa", "dtype": "(<class 'numbers.Number'>, <class 'numpy.ndarray'>)"}
 
 
 def test_System_tojson(test_library):
     config = StringIO(
-            """{
-  "$schema": "0-3-0/system.schema.json",
-  "p1": {
-    "class": "pressurelossvarious.PressureLossSys",
-    "connections": [
-      [
-        "flnum_out",
-        "p12.flnum_out"
-      ],
-      [
-        "p11.flnum_in",
-        "flnum_in"
-      ],
-      [
-        "p12.flnum_in",
-        "p11.flnum_out"
-      ]
+        """{
+  "$schema": "0-4-0/system.schema.json",
+  "__class__": "pressurelossvarious.PressureLossSys",
+  "__encoding_metadata__": {
+    "inputs_only": true,
+    "value_only": true,
+    "with_drivers": true,
+    "with_types": true
+  },
+  "connections": [
+    [
+      "flnum_out",
+      "p12.flnum_out"
     ],
-    "exec_order": [
-      "p11",
-      "p12"
+    [
+      "p11.flnum_in",
+      "flnum_in"
     ],
-    "inputs": {
-      "flnum_in.Pt": 101325.0,
-      "flnum_in.W": 1.0,
-      "inwards.K11": 100.0
+    [
+      "p12.flnum_in",
+      "p11.flnum_out"
+    ]
+  ],
+  "exec_order": [
+    "p11",
+    "p12"
+  ],
+  "inputs": {
+    "flnum_in": {
+      "__class__": "NumPort",
+      "variables": {
+        "Pt": 101325.0,
+        "W": 1.0
+      }
     },
-    "subsystems": {
-      "p11": {
-        "class": "pressurelossvarious.PressureLoss0D",
-        "inputs": {
-          "flnum_in.Pt": 101325.0,
-          "flnum_in.W": 1.0,
-          "inwards.K": 100.0
+    "inwards": {
+      "variables": {
+        "K11": 100.0
+      }
+    }
+  },
+  "name": "p1",
+  "subsystems": {
+    "p11": {
+      "__class__": "pressurelossvarious.PressureLoss0D",
+      "inputs": {
+        "flnum_in": {
+          "__class__": "NumPort",
+          "variables": {
+            "Pt": 101325.0,
+            "W": 1.0
+          }
+        },
+        "inwards": {
+          "variables": {
+            "K": 100.0
+          }
         }
       },
-      "p12": {
-        "class": "pressurelossvarious.PressureLoss0D",
-        "inputs": {
-          "flnum_in.Pt": 101325.0,
-          "flnum_in.W": 1.0,
-          "inwards.K": 100.0
+      "name": "p11"
+    },
+    "p12": {
+      "__class__": "pressurelossvarious.PressureLoss0D",
+      "inputs": {
+        "flnum_in": {
+          "__class__": "NumPort",
+          "variables": {
+            "Pt": 101325.0,
+            "W": 1.0
+          }
+        },
+        "inwards": {
+          "variables": {
+            "K": 100.0
+          }
         }
-      }
+      },
+      "name": "p12"
     }
   }
 }"""
@@ -738,8 +834,12 @@ def test_System_tojson(test_library):
     s = System.load(config)
     config.seek(0)
 
-    j = s.to_json(sort_keys=True)
-
+    j = s.to_json(
+        sort_keys=True,
+        indent=2,
+        encoding_metadata=EncodingMetadata(inputs_only=True, value_only=True),
+    )
+    print(j)
     assert j == config.read()
 
 
@@ -752,11 +852,11 @@ def test_System_AllTypesSystem_serialization():
     original.e = "John"
 
     data = original.to_dict()
-    s = System.load_from_dict('loaded', data['original'])
+    s = System.load_from_dict(data)
 
     assert s.__module__ == "cosapp.tests.library.systems.vectors"
     assert s.__class__.__qualname__ == "AllTypesSystem"
-    assert s.name == "loaded"
+    assert s.name == "original"
     assert s.parent is None
     assert len(s.children) == 0
 
@@ -786,20 +886,16 @@ def test_System_property_to_json():
 
     # Serialization using dictionaries
     data = original.to_dict()
+    assert_keys(data, "__class__", "__encoding_metadata__", "name", "properties")
 
-    assert set(data) == {original.name}
-    assert set(data[original.name]) == {
-        'class',
-        'properties',
-    }
-    properties = data[original.name]['properties']
+    properties = data['properties']
     assert set(properties) == {'n', 'g', 'c'}
     assert properties['n'] == original.n
     assert properties['g'] == original.g
     assert isinstance(properties['c'], SomeClass)
     assert np.array_equal(properties['c'].x, [-1, 0, 1])
 
-    loaded = System.load_from_dict('loaded', data[original.name])
+    loaded = System.load_from_dict(data)
 
     assert isinstance(loaded, SystemWithProps)
     assert loaded.n == original.n
@@ -811,9 +907,8 @@ def test_System_property_to_json():
     jstr = original.to_json()
     other = json.loads(jstr)
     assert isinstance(other, dict)
-    assert set(other) == {original.name, '$schema'}
-    assert set(other[original.name]) == set(data[original.name])
-    assert set(other[original.name]['properties']) == set(properties)
+    assert_keys(other, "$schema", "__class__", "__encoding_metadata__", "name", "properties")
+    assert set(other['properties']) == set(properties)
 
 
 def test_System_property_serialization(tmp_path):
@@ -825,9 +920,9 @@ def test_System_property_serialization(tmp_path):
     filepath = tmp_path / 'original.json'
 
     original.save(filepath)
-    loaded = System.load(filepath, name='loaded')
+    loaded = System.load(filepath)
 
-    assert loaded.name == 'loaded'
+    assert loaded.name == 'original'
     assert isinstance(loaded.sub, type(original.sub))
     assert loaded.sub.n == original.sub.n
     assert loaded.sub.g == original.sub.g
@@ -864,3 +959,69 @@ def test_System_ctor_args_serialization(tmp_path):
     assert loaded.s2.v is not original.s2.v
     assert loaded.s1.v == pytest.approx([0, 1, 2], abs=0)
     assert loaded.s2.v == pytest.approx([0, 0.2, 0.4, 0.6, 0.8, 1], abs=1e-15)
+
+
+class TestSystemPickling:
+
+    def test_system_with_none(self):
+
+        s = SystemWithNone("s")
+        assert are_same(s, pickle_roundtrip(s))
+
+        s.x = 10.0
+        new_s = pickle_roundtrip(s)
+        assert new_s.x == 10.0
+        assert are_same(s, new_s)
+
+    def test_system_with_props(self):
+
+        s = SystemWithProps("s")
+        assert are_same(s, pickle_roundtrip(s))
+
+        with pytest.raises(AttributeError):
+            s.n = 10.0
+
+    def test_system_with_kwargs(self):
+
+        s = SystemWithKwargs("s", n=10, r=1.1)
+        assert are_same(s, SystemWithKwargs("s", n=10, r=1.1))
+        assert are_same(s, pickle_roundtrip(s))
+
+        with pytest.raises(AttributeError):
+            s.n = 10.0
+
+        s.r = 1.2
+        new_s = pickle_roundtrip(s)
+        assert new_s.r == 1.2
+        assert are_same(s, new_s)
+
+    def test_system_with_children(self):
+
+        s = SystemWithChildren("s")
+        new_s = pickle_roundtrip(s)
+        assert len(new_s.children) == 2
+        assert are_same(s, new_s)
+
+        s.pop_child("sub1")
+        new_s = pickle_roundtrip(s)
+        assert len(new_s.children) == 1
+        assert "sub2" in new_s.children
+        assert are_same(s, new_s)
+
+        s.add_child(SubSystem("sub3"))
+        new_s = pickle_roundtrip(s)
+        assert len(new_s.children) == 2
+        assert "sub3" in new_s.children
+        assert are_same(s, new_s)
+
+    def test_system_with_connections(self):
+
+        s = SystemWithConnections("s")
+        new_s = pickle_roundtrip(s)
+        assert len(new_s.connectors()) == 1
+        assert are_same(s, new_s)
+
+        s.pop_child("sub1")
+        new_s = pickle_roundtrip(s)
+        assert len(new_s.connectors()) == 0
+        assert are_same(s, new_s)

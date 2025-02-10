@@ -12,7 +12,7 @@ from cosapp.ports.port import BasePort
 from cosapp.ports.enum import Scope, Validity
 from cosapp.ports.units import UnitError
 from cosapp.utils.distributions import Distribution, Uniform
-from cosapp.utils.testing import  get_args
+from cosapp.utils.testing import  get_args, are_same
 
 
 @pytest.fixture(scope='function')
@@ -554,9 +554,10 @@ def test_Variable__repr_markdown_(port, kwargs: dict, expected: str):
         get_args(),
         {
             "value": 2.0,
-            "valid_range": (-np.inf, np.inf),
+            "dtype": "(<class 'numbers.Number'>, <class 'numpy.ndarray'>)",
+            "valid_range": [-np.inf, np.inf],
             "invalid_comment": "",
-            "limits": (-np.inf, np.inf),
+            "limits": [-np.inf, np.inf],
             "out_of_limits_comment": "",
             "distribution": None,
         }
@@ -572,9 +573,12 @@ def test_Variable__repr_markdown_(port, kwargs: dict, expected: str):
         distribution=Uniform(1.0, 4.0, 0.2)),
         {
             "value": 2.0,
-            "valid_range": (-2, 0),
+            "unit": "kg",
+            "desc": "I'm a dummy donkey.",
+            "dtype": "<class 'float'>",
+            "valid_range": [-2, 0],
             "invalid_comment": "No valid",
-            "limits": (-4, 1),
+            "limits": [-4, 1],
             "out_of_limits_comment": "No so far!",
             "distribution":{ "worst": 1.0, "pworst": 0.2, "best": 4.0, "pbest": 0.15 },
         }
@@ -593,7 +597,7 @@ def test_Variable___json__(port, data, expected):
 @pytest.mark.parametrize("data, expected", [
     (
         get_args(),
-        {"value": 2.0}
+        {"value": 2.0, "dtype": "(<class 'numbers.Number'>, <class 'numpy.ndarray'>)"}
     ),(
         get_args (unit="kg",
         dtype=float,
@@ -607,6 +611,7 @@ def test_Variable___json__(port, data, expected):
         {
             "value": 2.0,
             "unit": "kg",
+            "dtype": "<class 'float'>",
             "invalid_comment": "No valid",
             "out_of_limits_comment": "No so far!",
             "desc": "I'm a dummy donkey.",
@@ -620,8 +625,10 @@ def test_Variable_to_dict(port, data, expected):
     name = "var1"
     value = 2.0  
     setattr(port, name, value)
-    w1 = Variable(name, port, value, **data[1])    
-    assert w1.to_dict() == expected
+    w1 = Variable(name, port, value, **data[1])
+    d = w1.to_dict()
+    assert are_same(d.pop("distribution", None), expected.pop("distribution", None))
+    assert d == expected
 
 
 @pytest.mark.parametrize("name, expected", [

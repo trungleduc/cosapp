@@ -245,7 +245,7 @@ def test_ModeVariable___repr__(owner, kwargs, expected):
 
 @pytest.mark.parametrize("kwargs, expected", [
     (
-        dict(), {'value': 2.0}
+        dict(), {'value': 2.0, "dtype": "(<class 'numbers.Number'>, <class 'numpy.ndarray'>)"}
     ),
     (
         dict(
@@ -254,7 +254,12 @@ def test_ModeVariable___repr__(owner, kwargs, expected):
             desc="I'm a dummy donkey.",
             scope=Scope.PROTECTED,
         ),
-        {'value': 2.0},
+        {
+            "value": 2.0, 
+            "unit": "kg",
+            "dtype": "<class 'float'>",
+            "desc": "I'm a dummy donkey."
+        },
     ),
 ])
 def test_ModeVariable___json__(owner, kwargs, expected):
@@ -268,7 +273,7 @@ def test_ModeVariable___json__(owner, kwargs, expected):
 @pytest.mark.parametrize("kwargs, expected", [
     (
         dict(),
-        {"value": 2.0}
+        {"value": 2.0, "dtype": "(<class 'numbers.Number'>, <class 'numpy.ndarray'>)"}
     ),
     (
         dict(
@@ -280,6 +285,7 @@ def test_ModeVariable___json__(owner, kwargs, expected):
         {
             "value": 2.0,
             "unit": "kg",
+            "dtype": "<class 'float'>",
             "desc": "I'm a dummy donkey.",
         }
     ),

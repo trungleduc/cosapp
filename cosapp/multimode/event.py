@@ -2,13 +2,14 @@ from __future__ import annotations
 import abc
 import logging, warnings
 from numpy import bool_ as numpy_bool
-from typing import Any, Union, Optional, TYPE_CHECKING
+from typing import Any, Union, Optional, Dict, TYPE_CHECKING
 from numbers import Number
 
 from .zeroCrossing import ZeroCrossing
 from cosapp.core.eval_str import EvalString
 from cosapp.utils.naming import NameChecker, CommonPorts
 from cosapp.utils.helpers import check_arg
+from cosapp.utils.state_io import object__getstate__
 if TYPE_CHECKING:
     from cosapp.systems import System
 
@@ -108,9 +109,21 @@ class Event:
         
         self._desc = desc
         self._present = False  # presence at current instant
-        self._state: EventState = None
+        self._state: Optional[EventState] = None
         self.trigger = trigger
         self.final = final
+
+    def __json__(self) -> Dict[str, Any]:
+        """Creates a JSONable dictionary representation of the object.
+
+        Returns
+        -------
+        Dict[str, Any]
+            The dictionary
+        """
+        _, slots = object__getstate__(self)
+        slots.pop("_context")
+        return slots
 
     @classmethod
     def name_check(cls, name: str):
@@ -296,6 +309,17 @@ class UndefinedEvent(EventState):
     def must_emit(self) -> bool:
         return False
 
+    def __json__(self) -> Dict[str, Any]:
+        """Creates a JSONable dictionary representation of the object.
+
+        Returns
+        -------
+        Dict[str, Any]
+            The dictionary
+        """
+        qualname = f"{self.__module__}.{self.__class__.__qualname__}"
+        state = object__getstate__(self)
+        return {"__class__": qualname, "state": state}
 
 class ZeroCrossingEvent(EventState):
     """Inner state of an event triggered by a zero-crossing expression"""
@@ -365,13 +389,25 @@ class ZeroCrossingEvent(EventState):
     def tick(self):
         """Performs a tick and checks whether the event can be unlocked"""
         if self._locked:
-            self._locked = (self._curr == self._prev)
+            self._locked = bool(self._curr == self._prev)
         self._prev = self._curr
         self._curr = None
 
     @property
     def is_primitive(self) -> bool:
         return True
+
+    def __json__(self) -> Dict[str, Any]:
+        """Creates a JSONable dictionary representation of the object.
+
+        Returns
+        -------
+        Dict[str, Any]
+            The dictionary
+        """
+        state = object__getstate__(self).copy()
+        state.update({"_event": self._event.present})
+        return state
 
 
 class FilteredEvent(EventState):
@@ -408,6 +444,18 @@ class FilteredEvent(EventState):
         # Property `present` is necessary to use filtered events in merged events
         return self.must_emit()
 
+    def __json__(self) -> Dict[str, Any]:
+        """Creates a JSONable dictionary representation of the object.
+
+        Returns
+        -------
+        Dict[str, Any]
+            The dictionary
+        """
+        state = self.__getstate__().copy()
+        state.update({"_event": self._event.present})
+        return state
+
     def must_emit(self) -> bool:
         return self._event.present and self._condition.eval()
 
@@ -431,6 +479,19 @@ class MergedEvents(EventState):
         # Property `present` is necessary to reuse merged events in other merged events
         return self.must_emit()
 
+    def __json__(self) -> Dict[str, Any]:
+        """Creates a JSONable dictionary representation of the object.
+
+        Returns
+        -------
+        Dict[str, Any]
+            The dictionary
+        """
+        state = self.__getstate__().copy()
+        events_present = any(event.present for event in self._events)
+        state.update({"_event": events_present})
+        return state
+
     def must_emit(self) -> bool:
         """Returns `True` if at least one event is present,
         `False` otherwise."""
@@ -443,6 +504,18 @@ class SynchronizedEvent(EventState):
     def __init__(self, event: Event):
         check_arg(event, 'event', Event)
         self._event = event
+
+    def __json__(self) -> Dict[str, Any]:
+        """Creates a JSONable dictionary representation of the object.
+
+        Returns
+        -------
+        Dict[str, Any]
+            The dictionary
+        """
+        state = self.__getstate__().copy()
+        state.update({"_event": self._event.present})
+        return state
 
     def must_emit(self) -> bool:
         return self._event.present

@@ -1,36 +1,36 @@
 import json
 import os
-import unittest
+import pytest
 
 import jsonschema
 
-from cosapp import systems
+from cosapp import utils
 
 
-class SystemSchemaTestCase(unittest.TestCase):
-    def setUp(self):
-        self.curdir = os.path.dirname(os.path.realpath(systems.__file__))
+class TestSystemSchema_0_3_0:
+    def setup_method(self):
+        self.curdir = os.path.dirname(os.path.realpath(utils.__file__))
 
-        with open(os.path.join(self.curdir, "./system.schema.json")) as fp:
+        with open(os.path.join(self.curdir, "./0-3-0_system.schema.json")) as fp:
             self.schema = json.load(fp)
 
     def test_system_config(self):
         # Working test - data/system_config.json
         with open(os.path.join(self.curdir, "../tests/data/system_config.json")) as fp:
             test = json.load(fp)
-        self.assertIsNone(jsonschema.validate(test, self.schema))
+        assert jsonschema.validate(test, self.schema) is None
 
         # Working test - data/system_config_ducts.json
         with open(
             os.path.join(self.curdir, "../tests/data/system_config_ducts.json")
         ) as fp:
             test = json.load(fp)
-        self.assertIsNone(jsonschema.validate(test, self.schema))
+        assert jsonschema.validate(test, self.schema) is None
 
     def test_full_definition(self):
         # Minimal configuration file
         config = {"mySystem": {"class": "SuperSystem"}}
-        self.assertIsNone(jsonschema.validate(config, self.schema))
+        assert jsonschema.validate(config, self.schema) is None
 
         # Configuration file - all keywords
         config = {
@@ -42,7 +42,7 @@ class SystemSchemaTestCase(unittest.TestCase):
                 "exec_order": [],
             }
         }
-        self.assertIsNone(jsonschema.validate(config, self.schema))
+        assert jsonschema.validate(config, self.schema) is None
 
         # Minimal configuration file with subsystem
         config = {
@@ -51,7 +51,7 @@ class SystemSchemaTestCase(unittest.TestCase):
                 "subsystems": {"mySubsystem": {"class": "Subsystem"}},
             }
         }
-        self.assertIsNone(jsonschema.validate(config, self.schema))
+        assert jsonschema.validate(config, self.schema) is None
 
         # Unknown properties
         config = {
@@ -63,7 +63,7 @@ class SystemSchemaTestCase(unittest.TestCase):
                 "myproperties": {},
             }
         }
-        with self.assertRaises(jsonschema.ValidationError):
+        with pytest.raises(jsonschema.ValidationError):
             jsonschema.validate(config, self.schema)
 
     def test_name(self):
@@ -71,7 +71,7 @@ class SystemSchemaTestCase(unittest.TestCase):
         config = {
             "": {"class": "SuperSystem"}  # Empty name not allowed
         }
-        with self.assertRaises(jsonschema.ValidationError):
+        with pytest.raises(jsonschema.ValidationError):
             jsonschema.validate(config, self.schema)
 
         # Invalid name
@@ -80,25 +80,25 @@ class SystemSchemaTestCase(unittest.TestCase):
                 "class": "SuperSystem"
             }
         }
-        with self.assertRaises(jsonschema.ValidationError):
+        with pytest.raises(jsonschema.ValidationError):
             jsonschema.validate(config, self.schema)
 
     def test_class(self):
         # Missing class
         config = {"mySystem": {}}
-        with self.assertRaises(jsonschema.ValidationError):
+        with pytest.raises(jsonschema.ValidationError):
             jsonschema.validate(config, self.schema)
 
         # Invalid class name
         config["mySystem"]["class"] = "2SuperSystem"  # First character must be a letter
-        with self.assertRaises(jsonschema.ValidationError):
+        with pytest.raises(jsonschema.ValidationError):
             jsonschema.validate(config, self.schema)
 
         # Multi level class name
         config["mySystem"]["class"] = "SuperSystem.MySystem"
-        self.assertIsNone(jsonschema.validate(config, self.schema))
+        assert jsonschema.validate(config, self.schema) is None
         config["mySystem"]["class"] = "SuperSystem.MySystem.MyField"
-        self.assertIsNone(jsonschema.validate(config, self.schema))
+        assert jsonschema.validate(config, self.schema) is None
 
     def test_inputs(self):
         # All possible boundaries type
@@ -117,26 +117,26 @@ class SystemSchemaTestCase(unittest.TestCase):
                 },
             }
         }
-        self.assertIsNone(jsonschema.validate(config, self.schema))
+        assert jsonschema.validate(config, self.schema) is None
 
         # Boundary name should start with a letter (lower or upper)
         config["mySystem"]["inputs"] = {"2int": 42}
-        with self.assertRaises(jsonschema.ValidationError):
+        with pytest.raises(jsonschema.ValidationError):
             jsonschema.validate(config, self.schema)
 
         # Not supported type
         config["mySystem"]["inputs"] = {"object": object()}
-        with self.assertRaises(jsonschema.ValidationError):
+        with pytest.raises(jsonschema.ValidationError):
             jsonschema.validate(config, self.schema)
 
         # Not supported empty string
         config["inputs"] = {"empty_str": ""}
-        with self.assertRaises(jsonschema.ValidationError):
+        with pytest.raises(jsonschema.ValidationError):
             jsonschema.validate(config, self.schema)
 
         # Not supported empty string in array
         config["mySystem"]["inputs"] = {"empty_str": ["Super", "", "man"]}
-        with self.assertRaises(jsonschema.ValidationError):
+        with pytest.raises(jsonschema.ValidationError):
             jsonschema.validate(config, self.schema)
 
     def test_connections(self):
@@ -147,40 +147,40 @@ class SystemSchemaTestCase(unittest.TestCase):
             }
         }
         # if connections, subsystems must be defined
-        with self.assertRaises(jsonschema.ValidationError):
+        with pytest.raises(jsonschema.ValidationError):
             jsonschema.validate(config, self.schema)
         
         config["mySystem"]["subsystems"] = {}
-        self.assertIsNone(jsonschema.validate(config, self.schema))
+        assert jsonschema.validate(config, self.schema) is None
 
         # Port name should start with a letter (upper or lower)
         config["mySystem"]["connections"] = [["2myinput", "module.myoutput"]]
-        with self.assertRaises(jsonschema.ValidationError):
+        with pytest.raises(jsonschema.ValidationError):
             jsonschema.validate(config, self.schema)
 
         # Port name should start with a letter (upper or lower)
         config["mySystem"]["connections"] = [["myinput", "2module.myoutput"]]
-        with self.assertRaises(jsonschema.ValidationError):
+        with pytest.raises(jsonschema.ValidationError):
             jsonschema.validate(config, self.schema)
 
         # Port name should start with a letter (upper or lower)
         config["mySystem"]["connections"] = [["myinput", "module.2myoutput"]]
-        with self.assertRaises(jsonschema.ValidationError):
+        with pytest.raises(jsonschema.ValidationError):
             jsonschema.validate(config, self.schema)
 
         # Connection value should be not empty string
         config["mySystem"]["connections"] = [["myinput", ""]]
-        with self.assertRaises(jsonschema.ValidationError):
+        with pytest.raises(jsonschema.ValidationError):
             jsonschema.validate(config, self.schema)
 
         # Connection value cannot be to a submodule
         config["mySystem"]["connections"] = [["myinput", "module.subsubmodule.itsoutput"]]
-        with self.assertRaises(jsonschema.ValidationError):
+        with pytest.raises(jsonschema.ValidationError):
             jsonschema.validate(config, self.schema)
 
         # Connection to the top module is not allowed
         config["mySystem"]["connections"] = [["myinput", "..itsoutput.T"]]
-        with self.assertRaises(jsonschema.ValidationError):
+        with pytest.raises(jsonschema.ValidationError):
             jsonschema.validate(config, self.schema)
 
     def test_exec_order(self):
@@ -193,13 +193,13 @@ class SystemSchemaTestCase(unittest.TestCase):
                 "exec_order": [],
             }
         }
-        with self.assertRaises(jsonschema.ValidationError):
+        with pytest.raises(jsonschema.ValidationError):
             jsonschema.validate(config, self.schema)
 
         config["mySystem"]["subsystems"] = {
             "mysystem": {"class": "System1"}
         }
-        self.assertIsNone(jsonschema.validate(config, self.schema))
+        assert jsonschema.validate(config, self.schema) is None
 
         config["mySystem"]["exec_order"].append("mysystem")
-        self.assertIsNone(jsonschema.validate(config, self.schema))
+        assert jsonschema.validate(config, self.schema) is None

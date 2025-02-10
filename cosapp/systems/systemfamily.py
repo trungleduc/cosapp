@@ -1,6 +1,5 @@
-from enum import Enum
 import logging
-from typing import List, Optional
+from typing import List, Dict, Any
 
 from cosapp.systems.system import System, ConversionType
 from cosapp.utils.helpers import check_arg
@@ -19,6 +18,35 @@ class SystemFamily(System):
         self.modelings = SystemFamilyModelings()  # type: SystemFamilyModelings
         self.family_name = "not_defined"  # type: str
         super(SystemFamily, self).__init__(name, **kwargs)
+
+    def __getstate__(self) -> Dict[str, Any]:
+        """Creates a state of the object.
+
+        The state type does NOT match type specified in
+        https://docs.python.org/3/library/pickle.html#object.__getstate__
+        to allow custom serialization.
+
+        Returns
+        -------
+        Dict[str, Any]:
+            state
+        """
+        state = super().__getstate__().copy()
+        state["family_name"] = self.family_name
+        state["modelings"] = self.modelings
+        return state
+
+    def __setstate__(self, state: Dict[str, Any]) -> None:
+        """Sets the object from a provided state.
+
+        Parameters
+        ----------
+        state : Dict[str, Any]
+            State
+        """
+        object.__setattr__(self, "family_name", state.pop("family_name"))
+        object.__setattr__(self, "modelings", state.pop("modelings"))
+        super().__setstate__(state)
 
     def possible_conversions(self) -> List[str]:
         """Get the list of possible conversions between `System` type inside the `SystemFamily`.

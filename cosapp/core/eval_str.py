@@ -15,6 +15,10 @@ from typing import (
     TYPE_CHECKING,
 )
 from cosapp.ports.port import BasePort
+from types import CodeType
+
+from cosapp.utils.state_io import object__getstate__
+
 if TYPE_CHECKING:
     from cosapp.systems import System
 
@@ -294,6 +298,43 @@ class EvalString:
 
         return mapping
 
+    class _EvalConstant:
+        def __init__(self, value):
+            self._value = value
+        
+        def __call__(self):
+            return self._value
+
+        def __reduce_ex__(self, _):
+            return type(self), (self._value, ), {}
+  
+    class _EvalNotConstant:
+        def __init__(self, context, source_code, code, expr_vars):
+            self._context = context
+            self._source_code = source_code
+            self._code = code
+            self._expr_vars = expr_vars
+            self._global_dict = EvalString._EvalString__globals
+            self.__locals = {}
+        
+        def __call__(self):
+            return eval(self._code, self._global_dict, self.locals)
+    
+        @classmethod
+        def _builder(cls, context, source_code, expr_vars):
+            code = compile(source_code, "<string>", "eval")
+            return cls(context, source_code, code, expr_vars)
+        
+        def __reduce_ex__(self, _):
+            return self._builder, (self._context, self._source_code, self._expr_vars), {}
+
+        @property
+        def locals(self) -> Dict[str, Any]:
+            """Dict[str, Any]: Context attributes required to evaluate the string expression."""
+            for key, (ctx, name) in self._expr_vars.items():
+                self.__locals[key] = getattr(ctx, name)
+            return self.__locals
+
     def __init__(self, expression: Any, context: System) -> None:
         """Class constructor.
 
@@ -308,6 +349,7 @@ class EvalString:
         self.__context = context
 
         self.__str = self.string(expression)  # type: str
+
         if len(self.__str) == 0:
             raise ValueError("Can't evaluate empty expressions")
 
@@ -346,11 +388,35 @@ class EvalString:
         if self.__constant:
             value = eval(code, global_dict, self.locals)
             # simply return constant value
-            eval_impl = lambda: value
+            eval_impl = self._EvalConstant(value)
         else:            
             # By specifying global and local contexts, we limit the user scope.
-            eval_impl = lambda: eval(code, self.globals, self.locals)
-        self.__eval = eval_impl  # type: Callable[[], Any]
+            eval_impl = self._EvalNotConstant(context, ast.unparse(ast_visited), code, self.__expr_vars)
+        self._eval = eval_impl  # type: Callable[[], Any]
+
+    def __getstate__(self) -> Dict[str, Any]:
+        """Creates a state of the object.
+
+        The state type does NOT match type specified in
+        https://docs.python.org/3/library/pickle.html#object.__getstate__
+        to allow custom serialization.
+
+        Returns
+        -------
+        Dict[str, Any]:
+            state
+        """
+        return object__getstate__(self)
+
+    def __json__(self) -> Dict[str, Any]:
+        """Creates a JSONable dictionary representation of the object.
+
+        Returns
+        -------
+        Dict[str, Any]
+            The dictionary
+        """
+        return {"expression": self.__str}
 
     @staticmethod
     def string(expression: Any) -> str:
@@ -420,7 +486,7 @@ class EvalString:
         Any
             The result of the expression evaluation.
         """
-        return self.__eval()
+        return self._eval()
 
     @property
     def variables(self) -> FrozenSet[str]:
@@ -467,9 +533,51 @@ class AssignString:
         self.__rhs_vars = frozenset()
         self.__locals = lhs.locals.copy()
         self.__locals.update({"rhs_value": value, context.name: context})
-        assignment = f"{context.name}.{lhs!s} = rhs_value"
-        self.__code = compile(assignment, "<string>", "single")  # assignment bytecode
+        self._assignment = f"{context.name}.{lhs!s} = rhs_value"
+        self.__code = compile(self._assignment, "<string>", "single")  # assignment bytecode
         self.rhs = rhs
+
+    def __getstate__(self) -> Dict[str, Any]:
+        """Creates a state of the object.
+        
+        The state type depend on the object, see
+        https://docs.python.org/3/library/pickle.html#object.__getstate__
+        for further details.
+        
+        Returns
+        -------
+        Dict[str, Any]:
+            state
+        """
+        
+        state = object__getstate__(self).copy()
+        state.pop("_AssignString__code")
+        return state
+    
+    def __setstate__(self, state: Dict[str, Any]) -> None:
+        """Sets the object from a provided state.
+
+        Parameters
+        ----------
+        state : Dict[str, Any]
+            State
+        """
+        self.__dict__.update(state)
+        self.__code = compile(state["_assignment"], "<string>", "single")
+
+    def __json__(self) -> Dict[str, Any]:
+        """Creates a JSONable dictionary representation of the object.
+
+        Returns
+        -------
+        Dict[str, Any]
+            The dictionary
+        """
+        state = self.__getstate__()
+        state.pop("_AssignString__context")
+        if self.__context.name in state["_AssignString__locals"]:
+            state["_AssignString__locals"].pop(self.__context.name)
+        return state
 
     @property
     def eval_context(self) -> System:

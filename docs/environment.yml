@@ -8,7 +8,6 @@ dependencies:
   - pytest
   - jsonschema
   - pandas
-  - wrapt
   - jinja2
   - sphinx
   - nbsphinx
