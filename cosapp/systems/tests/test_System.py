@@ -24,6 +24,7 @@ from cosapp.drivers import Driver, RunOnce, NonLinearSolver
 from cosapp.systems import system as system_module
 from cosapp.systems import System
 from cosapp.systems.system import VariableReference
+from cosapp.systems.systemConnector import SystemConnector
 
 from cosapp.tests.library.systems import Multiply1
 from cosapp.tests.library.systems.vectors import Strait1dLine
@@ -2992,6 +2993,9 @@ def test_System_connect_orphan_ports(DummyFactory, direction):
         s.connect(s.flow_out, orphan)
 
 
+def is_connector(*args, connector_ty=Connector):
+    return all([isinstance(c, SystemConnector) and isinstance(c._wrapped, connector_ty)] for c in args)
+
 def test_System_connect_ports(caplog, DummyFactory):
     caplog.set_level(logging.DEBUG)
 
@@ -3005,7 +3009,6 @@ def test_System_connect_ports(caplog, DummyFactory):
     group.connect(s1.out, s2.in_)
     # Retrieve connector dict after connection
     connectors = group.connectors()
-    is_connector = lambda c: isinstance(c, Connector)
     assert all(map(is_connector, connectors.values()))
     assert_keys(connectors, "s1.out -> s2.in_")
     connector = connectors["s1.out -> s2.in_"]
@@ -3196,8 +3199,7 @@ def test_System_connect_hybrid(DummyFactory):
 
     connectors = group.connectors()
     assert len(s1.connectors()) == 0
-    is_connector = lambda c: isinstance(c, Connector)
-    assert all(map(is_connector, connectors.values()))
+    assert is_connector(*connectors.values())
     assert set(connectors) == {"s1.out -> s2.in_"}
     connector = connectors["s1.out -> s2.in_"]
     assert connector.source is s1.out
@@ -3261,7 +3263,7 @@ def test_System_connect_full():
 
     group.connect(group.s1.inwards, group.s3.entry)
     connectors = group.connectors()
-    assert all(isinstance(c, Connector) for c in connectors.values())
+    assert is_connector(*connectors.values())
     assert set(connectors) == {
         "s3_entry -> s3.entry",
         "s3_entry -> s1.inwards",
@@ -3290,7 +3292,7 @@ def test_System_connect_full():
 
     group.connect(group.s1.inwards, group.s3.exit)
     connectors = group.connectors()
-    assert all(isinstance(c, Connector) for c in connectors.values())
+    assert is_connector(*connectors.values())
     assert set(connectors) == {"s3.exit -> s1.inwards"}
     connector = connectors["s3.exit -> s1.inwards"]
     assert connector.source is group.s3.exit
@@ -3300,7 +3302,7 @@ def test_System_connect_full():
     # Add new connection
     group.connect(group.s2.outwards, group.s4.entry)
     connectors = group.connectors()
-    assert all(isinstance(c, Connector) for c in connectors.values())
+    assert is_connector(*connectors.values())
     assert set(connectors) == {
         "s3.exit -> s1.inwards",
         "s2.outwards -> s4.entry",
@@ -3322,7 +3324,7 @@ def test_System_connect_full():
 
     group.connect(group.s1.inwards, group.s2.outwards)
     connectors = group.connectors()
-    assert all(isinstance(c, Connector) for c in connectors.values())
+    assert is_connector(*connectors.values())
     assert set(connectors) == {"s2.outwards -> s1.inwards"}
     connector = connectors["s2.outwards -> s1.inwards"]
     assert connector.source is group.s2.outwards
@@ -3356,7 +3358,7 @@ def test_System_connect_partial():
 
     group.connect(group.s1.inwards, group.s3.entry, "b")
     connectors = group.connectors()
-    assert all(isinstance(c, Connector) for c in connectors.values())
+    assert is_connector(*connectors.values())
     assert set(connectors) == {
         "s3_entry -> s3.entry",
         "s3_entry -> s1.inwards",
@@ -3385,7 +3387,7 @@ def test_System_connect_partial():
 
     group.connect(group.s1.inwards, group.s3.exit, "b")
     connectors = group.connectors()
-    assert all(isinstance(c, Connector) for c in connectors.values())
+    assert is_connector(*connectors.values())
     assert set(connectors) == {"s3.exit -> s1.inwards"}
     connector = connectors["s3.exit -> s1.inwards"]
     assert connector.source is group.s3.exit
@@ -3395,7 +3397,7 @@ def test_System_connect_partial():
     # Add new connection
     group.connect(group.s3.exit, group.s4.entry, ["a", "b"])
     connectors = group.connectors()
-    assert all(isinstance(c, Connector) for c in connectors.values())
+    assert is_connector(*connectors.values())
     assert set(connectors) == {
         "s3.exit -> s1.inwards",
         "s3.exit -> s4.entry",
@@ -3413,7 +3415,7 @@ def test_System_connect_partial():
 
     group.connect(group.s1.inwards, group.s2.inwards, {"data1": "d1"})
     connectors = group.connectors()
-    assert all(isinstance(c, Connector) for c in connectors.values())
+    assert is_connector(*connectors.values())
     assert set(connectors) == {
         "inwards -> s1.inwards",
         "inwards -> s2.inwards",
@@ -3437,7 +3439,7 @@ def test_System_connect_partial():
 
     group.connect(group.s3.exit, group.s4.entry, {"a": "a", "b": "b"})
     connectors = group.connectors()
-    assert all(isinstance(c, Connector) for c in connectors.values())
+    assert is_connector(*connectors.values())
     assert set(connectors) == {"s3.exit -> s4.entry"}
     connector = connectors["s3.exit -> s4.entry"]
     assert connector.source is group.s3.exit
@@ -3447,7 +3449,7 @@ def test_System_connect_partial():
     group.connect(group.s2.inwards, group.s1.outwards,
         {"d1": "local1", "d2": "local2"})
     connectors = group.connectors()
-    assert all(isinstance(c, Connector) for c in connectors.values())
+    assert is_connector(*connectors.values())
     assert set(connectors) == {
         "s3.exit -> s4.entry",
         "s1.outwards -> s2.inwards",
@@ -3460,7 +3462,7 @@ def test_System_connect_partial():
     group.connect(group.s2.outwards, group.s1.inwards,
         {"l1": "data1", "l2": "data2"})
     connectors = group.connectors()
-    assert all(isinstance(c, Connector) for c in connectors.values())
+    assert is_connector(*connectors.values())
     assert set(connectors) == {
         "s3.exit -> s4.entry",
         "s1.outwards -> s2.inwards",
@@ -3492,7 +3494,7 @@ def test_System_connect_partial():
     # First partial connection
     group.connect(group.s4.entry, group.s3.exit, "b")
     connectors = group.connectors()
-    assert all(isinstance(c, Connector) for c in connectors.values())
+    assert is_connector(*connectors.values())
     assert set(connectors) == {"s3.exit -> s4.entry"}
     connector = connectors["s3.exit -> s4.entry"]
     assert connector.source is group.s3.exit
@@ -3503,7 +3505,7 @@ def test_System_connect_partial():
     # Should not create any new connector
     group.connect(group.s4.entry, group.s3.exit, "a")
     connectors = group.connectors()
-    assert all(isinstance(c, Connector) for c in connectors.values())
+    assert is_connector(*connectors.values())
     assert set(connectors) == {"s3.exit -> s4.entry"}
     connector = connectors["s3.exit -> s4.entry"]
     assert connector.source is group.s3.exit
@@ -3539,11 +3541,13 @@ def test_System_connect_custom():
     with no_exception():
         top.connect(s1.out, s2.in_, cls=PlainConnector)
 
-    assert all(isinstance(c, BaseConnector) for c in top.all_connectors())
+    assert all(isinstance(c, SystemConnector) for c in top.all_connectors())
+    assert all(isinstance(c._wrapped, BaseConnector) for c in top.all_connectors())
     connectors = top.connectors()
     assert set(connectors) == {"s1.out -> s2.in_"}
     connector = connectors["s1.out -> s2.in_"]
-    assert isinstance(connector, PlainConnector)
+    assert isinstance(connector, SystemConnector)
+    assert isinstance(connector._wrapped, PlainConnector)
     assert connector.source is top.s1.out
     assert connector.sink is top.s2.in_
     assert connector.mapping == {'Pt': 'Pt', 'W': 'W'}
@@ -3557,7 +3561,8 @@ def test_System_connect_custom():
         "s2.out -> s3.in_",
     }
     connector = connectors["s2.out -> s3.in_"]
-    assert isinstance(connector, PlainConnector)
+    assert isinstance(connector, SystemConnector)
+    assert isinstance(connector._wrapped, PlainConnector)
     assert connector.mapping == {'Pt': 'Pt'}
     top.connect(s2.out, s3.in_, 'W', cls=PlainConnector)
     assert connector.mapping == {'Pt': 'Pt', 'W': 'W'}
@@ -3705,8 +3710,10 @@ def test_System_connect_port_connectors(caplog):
         "s1.p_out -> s2.p_in",
         "s2.p_out -> s3.p_in",
     }
-    assert isinstance(connectors['s1.p_out -> s2.p_in'], AbPort.Connector)
-    assert isinstance(connectors['s2.p_out -> s3.p_in'], Connector)
+    assert isinstance(connectors['s1.p_out -> s2.p_in']._wrapped, AbPort.Connector)
+    assert isinstance(connectors['s1.p_out -> s2.p_in'], SystemConnector)
+    assert isinstance(connectors['s2.p_out -> s3.p_in']._wrapped, Connector)
+    assert isinstance(connectors['s2.p_out -> s3.p_in'], SystemConnector)
 
     assert connectors['s1.p_out -> s2.p_in'].mapping == dict(zip('ba', 'ab'))
     assert connectors['s2.p_out -> s3.p_in'].mapping == dict(zip('xy', 'ab'))

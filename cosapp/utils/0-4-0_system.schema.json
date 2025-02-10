@@ -1,0 +1,146 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "$id": "0-4-0/system.schema.json",
+  "description": "Validation schema for CoSApp model file.",
+  "type": "object",
+  "definitions": {
+    "system_schema": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[A-Za-z]\\w*$"
+        },
+        "__encoding_metadata__":{
+          "type": "object",
+          "properties": {
+            "with_types": {
+              "type": "boolean"
+            },
+            "inputs_only": {
+              "type": "boolean"
+            },
+            "with_drivers": {
+              "type": "boolean"
+            },
+            "value_only": {
+              "type": "boolean"
+            }
+          }
+        },
+        "__class__": {
+          "type": "string",
+          "pattern": "^[A-Za-z][\\w]*(\\.[A-Za-z][\\w]*)*$"
+        },
+        "properties": {
+          "$ref": "#/definitions/variable_schema"
+        },
+        "setup_args": {
+          "$ref": "#/definitions/variable_schema"
+        },
+        "inputs": {
+          "$ref": "#/definitions/variable_schema"
+        },
+        "outputs": {
+          "$ref": "#/definitions/variable_schema"
+        },
+        "connections": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/connection_schema"
+          },
+          "additionalItems": false,
+          "minLength": 1
+        },
+        "subsystems": {
+          "type": "object",
+          "patternProperties": {
+            "^[A-Za-z]\\w*$": {
+              "$ref": "#/definitions/system_schema"
+            }
+          },
+          "additionalProperties": false
+        },
+        "exec_order": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z]\\w*$",
+            "minLength": 1
+          }
+        }
+      },
+      "required": [
+        "__class__",
+        "name"
+      ],
+      "dependencies": {
+        "connections": [
+          "subsystems"
+        ],
+        "exec_order": [
+          "subsystems"
+        ]
+      },
+      "additionalProperties": false
+    },
+    "connection_schema": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 3,
+      "items": [
+        {
+          "type": "string",
+          "pattern": "^([A-Za-z]\\w*)(\\.[A-Za-z]\\w*)?$"
+        },
+        {
+          "type": "string",
+          "pattern": "^([A-Za-z]\\w*)(\\.[A-Za-z]\\w*)?$"
+        },
+        {
+          "type": "object",
+          "patternProperties": {
+            "^[A-Za-z]\\w*$": {
+              "type": "string",
+              "pattern": "^[A-Za-z]\\w*$"
+            }
+          },
+          "additionalProperties": false
+        }
+      ],
+      "additionalItems": false
+    },
+    "variable_schema": {
+      "type": "object",
+      "patternProperties": {
+        "^[A-Za-z]\\w*(\\.[A-Za-z]\\w*)?$": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "array"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "$ref": "#/definitions/system_schema",
+  "additionalProperties": false
+}

@@ -4,12 +4,14 @@ import abc
 import copy
 import pandas
 import warnings
-from typing import Union, List, Optional, NamedTuple, Any, TYPE_CHECKING
+from typing import Dict, Union, List, Optional, NamedTuple, Any, TYPE_CHECKING
 
 from cosapp.core.signal import Signal
 from cosapp.core.eval_str import EvalString
+from cosapp.utils.execution import ExecutionType
 from cosapp.utils.helpers import is_numerical, check_arg
 from cosapp.utils.find_variables import SearchPattern, make_wishlist, find_variables
+from cosapp.utils.state_io import object__getstate__
 if TYPE_CHECKING:
     from cosapp.core.module import Module
 
@@ -140,8 +142,53 @@ class BaseRecorder(abc.ABC):
         )
         self.cleared = Signal(name="cosapp.recorders.recorder.BaseRecorder.cleared")
 
+    def __getstate__(self) -> Dict[str, Any]:
+        """Creates a state of the object.
+
+        The state type depend on the object, see
+        https://docs.python.org/3/library/pickle.html#object.__getstate__
+        for further details.
+
+        Returns
+        -------
+        Dict[str, Any]:
+            state
+        """
+        state = object__getstate__(self).copy()
+        return state
+
+    def __json__(self) -> Dict[str, Any]:
+        """Creates a JSONable dictionary representation of the object.
+
+        Returns
+        -------
+        Dict[str, Any]
+            The dictionary
+        """
+        qualname = f"{self.__module__}.{self.__class__.__qualname__}"
+        state = self.__getstate__()
+
+        state.pop("_watch_object")
+        state.pop("_owner")
+        state.pop("state_recorded")
+        state.pop("cleared")
+
+        return {
+            "__class__": qualname,
+            **state,
+        }
+
     @classmethod
-    def extend(cls, recorder, includes: SearchPattern=[], excludes: SearchPattern=[]) -> BaseRecorder:
+    def from_dict(cls, state):
+        rec = cls()
+        for key, val in state.items():
+            setattr(rec, key, val)
+        return rec
+
+    @classmethod
+    def extend(
+        cls, recorder, includes: SearchPattern = [], excludes: SearchPattern = []
+    ) -> BaseRecorder:
         """
         Factory returning a new recorder, with similar attributes as
         `recorder`, but extended `includes` and `excludes` fields.
@@ -386,6 +433,49 @@ class BaseRecorder(abc.ABC):
         Required by `record_state` method.
         """
         pass
+
+    @abc.abstractmethod
+    def _batch_record(self, lines: List[List[Any]]) -> None:
+        """Records multiple lines at a time.
+
+        Internal API allowing efficient concatenation of recorders.
+        """
+        pass
+
+    @abc.abstractmethod
+    def _enable_parallel_execution(self, exec_type: ExecutionType, chunk_id: int) -> None:
+        """Enables the use of this `Recorder` in parallel execution.
+        
+        This method must perform the necessary changes to allow parallel
+        execution in a multithreading or multiprocessing context.
+
+        Parameters
+        ----------
+        exec_type : ExecutionType
+            Type of parallel execution
+        chunk_id : int
+            Identifier of the chunk to be handled by this recorder
+        """
+        pass
+
+    @abc.abstractmethod
+    def _disable_parallel_execution(self, exec_type: ExecutionType, chunk_id: int) -> None:
+        """Disables the use of this `Recorder` in parallel execution.
+        
+        This method rollbacks the changes made to the `Recorder` to handle parallel
+        execution.
+
+        Parameters
+        ----------
+        exec_type : ExecutionType
+            Type of parallel execution
+        chunk_id : int
+            Identifier of the chunk to be handled by this recorder
+        """
+        pass
+
+    def _set_parallel_execution(self, chunck_id: int) -> None:
+        """"""
 
     def clear(self):
         """Clear all previously stored data."""

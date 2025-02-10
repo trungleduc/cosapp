@@ -259,10 +259,10 @@ def test_Port_to_dict_with_def(PortClassFactory, direction):
         ],
     )
     p = DummyPort("dummy", direction)
-    port_dict = p.to_dict(True)
-    assert_keys(port_dict, "dummy")
-    assert port_dict["dummy"] ==  {
-        '__class__': 'DummyPort',
+    port_dict = p.to_dict(with_types=True, value_only=True)
+    assert_keys(port_dict, "__class__", "name", "variables")
+    assert port_dict["__class__"] == "DummyPort"
+    assert port_dict["variables"] == {
         'Pt': 101325.0,
         'W': 1.0,
     }

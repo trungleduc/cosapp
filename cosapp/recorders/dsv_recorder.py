@@ -7,6 +7,7 @@ from collections.abc import Collection
 from numbers import Integral
 
 from cosapp.recorders.recorder import BaseRecorder, SearchPattern
+from cosapp.utils.execution import ExecutionType
 from cosapp.utils.helpers import is_numerical, check_arg
 
 
@@ -124,6 +125,42 @@ class DSVRecorder(BaseRecorder):
             # The header line is skipped
             content = map(lambda line: line.split(self.__delimiter), fd.readlines()[1:])
         return content
+    
+    def _enable_parallel_execution(self, exec_type: ExecutionType, chunk_id: int) -> None:
+        """Enables the use of this `Recorder` in parallel execution.
+        
+        This method must perform the necessary changes to allow parallel
+        execution in a multithreading or multiprocessing context.
+
+        No-op for multiprocessing, not implemented yet for multithreading.
+
+        Parameters
+        ----------
+        exec_type : ExecutionType
+            Type of parallel execution
+        chunk_id : int
+            Identifier of the chunk to be handled by this recorder
+        """
+        if exec_type == ExecutionType.MULTI_THREADING:
+            raise NotImplementedError("Multithreading is not implemented yet")
+        elif exec_type == ExecutionType.MULTI_PROCESSING and self.__buffer is None:
+            self.__filepath += f"_{chunk_id}"
+    
+    def _disable_parallel_execution(self, exec_type: ExecutionType, chunk_id: int) -> None:
+        """Disables the use of this `Recorder` in parallel execution.
+        
+        This method rollbacks the changes made to the `Recorder` to handle parallel
+        execution.
+
+        Parameters
+        ----------
+        exec_type : ExecutionType
+            Type of parallel execution
+        chunk_id : int
+            Identifier of the chunk to be handled by this recorder
+        """
+        if exec_type == ExecutionType.MULTI_PROCESSING and self.__buffer is None:
+            self.__filepath = self.__filepath.rsplit("_", maxsplit=1)[0]
 
     def start(self):
         """Initialize recording support."""
@@ -199,6 +236,18 @@ class DSVRecorder(BaseRecorder):
                 fd.write(self.__delimiter.join(line) + "\n")
         else:
             self.__buffer.append(line)
+
+    def _batch_record(self, lines: List[List[Any]]) -> None:
+        """Records multiple lines at a time.
+
+        Internal API allowing efficient concatenation of recorders.
+        """
+        if self.__buffer is None:
+            with open(self.__filepath, "a") as fd:
+                for line in lines:
+                    fd.write(self.__delimiter.join(line) + "\n")
+        else:
+            self.__buffer += lines
 
     def clear(self):
         """Clear all previously stored data."""

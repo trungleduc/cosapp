@@ -1,4 +1,6 @@
 """Utility functions for testing purposes"""
+
+import pickle
 import numpy
 import pytest
 import inspect
@@ -7,15 +9,20 @@ import itertools
 from numbers import Number
 from contextlib import contextmanager
 from typing import Tuple, Dict, Any, Union, Iterable, Type, Optional
-from cosapp.base import System
+from cosapp.base import System, Driver
+from cosapp.utils.distributions import Distribution
 
+from cosapp.utils.json import to_json
 
 ArgsKwargs = Tuple[Tuple[Any], Dict[str, Any]]
 
 
+def has_keys(dictionary, *keys):
+    return set(dictionary.keys()) == set(keys)
+
 def assert_keys(dictionary, *keys):
     """Utility function to test dictionary keys"""
-    if set(dictionary.keys()) != set(keys):
+    if not has_keys(dictionary, *keys):
         actual = list(dictionary.keys())
         raise KeyError(f"actual: {actual}; expected: {list(keys)}") 
 
@@ -235,3 +242,18 @@ def DummySystemFactory(
                     getattr(self, method_name)(*args, **kwargs)
     
     return type(classname, (Prototype,), {})
+
+
+def are_same(o1: Union[Driver, System, Distribution], o2: Union[Driver, System, Distribution]) -> bool:
+    j1 = to_json(o1)
+    j2 = to_json(o2)
+    are_equal = j1 ==j2
+    if not are_equal:
+        print(j1)
+        print(j2)
+
+    return are_equal
+
+
+def pickle_roundtrip(s: System) -> System:
+    return pickle.loads(pickle.dumps(s))

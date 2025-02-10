@@ -3,9 +3,8 @@ import pytest
 import logging
 import re
 import numpy as np
-from scipy.linalg import lu_factor
 
-from cosapp.core.numerics import root
+from cosapp.core.numerics.solve import jacobian
 from cosapp.drivers import NonLinearMethods, NonLinearSolver, RunSingleCase
 from cosapp.systems import System
 from cosapp.tests.library.systems import (
@@ -180,7 +179,7 @@ def test_completejacobian(caplog, caplog_messages):
     d.add_unknown("inwards.K1").add_equation("p_out.x == 100")
 
     caplog.clear()
-    with caplog.at_level(logging.INFO, root.__name__):
+    with caplog.at_level(logging.INFO, jacobian.__name__):
         s.run_drivers()
     assert s.K1 == pytest.approx(50, rel=1e-5)
 
@@ -239,7 +238,6 @@ def test_partialjacobian(caplog, caplog_messages, set_master_system):
 
     s.K1 = 1.0
     d.jac = np.linalg.inv(np.array([[10.0]]))
-    d.jac_lup = lu_factor(d.jac)
     d.solution.clear()
 
     caplog.clear()
@@ -264,13 +262,27 @@ def test_partialjacobian(caplog, caplog_messages, set_master_system):
     )
     assert any(matches)
 
-
-def test_partialjacobian_coupledmatrix(caplog, caplog_messages, set_master_system):
+@pytest.mark.parametrize(argnames="deferred_option", argvalues=[False, True])
+@pytest.mark.parametrize(argnames="partial_jac", argvalues=[False, True])
+@pytest.mark.parametrize(argnames="partial_jac_tries", argvalues=[1, 10])
+def test_partialjacobian_coupledmatrix(
+    caplog,
+    caplog_messages,
+    set_master_system,
+    partial_jac,
+    partial_jac_tries,
+    deferred_option
+    ):
     """Trivial linear problem with imposed incorrect Jacobian matrix"""
     s = Multiply2("MyMult")
+
+    jac_options = {"partial_jac": partial_jac, "partial_jac_tries": partial_jac_tries}
+    options = {} if deferred_option else jac_options
     d = s.add_driver(
-        NonLinearSolver("solver", method=NonLinearMethods.NR, factor=0.1)
+        NonLinearSolver("solver", method=NonLinearMethods.NR, factor=0.1, **options)
     )
+    if deferred_option:
+        d.options.update(jac_options)
 
     s.p_in.x = 1.0
     s.K1 = s.K2 = 1.0
@@ -289,7 +301,6 @@ def test_partialjacobian_coupledmatrix(caplog, caplog_messages, set_master_syste
     s.K1 = s.K2 = 1.0
 
     d.jac = np.array([[1, 0], [0, 0.077]])
-    d.jac_lup = lu_factor(d.jac)
     d.run.solution.clear()
 
     caplog.clear()
@@ -298,9 +309,12 @@ def test_partialjacobian_coupledmatrix(caplog, caplog_messages, set_master_syste
     
     info_messages = caplog_messages(logging.INFO)
     assert len(info_messages) >= 2
+    full_update_count = 0 if partial_jac else 1
+    partial_update_count = 1 if partial_jac else 0
     matches = map(
         lambda r: re.search(
-            r"Converged \((\d)+(?:\.\d*)(?:[eE][+-]\d+)\) in \d+ iterations, 0 complete, 1 partial Jacobian and \d+ Broyden",
+            r"Converged \((\d)+(?:\.\d*)(?:[eE][+-]\d+)\) in \d+ iterations, "
+            f"{full_update_count} complete, {partial_update_count} partial Jacobian and \d+ Broyden",
             r,
         ),
         info_messages,
@@ -309,7 +323,8 @@ def test_partialjacobian_coupledmatrix(caplog, caplog_messages, set_master_syste
 
     debug_messages = caplog_messages(logging.DEBUG)
     jacobian_related = list(filter(lambda msg: "Jacobian" in msg, debug_messages))
-    assert "Jacobian matrix: 1 over 2 derivative(s) updated" in jacobian_related
+    jacobian_msg = "1 over 2 derivative(s) updated" if partial_jac else "full update"
+    assert f"Jacobian matrix: {jacobian_msg}" in jacobian_related
     assert "Reuse of previous Jacobian matrix" in jacobian_related
     assert "Perturb unknown 0" in debug_messages
 
@@ -338,7 +353,6 @@ def test_partialjacobian_independentmatrix(caplog, caplog_messages, set_master_s
     s.K1 = s.K2 = 1.0
     # Impose Jacobian matrix; exact matrix is identity
     d.jac = np.array([[1, 0], [0, -3.2]])
-    d.jac_lup = lu_factor(d.jac)
     d.solution.clear()
 
     caplog.clear()
@@ -364,7 +378,17 @@ def test_partialjacobian_independentmatrix(caplog, caplog_messages, set_master_s
     assert "Perturb unknown 1" in debug_messages
 
 
-def test_NumericalSolver_linear_nonlinear_diag(caplog, caplog_messages, set_master_system):
+@pytest.mark.parametrize(argnames="deferred_option", argvalues=[False, True])
+@pytest.mark.parametrize(argnames="partial_jac", argvalues=[False, True])
+@pytest.mark.parametrize(argnames="partial_jac_tries", argvalues=[1, 10])
+def test_NumericalSolver_linear_nonlinear_diag(
+    caplog,
+    caplog_messages,
+    set_master_system,
+    partial_jac,
+    partial_jac_tries,
+    deferred_option
+    ):
     """
     Test related to issue https://gitlab.com/cosapp/cosapp/-/issues/22
     Mathematical problem with one linear equation, and one highly nonlinear equation.
@@ -372,9 +396,14 @@ def test_NumericalSolver_linear_nonlinear_diag(caplog, caplog_messages, set_mast
     remains diagonal.
     """
     s = Multiply2("MyMult")
+
+    jac_options = {"partial_jac": partial_jac, "partial_jac_tries": partial_jac_tries}
+    options = {} if deferred_option else jac_options
     solver = s.add_driver(
-        NonLinearSolver("solver", method=NonLinearMethods.NR, tol=1e-6)
+        NonLinearSolver("solver", method=NonLinearMethods.NR, tol=1e-6, **options)
     )
+    if deferred_option:
+        solver.options.update(jac_options)
 
     solver.add_unknown(["K1", "K2"]).add_equation(["K1 == 2", "K2**4 == 1"])
 
@@ -389,11 +418,20 @@ def test_NumericalSolver_linear_nonlinear_diag(caplog, caplog_messages, set_mast
     assert s.K1 == pytest.approx(2)
     assert s.K2 == pytest.approx(1)
     
-    info_messages = caplog_messages(logging.INFO)
     debug_messages = caplog_messages(logging.DEBUG)
     jacobian_related = list(filter(lambda msg: "Jacobian" in msg, debug_messages))
-    assert "Jacobian matrix: 1 over 2 derivative(s) updated" in jacobian_related
+
+    partial_jac_msg = "1 over 2 derivative(s) updated"
+    full_jac_msg = "full update"
+    if partial_jac:
+        assert f"Jacobian matrix: {partial_jac_msg}" in jacobian_related
+    else:
+        assert f"Jacobian matrix: {partial_jac_msg}" not in jacobian_related
+        assert f"Jacobian matrix: {full_jac_msg}" in jacobian_related
+
+    assert "Reuse of previous Jacobian matrix" in jacobian_related
     assert "Perturb unknown 1" in debug_messages
+    assert "Perturb unknown 0" in debug_messages
 
 
 def test_NumericalSolver_linear_nonlinear(caplog, caplog_messages, set_master_system):

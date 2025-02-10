@@ -5,7 +5,7 @@ from math import sqrt
 import numpy as np
 
 from cosapp.systems import SystemFamily, System
-from cosapp.core.numerics.root import root
+from cosapp.core.numerics.solve import root
 from cosapp.core.numerics.residues import Residue
 from cosapp.tests.library.ports import FluidPort, MechPort, FluidState, FlowPort
 

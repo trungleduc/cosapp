@@ -1,3 +1,4 @@
+import json
 import pytest
 
 from unittest.mock import MagicMock
@@ -11,9 +12,15 @@ from cosapp.drivers import runonce
 from cosapp.core.numerics.boundary import Boundary
 from cosapp.recorders import DataFrameRecorder
 from cosapp.tests.library.systems import Fan
-from cosapp.utils.testing import DummySystemFactory, get_args, assert_keys, assert_all_type
+from cosapp.utils.testing import (
+    DummySystemFactory,
+    get_args,
+    assert_keys,
+    assert_all_type,
+    are_same,
+    pickle_roundtrip,
+)
 
-# <codecell>
 
 def test_RunOnce__initialize():
     d = RunOnce('runner')
@@ -310,4 +317,56 @@ def test_RunOnce_recorder():
     s.run_drivers()
     data = rec.export_data()
     assert len(data) == 1
-    assert data['a'][0] == 20.
+    assert data['a'][0] == 20.0
+
+
+class TestRunOncePickling:
+
+    class S(System):
+        def setup(self):
+            self.add_inward("x", desc="aa")
+            self.add_outward("y")
+
+        def compute(self):
+            self.y = self.x * 1.1
+
+    @pytest.fixture
+    def system(self):
+        s = self.S("s")
+        s.add_driver(RunOnce("run"))
+        return s
+
+    def test_default_driver(self, system):
+        """Test pickle roundtrip."""
+
+        assert are_same(system, pickle_roundtrip(system))
+
+    def test_set_init(self, system):
+
+        run = system.drivers["run"]
+        run.set_init({"x": 1.0})
+        assert are_same(system, pickle_roundtrip(system))
+
+        j1 = json.loads(system.to_json())
+        assert "initial_values" in j1["drivers"][0]
+
+        init_values = j1["drivers"][0]["initial_values"]
+        assert len(init_values) == 1
+        assert "x" in init_values
+
+        init_x = init_values["x"]
+        assert_keys(init_x, "__class__", "_default_value", "_is_scalar", "_name_info", "_portname", "_port", "_ref")
+
+    def test_recorder(self, system):
+        """Test RunOnce pickling with recorder."""
+
+        run = system.drivers["run"]
+        run.add_recorder(DataFrameRecorder(hold=True, includes="a*"))
+        assert are_same(system, pickle_roundtrip(system))
+
+        s2 = pickle_roundtrip(system)
+        run2 = s2.drivers["run"]
+        assert run2.recorder.hold
+        assert run2.recorder.includes == ["a*"]
+        assert run2.recorder._owner is run2
+        assert run2.recorder._watch_object is s2

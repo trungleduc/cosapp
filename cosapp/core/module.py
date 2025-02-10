@@ -8,7 +8,7 @@ import logging
 from numbers import Integral
 from typing import (
     Optional, Any, List, Dict, OrderedDict,
-    Generator, MappingView, Sequence,
+    Generator, MappingView, Sequence, Union,
     TypeVar,
 )
 
@@ -17,6 +17,7 @@ from cosapp.core.signal import Signal
 from cosapp.utils.naming import NameChecker, CommonPorts
 from cosapp.utils.helpers import check_arg
 from cosapp.utils.logging import LoggerContext, LogFormat, LogLevel
+from cosapp.utils.state_io import object__getstate__
 
 logger = logging.getLogger(__name__)
 
@@ -100,6 +101,23 @@ class Module(LoggerContext, VisitedComponent, metaclass=abc.ABCMeta):
                 dir(type(self))
             )
         )
+
+    def __getstate__(self) -> tuple[None, Dict[str, Any]]:
+        """Creates a state of the object.
+        
+        The state type depend on the object, see
+        https://docs.python.org/3/library/pickle.html#object.__getstate__
+        for further details.
+        
+        Returns
+        -------
+        tuple[None, Dict[str, Any]]:
+            state
+        """
+        
+        _, slots = object__getstate__(self)
+        slots.pop("_Module__members")
+        return None, slots
 
     def __dir__(self):
         """Collection of all member names (used for autocompletion)"""
@@ -315,6 +333,55 @@ class Module(LoggerContext, VisitedComponent, metaclass=abc.ABCMeta):
         if not trim_top:
             path.append(self.name)
         return ".".join(reversed(path))
+    
+
+    def _add_child(self, child: Child, execution_index: Optional[int]=None, desc="", check: bool = True) -> Child:
+        """Add a child to the current `Module`.
+        
+        This method is the internal implementation of `add_child` but also offer
+        the capability to perform the operation without checking, which has a huge
+        impact on performance (serial/deserial, etc.).
+
+        Parameters
+        ----------
+        - child [Module]:
+            `Module` to add to the current `Module`
+        - execution_index [int, optional]:
+            Index of the execution order list at which the `Module` should be inserted;
+            default latest.
+        - desc [str, optional]:
+            Module description in the context of its parent module.
+        - check [bool]:
+            Whether to perform checks (types, pre-existing child, etc.) when adding a new child or not
+
+        Returns
+        -------
+        `child`
+        """
+        # Type validation
+        check_arg(child, 'child', Module)
+
+        specific_order = None
+        if execution_index is not None:
+            check_arg(execution_index, 'execution_index', Integral)
+            specific_order = list(self.exec_order)
+            specific_order.insert(execution_index, child.name)
+
+        if check and child.name in self.children:
+            raise ValueError(
+                "{} {!r} cannot be added, as Module already contains an object with the same name"
+                "".format(type(child).__qualname__, child.name)
+            )
+
+        child.parent = self
+        child.description = desc
+        self.children[child.name] = child
+        self._add_member(child.name)
+
+        if specific_order:
+            self.exec_order = specific_order
+
+        return child
 
     def add_child(self, child: ModuleType, execution_index: Optional[int]=None, desc="") -> ModuleType:
         """Add a child `Module` to the current `Module`.
@@ -336,30 +403,7 @@ class Module(LoggerContext, VisitedComponent, metaclass=abc.ABCMeta):
         -------
         `child`
         """
-        # Type validation
-        check_arg(child, 'child', Module)
-
-        specific_order = None
-        if execution_index is not None:
-            check_arg(execution_index, 'execution_index', Integral)
-            specific_order = list(self.exec_order)
-            specific_order.insert(execution_index, child.name)
-
-        if child.name in self.children:
-            raise ValueError(
-                "{} {!r} cannot be added, as Module already contains an object with the same name"
-                "".format(type(child).__qualname__, child.name)
-            )
-
-        child.parent = self
-        child.description = desc
-        self.children[child.name] = child
-        self._add_member(child.name)
-
-        if specific_order:
-            self.exec_order = specific_order
-
-        return child
+        return self._add_child(child, execution_index, desc, check=True)
 
     def pop_child(self, name: str) -> Module:
         """Remove submodule `name` from current module.

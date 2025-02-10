@@ -1,4 +1,5 @@
 from __future__ import annotations
+import json
 import logging
 import copy
 import abc
@@ -19,6 +20,8 @@ from cosapp.ports.mode_variable import ModeVariable
 from cosapp.utils.distributions import Distribution
 from cosapp.utils.helpers import check_arg
 from cosapp.utils.naming import NameChecker
+from cosapp.utils.json import jsonify
+
 if TYPE_CHECKING:
     from cosapp.systems import System
 
@@ -173,18 +176,62 @@ class BasePort(visitor.Component, metaclass=abc.ABCMeta):
 
         return port_to_md(self)
 
-    def __json__(self) -> Dict[str, Dict[str, Any]]:
-        """JSONable dictionary representing a variable.
+    def __json__(self) -> Dict[str, Any]:
+        """Creates a JSONable dictionary representation of the object.
         
+        Break circular dependencies by not relying
+        on a `__getstate__` call.
+
         Returns
         -------
         Dict[str, Any]
             The dictionary
         """
-        return dict(
-            (name, variable.__json__())
-            for name, variable in self._variables.items()
+        return jsonify(dict((name, variable.__json__()) for name, variable in self._variables.items()))
+
+    def __reduce_ex__(self, _: Any) -> tuple[Callable, tuple, dict]:
+        """Defines how to serialize/deserialize the object.
+        
+        Parameters
+        ----------
+        _ : Any
+            Protocol used
+
+        Returns
+        -------
+        tuple[Callable, tuple, dict]
+            A tuple of the reconstruction method, the arguments to pass to
+            this method, and the state of the object
+        """
+        state = {"owner": self._owner}
+        state.update({key: (val, self._variables[key]) for (key, val) in self.items()})
+
+        return (
+            type(self),
+            (
+                self.name,
+                self.direction,
+            ),
+            state,
         )
+
+    def __setstate__(self, state: Dict[str, Any]) -> None:
+        """Sets the object from a provided state.
+
+        Parameters
+        ----------
+        state : Dict[str, Any]
+            State
+        """
+        self._owner = state.pop("owner")
+
+        for name, (val, var) in state.items():
+            if isinstance(self, ExtensiblePort):
+                self.add_variable(name, val)
+            else:
+                self[name] = val
+            self._variables[name] = var
+            # print(var, var.distribution)
 
     def serialize_data(self) -> Dict[str, Any]:
         """Serialize the variable values in a dictionary.
@@ -651,12 +698,14 @@ class BasePort(visitor.Component, metaclass=abc.ABCMeta):
         delattr(self, varname)
         return variable
 
-    def to_dict(self, with_def: bool = False) -> Dict[str, Union[str, Tuple[Dict[str, str], str]]]:
+    def to_dict(
+        self, *, with_types: bool, value_only: bool
+    ) -> Dict[str, Union[str, Tuple[Dict[str, str], str]]]:
         """Convert this port in a dictionary.
-   
+
         Parameters
         ----------
-        with_def : bool
+        with_types : bool
             Flag to export also output ports and its class name (default: False).
 
         Returns
@@ -664,29 +713,35 @@ class BasePort(visitor.Component, metaclass=abc.ABCMeta):
         dict
             The dictionary representing this port.
         """
-        # TODO this is uncomplete as validation ranges and distribution could be changed
-        new_dict = dict()
 
-        if with_def:
-            data = dict()
-            if self.name not in ["inwards", "outwards"]:
-                data["__class__"] = self.__class__.__qualname__
-                data.update(self.items())
-            else:
-                data.update(
-                    (varname, variable.to_dict())
-                    for varname, variable in self._variables.items()
-                )
-            new_dict[self.name] = data
-        
-        elif self.is_input:
-            portname = self.name
-            new_dict.update(
-                (f"{portname}.{varname}", value)
-                for varname, value in self.items()
-            )
-        
-        return new_dict
+        state = {"name": self.name}
+        if with_types and self.name not in ["inwards", "outwards"]:
+            state["__class__"] = self.__class__.__qualname__
+
+        if value_only:
+            state["variables"] = {name: value for name, value in self.items()}
+        else:
+            state["variables"] = {name: var.to_dict() for name, var in self._variables.items()}
+
+        return state
+
+    def to_json(self, indent=2, sort_keys=True) -> str:
+        """Return a string in JSON format representing the `System`.
+
+        Parameters
+        ----------
+        indent : int, optional
+            Indentation of the JSON string (default: 2)
+        sort_keys : bool, optional
+            Sort keys in alphabetic order (default: True)
+
+        Returns
+        -------
+        str
+            String in JSON format
+        """
+
+        return json.dumps(self.__json__(), indent=indent, sort_keys=sort_keys)
 
 
 class ModeVarPort(BasePort):

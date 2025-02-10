@@ -1,6 +1,7 @@
 import abc
 import logging
 from numbers import Number
+from typing import Any, Callable, Tuple, Dict
 
 from cosapp.patterns import Singleton, Observer, Subject
 
@@ -35,6 +36,23 @@ class TimeManager(Subject):
 
 class UniversalClock(TimeManager, metaclass=Singleton):
     """Unique (singleton) time manager"""
+    def __reduce_ex__(self, _: Any) -> tuple[Callable, Tuple, Dict]:
+        """Defines how to serialize/deserialize the object.
+        
+        Parameters
+        ----------
+        _ : Any
+            Protocol used
+
+        Returns
+        -------
+        tuple[Callable, tuple, dict]
+            A tuple of the reconstruction method, the arguments to pass to
+            this method, and the state of the object
+        """
+        state = self.__getstate__()
+        return type(self), (self.time, ), state
+
     def __repr__(self) -> str:
         return f"Universal time manager @ t = {self.time}"
 

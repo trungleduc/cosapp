@@ -1,3 +1,4 @@
+import sys
 import pytest
 import numpy as np
 
@@ -17,7 +18,8 @@ from cosapp.tests.library.systems import (
     Multiply4,
     MultiplySystem2,
 )
-from cosapp.utils.testing import no_exception
+from cosapp.utils.execution import ExecutionPolicy, ExecutionType, WorkerStartMethod
+from cosapp.utils.testing import no_exception, pickle_roundtrip, are_same, has_keys
 
 
 class SimpleCentered(System):
@@ -176,7 +178,7 @@ def test_MonteCarlo__precompute():
     mc.add_random_variable({"K1", "K2"})
 
     assert mc.cases is None
-    mc._precompute()
+    mc.setup_run()
     assert mc.cases.shape == (mc.draws, len(mc.random_variables))
 
     # Linear use case
@@ -192,6 +194,7 @@ def test_MonteCarlo__precompute():
     assert mc.X0 is None
     assert mc.Y0 is None
     assert mc.A is None
+    mc.setup_run()
     mc._precompute()
     assert mc.cases.shape == (mc.draws, len(mc.random_variables))
     assert len(mc.X0) == 2
@@ -211,7 +214,7 @@ def test_MonteCarlo__precase():
     mc.draws = 2
     mc.add_random_variable({"K1", "K2"})
 
-    mc._precompute()
+    mc.setup_run()
     mc._precase(1, mc.cases[1])
     assert s.K1 != pytest.approx(5, abs=1e-4)
     assert s.K2 != pytest.approx(10, abs=1e-4)
@@ -225,7 +228,7 @@ def test_MonteCarlo__precase():
     mc = t.add_driver(MonteCarlo("mc"))
     mc.add_random_variable({"mult.p_in.x", "mult.K2"})
 
-    mc._precompute()
+    mc.setup_run()
     mc._precase(1, mc.cases[1])
     t.run_once()
     assert t.mult.p_in.x != pytest.approx(22, abs=1e-4)
@@ -242,7 +245,7 @@ def test_MonteCarlo__postcase():
     mc.draws = 2
     mc.add_random_variable({"K1", "K2"})
 
-    mc._precompute()
+    mc.setup_run()
     mc._precase(1, mc.cases[1])
     mc._postcase(1, mc.cases[1])
     assert s.K1 == pytest.approx(5.0, abs=1e-4)
@@ -258,7 +261,7 @@ def test_MonteCarlo__postcase():
     mc = t.add_driver(MonteCarlo("mc"))
     mc.add_random_variable({"mult.p_in.x", "mult.K2"})
 
-    mc._precompute()
+    mc.setup_run()
     mc._precase(1, mc.cases[1])
     s.run_once()
     mc._postcase(1, mc.cases[1])
@@ -425,7 +428,7 @@ def test_MonteCarlo_multipts_iterative_nonlinear():
 
     mc.add_random_variable({"mult2.inwards.K2"})
 
-    mc.draws = 50
+    mc.draws = 64
 
     snl.run_drivers()
 
@@ -451,7 +454,7 @@ def test_MonteCarlo_multipts_iterative_nonlinear():
     assert run2[("mult2.K1", "std")] != pytest.approx(0, abs=1e-3)
 
 
-@pytest.mark.skip("TODO linearization does not support multipoint cases")
+@pytest.mark.skip("TODO linearization mcs not support multipoint cases")
 def test_MonteCarlo_multipts_iterative_nonlinear_linearized():
     snl = IterativeNonLinear("nl")
 
@@ -550,3 +553,133 @@ def test_MonteCarlo_embedded_solver():
 
     with no_exception():
         s.run_drivers()
+
+
+def _get_start_methods():
+    if sys.platform == "win32":
+        return (WorkerStartMethod.SPAWN, )
+
+    return (WorkerStartMethod.FORK, WorkerStartMethod.SPAWN)
+
+@pytest.mark.parametrize(argnames="nprocs", argvalues=[2, 4])    
+@pytest.mark.parametrize("start_method", _get_start_methods())
+def test_MonteCarlo_multiprocessing(nprocs, start_method):
+    """Tests the execution of a MonteCarlo on multiple (sub)processes."""
+    s = MultiplySystem2("s")
+    s.run_once()
+    s.mult1.p_in.get_details("x").distribution = Normal(best=0.1, worst=-0.1)
+    s.mult2.p_in.get_details("x").distribution = Normal(best=0.2, worst=-0.2)
+
+    mc = s.add_driver(MonteCarlo(
+        "mc", 
+        execution_policy=ExecutionPolicy(
+            workers_count=nprocs,
+            execution_type=ExecutionType.MULTI_PROCESSING,
+            start_method=start_method
+            )
+        )
+    )
+    nls = mc.add_child(NonLinearSolver('solver'))
+    mc.add_child(RunOnce("runonce"))  # last mc child is *not* a solver
+    rec = nls.add_recorder(DataFrameRecorder("*x", hold=True))
+
+    mc.add_random_variable({"mult1.p_in.x", "mult2.p_in.x"})
+    mc.draws = 1 << 4
+
+    with no_exception():
+        s.run_drivers()
+
+    assert len(rec.export_data()) == mc.draws + 1
+
+
+class TestMonteCarloPickling:
+  
+    @pytest.fixture
+    def system(self):
+        s: System = Multiply2('s')
+        s.add_driver(MonteCarlo('mc'))
+        return s
+
+    def test_standalone(self):
+        """Test pickling of standalone driver."""
+
+        mc = MonteCarlo('mc')
+
+        mc_copy = pickle_roundtrip(mc)
+        assert are_same(mc, mc_copy)
+
+    def test_default(self, system):
+        """Test driver with default options."""
+
+        system_copy = pickle_roundtrip(system)
+        assert are_same(system, system_copy)
+
+    def test_random_variables(self, system):
+        """Test driver with input vars."""
+
+        mc = system.drivers["mc"]
+        distribution = Uniform(best=0.2, worst=-0.2)
+        system.p_in.get_details("x").distribution = distribution
+        mc.add_random_variable({"p_in.x"})
+
+        system_copy = pickle_roundtrip(system)
+        assert are_same(system, system_copy)
+
+        mc_copy = system_copy.drivers["mc"]
+        assert has_keys(mc_copy.random_variables, "p_in.x")
+        random_var = mc_copy.random_variables["p_in.x"]
+        assert are_same(random_var.distribution, distribution)
+        assert are_same(system_copy.p_in.get_details("x").distribution, distribution)
+
+
+    def test_responses(self, system):
+        """Test driver with response vars."""
+
+        mc = system.drivers["mc"]
+        mc.add_response("K1")
+        mc.add_response("K2")
+
+        system_copy = pickle_roundtrip(system)
+        assert are_same(system, system_copy)
+
+        mc_copy = system_copy.drivers["mc"]
+        assert set(mc_copy.responses) == {"K1", "K2"}
+
+
+    def test_recorder(self, system):
+        """Test pickling of driver with recorder."""
+
+        mc = system.drivers["mc"]
+        mc.add_recorder(DataFrameRecorder(hold=True, includes="a*"))
+        assert are_same(system, pickle_roundtrip(system))
+
+        system_copy = pickle_roundtrip(system)
+        mc_copy = system_copy.drivers["mc"]
+        assert mc_copy.recorder.hold
+        assert mc_copy.recorder.includes == ["a*"]
+        assert mc_copy.recorder._owner is mc_copy
+        assert mc_copy.recorder._watch_object is system_copy
+
+    def test_execution(self, system):
+        """Test execution of pickled driver."""
+
+        mc = system.drivers["mc"]
+        mc.add_child(RunOnce("run"))
+        mc.add_recorder(DataFrameRecorder(includes=["K?", "p_in.x"], raw_output=True))
+
+        distribution = Uniform(best=0.2, worst=-0.2)
+        system.p_in.get_details("x").distribution = distribution
+        mc.add_random_variable({"p_in.x"})
+        mc.draws = 10
+        system.run_drivers()
+
+        system_copy = pickle_roundtrip(system)
+        mc_copy = system_copy.drivers["mc"]
+        df = mc_copy.recorder.export_data()
+        assert len(df) == 10
+        assert df.iloc[4]["K1"] == 5.0
+        assert df.iloc[4]["K2"] == 5.0
+        assert 0.0 < df.iloc[4]["p_in.x"] < 2.0
+        assert df.iloc[8]["K1"] == 5.0
+        assert df.iloc[8]["K2"] == 5.0
+        assert 0.0 < df.iloc[8]["p_in.x"] < 2.0

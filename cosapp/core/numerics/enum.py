@@ -1,4 +1,7 @@
 from enum import Enum
+from typing import Any, Dict
+
+from cosapp.utils.state_io import object__getstate__
 
 # TODO
 # class SolverStep(Enum):
@@ -25,3 +28,16 @@ class NonLinearMethods(Enum):
     BROYDEN_GOOD = "broyden1"
     NR = "cosapp"
 
+    def __json__(self) -> Dict[str, Any]:
+        """Creates a state of the object.
+
+        The state type depend on the object, see
+        https://docs.python.org/3/library/pickle.html#object.__getstate__
+        for further details.
+
+        Returns
+        -------
+        Dict[str, Any]:
+            state
+        """
+        return object__getstate__(self)

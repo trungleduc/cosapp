@@ -558,6 +558,7 @@ class Optimizer(AbstractSolver):
         return "\n".join(lines)
 
     def _declare_options(self) -> None:
+        super()._declare_options()
         self.options.declare(
             name = 'method',
             default = None,

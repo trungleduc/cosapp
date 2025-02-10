@@ -12,6 +12,7 @@ from cosapp.core.numerics.boundary import Boundary
 from cosapp.core.eval_str import AssignString
 from cosapp.utils.naming import natural_varname
 from cosapp.utils.helpers import check_arg
+from cosapp.utils.state_io import object__getstate__
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +76,6 @@ class Interpolator:
     def __call__(self, t: float) -> numpy.ndarray:
         return self.__evaluator(t)
 
-
 class TimeAssignString:
     """Creates an executable assignment to handle time boundary conditions
     of the kind `lhs = F(t, data)`, where F is a function of some dataset at time t,
@@ -90,11 +90,59 @@ class TimeAssignString:
             )
         Boundary(context, lhs, inputs_only=True)  # checks that variable is valid
         fname = f"BC{id(rhs)}"
-        assignment = f"{context.name}.{lhs} = {fname}(t)"
+        self._assignment = f"{context.name}.{lhs} = {fname}(t)"
         self.__locals = {fname: rhs, context.name: context, 't': 0}
-        self.__code = compile(assignment, "<string>", "single")  # type: CodeType
+        self.__code = compile(self._assignment, "<string>", "single")  # type: CodeType
         self.__str = f"{lhs} = {type(rhs).__name__}(t)"
         self.__rhs = rhs
+
+    def __getstate__(self) -> Dict[str, Any]:
+        """Creates a state of the object.
+        
+        The state type depend on the object, see
+        https://docs.python.org/3/library/pickle.html#object.__getstate__
+        for further details.
+        
+        Returns
+        -------
+        Dict[str, Any]:
+            state
+        """
+        
+        state = object__getstate__(self).copy()
+        state.pop("_TimeAssignString__code")
+        return state
+    
+    def __setstate__(self, state: Dict[str, Any]) -> None:
+        """Sets the object from a provided state.
+
+        Parameters
+        ----------
+        state : Dict[str, Any]
+            State
+        """
+        self.__dict__.update(state)
+        self.__code = compile(state["_assignment"], "<string>", "single")
+
+    def __json__(self) -> Dict[str, Any]:
+        """Creates a JSONable dictionary representation of the object.
+
+        Returns
+        -------
+        Dict[str, Any]
+            The dictionary
+        """
+        state = self.__getstate__()
+        # remove System
+        key = list(state["_TimeAssignString__locals"].keys())
+        state["_TimeAssignString__locals"].pop(key[1])
+
+        # get only numpy.Polynomial args instead not jsonable method
+        if isinstance(self.__rhs, numpy.polynomial.polynomial.Polynomial):
+            args = (self.__rhs.coef, self.__rhs.domain, self.__rhs.window, self.__rhs.symbol)
+            state.update({"_TimeAssignString__rhs": args})
+            state["_TimeAssignString__locals"].update({key[0]: args})
+        return state
 
     def exec(self, t: float) -> None:
         """Evaluates rhs(t), and executes assignment lhs <- rhs(t).
@@ -156,6 +204,22 @@ class Scenario:
         self.__stop: Event = None
         self.name = name
         self.owner = owner
+
+    def __json__(self) -> Dict[str, Any]:
+        """Creates a JSONable dictionary representation of the object.
+        
+        Break circular dependency with the System by removing
+        the `_owner` member from the object state.
+
+        Returns
+        -------
+        Dict[str, Any]
+            The dictionary
+        """
+        state = object__getstate__(self).copy()
+        state.pop("_Scenario__owner")
+        state.pop("_Scenario__context")
+        return state
 
     @classmethod
     def make(cls, name: str, driver: Driver, init: Dict[str, Any], values: Dict[str, Any]) -> Scenario:

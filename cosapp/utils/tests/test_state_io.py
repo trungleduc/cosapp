@@ -1,6 +1,6 @@
 import pytest
 
-from cosapp.utils.state_io import get_state, set_state
+from cosapp.utils.state_io import get_state, set_state, object__getstate__
 from cosapp.utils.testing import assert_close_dict
 from cosapp.tests.library.systems import ComplexTurbofan
 
@@ -561,3 +561,49 @@ def test_set_state(turbofan: ComplexTurbofan, turbofan_state: dict):
     assert turbofan.noz.fl_in.W == pytest.approx(187.0459)
     assert turbofan.noz.WRnozzle == pytest.approx(101.87617)
     assert turbofan.bleed.fl2_out.W == pytest.approx(1.889352)
+
+
+class Parent:
+    __slots__ = ("__private", "_half_priv", "public")
+
+    def __init__(self) -> None:
+        self.__private = 1.
+        self._half_priv = 2.
+        self.public = 3.
+
+class Child(Parent):
+    __slots__ = ("__to_child", "_half_child", "all")
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.__to_child = 1.
+        self._half_child = 2.
+        self.all = 3.
+
+class GrandChild(Child): ...
+
+
+def test_object_getstate():
+    parent = Parent()
+    child = Child()
+    gchild = GrandChild()
+
+    assert hasattr(parent, "__slots__")
+    assert not hasattr(parent, "__dict__")
+
+    assert hasattr(child, "__slots__")
+    assert not hasattr(child, "__dict__")
+    assert child.__slots__ is not parent.__slots__
+
+    assert hasattr(gchild, "__slots__")
+    assert hasattr(gchild, "__dict__")
+    assert gchild.__slots__ is child.__slots__
+
+    _, pslots = object__getstate__(parent)
+    assert pslots == {'_Parent__private': 1.0, '_half_priv': 2.0, 'public': 3.0}
+    
+    _, chslots = object__getstate__(child)
+    assert chslots == {'_Child__to_child': 1.0, '_half_child': 2.0, 'all': 3.0, **pslots}
+
+    _, gchslots  = object__getstate__(gchild)
+    assert gchslots == chslots

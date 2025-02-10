@@ -54,7 +54,7 @@ Ready to contribute? Here's how to set up `cosapp` for local development.
 
 3. Install your local copy into a conda environment. Assuming you have conda installed, this is how you set up your fork for local development::
     ```
-    conda create -n cosapp python=3.11 scipy pandas wrapt jsonschema pytest
+    conda create -n cosapp python=3.11 scipy pandas jsonschema pytest
     cd cosapp/
     python -m pip install -e .
     ```

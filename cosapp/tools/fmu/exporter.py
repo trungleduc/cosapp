@@ -18,6 +18,7 @@ from cosapp.ports.port import BasePort
 from cosapp.systems import System
 from cosapp.utils.helpers import check_arg
 from cosapp.utils.naming import natural_varname
+from cosapp.utils.json import EncodingMetadata
 
 try:
     from pythonfmu import Fmi2Causality, Fmi2Variability, FmuBuilder as PyFmuBuilder
@@ -477,7 +478,7 @@ class FmuBuilder:
 
         project_folder = FmuBuilder._get_project_folder(temp_dest)
         deck_file = project_folder / DECK_FILE_NAME
-        system.save(deck_file)  # Save the customized system
+        system.save(deck_file, encoding_metadata=EncodingMetadata(with_drivers=False, value_only=True))  # Save the customized system
 
         # Create default environment if it is not provided
         if python_env is None:

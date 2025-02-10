@@ -16,9 +16,15 @@ limitations under the License.
 
 This module comes from OpenMDAO 2.2.0. It was slightly modified for CoSApp integration.
 """
-# from __future__ import division, print_function
+
+from __future__ import annotations
 
 # unique object to check if default is given
+
+from typing import Any, Dict, Union, Optional, Callable, Container, Iterable
+from cosapp.utils.state_io import object__getstate__
+
+
 _undefined = object()
 
 
@@ -40,6 +46,8 @@ class OptionsDictionary(object):
         If True, no options can be set after declaration.
     """
 
+    __slots__ = ["_dict", "_read_only"]
+
     def __init__(self, read_only=False):
         """
         Initialize all attributes.
@@ -51,6 +59,35 @@ class OptionsDictionary(object):
         """
         self._dict = {}
         self._read_only = read_only
+
+    def __getstate__(
+        self,
+    ) -> Union[Dict[str, Any], tuple[Optional[Dict[str, Any]], Dict[str, Any]]]:
+        """Creates a state of the object.
+
+        The state type depend on the object, see
+        https://docs.python.org/3/library/pickle.html#object.__getstate__
+        for further details.
+
+        Returns
+        -------
+        Union[Dict[str, Any], tuple[Optional[Dict[str, Any]], Dict[str, Any]]]:
+            state
+        """
+        return object__getstate__(self)
+
+    def __json__(self) -> Dict[str, Any]:
+        """Creates a JSONable dictionary representation of the object.
+
+        Returns
+        -------
+        Dict[str, Any]
+            The dictionary
+        """
+        qualname = f"{self.__module__}.{self.__class__.__qualname__}"
+        d, state = self.__getstate__()
+
+        return {"__class__": qualname, "state": state}
 
     def __repr__(self):
         """
@@ -262,6 +299,7 @@ class OptionsDictionary(object):
         lower=None,
         check_valid=None,
         allow_none=False,
+        tag=None,
     ):
         r"""
         Declare an option.
@@ -291,6 +329,8 @@ class OptionsDictionary(object):
             General check function that raises an exception if value is not valid.
         allow_none : bool
             If True, allow None as a value regardless of values or dtype.
+        tag : Optional[str]
+            Specify a tag to allow later filtering of options.
         """
 
         if values is not None and not isinstance(values, (set, list, tuple)):
@@ -310,9 +350,10 @@ class OptionsDictionary(object):
             )
 
         default_provided = default is not _undefined
+        default_value = default() if isinstance(default, Callable) else default
 
         self._dict[name] = {
-            "value": default,
+            "value": default_value,
             "values": values,
             "dtype": dtype,
             "desc": desc,
@@ -321,11 +362,12 @@ class OptionsDictionary(object):
             "check_valid": check_valid,
             "has_been_set": default_provided,
             "allow_none": allow_none,
+            "tag": tag,
         }
 
         # If a default is given, check for validity
         if default_provided:
-            self._assert_valid(name, default)
+            self._assert_valid(name, default_value)
 
     def undeclare(self, name):
         """
@@ -379,12 +421,33 @@ class OptionsDictionary(object):
         for key in self.keys():
             yield self[key]
 
-    def items(self):
+    def items(self, tags: Container[str] = ()):
         """Return an iterator over dict keys and values, as tuples.
+
+        The items can be filtered by tags if provided.
+
         Raises `RuntimeError` if a required option is undefined.
+
+        Parameters
+        ----------
+        tags : Container[str]
+            tags to filter
+
+        Returns
+        -------
+        items
+            iterator to the filtered items.
         """
-        for key in self.keys():
-            yield key, self[key]
+
+        def get_item(x):
+            key, val = x
+            return key, self[key]
+
+        def filter_items(x):
+            _, val = x
+            return not tags or val["tag"] in tags
+
+        return map(get_item, filter(filter_items, self._dict.items()))
 
     def __contains__(self, key):
         """
@@ -451,8 +514,80 @@ class OptionsDictionary(object):
             if meta["has_been_set"]:
                 return meta["value"]
             else:
-                raise RuntimeError(
-                    f"Option {name!r} is required but has not been set."
-                )
+                raise RuntimeError(f"Option {name!r} is required but has not been set.")
         except KeyError:
             raise KeyError(f"Option {name!r} cannot be found")
+
+    def __getattr__(self, name):
+        if name in self.__getattribute__("_dict"):
+            return self[name]
+        return self.__getattribute__(name)
+
+    def get(self, name: str, default: Optional[Any] = None) -> Any:
+        if name in self:
+            return self[name]
+
+        return default
+
+    def merge(self, other: OptionsDictionary) -> None:
+        self._dict.update(other._dict)
+
+
+class HasOptions:
+    """Base class to handle options as `OptionsDictionary`."""
+
+    __slots__ = ()  # do not provide the '_options' slot to allow multiple inheritence
+
+    def __init__(self):
+        self._options = OptionsDictionary()
+
+    def _declare_options(self) -> None:
+        """Declares options."""
+        pass
+
+    def _init_options(self, kwargs) -> OptionsDictionary:
+        """Initializes the options."""
+        self._declare_options()
+        self._consume_options(kwargs)
+        self._set_options()
+
+        return self._options
+
+    def _consume_options(self, kwargs: Dict[str, Any]) -> None:
+        """Sets the options by consuming them."""
+        for key, _ in self._options.items():
+            if key in kwargs:
+                self._options[key] = kwargs.pop(key)
+
+    def _set_options(self) -> None:
+        """Sets options from the current state."""
+        pass
+
+    def set_options(self) -> None:
+        """Sets options from the current state."""
+        self._set_options()
+
+
+class HasCompositeOptions(HasOptions):
+
+    __slots__ = ()
+
+    def _get_nested_objects_with_options(self) -> Iterable[HasOptions]:
+        """Gets nested objects having options."""
+        return ()
+
+    def _init_options(self, kwargs) -> OptionsDictionary:
+        """Initializes the options."""
+        super()._init_options(kwargs)
+
+        for obj in self._get_nested_objects_with_options():
+            obj._init_options(kwargs)
+            self._options.merge(obj._options)
+
+        return self._options
+
+    def set_options(self) -> None:
+        """Sets options from the current state."""
+        self._set_options()
+        for obj in self._get_nested_objects_with_options():
+            obj.set_options()

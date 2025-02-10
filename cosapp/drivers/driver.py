@@ -1,17 +1,19 @@
 """
 Classes driving simulation on CoSApp :py:class:`~cosapp.systems.system.System`.
 """
+import json
 import logging
 import time
-from typing import Optional, TypeVar, Union, List, Dict, Any
+from typing import Optional, TypeVar, Union, List, Dict, Any, Callable
 
 from cosapp.patterns.visitor import Visitor
 from cosapp.core.module import Module
 from cosapp.systems import System
 from cosapp.recorders.recorder import BaseRecorder
-from cosapp.utils.options_dictionary import OptionsDictionary
+from cosapp.utils.options_dictionary import HasCompositeOptions, OptionsDictionary
 from cosapp.utils.naming import NameChecker, CommonPorts
 from cosapp.utils.helpers import check_arg
+from cosapp.utils.json import jsonify
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +21,7 @@ AnyDriver = TypeVar("AnyDriver", bound="Driver")
 AnyRecorder = TypeVar("AnyRecorder", bound=BaseRecorder)
 
 
-class Driver(Module):
+class Driver(Module, HasCompositeOptions):
     """Abstract base class for all systems drivers.
 
     Parameters
@@ -51,7 +53,7 @@ class Driver(Module):
         List of (name, value) for the iteratives when a solution is reached
     """
 
-    __slots__ = ('_owner', '_recorder', 'options', 'start_time', 'status', 'error_code')
+    __slots__ = ('_owner', '_recorder', '_options', 'start_time', 'status', 'error_code')
 
     _name_check = NameChecker(
         pattern = r"^[A-Za-z][\w\s@-]*[\w]?$",
@@ -77,6 +79,8 @@ class Driver(Module):
             Optional keywords arguments.
         """
         super().__init__(name)
+        HasCompositeOptions.__init__(self)
+
         self._owner: Optional[System] = None
         self._recorder: Optional[BaseRecorder] = None
         self.owner = owner
@@ -91,9 +95,17 @@ class Driver(Module):
             # desc="Error code during the execution."
             # TODO Fred what is the code? ESI?
 
-        self.options = OptionsDictionary()  # type: OptionsDictionary
-            # "Driver options dictionary"
-        self.options.declare(
+        self._init_options(options)
+        if options:
+            raise RuntimeError(
+                    f"Unknown option(s) {list(options.keys())!r} for {type(self).__name__}"
+                    f"; available options are: {self.available_options(0)}."
+                )
+
+    def _declare_options(self) -> None:
+        """Declares options."""
+        super()._declare_options()
+        self._options.declare(
             "verbose",
             default=0,
             dtype=int,
@@ -101,23 +113,91 @@ class Driver(Module):
             upper=1,
             desc="Verbosity level of the driver",
         )
-        self._declare_options()
-        for name in list(options):
-            # All options are consummed; fails if option name has not been declared
-            try:
-                self.options[name] = options.pop(name)
-            except KeyError:
-                raise RuntimeError(
-                    f"Unknown option {name!r} for {type(self).__name__}"
-                    f"; available options are: {self.available_options(0)}."
-                )
 
-    def _declare_options(self) -> None:
-        """Hook function to declare entries in `self.options`.
-        Actual values are captured at driver construction, from keyword arguments.
-        See `OptionsDictionary.declare` for details on option declaration.
+    @property
+    def options(self) -> OptionsDictionary:
+        """Gets options."""
+        return self._options
+
+    def __getstate__(self) -> tuple[None, Dict[str, Any]]:
+        """Creates a state of the object.
+
+        The state type depend on the object, see
+        https://docs.python.org/3/library/pickle.html#object.__getstate__
+        for further details.
+        
+        Returns
+        -------
+        tuple[None, Dict[str, Any]]:
+            state
         """
-        pass
+        _, slots = super().__getstate__()
+
+        for slot in ("setup_ran", "computed", "clean_ran"):
+            slots.pop(slot)
+
+        return None, slots
+
+    def __setstate__(self, state: tuple[None, Dict[str, Any]]) -> None:
+        """Sets the object from a provided state.
+
+        Parameters
+        ----------
+        state : tuple[None, Dict[str, Any]]
+            State
+        """
+        _, slots = state
+
+        for name, value in slots.items():
+            setattr(self, name, value)
+
+    def __reduce_ex__(self, _: Any) -> tuple[Callable, tuple, dict]:
+        """Defines how to serialize/deserialize the object.
+        
+        Parameters
+        ----------
+        _ : Any
+            Protocol used
+
+        Returns
+        -------
+        tuple[Callable, tuple, dict]
+            A tuple of the reconstruction method, the arguments to pass to
+            this method, and the state of the object
+        """
+        state = self.__getstate__()
+        return self._from_state, (self.name,), state
+
+    @classmethod
+    def _from_state(cls, name):
+        return cls(name)
+
+    @classmethod
+    def _slots_not_jsonified(cls) -> tuple[str]:
+        """Returns slots that must not be JSONified."""
+        return ("_owner", "parent")
+
+    def __json__(self) -> Dict[str, Any]:
+        """Creates a JSONable dictionary representation of the object.
+        
+        Break circular dependencies by removing some slots from the 
+        state.
+
+        Returns
+        -------
+        Dict[str, Any]
+            The dictionary
+        """
+        _, slots = self.__getstate__()
+        for s in self._slots_not_jsonified():
+            slots.pop(s)
+
+        return jsonify(slots)
+    
+    def to_json(self,*,
+        indent: Optional[int] = None,
+        sort_keys: bool = True)->str:
+        return json.dumps(self.__json__(), indent=indent, sort_keys=sort_keys)
 
     def available_options(self, level=1) -> Union[List[str], Dict[str, Any], None]:
         """Prints out the driver options.

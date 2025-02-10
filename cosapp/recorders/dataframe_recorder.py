@@ -4,6 +4,7 @@ import pandas
 from typing import Any, List, Optional
 
 from cosapp.recorders.recorder import BaseRecorder, SearchPattern
+from cosapp.utils.execution import ExecutionType
 
 
 class DataFrameRecorder(BaseRecorder):
@@ -121,6 +122,46 @@ class DataFrameRecorder(BaseRecorder):
 
     def _record(self, line: List[Any]) -> None:
         self.__buffer.append(line)
+
+    def _batch_record(self, lines: List[List[Any]]) -> None:
+        """Records multiple lines at a time.
+
+        Internal API allowing efficient concatenation of recorders.
+        """
+        self.__buffer += lines
+
+    def _enable_parallel_execution(self, exec_type: ExecutionType, _: int) -> None:
+        """Enables the use of this `Recorder` in parallel execution.
+        
+        This method must perform the necessary changes to allow parallel
+        execution in a multithreading or multiprocessing context.
+
+        No-op for multiprocessing, not implemented yet for multithreading.
+
+        Parameters
+        ----------
+        exec_type : ExecutionType
+            Type of parallel execution
+        _ : int
+            Identifier of the chunk to be handled by this recorder
+        """
+        if exec_type == ExecutionType.MULTI_THREADING:
+            raise NotImplementedError("Multithreading is not implemented yet")
+
+    def _disable_parallel_execution(self, exec_type: ExecutionType, chunk_id: int) -> None:
+        """Disables the use of this `Recorder` in parallel execution.
+        
+        This method rollbacks the changes made to the `Recorder` to handle parallel
+        execution.
+
+        Parameters
+        ----------
+        exec_type : ExecutionType
+            Type of parallel execution
+        chunk_id : int
+            Identifier of the chunk to be handled by this recorder
+        """
+        pass
 
     def exit(self):
         """Close recording session."""

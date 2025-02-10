@@ -14,6 +14,7 @@ from cosapp.ports.enum import Scope, Validity, RangeType
 from cosapp.utils.distributions import Distribution
 from cosapp.utils.naming import NameChecker, CommonPorts
 from cosapp.utils.helpers import check_arg, is_numerical, get_typename
+from cosapp.utils.json import jsonify
 if TYPE_CHECKING:
     from cosapp.ports.port import BasePort
 
@@ -202,16 +203,14 @@ class BaseVariable(abc.ABC):
         return self._repr_markdown_()
     
     def __json__(self) -> Dict[str, Any]:
-        """JSONable dictionary representing a variable.
-        
+        """Creates a JSONable dictionary representation of the object.
+
         Returns
         -------
         Dict[str, Any]
             The dictionary
         """
-        return {
-            "value": self.value,
-        }
+        return jsonify(self.to_dict())
 
     def filter_value(self, value: Any) -> Any:
         if self.dtype == (
@@ -233,6 +232,7 @@ class BaseVariable(abc.ABC):
         return {
             "value" : self.value,
             "unit": self.unit or None,
+            "dtype": str(self._dtype) or None,
             "desc" : self.description or None,
         }
 
@@ -245,10 +245,10 @@ class BaseVariable(abc.ABC):
             Dictionary representing variable. Attributes with `None` value are filtered out.
         """
         data = self._to_raw_dict()
-        return dict(filter(
-            lambda items: items[1] is not None,
-            data.items()
-        ))
+        def filter_func(item):
+            key, val = item
+            return key == "value" or val is not None
+        return dict(filter(filter_func, data.items())) 
 
 
 class Variable(BaseVariable):
@@ -558,8 +558,8 @@ class Variable(BaseVariable):
         )
     
     def __json__(self) -> Dict[str, Any]:
-        """JSONable dictionary representing a variable.
-        
+        """Creates a JSONable dictionary representation of the object.
+
         Returns
         -------
         Dict[str, Any]
@@ -573,7 +573,7 @@ class Variable(BaseVariable):
             "out_of_limits_comment": self.out_of_limits_comment,
             "distribution": self.distribution.__json__() if self.distribution else None,
         })
-        return data
+        return jsonify(data)
 
     @property
     def valid_range(self) -> RangeValue:
@@ -876,7 +876,7 @@ class Variable(BaseVariable):
         data.update({
             "invalid_comment": self.invalid_comment or None,
             "out_of_limits_comment": self.out_of_limits_comment or None,
-            "distribution": self.distribution.__json__() if self.distribution else None,
+            "distribution": self.distribution if self.distribution else None,
         })
         for key in ["valid_range", "limits"]:
             try:

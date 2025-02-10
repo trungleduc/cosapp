@@ -27,7 +27,7 @@ class Distribution(ABC):
 
     # TODO should we forbid worst > best
 
-    __slots__ = ("__wearkref__", "_best", "_pbest", "_pworst", "_worst")
+    __slots__ = ("__weakref__", "_best", "_pbest", "_pworst", "_worst")
 
     def __init__(
         self,
@@ -48,12 +48,12 @@ class Distribution(ABC):
         self.pbest = pbest
 
     def __json__(self) -> Dict[str, Any]:
-        """Serialize the distribution object.
+        """Creates a JSONable dictionary representation of the object.
 
         Returns
         -------
         Dict[str, Any]
-            JSONable dictionary describing the distribution.
+            The dictionary
         """
         return {
             "worst": self.worst,

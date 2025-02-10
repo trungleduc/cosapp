@@ -1,7 +1,8 @@
 from __future__ import annotations
 import enum
-from typing import Dict, NamedTuple
+from typing import Dict, NamedTuple, Any, Callable
 from cosapp.utils.helpers import check_arg
+from cosapp.utils.state_io import object__getstate__
 
 
 @enum.unique
@@ -24,6 +25,49 @@ class EventDirection(enum.Enum):
         detector = self.value['func']
         return detector(prev, curr)
 
+    def __json__(self) -> Dict[str, Any]:
+        """Creates a JSONable dictionary representation of the object.
+
+        Returns
+        -------
+        Dict[str, Any]
+            The dictionary
+        """
+        state = self.__getstate__().copy()
+        state.pop("_value_")
+        return state
+
+    @classmethod
+    def _new(cls, value: str) -> EventDirection:
+        return cls[value]
+
+    def __reduce_ex__(self, _: Any) -> tuple[Callable, tuple, dict]:
+        """Defines how to serialize/deserialize the object.
+        
+        Parameters
+        ----------
+        _ : Any
+            Protocol used
+
+        Returns
+        -------
+        tuple[Callable, tuple, dict]
+            A tuple of the reconstruction method, the arguments to pass to
+            this method, and the state of the object
+        """
+        return self._new, (self.name, ), {}
+    
+    def __json__(self) -> Dict[str, Any]:
+        """Creates a JSONable dictionary representation of the object.
+
+        Returns
+        -------
+        Dict[str, Any]
+            The dictionary
+        """
+        state = object__getstate__(self).copy()
+        state.pop("_value_")
+        return state
 
 class ZeroCrossing(NamedTuple):
     expression: str

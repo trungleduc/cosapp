@@ -2,11 +2,29 @@ import pytest
 
 import numpy as np
 from cosapp.systems import System
-from cosapp.drivers import NonLinearSolver, RunSingleCase, RungeKutta
+from cosapp.core.numerics.solve import FfdJacobianEvaluation
+from cosapp.drivers import NonLinearSolver, RunSingleCase, RungeKutta, NonLinearMethods
 from cosapp.drivers.time.scenario import Interpolator
 from cosapp.recorders import DataFrameRecorder
+from cosapp.utils.execution import ExecutionPolicy, ExecutionType
 from cosapp.utils.testing import rel_error
 from .conftest import case_factory, PointMass, PointMassWithPorts
+
+
+class Bogus(System):
+    def setup(self):
+        self.add_inward('x', np.zeros(3))
+        self.add_outward('foo', np.zeros(3), desc='Bogus quantity computed from position `x`')
+    
+    def compute(self):
+        self.foo = self.x**2
+
+
+class PointMassTarget(System):
+    def setup(self):
+        self.add_inward('v0', np.zeros(3), desc='Initial velocity')
+        self.add_child(PointMass('point'), pulling=['x', 'v'])
+        self.add_child(Bogus('bogus'), pulling='x')
 
 
 def test_RungeKutta_init_default():
@@ -325,22 +343,6 @@ def test_RungeKutta_point_mass_target(exec_order, case_settings: dict, expected:
     in order to find the initial velocity condition leading to the trajectory reaching
     a target point after a given amount of time."""
 
-    class Bogus(System):
-        def setup(self):
-            self.add_inward('x', np.zeros(3))
-            self.add_outward('foo', np.zeros(3), desc='Bogus quantity computed from position `x`')
-        
-        def compute(self):
-            self.foo = self.x**2
-
-    class PointMassTarget(System):
-        def setup(self):
-            self.add_inward('v0', np.zeros(3), desc='Initial velocity')
-            self.add_child(PointMass('point'), pulling=['x', 'v'])
-            self.add_child(Bogus('bogus'), pulling='x')
-
-            self.exec_order = exec_order
-
     # Set test case
     settings = case_settings.copy()
     settings.setdefault('order', 2)
@@ -351,6 +353,7 @@ def test_RungeKutta_point_mass_target(exec_order, case_settings: dict, expected:
     x0 = settings.pop('x0', np.zeros(3))  # initial point position
 
     traj = PointMassTarget('traj')
+    traj.exec_order = exec_order
     assert list(traj.exec_order) == exec_order
     solver = traj.add_driver(NonLinearSolver('solver', factor=0.9, tol=xtol))
     target = solver.add_child(RunSingleCase('target'))
@@ -383,16 +386,13 @@ def test_RungeKutta_point_mass_target_recorder(hold):
     checking that the inner recorder has the right size
     at the end of the simulation.
     """
-    class PointMassTarget(System):
-        def setup(self):
-            self.add_inward('v0', np.zeros(3), desc='Initial velocity')
-            self.add_child(PointMass('point'), pulling=['x', 'v'])
 
     # Set test case
     x0 = [0, 0, 10]  # initial point position
     target_point = [10, 0, 10]
 
     traj = PointMassTarget('traj')
+    traj.pop_child("bogus")
     solver = traj.add_driver(NonLinearSolver('solver', tol=1e-9))
     target = solver.add_child(RunSingleCase('target'))
     driver = target.add_child(
@@ -703,3 +703,47 @@ def test_RungeKutta_multimode_scalar_ode_2(multimode_scalar_ode_case):
     assert np.asarray(data['time']) == pytest.approx(expected['time'], abs=1e-14)
     assert np.asarray(data['f']) == pytest.approx(expected['f'], abs=1e-14)
     assert np.asarray(data['df']) == pytest.approx(expected['df'], abs=1e-14)
+
+
+@pytest.mark.parametrize(argnames="pool_size", argvalues=[2, 3, 4])
+def test_RungeKutta_point_mass_target_parallel(pool_size):
+    """Test parallel calculation with sparse linear solver
+      and forward finite-difference Jacobian."""
+
+    # Set test case
+    traj = PointMassTarget('traj')
+    solver = traj.add_driver(NonLinearSolver(
+            "nls",
+            factor=0.9,
+            tol=1e-5,
+            method=NonLinearMethods.NR,
+            jac=FfdJacobianEvaluation(
+                    execution_policy=ExecutionPolicy(pool_size, ExecutionType.MULTI_PROCESSING)
+            )
+        )
+    )
+    target = solver.add_child(RunSingleCase('target'))
+    driver = target.add_child(RungeKutta(time_interval=(0, 2), dt=0.1, order=3))
+
+    target.set_init({'v0': np.array([1, 1, 1])})
+    target.add_unknown('v0').add_equation("x == [10, 0, 10]")
+
+    # Define a simulation scenario
+    driver.set_scenario(
+        init={'x': [0, 0, 10], 'v': 'v0'},
+        values={'point.mass': 1.5, 'point.k': 0.9}
+    )
+
+    # Assertions
+    traj.run_drivers()
+
+    # Check that current position is target point
+    assert traj.time == pytest.approx(driver.time_interval[1], abs=1e-12)
+    assert traj.x == pytest.approx([10, 0, 10], abs=1e-5)
+
+    # Check that pulling did not shadow subsystem variables
+    assert traj.point.x == pytest.approx(traj.x, abs=0)
+    assert traj.bogus.x == pytest.approx(traj.x, abs=0)
+
+    # Check initial velocity solution
+    assert traj.v0 == pytest.approx([8.5860, 0, 11.726], rel=1e-4)

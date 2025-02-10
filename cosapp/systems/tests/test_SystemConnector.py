@@ -1,7 +1,6 @@
 import pytest
 from contextlib import nullcontext as does_not_raise
 
-from cosapp.patterns import Proxy
 from cosapp.ports.connectors import BaseConnector, Connector
 from cosapp.ports.port import PortType, Port
 from cosapp.systems.systemConnector import SystemConnector
@@ -61,11 +60,9 @@ def test_Connector__init__():
     p2 = AbcdPort('p2', PortType.OUT)
     connector = Connector('p2_to_p1', p1, p2)
     proxy = SystemConnector(connector)
-    assert isinstance(proxy, Proxy)
-    assert isinstance(proxy, Connector)
     assert isinstance(proxy, SystemConnector)
     assert proxy.is_active
-    assert proxy.__wrapped__ is connector
+    assert proxy._wrapped is connector
     assert proxy.source is connector.source
     assert proxy.sink is connector.sink
     assert proxy.mapping == connector.mapping

@@ -43,7 +43,12 @@ from cosapp.ports.connectors import BaseConnector, Connector, ConnectorError
 from cosapp.utils.distributions import Distribution
 from cosapp.utils.context import ContextLock
 from cosapp.utils.helpers import check_arg, is_number, is_numerical
-from cosapp.utils.json import JSONEncoder, decode_cosapp_dict
+from cosapp.utils.json import (
+    from_json,
+    load_json,
+    jsonify,
+    EncodingMetadata,
+)
 from cosapp.utils.logging import LogFormat, LogLevel, rollover_logfile
 from cosapp.utils.naming import natural_varname
 from cosapp.utils.pull_variables import pull_variables
@@ -226,6 +231,20 @@ class System(Module, TimeObserver):
         - name [str]:
             System name
         """
+        self._init(name, **kwargs)
+
+        # Customized subclass `System` before applying user wishes
+        kwargs = self._initialize(**kwargs)
+
+        # Customized the `System` according to user wishes
+        with self.__free_problem:
+            self.setup(**kwargs)
+            self.update()
+
+        self.__enforce_scope()
+        self._locked = True
+
+    def _init(self, name: str, **kwargs):
         Module.__init__(self, name)
         TimeObserver.__init__(self, sign_in=False)
         from cosapp.drivers import Driver
@@ -262,17 +281,6 @@ class System(Module, TimeObserver):
         self._add_port(ExtensiblePort(System.OUTWARDS, PortType.OUT))
         self._add_port(ModeVarPort(System.MODEVARS_IN, PortType.IN))
         self._add_port(ModeVarPort(System.MODEVARS_OUT, PortType.OUT))
-
-        # Customized subclass `System` before applying user wishes
-        kwargs = self._initialize(**kwargs)
-
-        # Customized the `System` according to user wishes
-        with self.__free_problem:
-            self.setup(**kwargs)
-            self.update()
-
-        self.__enforce_scope()
-        self._locked = True
 
     def _update(self, dt) -> None:
         """Required by `TimeObserver` base class"""
@@ -485,6 +493,106 @@ class System(Module, TimeObserver):
         """
         pass  # pragma: no cover
 
+    def __getstate__(self) -> Dict[str, Any]:
+        """Creates a state of the object.
+
+        The state type does NOT match type specified in
+        https://docs.python.org/3/library/pickle.html#object.__getstate__
+        to allow custom serialization.
+
+        Returns
+        -------
+        Dict[str, Any]:
+            state
+        """
+        data = dict()
+
+        data["setup_args"] = self.__ctor_kwargs.copy()
+        data["name"] = self.name
+        data["problem"] = self._math
+        data["properties"] = self.__readonly.copy()
+
+        for direction in ["inputs", "outputs"]:
+            ports: Dict[str, BasePort] = getattr(self, direction)
+
+            data[direction] = {
+                name: port
+                for name, port in ports.items()
+            }
+
+        data['child_connectors'] = self.__child_connectors
+        data['pulling_connectors'] = self.__pulling_connectors
+        data['name2variable'] = self.name2variable
+        data['children'] = self.children
+        data['exec_order'] = list(self.exec_order)
+        data["drivers"] = self.drivers
+        data["__master_set"] = self.__master_set
+
+        return data
+
+    def __reduce_ex__(self, p: Any) -> tuple[Callable, tuple, dict]:
+        """Defines how to serialize/deserialize the object.
+        
+        Parameters
+        ----------
+        _ : Any
+            Protocol used
+
+        Returns
+        -------
+        tuple[Callable, tuple, dict]
+            A tuple of the reconstruction method, the arguments to pass to
+            this method, and the state of the object
+        """
+        state = self.__getstate__()
+        state["setup_args"]["name"] = self.name
+
+        return self._new, (state["setup_args"], ), state
+
+    @classmethod
+    def _new(cls, setup_args: Dict[str, Any]) -> System:
+        """Reconstructs a `System` from the state related to the topology.
+        
+        The object deserialization must be performed in 2 stages because
+        some objects will inspect the systems at initialization (e.g. `EvalString`).
+        """
+        name = setup_args.pop("name")
+        system = object.__new__(cls, name)
+        system._init(name, **setup_args)
+        return system
+
+    def __setstate__(self, state: Dict[str, Any]) -> None:
+        """Sets the object from a provided state.
+
+        Parameters
+        ----------
+        state : Dict[str, Any]
+            State
+        """
+
+        for child in state.pop("children").values():
+            self._add_child(child, check=False)
+
+        for port in (state.get("inputs") | state.get("outputs")).values():
+            self._add_port(port, check=False)
+
+        self.name2variable = state.pop("name2variable")
+
+        self.__child_connectors = state['child_connectors']
+        self.__pulling_connectors = state['pulling_connectors']
+
+        self.__readonly = state.pop('properties', {})
+
+        self._math = state["problem"]
+        self.exec_order = state.get("exec_order", [])
+
+        for driver in state.get("drivers", {}).values():
+            self.add_driver(driver)
+
+        # this should only affect object serialized inside a `set_master`
+        # context manager (such as drivers relying on multiprocessing)
+        System.__master_set = state["__master_set"]
+        
     def __getattr__(self, name: str) -> Any:
         try:  # Faster than testing `if name in self`
             variable_ref = self.name2variable[name]
@@ -738,7 +846,7 @@ class System(Module, TimeObserver):
         self._add_port(new_port, desc)
         return new_port
 
-    def _add_port(self, port: BasePort, desc="") -> None:
+    def _add_port(self, port: BasePort, desc="", check: bool = True) -> None:
         """Add a port to the system
 
         Parameters
@@ -746,19 +854,20 @@ class System(Module, TimeObserver):
         port : `BasePort`
             instance of a port class
         """
-        self.__check_attr(port.name, f"cannot add {type(port).__qualname__} {port.name!r}")
+        if check:
+            self.__check_attr(port.name, f"cannot add {type(port).__qualname__} {port.name!r}")
 
         port.owner = self
         port.description = desc
         if port.is_input:
             inputs = self.inputs
-            if port.name in inputs:
+            if check and port.name in inputs:
                 raise ValueError(f"Port name {port.name!r} already exists as input")
             inputs[port.name] = port
             port_key = (port.name, VariableReference(context=self, mapping=inputs, key=port.name))
         elif port.is_output:
             outputs = self.outputs
-            if port.name in outputs:
+            if check and port.name in outputs:
                 raise ValueError(f"Port name {port.name!r} already exists as output")
             outputs[port.name] = port
             port_key = (port.name, VariableReference(context=self, mapping=outputs, key=port.name))
@@ -789,6 +898,7 @@ class System(Module, TimeObserver):
         except AttributeError:
             return  # attribute does not exist - OK
         
+        suffix = ""
         if isinstance(obj, VariableReference):
             if obj.context is self:
                 value = obj.value
@@ -1580,22 +1690,18 @@ class System(Module, TimeObserver):
         )
         return self.assembled_problem()
 
-    def add_child(self,
+    def _add_child(self,
         child: AnySystem,
         execution_index: Optional[int] = None,
         pulling: Optional[Union[str, Collection[str], Dict[str, str]]] = None,
         desc: str = "",
+        check: bool = True,
     ) -> AnySystem:
-        """Add a child `System` to the current `System`.
-
-        When adding a child `System`, it is possible to specified its position in the execution
-        order.
-
-        Child ports or individual `inwards` and `outwards` can also be pulled at the parent level by providing
-        either the name of the port/inward/outward or a list of them or the name mapping of the child element
-        (dictionary keys) to the parent element (dictionary values).
-        If the argument is not a dictionary, the name in the parent system will be the same as in
-        the child.
+        """Add a child to the current `System`.
+        
+        This method is the internal implementation of `add_child` but also offer
+        the capability to perform the operation without checking, which has a huge
+        impact on performance (serial/deserial, etc.).
 
         Parameters
         ----------
@@ -1608,18 +1714,21 @@ class System(Module, TimeObserver):
             Map of child ports to pulled ports at the parent system level; default None (no pulling)
         - desc [str, optional]:
             Sub-system description in the context of its parent.
+        - check [bool]:
+            Whether to perform checks (types, pre-existing child, etc.) when adding a new child or not
 
         Returns
         -------
         `child`
         """
         # Type validation
-        check_arg(child, 'child', System)
-        check_arg(pulling, 'pulling', (type(None), str, Collection))
+        if check:
+            check_arg(child, 'child', System)
+            check_arg(pulling, 'pulling', (type(None), str, Collection))
 
-        child = super().add_child(child, execution_index, desc)
+        child = super()._add_child(child, execution_index, desc, check)
 
-        if child.name in self.name2variable:
+        if check and child.name in self.name2variable:
             if isinstance(self[child.name], System):
                 logger.warning(
                     f"A subsystem named {child.name} already exists within system {self.name}."
@@ -1655,6 +1764,42 @@ class System(Module, TimeObserver):
         self.touch()
 
         return child
+
+    def add_child(self,
+        child: AnySystem,
+        execution_index: Optional[int] = None,
+        pulling: Optional[Union[str, Collection[str], Dict[str, str]]] = None,
+        desc: str = "",
+        check: bool = True,
+    ) -> AnySystem:
+        """Add a child `System` to the current `System`.
+
+        When adding a child `System`, it is possible to specified its position in the execution
+        order.
+
+        Child ports or individual `inwards` and `outwards` can also be pulled at the parent level by providing
+        either the name of the port/inward/outward or a list of them or the name mapping of the child element
+        (dictionary keys) to the parent element (dictionary values).
+        If the argument is not a dictionary, the name in the parent system will be the same as in
+        the child.
+
+        Parameters
+        ----------
+        - child [System]:
+            `System` to add to the current `System`
+        execution_index [int, optional]:
+            Index of the execution order list at which the `System` should be inserted;
+            default latest.
+        - pulling [str or list[str] or dict[str, str], optional]:
+            Map of child ports to pulled ports at the parent system level; default None (no pulling)
+        - desc [str, optional]:
+            Sub-system description in the context of its parent.
+
+        Returns
+        -------
+        `child`
+        """
+        return self._add_child(child, execution_index, pulling, desc, check=True)
 
     def pop_child(self, name: str) -> System:
         """Remove the subsystem called `name`.
@@ -3102,25 +3247,22 @@ class System(Module, TimeObserver):
         """
         if isinstance(filepath, (str, Path)):
             with open(filepath) as fp:
-                params = json.load(fp)
+                system = load_json(fp)
         elif hasattr(filepath, 'read'):
-            params = json.load(filepath)
+            system = load_json(filepath)
         else:
             raise TypeError("Input parameter should be a filepath or file-like object.")
 
-        cls.check_config_dict(params)
-        # Remove schema reference entry
-        params.pop('$schema', None)
-        # Convert variables if needed
-        params = decode_cosapp_dict(params)
+        # # Convert variables if needed
+        # params = decode_cosapp_dict(params)
 
-        system = cls.load_from_dict(*params.popitem())
+        # system = cls.load_from_dict(*params.popitem())
         if name:
             system.name = name
         return system
 
     @classmethod
-    def load_from_dict(cls, name: str, parameters: dict) -> System:
+    def _create_new(cls, class_name: str, ctor_kwargs: dict) -> System:
         """Instantiate a `System` from its name and its parameters.
 
         The construction of the `System` is done recursively from the lower level. Therefore this
@@ -3140,12 +3282,6 @@ class System(Module, TimeObserver):
         System
             The generated system
         """
-        # TODO The all process of saving and reading from a file should be overhaul to take into account missing attr
-        #  - setup kwargs
-        #  - design methods (?)
-        # Moreover what should be the source of truth JSON or Python? Currently reading from JSON duplicates Python
-        # work as first the object is instantiated. Then its children are removed to create them (and the associated
-        # connections from the JSON file.
 
         def get_system_class(class_name: str):
             if class_name == "System":
@@ -3196,10 +3332,56 @@ class System(Module, TimeObserver):
                 )
             return system_class
 
-        class_name = parameters.get('class', 'System')
-        ctor_kwargs = parameters.get('setup_args', {})
-        system_class = get_system_class(class_name)
-        top_system = system_class(name=name, **ctor_kwargs)
+        ty = get_system_class(class_name)
+        name = ctor_kwargs.pop("name")
+        return ty(name, **ctor_kwargs)
+
+    @classmethod
+    def from_json(j: dict[str, Any]) -> System:
+        return from_json(j)
+
+    @classmethod
+    def load_from_dict(
+        cls,
+        state: dict,
+        decoding_metadata: EncodingMetadata=EncodingMetadata(),
+    ) -> System:
+        """Instantiate a `System` from its name and its parameters.
+
+        The construction of the `System` is done recursively from the lower level. Therefore this
+        function is also called recursively returning to the upper level, the lower `System` and
+        its connections to the upper `System` via a dictionary. If no connections are to forwarded
+        the second returned argument is `None`.
+
+        Parameters
+        ----------
+        name : str
+            Identifier of the system
+        parameters : dict
+            The dictionary containing the system definition
+
+        Returns
+        -------
+        System
+            The generated system
+        """
+        # TODO The all process of saving and reading from a file should be overhaul to take into account missing attr
+        #  - setup kwargs
+        #  - design methods (?)
+        # Moreover what should be the source of truth JSON or Python? Currently reading from JSON duplicates Python
+        # work as first the object is instantiated. Then its children are removed to create them (and the associated
+        # connections from the JSON file.
+
+        if "__encoding_metadata__" in state:
+            decoding_metadata = EncodingMetadata(**state["__encoding_metadata__"])
+        _, _, _, value_only = decoding_metadata
+
+        class_name = state.get("__class__", "System")
+        ctor_kwargs = state.get("setup_args", {})
+
+        ctor_kwargs["name"] = state["name"]
+        top_system = cls._create_new(class_name, ctor_kwargs)
+
         for name in top_system.children:
             top_system.name2variable.pop(name)
         # Remove children and connectors --> the source of truth is the json file
@@ -3207,16 +3389,11 @@ class System(Module, TimeObserver):
         top_system.__child_connectors.clear()
         top_system.__pulling_connectors.clear()
 
-        top_system.__readonly = parameters.get('properties', {}).copy()
-
-        for name, value in parameters.get('inputs', {}).items():
-            top_system[name] = value
-
-        for name_system, params in parameters.get('subsystems', {}).items():
-            subsystem = cls.load_from_dict(name_system, params)
+        for child_state in state.get('subsystems', {}).values():
+            subsystem = top_system.load_from_dict(child_state, decoding_metadata=decoding_metadata)
             top_system.add_child(subsystem)
-        
-        for connection in parameters.get('connections', []):
+
+        for connection in state.get('connections', []):
             if len(connection) == 2:
                 sink, source = connection
                 mapping = None
@@ -3224,8 +3401,36 @@ class System(Module, TimeObserver):
                 sink, source, mapping = connection
             top_system.connect(top_system[sink], top_system[source], mapping)
 
+        for name, value in state.get('properties', {}).items():
+            if isinstance(value, dict) and "__class__" in value:
+                value.pop("__class__")
+                try:
+                    top_system[name].__setstate__(value)
+                except AttributeError:
+                    for key, val in value.items():
+                        setattr(top_system[name], key, val)
+            else:
+                top_system.__readonly[name] = value
+
+        for name, port in (state.get("inputs", {}) | state.get("outputs", {})).items():
+            variables = port["variables"]
+            port.pop("__class__", None)
+            if value_only:
+                top_system[name].set_values(**{var: val for var, val in variables.items()})
+            else:
+                top_system[name].set_values(**{var: val["value"] for var, val in variables.items()})
+                for var, val in variables.items():
+                    top_system[name][var] = val.pop("value")
+
+                    v = top_system[name].get_details(var)
+                    for metadata_name, metadata_value in val.items():
+                        setattr(v, f"_{metadata_name}", metadata_value)
+
+        for driver in state.get("drivers", {}).values():
+            top_system.add_driver(driver)
+
         try:
-            exec_order = parameters['exec_order']
+            exec_order = state["exec_order"]
         except KeyError:
             pass
         else:
@@ -3234,7 +3439,14 @@ class System(Module, TimeObserver):
 
         return top_system
 
-    def save(self, fp, indent=2, sort_keys=True) -> None:
+    def save(
+        self,
+        fp,
+        *,
+        indent: int = 2,
+        sort_keys: bool = True,
+        encoding_metadata: EncodingMetadata = EncodingMetadata(),
+    ) -> None:
         """Serialize the `System` as a JSON formatted stream to fp.
 
         Parameters
@@ -3246,51 +3458,62 @@ class System(Module, TimeObserver):
         sort_keys : bool, optional
             Sort the keys in alphabetic order (default: False)
         """
+        kwargs = dict(indent=indent, sort_keys=sort_keys, encoding_metadata=encoding_metadata)
         if isinstance(fp, (str, Path)):
             with open(fp, 'w') as filepath:
-                filepath.write(self.to_json(indent, sort_keys))
+                filepath.write(self.to_json(**kwargs))
         else:
-            fp.write(self.to_json(indent, sort_keys))
+            fp.write(self.to_json(**kwargs))
 
-    def export_structure(self) -> Dict:
-        """
-        Export current system structure to a dictionary, which contains
-        the definition of all ports, the structure of sub-system and the 
-        connections between ports.
-        """
-        
-        port_cls_data = {}
-        sys_data = self.__to_dict(True, port_cls_data)
-        return {"Ports": port_cls_data, "Systems": sys_data}
+    def to_dict(self, *, encoding_metadata: EncodingMetadata = EncodingMetadata()) -> Dict[str, Any]:
+        """Exports the `System` as a dictionary.
 
-    def to_dict(self) -> Dict:
-        """
-        Public API to export system to a dictionary
-        """
-        return self.__to_dict(with_struct=False)
+        Parameters
+        ----------
+        encoding_metadata: EncodingMetadata, optional
+            Specify the exported level of details (default: EncodingMetadata())
 
-    def __json__(self) -> Dict[str, Dict[str, Any]]:
-        """JSONable dictionary representing a variable.
-        
         Returns
         -------
         Dict[str, Any]
             The dictionary
         """
-        return self.to_dict()
+        return self.__to_dict(encoding_metadata=encoding_metadata)
 
-    def __to_dict(self, with_struct: bool, port_cls_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """Convert the `System` to a dictionary.
-        In default mode, `with_struct` flag is `False`, only export input ports
-        and its variable values.
+    def __json__(
+        self, *, encoding_metadata: EncodingMetadata = EncodingMetadata()
+    ) -> Dict[str, Any]:
+        """Creates a JSONable dictionary representation of the object.
 
-        In other case where `with_struct` flag is `True`, export all ports with
-        values and class name. `port_cls_data` can be provided to recover the
-        definitions of all ports inside system.
-        
         Parameters
         ----------
-        with_struct : bool, optional
+        encoding_metadata: EncodingMetadata, optional
+            Specify the exported level of details (default: EncodingMetadata())
+
+        Returns
+        -------
+        Dict[str, Any]
+            The dictionary
+        """
+        return jsonify(self.to_dict(encoding_metadata=encoding_metadata))
+
+    def __to_dict(
+        self,
+        *,
+        encoding_metadata: EncodingMetadata = EncodingMetadata(),
+        export_encoding_metadata: bool = True,
+    ) -> Dict[str, Any]:
+        """Convert the `System` to a dictionary.
+        In default mode, `with_types` flag is `False`, only export input ports
+        and its variable values.
+
+        In other case where `with_types` flag is `True`, export all ports with
+        values and class name. `port_cls_data` can be provided to recover the
+        definitions of all ports inside system.
+
+        Parameters
+        ----------
+        with_types : bool, optional
             Flag to export output ports and the class name of ports (default: False).
 
         port_cls_data : dict, optional
@@ -3301,68 +3524,72 @@ class System(Module, TimeObserver):
         dict
             A dictionary defining fully the `System`
         """
+
         # TODO Fred - BUG Information missing from dictionary conversion
         # - kwargs of setup - e.g. Shaft system of librairies_sae has its ports functions of kwargs
         # - design equations - are not saved (should they be?)
-        data = dict()
+        data = {}
 
-        if self.__class__.__qualname__ == 'System':
-            data['class'] = 'System'  # Trick to allow container `System` without special type
-        else:
-            data['class'] = f"{self.__module__}.{self.__class__.__qualname__}"
+        if export_encoding_metadata and encoding_metadata:
+            data["__encoding_metadata__"] = encoding_metadata.__json__()
+
+        with_types, inputs_only, with_drivers, value_only = encoding_metadata
+
+        data['__class__'] = f"{self.__module__}.{self.__class__.__qualname__}"
+        data['name'] = self.name
 
         ctor_kwargs = self.__ctor_kwargs
         if ctor_kwargs:
-            data["setup_args"] = ctor_kwargs
+            data["setup_args"] = ctor_kwargs.copy()
 
         properties = self.__readonly
         if properties:
-            data['properties'] = properties
+            data["properties"] = properties
 
-        port_data_required = isinstance(port_cls_data, dict)
+        directions = ["inputs"]
+        if not inputs_only:
+            directions.append("outputs")
+        for direction in directions:
+            ports: Dict[str, BasePort] = getattr(self, direction)
+            temp_dict = collections.OrderedDict()
 
-        if with_struct:
-            for direction in ["inputs", "outputs"]:
-                ports: Dict[str, BasePort] = getattr(self, direction)
-                temp_dict = {}
-                for port in ports.values():
-                    if port_data_required and isinstance(port, Port):
-                        key = port.__class__.__qualname__
-                        if key not in port_cls_data:
-                            port_cls_data[key] = {
-                                name: variable.to_dict()
-                                for name, variable in port._variables.items()
-                            }
-                    port_dict = port.to_dict(with_struct)
-                    temp_dict.update(port_dict)
+            for name, port in ports.items():
+                port_dict = port.to_dict(with_types=with_types, value_only=value_only)
+                if port_dict:
+                    port_dict.pop("name")
+                    vars = port_dict.get("variables", {})
+                    if vars:
+                        temp_dict[name] = port_dict
 
-                if temp_dict:
-                    data[direction] = temp_dict           
-        else:
-            inputs = {}
-            for port in self.inputs.values():
-                port_dict = port.to_dict()
-                inputs.update(port_dict)
-            if inputs:
-                data['inputs'] = inputs
+            if temp_dict:
+                data[direction] = temp_dict
 
-        connections = [
-            connector.info()
-            for connector in self.all_connectors()
-        ]
+        connections = [connector.info() for connector in self.all_connectors()]
         if connections:
             data['connections'] = connections
 
         if len(self.children) > 0:
             data['subsystems'] = {
-                name: component.__to_dict(with_struct, port_cls_data)[name]
+                name: component.__to_dict(
+                    encoding_metadata=encoding_metadata,
+                    export_encoding_metadata=False,
+                )
                 for name, component in self.children.items()
             }
             data['exec_order'] = list(self.exec_order)
 
-        return {self.name: data}
+        if with_drivers and self.drivers:
+            data["drivers"] = [d for d in self.drivers.values()]
 
-    def to_json(self, indent=2, sort_keys=True) -> str:
+        return data
+
+    def to_json(
+        self,
+        *,
+        indent: Optional[int] = None,
+        sort_keys: bool = True,
+        encoding_metadata: EncodingMetadata = EncodingMetadata(),
+    ) -> str:
         """Return a string in JSON format representing the `System`.
 
         Parameters
@@ -3371,16 +3598,20 @@ class System(Module, TimeObserver):
             Indentation of the JSON string (default: 2)
         sort_keys : bool, optional
             Sort keys in alphabetic order (default: True)
+        encoding_metadata: EncodingMetadata, optional
+            Specify the exported level of details (default: EncodingMetadata())
 
         Returns
         -------
         str
             String in JSON format
         """
-        dict_repr = self.to_dict()
+        dict_repr = self.__json__(encoding_metadata=encoding_metadata)
         # If this is updated => workspace template should be updated too.
-        dict_repr['$schema'] = "0-3-0/system.schema.json"  # Add self referencing to system JSON version - provision
-        return json.dumps(dict_repr, indent=indent, sort_keys=sort_keys, cls=JSONEncoder)
+        dict_repr['$schema'] = (
+            "0-4-0/system.schema.json"  # Add self referencing to system JSON version - provision
+        )
+        return json.dumps(dict_repr, indent=indent, sort_keys=sort_keys)
 
     def to_d3(self, show=True, size=435) -> "IPython.display.IFrame":
         """Returns the hierarchical representation of this system in HTML format.

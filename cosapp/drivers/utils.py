@@ -1,12 +1,13 @@
 from __future__ import annotations
 import enum
-from typing import Optional, Union, Dict, Tuple, List, Set, NamedTuple, TYPE_CHECKING
+from typing import Any, Optional, Union, Dict, Tuple, List, Set, NamedTuple, TYPE_CHECKING
 from collections.abc import Collection
 
 from cosapp.core.numerics.boundary import Unknown
 from cosapp.core.numerics.basics import MathematicalProblem
 from cosapp.utils.helpers import check_arg
 from cosapp.utils.parsing import multi_split
+from cosapp.utils.state_io import object__getstate__
 if TYPE_CHECKING:
     from cosapp.systems import System
 
@@ -23,6 +24,20 @@ class SystemAnalyzer:
     def __init__(self, system: Optional[System]=None):
         self.__reset()
         self.system = system
+
+    def __getstate__(self) -> Union[Dict[str, Any], tuple[Optional[Dict[str, Any]], Dict[str, Any]]]:
+        """Creates a state of the object.
+
+        The state type depend on the object, see
+        https://docs.python.org/3/library/pickle.html#object.__getstate__
+        for further details.
+        
+        Returns
+        -------
+        Union[Dict[str, Any], tuple[Optional[Dict[str, Any]], Dict[str, Any]]]:
+            state
+        """
+        return object__getstate__(self)
 
     @property
     def system(self) -> System:
@@ -144,6 +159,24 @@ class DesignProblemHandler(SystemAnalyzer):
     """Class managing tied design and off-design problems,
     including unknown aliasing.
     """
+
+    __slots__ = ("design", "offdesign")
+
+    def __json__(self) -> Dict[str, Any]:
+        """Creates a JSONable dictionary representation of the object.
+        
+        Break circular dependencies by removing some slots from the 
+        state.
+
+        Returns
+        -------
+        Dict[str, Any]
+            The dictionary
+        """
+        _, slots = self.__getstate__()
+        slots.pop("_SystemAnalyzer__system")
+        return slots
+
     def clear(self) -> None:
         """Reset inner problems"""
         self.design = self.new_problem('design')

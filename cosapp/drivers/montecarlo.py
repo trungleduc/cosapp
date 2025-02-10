@@ -1,9 +1,12 @@
+from __future__ import annotations
+
 import numpy
 import logging
 from collections import OrderedDict
 from typing import Any, Iterable, Dict, List, Optional, Union, NamedTuple
 
-from cosapp.core.numerics import sobol_seq
+from scipy.stats import qmc
+
 from cosapp.core.variableref import VariableReference
 from cosapp.ports.port import BasePort
 from cosapp.drivers.abstractsetofcases import AbstractSetOfCases, System
@@ -19,7 +22,7 @@ class RandomVariable(NamedTuple):
     variable: VariableReference
     distribution: Distribution
     connector: Optional[SystemConnector] = None
-
+    
     def add_noise(self, quantile=None) -> float:
         delta = self.draw(quantile)
         self.set_perturbation(delta)
@@ -90,6 +93,11 @@ class MonteCarlo(AbstractSetOfCases):
         self.perturbations = None  # type: Optional[numpy.ndarray]
             # desc="Array of perturbations applied on the system."
 
+    @classmethod
+    def _slots_not_jsonified(cls) -> tuple[str]:
+        """Returns slots that must not be JSONified."""
+        return (*super()._slots_not_jsonified(), "random_variables")
+    
     def add_random_variable(self, names: Union[str, Iterable[str]]) -> None:
         """Add variable to be perturbated.
 
@@ -170,10 +178,13 @@ class MonteCarlo(AbstractSetOfCases):
     def _build_cases(self) -> None:
         """Build the list of cases to run during execution
         """
-        self.cases = sobol_seq.i4_sobol_generate(len(self.random_variables), self.draws)
+        sobol = qmc.Sobol(d=len(self.random_variables), scramble=False)
+        sobol.random()
+        self.cases = sobol.random(self.draws)
 
     def _precompute(self):
         """Save reference and build cases."""
+        super()._precompute()
         self.run_children()
 
         self.solver = None
@@ -182,8 +193,6 @@ class MonteCarlo(AbstractSetOfCases):
                 self.solver = child
                 self.reference_case_solution = child.save_solution()
                 break
-
-        self._build_cases()
 
         if self.linear:  # precompute linear system
             n_input = len(self.random_variables)
@@ -241,17 +250,17 @@ class MonteCarlo(AbstractSetOfCases):
         if len(self.reference_case_solution) > 0:
             self.solver.load_solution(self.reference_case_solution)
 
-    def compute(self) -> None:
-        """Contains the customized `Module` calculation, to execute after children.
-        """
-        for case_idx, case in enumerate(self.cases):
+    @staticmethod
+    def _compute_sequential(mc: MonteCarlo) -> None:
+        """Contains the customized `Module` calculation, to execute after children."""
+        for case_idx, case in enumerate(mc.cases):
             if len(case) > 0:
-                self._precase(case_idx, case)
-                if self.linear:
-                    self.__run_linear()
+                mc._precase(case_idx, case)
+                if mc.linear:
+                    mc.__run_linear()
                 else:
-                    self.run_children()
-                self._postcase(case_idx, case)
+                    mc.run_children()
+                mc._postcase(case_idx, case)
 
     def __run_linear(self) -> None:
         """Approximate MonteCarlo simulation using partial derivatives matrix."""

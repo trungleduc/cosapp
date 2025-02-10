@@ -16,6 +16,7 @@ from cosapp.ports.exceptions import ScopeError
 from cosapp.utils.helpers import check_arg
 from cosapp.utils.naming import natural_varname
 from cosapp.utils.parsing import find_selector
+from cosapp.utils.state_io import object__getstate__
 
 if TYPE_CHECKING:
     from cosapp.systems import System
@@ -74,6 +75,32 @@ class AttrRef:
             return self._obj is other._obj and self._key == other._key
         except:
             return False
+    
+    def __getstate__(self) -> Dict[str, Any]:
+        """Creates a state of the object.
+
+        The state type does NOT match type specified in
+        https://docs.python.org/3/library/pickle.html#object.__getstate__
+        to allow custom serialization.
+
+        Returns
+        -------
+        Dict[str, Any]:
+            state
+        """
+        return object__getstate__(self)
+
+    def __json__(self) -> Dict[str, Any]:
+        """Creates a JSONable dictionary representation of the object.
+
+        Returns
+        -------
+        Dict[str, Any]
+            The dictionary
+        """
+        state = self.__getstate__().copy()
+        # state.pop[""]
+        return state
 
 class MaskedAttrRef(AttrRef):
     """Masked Attribute Reference for MutableSequence-like object.
@@ -266,7 +293,39 @@ class Boundary:
         boundary._default_value = copy.copy(self._default_value)
         boundary._ref = self._ref.__copy__()
         return boundary
-    
+
+    def __getstate__(self) -> Union[Dict[str, Any], tuple[Optional[Dict[str, Any]], Dict[str, Any]]]:
+        """Creates a state of the object.
+
+        The state may take various forms depending on the object, see
+        https://docs.python.org/3/library/pickle.html#object.__getstate__
+        for further details.
+        
+        Returns
+        -------
+        Union[Dict[str, Any], tuple[Optional[Dict[str, Any]], Dict[str, Any]]]:
+            state
+        """
+        return object__getstate__(self)
+
+    def __json__(self) -> Dict[str, Any]:
+        """Creates a JSONable dictionary representation of the object.
+
+        Returns
+        -------
+        Dict[str, Any]
+            The dictionary
+        """
+        qualname = f"{self.__module__}.{self.__class__.__qualname__}"
+        state = self.__getstate__().copy()
+
+        state.pop("_context")
+        state.pop("_boundary_impl")
+        return {
+            "__class__": qualname,
+            **state,
+        }
+
     @staticmethod
     def parse_expression(expression: str) -> MaskedVarInfo:
         """Decompose a variable specification into its base name and selector.

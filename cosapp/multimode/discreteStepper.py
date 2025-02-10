@@ -5,9 +5,10 @@ from __future__ import annotations
 import scipy.optimize
 from math import inf
 
-from typing import NamedTuple, Iterator, List, Dict, Tuple, TYPE_CHECKING
+from typing import NamedTuple, Iterator, List, Dict, Tuple, Any, TYPE_CHECKING
 from cosapp.multimode.event import Event, EventError
 from cosapp.utils import partition
+from cosapp.utils.state_io import object__getstate__
 if TYPE_CHECKING:
     from cosapp.drivers import Driver
     from cosapp.drivers.time.utils import SystemInterpolator
@@ -39,6 +40,21 @@ class DiscreteStepper():
         self._sysview = SystemInterpolator(driver)
         self._interval = None
         self.update_events()
+
+    def __json__(self) -> Dict[str, Any]:
+        """Creates a JSONable dictionary representation of the object.
+
+        Returns
+        -------
+        Dict[str, Any]
+            The dictionary
+        """
+        _, slots = object__getstate__(self)
+        slots.pop("_owner")
+        slots.pop("_system")
+        events = [pair for pair in self._state.items()]
+        slots.update({"_state": events})
+        return slots
 
     def update_events(self) -> None:
         """Update event list from system of interest,

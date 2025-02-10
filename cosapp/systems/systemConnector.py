@@ -1,14 +1,13 @@
 import inspect
-from cosapp.patterns import Proxy
 from cosapp.ports.port import BasePort
-from cosapp.ports.enum import PortType
 from cosapp.ports.connectors import BaseConnector
-from typing import Dict, Any
+from cosapp.patterns import Proxy
+from typing import Dict, Any, Callable
 
 
 class SystemConnector(Proxy):
-    """Connector proxy used in `System`
-    """
+    """Connector proxy used in `System`"""
+
     def __init__(self, connector: BaseConnector):
         self.check(connector)
         super().__init__(connector)
@@ -27,7 +26,7 @@ class SystemConnector(Proxy):
             If wrappee is a class, check that it is a concrete implementation of
             `BaseConnector`. If it is an object, check that its type is derived from
             `BaseConnector`.
-        
+
         Raises:
         -------
         - `ValueError` if `wrappee` is a class not derived from `BaseConnector`
@@ -40,9 +39,43 @@ class SystemConnector(Proxy):
             ok = isinstance
             error = TypeError
         if not ok(wrappee, BaseConnector):
-            raise error(
-                "`SystemConnector` can only wrap objects derived from `BaseConnector`"
-            )
+            raise error("`SystemConnector` can only wrap objects derived from `BaseConnector`")
+
+    def __getstate__(self) -> Dict[str, Any]:
+        """Creates a state of the object.
+
+        The state type does NOT match type specified in
+        https://docs.python.org/3/library/pickle.html#object.__getstate__
+        to allow custom serialization.
+
+        Returns
+        -------
+        Dict[str, Any]:
+            state
+        """
+        return {"__noise": self.__noise, "_wrapped": super().__getattribute__("_wrapped"), "__is_active": self.__is_active}
+
+    def __setstate__(self, state: Dict[str, Any]) -> None:
+        """Sets the object from a provided state.
+
+        Parameters
+        ----------
+        state : Dict[str, Any]
+            State
+        """
+        self.__is_active = state["__is_active"]
+        self._wrapped = state["_wrapped"]
+        self.__noise = state["__noise"]
+
+    def __json__(self) -> Dict[str, Any]:
+        """Creates a JSONable dictionary representation of the object.
+
+        Returns
+        -------
+        Dict[str, Any]
+            The dictionary
+        """
+        return {"_wrapped": self._wrapped}
 
     @property
     def is_active(self) -> bool:
@@ -59,7 +92,7 @@ class SystemConnector(Proxy):
 
     def set_perturbation(self, name: str, value: Any) -> None:
         """Add a perturbation on a connector.
-        
+
         Parameters
         ----------
         name : str
@@ -68,9 +101,7 @@ class SystemConnector(Proxy):
             Perturbation value
         """
         if name not in self.sink_variables():
-            raise ValueError(
-                "Perturbations can only be added on sink variables"
-            )
+            raise ValueError("Perturbations can only be added on sink variables")
         self.__noise[name] = value
         self.sink.owner.touch()
 
@@ -78,8 +109,8 @@ class SystemConnector(Proxy):
         self.__noise.clear()
 
     def __repr__(self):
-        return repr(self.__wrapped__)
-    
+        return repr(self._wrapped)
+
     def transfer(self) -> None:
         """Transfer values from `source` to `sink`."""
         if self.__is_active:
@@ -89,6 +120,6 @@ class SystemConnector(Proxy):
 
             if not source.is_clean or noise:
                 sink.touch()
-                self.__wrapped__.transfer()
+                self._wrapped.transfer()
                 for varname, perturbation in noise.items():
                     sink[varname] += perturbation

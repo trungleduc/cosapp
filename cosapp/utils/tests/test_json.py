@@ -7,6 +7,7 @@ import numpy
 import pytest
 
 from cosapp.utils.json import JSONEncoder, decode_cosapp_dict
+from cosapp.utils.state_io import object__getstate__
 
 
 def encode(obj: bytes) -> str:
@@ -14,7 +15,7 @@ def encode(obj: bytes) -> str:
 
 
 def decode(obj: str) -> bytes:
-    return base64.b64decode(bytes(data, encoding="utf-8"))
+    return base64.b64decode(bytes(obj, encoding="utf-8"))
 
 
 def ndarray_to_bytes(arr) -> bytes:
@@ -28,7 +29,7 @@ class Jsonable:
     CONTENT = {"a": [1, 2]}
 
     def __json__(self):
-        return json.dumps(Jsonable.CONTENT)
+        return Jsonable.CONTENT.copy()
 
 
 class AnyClass:
@@ -43,7 +44,11 @@ class AnyClass:
             r = o.a == self.a and isinstance(o.b, object)
         return r
 
-
+    def __json__(self):
+        state = object__getstate__(self).copy()
+        state.pop("b")
+        return state
+    
 class UnPickable:
 
     def __getstate__(self):
@@ -53,8 +58,8 @@ class UnPickable:
 @pytest.mark.parametrize("value, expected", [
     (b"hello", "data:text/plain;base64," + encode(b"hello")),
     (numpy.array([1., 1.]), "data:application/vnd.numpy.ndarray;base64," + encode(ndarray_to_bytes(numpy.array([1., 1.])))),
-    (Jsonable(), json.dumps(Jsonable.CONTENT)),
-    (AnyClass(), "data:application/vnd.python3.pickle;base64," + encode(pickle.dumps(AnyClass(), protocol=4))),
+    (Jsonable(), Jsonable.CONTENT | {'__class__': 'test_json.Jsonable'}),
+    (AnyClass(), {'__class__': 'test_json.AnyClass', 'a': 22.0}),
     (UnPickable(), TypeError),
 ])
 def test_JSONEncoder(value, expected):
