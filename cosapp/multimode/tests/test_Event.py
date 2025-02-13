@@ -209,6 +209,25 @@ def test_Event_filter(condition, expected):
         s.boom.trigger = s.beep.filter(condition)
 
 
+def test_Event_filter_context():
+    """Check filtered event based on a condition evaluated
+    in a context other than that of the source event.
+    """
+    class Head(System):
+        def setup(self):
+            self.add_child(BeepSystem("sub"))
+            self.add_inward("foo", 0.0)
+            self.add_event("zap")
+    
+    head = Head("head")
+
+    with pytest.raises(NameError, match="'foo'"):
+        head.zap.trigger = head.sub.beep.filter("foo > 1")
+    
+    with does_not_raise():
+        head.zap.trigger = head.sub.beep.filter("foo > 1", context=head)
+
+
 def test_Event_final():
     dummy = System('dummy')
     foo = Event('foo', dummy)
