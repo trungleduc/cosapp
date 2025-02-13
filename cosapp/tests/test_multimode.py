@@ -6,7 +6,7 @@ import numpy
 # import pandas
 
 from cosapp.base import Port, System
-from cosapp.drivers import EulerExplicit, NonLinearSolver
+from cosapp.drivers import EulerExplicit, RungeKutta, NonLinearSolver
 from cosapp.recorders import DataFrameRecorder
 from cosapp.multimode import PeriodicTrigger
 from typing import List
@@ -777,3 +777,42 @@ def test_MultimodeSystem_nested_primary_events(trigger):
     assert set(event_records[0].events) == {s.ode_u.cross, s.ode_u.snap}
     assert set(event_records[1].events) == {s.ode_x.snap, s.ode_u.cross, s.ode_u.snap}
     assert set(event_records[2].events) == {s.ode_u.cross, s.ode_u.snap}
+
+
+def test_MultimodeSystem_filter_context():
+    """Integration test for a filtered event based on an expression evaluated
+    in a context other than that of the event.
+    Here, this feature is used on the stop condition of a time driver.
+    """
+    class Head(System):
+        def setup(self):
+            self.add_child(MultimodeOde("ode"))
+            self.add_inward("x", 0.0)
+            self.add_outward("y", 0.0)
+        
+        def compute(self):
+            self.y = self.x + self.ode.f
+    
+    head = Head("head")
+    ode: MultimodeOde = head.ode
+    ode.snap.trigger = "f == 0.5"
+
+    driver = head.add_driver(RungeKutta(order=3, time_interval=[0, 3], dt=0.01))
+    driver.add_recorder(DataFrameRecorder(), period=0.1)
+    driver.set_scenario(
+        init={"ode.f": 0.0},
+        values={
+            "ode.df": "pi * cos(pi * t)",  # -> f(t) = sin(pi * t)
+            "x": "t",  # -> y(t) = t + sin(pi * t)
+        },
+        stop=ode.snap.filter("y > 2", context=head),
+    )
+    head.run_drivers()
+
+    records = driver.recorded_events
+    assert len(records) == 3
+    assert [record.time for record in records] == pytest.approx(numpy.r_[1.0, 5.0, 13.0] / 6)
+    assert records[0].events == [head.ode.snap]
+    assert records[1].events == [head.ode.snap]
+    assert records[2].events == [head.ode.snap, driver.scenario.stop]
+    assert head.y > 2.0
