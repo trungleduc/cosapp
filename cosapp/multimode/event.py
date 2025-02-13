@@ -272,20 +272,23 @@ class Event:
         """
         return self._state.trigger_time()
 
-    def filter(self, condition: str) -> FilteredEvent:
+    def filter(self, condition: str, context: Optional[System]=None) -> FilteredEvent:
         """Filters event with an additional boolean condition.
         
         Parameters:
         -----------
         - condition [str]:
-            Evaluable boolean condition.
+            Evaluable Boolean expression.
+        - condition [System, optional]:
+            Context in which the condition should be evaluated.
+            If unspecified (default), the context is that of the event.
         
         Returns:
         --------
-        - trigger [FilteredEvent]:
+        trigger [FilteredEvent]:
             The filtered event state, to be used as trigger.
         """
-        return FilteredEvent(self, condition)
+        return FilteredEvent(self, condition, context)
 
     @staticmethod
     def merge(*events: Event) -> MergedEvents:
@@ -414,18 +417,21 @@ class FilteredEvent(EventState):
     """Inner state of an event triggered by another event,
     filtered by a Boolean condition.
     """
-    def __init__(self, event: Event, condition: str):
+    def __init__(self, event: Event, condition: str, context: Optional[System]=None):
         """`FilteredEvent` constructor.
         
         Parameters
         ----------
-        event : Event
-            Base event
-        condition : str
-            Boolean expression, as a string
+        - event [Event]:
+            Base event.
+        - condition [str]:
+            Evaluable Boolean expression.
+        - context [System, optional]:
+            Context in which the condition should be evaluated.
+            If unspecified (default), the context is that of the base event.
         """
         check_arg(event, 'event', Event)
-        expr = EvalString(condition, event.context)
+        expr = EvalString(condition, context or event.context)
         if not isinstance(expr.eval(), (bool, numpy_bool)):
             raise TypeError(
                 "FilteredEvent condition must be a Boolean expression."
