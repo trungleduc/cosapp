@@ -1,7 +1,7 @@
 from abc import abstractmethod
 from typing import Any, Dict
 
-import numpy as np
+import numpy
 from scipy.linalg import LinAlgWarning, lu_factor, lu_solve
 from scipy.sparse.linalg import splu
 
@@ -42,7 +42,7 @@ class AbstractLinearSolver(HasOptions):
         return jsonify(state)
 
     @abstractmethod
-    def solve(self, x: np.ndarray) -> np.ndarray:
+    def solve(self, x: numpy.ndarray) -> numpy.ndarray:
         """Solves the linear problem."""
         pass
 
@@ -59,7 +59,7 @@ class AbstractLinearSolver(HasOptions):
         pass
 
     @abstractmethod
-    def eval(self, dx: np.ndarray) -> np.ndarray:
+    def eval(self, dx: numpy.ndarray) -> numpy.ndarray:
         """Evaluates a residue delta from an input delta."""
         pass
 
@@ -67,13 +67,13 @@ class AbstractLinearSolver(HasOptions):
 class GradientBasedLS(AbstractLinearSolver):
     @property
     @abstractmethod
-    def jacobian(self) -> np.ndarray:
+    def jacobian(self) -> numpy.ndarray:
         """Gets the Jacobian matrix."""
         pass
 
     @jacobian.setter
     @abstractmethod
-    def jacobian(self, value: np.ndarray) -> None:
+    def jacobian(self, value: numpy.ndarray) -> None:
         """Sets the Jacobian matrix."""
         pass
 
@@ -92,10 +92,10 @@ class DenseLUSolver(GradientBasedLS):
         a Jacobian matrix or not."""
         return True
 
-    def setup(self, jac: np.ndarray) -> None:
+    def setup(self, jac: numpy.ndarray) -> None:
         """Performs setup of the linear solver from the Jacobian matrix."""
         lu, piv = lu_factor(jac, check_finite=True)
-        min_diag = np.abs(lu.diagonal()).min()
+        min_diag = numpy.abs(lu.diagonal()).min()
         if min_diag < 1e-14:
             raise LinAlgWarning(
                 f"Quasi-singular Jacobian matrix; min diag element of U matrix is {min_diag}"
@@ -104,12 +104,12 @@ class DenseLUSolver(GradientBasedLS):
         self._lu_piv = lu, piv
 
     @property
-    def jacobian(self) -> np.ndarray:
+    def jacobian(self) -> numpy.ndarray:
         """Gets the Jacobian matrix."""
         return self._jac
 
     @jacobian.setter
-    def jacobian(self, value: np.ndarray) -> None:
+    def jacobian(self, value: numpy.ndarray) -> None:
         """Sets the Jacobian matrix."""
         self._jac = value
         self.setup(self._jac)
@@ -118,11 +118,11 @@ class DenseLUSolver(GradientBasedLS):
         """Gets whether the implementation is in valid state or not."""
         return self._lu_piv is not None and self._lu_piv[0].shape == (size, size)
 
-    def solve(self, x: np.ndarray) -> np.ndarray:
+    def solve(self, x: numpy.ndarray) -> numpy.ndarray:
         """Solves the linear problem."""
         return -lu_solve(self._lu_piv, x)
 
-    def eval(self, dx: np.ndarray) -> np.ndarray:
+    def eval(self, dx: numpy.ndarray) -> numpy.ndarray:
         """Evaluates a residue delta from an input delta."""
         return self._jac.dot(dx)
 
@@ -135,7 +135,7 @@ class SparseLUSolver(AbstractLinearSolver):
         self._splu = None
         self._jac = None
 
-    def setup(self, jac: np.ndarray) -> None:
+    def setup(self, jac: numpy.ndarray) -> None:
         """Performs setup of the linear solver from the Jacobian matrix."""
         self._splu = splu(jac)
 
@@ -146,12 +146,12 @@ class SparseLUSolver(AbstractLinearSolver):
         return True
 
     @property
-    def jacobian(self) -> np.ndarray:
+    def jacobian(self) -> numpy.ndarray:
         """Gets the Jacobian matrix."""
         return self._jac
 
     @jacobian.setter
-    def jacobian(self, value: np.ndarray) -> None:
+    def jacobian(self, value: numpy.ndarray) -> None:
         """Sets the Jacobian matrix."""
         self._jac = value
         self.setup(self._jac)
@@ -160,11 +160,11 @@ class SparseLUSolver(AbstractLinearSolver):
         """Gets whether the implementation is in valid state or not."""
         return self._splu is not None and self._splu.shape == (size, size)
 
-    def solve(self, x: np.ndarray) -> np.ndarray:
+    def solve(self, x: numpy.ndarray) -> numpy.ndarray:
         """Solves the linear problem."""
         return -self._splu.solve(x)
 
-    def eval(self, dx: np.ndarray) -> np.ndarray:
+    def eval(self, dx: numpy.ndarray) -> numpy.ndarray:
         """Evaluates a residue delta from an input delta."""
         L, U = self._splu.L, self._splu.U
         return L.dot(U).dot(dx)

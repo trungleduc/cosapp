@@ -1,6 +1,5 @@
 import multiprocessing as mp
 import signal
-import threading as mt
 from queue import Queue
 from typing import Any, Collection
 
@@ -8,28 +7,29 @@ from cosapp.utils.state_io import object__getstate__
 
 from .comms import WorkerComms
 from .context import is_fork_available, is_running_windows
-from .task import (FunctionCallBehavior, Task, TaskActionType,
-                   TaskResponseStatusCode, TaskState)
+from .task import (
+    FunctionCallBehavior,
+    Task, TaskState,
+    TaskAction,
+    TaskResponseStatus,
+)
 
 
-class StopWorker(Exception):
+class StopWorkerError(Exception):
     """Exception used to kill a worker"""
-
     pass
 
 
-class InterruptWorker(Exception):
+class InterruptWorkerError(Exception):
     """Exception used to interrupt a worker"""
-
     pass
 
 
-class AbstractWorker:
-    """Interface class for all workers."""
+class BaseWorker:
+    """Base class for all workers."""
 
     def __init__(self, id: int, comms: WorkerComms):
         """Initializes a worker object.
-
 
         Parameters
         ----------
@@ -68,27 +68,23 @@ class AbstractWorker:
 
     def _on_exception_exit_gracefully(self, *_) -> None:
         # TODO: implement this method
-        raise StopWorker
+        raise StopWorkerError
 
     def _on_exception_exit_gracefully_windows(self) -> None:
         # TODO: implement this method
-        raise StopWorker
+        raise StopWorkerError
 
     def run(self) -> None:
         """Runs tasks received from parent process."""
         self._set_signal_handlers()
 
-        loop: bool = True
         previous_result: Any = None  # allow tasks chaining
-        while loop:
+
+        while True:
             action, opts, data = self._comms.get_task()
             self.task_done()
 
-            apply = action == TaskActionType.FUNC_CALL
-            memoize = action == TaskActionType.MEMOIZE
-            stop = action == TaskActionType.INTERRUPTION
-
-            if apply:
+            if action == TaskAction.FUNC_CALL:
                 store = opts & FunctionCallBehavior.STORE_RETURNED_OBJECT
                 return_result = opts & FunctionCallBehavior.RETURN_OBJECT
                 args_in_storage = opts & FunctionCallBehavior.ARGS_IN_STORAGE
@@ -100,28 +96,26 @@ class AbstractWorker:
                     if isinstance(previous_result, (list, tuple)):
                         storage_args = previous_result
                     else:
-                        storage_args = [
-                            previous_result,
-                        ]
+                        storage_args = [previous_result]
 
                 if args_in_storage:
                     largs = list(args)
                     try:
                         storage_ids = largs.pop(0)
                         storage_args.extend(self._storage[obj_id] for obj_id in storage_ids)
-                    except KeyError as e:
-                        self.add_result(TaskResponseStatusCode.MISSING_STORED_OBJECT, e)
+                    except KeyError as error:
+                        self.add_result(TaskResponseStatus.MISSING_STORED_OBJECT, error)
                         continue
-                    except Exception as e:
-                        self.add_result(TaskResponseStatusCode.INVALID_STORAGE_ARGS, e)
+                    except Exception as error:
+                        self.add_result(TaskResponseStatus.INVALID_STORAGE_ARGS, error)
                         continue
                 else:
                     largs = args
 
                 try:
                     result = previous_result = func(*storage_args, *largs)
-                except Exception as e:
-                    self.add_result(TaskResponseStatusCode.FUNCTION_CALL_RAISED, e)
+                except Exception as error:
+                    self.add_result(TaskResponseStatus.FUNCTION_CALL_RAISED, error)
                     continue
                 else:
                     if store:
@@ -135,25 +129,25 @@ class AbstractWorker:
 
                         if return_result:
                             self.add_result(
-                                TaskResponseStatusCode.OK,
+                                TaskResponseStatus.OK,
                                 (result_ids, result),
                             )
                         else:
-                            self.add_result(TaskResponseStatusCode.OK, result_ids)
+                            self.add_result(TaskResponseStatus.OK, result_ids)
                     elif return_result:
-                        self.add_result(TaskResponseStatusCode.OK, result)
+                        self.add_result(TaskResponseStatus.OK, result)
                     else:
-                        self.add_result(TaskResponseStatusCode.OK)
+                        self.add_result(TaskResponseStatus.OK)
                         continue
 
-            if memoize:
+            elif action == TaskAction.MEMOIZE:
                 memo = data
                 self._storage[memo] = previous_result
-                self.add_result(TaskResponseStatusCode.OK)
+                self.add_result(TaskResponseStatus.OK)
 
-            if stop:
-                self.add_result(TaskResponseStatusCode.OK)
-                loop = False
+            elif action == TaskAction.INTERRUPT:
+                self.add_result(TaskResponseStatus.OK)
+                break
 
     def task_done(self):
         """Marks a task as done."""
@@ -176,11 +170,10 @@ class AbstractWorker:
 
     def _dequeue_task_result(self):
         """Dequeue latest result and update task."""
-        r = self._comms.get_result()
+        result = self._comms.get_result()
         task = self._received_tasks.get_nowait()
         task.state = TaskState.FINISHED
-        task.result = r
-
+        task.result = result
         return task
 
     def dequeue_results(self):
@@ -205,20 +198,19 @@ class AbstractWorker:
         return self._task_counter
 
 
-class InvalidProcess:
-    def __init__(self, *args, **kwargs):
-        raise TypeError(f"Fork start method is not available on this platform")
-
-
 if is_fork_available():
 
-    class ForkWorker(AbstractWorker, mp.context.ForkProcess): ...
+    class ForkWorker(BaseWorker, mp.context.ForkProcess): ...
 
-    class ForkServerWorker(AbstractWorker, mp.context.ForkServerProcess): ...
+    class ForkServerWorker(BaseWorker, mp.context.ForkServerProcess): ...
 
 else:
+    class InvalidProcess:
+        def __init__(self, *args, **kwargs):
+            raise TypeError(f"Fork start method is not available on this platform")
+
     ForkWorker = InvalidProcess
     ForkServerWorker = InvalidProcess
 
 
-class SpawnWorker(AbstractWorker, mp.context.SpawnProcess): ...
+class SpawnWorker(BaseWorker, mp.context.SpawnProcess): ...

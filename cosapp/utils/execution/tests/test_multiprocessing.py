@@ -8,16 +8,15 @@ import pytest
 from cosapp.base import System
 from cosapp.utils.execution import (
     Batch,
-    ExecutionPolicy,
     ExecutionType,
     FunctionCallBehavior,
     Job,
     Pool,
     Task,
-    TaskActionType,
-    TaskResponseStatusCode,
-    TaskResultNotAvailableYet,
     TaskState,
+    TaskAction,
+    TaskResponseStatus,
+    TaskResultNotAvailableYet,
     WorkerStartMethod,
     ops,
 )
@@ -94,7 +93,7 @@ class TestProcessPool:
 
         task = pool1.run_task(
             Task(
-                TaskActionType.FUNC_CALL,
+                TaskAction.FUNC_CALL,
                 FunctionCallBehavior.STORE_RETURNED_OBJECT,
                 (ops.return_arg, (system,)),
             )
@@ -102,7 +101,7 @@ class TestProcessPool:
         assert task.result == TaskResultNotAvailableYet
         status, (storage_id,) = task.wait_for_result()
         assert isinstance(storage_id, int)
-        assert status == TaskResponseStatusCode.OK
+        assert status == TaskResponseStatus.OK
         assert task.state == TaskState.FINISHED
 
     @pytest.mark.parametrize("pool1", _get_start_methods(), indirect=True)
@@ -111,24 +110,24 @@ class TestProcessPool:
 
         store = pool1.run_task(
             Task(
-                TaskActionType.FUNC_CALL,
+                TaskAction.FUNC_CALL,
                 FunctionCallBehavior.STORE_RETURNED_OBJECT,
                 (ops.return_arg, (system,)),
             )
         )
         status, data = store.wait_for_result()
-        assert status == TaskResponseStatusCode.OK
+        assert status == TaskResponseStatus.OK
 
         reuse = pool1.run_task(
             Task(
-                TaskActionType.FUNC_CALL,
+                TaskAction.FUNC_CALL,
                 FunctionCallBehavior.RETURN_OBJECT
                 | FunctionCallBehavior.ARGS_IN_STORAGE,
                 (ops.return_arg, (data,)),
             )
         )
         status, data = reuse.wait_for_result()
-        assert status == TaskResponseStatusCode.OK
+        assert status == TaskResponseStatus.OK
         assert are_same(system, data)
 
     @pytest.mark.parametrize("pool1", _get_start_methods(), indirect=True)
@@ -137,14 +136,14 @@ class TestProcessPool:
         invalid_object_id = 0
         reuse = pool1.run_task(
             Task(
-                TaskActionType.FUNC_CALL,
+                TaskAction.FUNC_CALL,
                 FunctionCallBehavior.RETURN_OBJECT
                 | FunctionCallBehavior.ARGS_IN_STORAGE,
                 (ops.return_arg, ((invalid_object_id,),)),
             )
         )
         status, data = reuse.wait_for_result()
-        assert status == TaskResponseStatusCode.MISSING_STORED_OBJECT
+        assert status == TaskResponseStatus.MISSING_STORED_OBJECT
         assert isinstance(data, KeyError)
 
     @pytest.mark.parametrize("pool1", _get_start_methods(), indirect=True)
@@ -152,13 +151,13 @@ class TestProcessPool:
         """Test function call with invalid signature."""
         reuse = pool1.run_task(
             Task(
-                TaskActionType.FUNC_CALL,
+                TaskAction.FUNC_CALL,
                 FunctionCallBehavior.EXECUTE,
                 (ops.return_arg, ()),
             )
         )
         status, data = reuse.wait_for_result()
-        assert status == TaskResponseStatusCode.FUNCTION_CALL_RAISED
+        assert status == TaskResponseStatus.FUNCTION_CALL_RAISED
         assert isinstance(data, TypeError)
 
     @pytest.mark.parametrize("pool1", _get_start_methods(), indirect=True)
@@ -166,13 +165,13 @@ class TestProcessPool:
         """Test function call with invalid signature."""
         reuse = pool1.run_task(
             Task(
-                TaskActionType.FUNC_CALL,
+                TaskAction.FUNC_CALL,
                 FunctionCallBehavior.EXECUTE,
                 (f_use_a_member, (None,)),
             )
         )
         status, data = reuse.wait_for_result()
-        assert status == TaskResponseStatusCode.FUNCTION_CALL_RAISED
+        assert status == TaskResponseStatus.FUNCTION_CALL_RAISED
         assert isinstance(data, AttributeError)
 
     @pytest.mark.parametrize("pool1", _get_start_methods(), indirect=True)
@@ -181,14 +180,14 @@ class TestProcessPool:
         ref_obj = 12.1
         reuse = pool1.run_task(
             Task(
-                TaskActionType.FUNC_CALL,
+                TaskAction.FUNC_CALL,
                 FunctionCallBehavior.STORE_RETURNED_OBJECT
                 | FunctionCallBehavior.RETURN_OBJECT,
                 (ops.return_arg, (ref_obj,)),
             )
         )
         status, ((storage_id,), returned_obj) = reuse.wait_for_result()
-        assert status == TaskResponseStatusCode.OK
+        assert status == TaskResponseStatus.OK
         assert isinstance(storage_id, int)
         assert returned_obj == ref_obj
 
@@ -196,7 +195,7 @@ class TestProcessPool:
     def test_worker_affinity(self, system, pool2):
         """Test worker affinity on a task ran multiple times."""
         task = Task(
-            TaskActionType.FUNC_CALL,
+            TaskAction.FUNC_CALL,
             FunctionCallBehavior.EXECUTE,
             (ops.return_arg, (system,)),
         )
@@ -219,12 +218,12 @@ class TestProcessPool:
             Job(
                 [
                     Task(
-                        TaskActionType.FUNC_CALL,
+                        TaskAction.FUNC_CALL,
                         FunctionCallBehavior.EXECUTE,
                         (ops.return_arg, (ref_obj,)),
                     ),
                     Task(
-                        TaskActionType.FUNC_CALL,
+                        TaskAction.FUNC_CALL,
                         FunctionCallBehavior.RETURN_OBJECT
                         | FunctionCallBehavior.CHAINED,
                         (ops.return_arg, ()),
@@ -233,11 +232,11 @@ class TestProcessPool:
             )
         )
         status, data = task1.wait_for_result()
-        assert status == TaskResponseStatusCode.OK
+        assert status == TaskResponseStatus.OK
         assert data is None
 
         status, data = task2.wait_for_result()
-        assert status == TaskResponseStatusCode.OK
+        assert status == TaskResponseStatus.OK
         assert isinstance(data, float)
         assert data == ref_obj
 
@@ -249,12 +248,12 @@ class TestProcessPool:
             Job(
                 [
                     Task(
-                        TaskActionType.FUNC_CALL,
+                        TaskAction.FUNC_CALL,
                         FunctionCallBehavior.EXECUTE,
                         (ops.return_arg, (ref_obj,)),
                     ),
                     Task(
-                        TaskActionType.FUNC_CALL,
+                        TaskAction.FUNC_CALL,
                         FunctionCallBehavior.RETURN_OBJECT
                         | FunctionCallBehavior.CHAINED,
                         (add, (10.0,)),
@@ -263,11 +262,11 @@ class TestProcessPool:
             )
         )
         status, data = task1.wait_for_result()
-        assert status == TaskResponseStatusCode.OK
+        assert status == TaskResponseStatus.OK
         assert data is None
 
         status, data = task2.wait_for_result()
-        assert status == TaskResponseStatusCode.OK
+        assert status == TaskResponseStatus.OK
         assert isinstance(data, float)
         assert data == ref_obj + 10.0
 
@@ -281,14 +280,14 @@ class TestProcessPool:
             [
                 Job(
                     Task(
-                        TaskActionType.FUNC_CALL,
+                        TaskAction.FUNC_CALL,
                         FunctionCallBehavior.RETURN_OBJECT,
                         (ops.return_arg, (ref_obj1,)),
                     )
                 ),
                 Job(
                     Task(
-                        TaskActionType.FUNC_CALL,
+                        TaskAction.FUNC_CALL,
                         FunctionCallBehavior.RETURN_OBJECT,
                         (ops.return_arg, (ref_obj2,)),
                     )
@@ -301,12 +300,12 @@ class TestProcessPool:
 
         assert task1.worker.uid == 0
         status, data = task1.wait_for_result()
-        assert status == TaskResponseStatusCode.OK
+        assert status == TaskResponseStatus.OK
         assert data == ref_obj1
 
         assert task2.worker.uid == 1
         status, data = task2.wait_for_result()
-        assert status == TaskResponseStatusCode.OK
+        assert status == TaskResponseStatus.OK
         assert data == ref_obj2
 
         ref_obj1[0] = 15.1
@@ -316,13 +315,13 @@ class TestProcessPool:
 
         assert task1.worker.uid == 0
         status, data = task1.wait_for_result()
-        assert status == TaskResponseStatusCode.OK
+        assert status == TaskResponseStatus.OK
         assert data == ref_obj1
         assert task1.execution_count == 2
 
         assert task2.worker.uid == 1
         status, data = task2.wait_for_result()
-        assert status == TaskResponseStatusCode.OK
+        assert status == TaskResponseStatus.OK
         assert data == ref_obj2
         assert task2.execution_count == 2
 
@@ -337,14 +336,14 @@ class TestProcessPool:
             [
                 Job(
                     Task(
-                        TaskActionType.FUNC_CALL,
+                        TaskAction.FUNC_CALL,
                         FunctionCallBehavior.RETURN_OBJECT,
                         (ops.return_arg, (ref_obj1,)),
                     )
                 ),
                 Job(
                     Task(
-                        TaskActionType.FUNC_CALL,
+                        TaskAction.FUNC_CALL,
                         FunctionCallBehavior.RETURN_OBJECT,
                         (ops.return_arg, (ref_obj2,)),
                     )
@@ -355,12 +354,12 @@ class TestProcessPool:
 
         assert task1.worker.uid == 0
         status, data = task1.wait_for_result()
-        assert status == TaskResponseStatusCode.OK
+        assert status == TaskResponseStatus.OK
         assert data == ref_obj1
 
         assert task2.worker.uid == 0
         status, data = task2.wait_for_result()
-        assert status == TaskResponseStatusCode.OK
+        assert status == TaskResponseStatus.OK
         assert isinstance(data, float)
         assert data == ref_obj2
 
@@ -374,14 +373,14 @@ class TestProcessPool:
             [
                 Job(
                     Task(
-                        TaskActionType.FUNC_CALL,
+                        TaskAction.FUNC_CALL,
                         FunctionCallBehavior.RETURN_OBJECT,
                         (ops.return_arg, (ref_obj1,)),
                     )
                 ),
                 Job(
                     Task(
-                        TaskActionType.FUNC_CALL,
+                        TaskAction.FUNC_CALL,
                         FunctionCallBehavior.RETURN_OBJECT,
                         (ops.return_arg, (ref_obj2,)),
                     )
@@ -391,12 +390,12 @@ class TestProcessPool:
 
         assert task1.worker.uid == 0
         status, data = task1.wait_for_result()
-        assert status == TaskResponseStatusCode.OK
+        assert status == TaskResponseStatus.OK
         assert data == ref_obj1
 
         assert task2.worker.uid == 0
         status, data = task2.wait_for_result()
-        assert status == TaskResponseStatusCode.OK
+        assert status == TaskResponseStatus.OK
         assert isinstance(data, float)
         assert data == ref_obj2
 
@@ -404,7 +403,7 @@ class TestProcessPool:
     def test_run_batch_invalid_state(self, pool1):
         """Test dispatch of a batch with inconsistent states."""
         t1 = Task(
-            TaskActionType.FUNC_CALL,
+            TaskAction.FUNC_CALL,
             FunctionCallBehavior.RETURN_OBJECT,
             (ops.noop, ()),
         )
@@ -417,7 +416,7 @@ class TestProcessPool:
                     job1,
                     Job(
                         Task(
-                            TaskActionType.FUNC_CALL,
+                            TaskAction.FUNC_CALL,
                             FunctionCallBehavior.RETURN_OBJECT,
                             (ops.noop, ()),
                         )
@@ -427,7 +426,7 @@ class TestProcessPool:
 
 
 def test_job_batch():
-    jobs = [Job(Task(TaskActionType.FUNC_CALL, ops.noop))]
+    jobs = [Job(Task(TaskAction.FUNC_CALL, ops.noop))]
     b = Batch(jobs * 10)
     assert [block for block in b.get_blocks(16)] == [range(i, i + 1) for i in range(10)]
 

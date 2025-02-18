@@ -190,22 +190,23 @@ class TestLinearDoEPickling:
 def _get_start_methods():
     if sys.platform == "win32":
         return (WorkerStartMethod.SPAWN, )
-
     return (WorkerStartMethod.FORK, WorkerStartMethod.SPAWN)
+
 
 @pytest.mark.parametrize(argnames="nprocs", argvalues=[2, 4])    
 @pytest.mark.parametrize("start_method", _get_start_methods())
-def test_MonteCarlo_multiprocessing(nprocs, start_method):
+def test_LinearDoE_multiprocessing(nprocs, start_method):
     """Tests the execution of a MonteCarlo on multiple (sub)processes."""
     s = MultiplySystem2("s")
     s.run_once()
 
-    doe = s.add_driver(LinearDoE(
-        "doe", 
-        execution_policy=ExecutionPolicy(
-            workers_count=nprocs,
-            execution_type=ExecutionType.MULTI_PROCESSING,
-            start_method=start_method
+    doe = s.add_driver(
+        LinearDoE(
+            "doe", 
+            execution_policy=ExecutionPolicy(
+                workers_count=nprocs,
+                execution_type=ExecutionType.MULTI_PROCESSING,
+                start_method=start_method,
             )
         )
     )
@@ -219,5 +220,4 @@ def test_MonteCarlo_multiprocessing(nprocs, start_method):
     data = rec.export_data()
     assert len(data) == 16
 
-    expected_array = np.linspace(0.9, 1.1, 16)
-    assert np.array_equal(data["mult1.p_in.x"], expected_array)
+    assert np.array_equal(data["mult1.p_in.x"], np.linspace(0.9, 1.1, 16))

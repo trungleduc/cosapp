@@ -12,8 +12,8 @@ from cosapp.utils.execution import (
     Task,
     Job,
     Batch,
-    TaskActionType,
-    TaskResponseStatusCode,
+    TaskAction,
+    TaskResponseStatus,
     FunctionCallBehavior,
     ops,
 )
@@ -202,7 +202,7 @@ class AbstractSetOfCases(Driver):
         mc_tree = list(self.tree(downwards=True))
         for job in batch.jobs:
             status, data = job.tasks[-1].result
-            if status != TaskResponseStatusCode.OK:
+            if status != TaskResponseStatus.OK:
                 return data
 
             for driver in mc_tree:
@@ -215,50 +215,45 @@ class AbstractSetOfCases(Driver):
         exec_policy = self._execution_policy
         pool = Pool.from_policy(exec_policy)
 
-        def create_job(worker_id, rng):
+        def create_job(id_and_range: Tuple[int, range]):
+            worker_id, index_range = id_and_range
             store_system = Task(
-                TaskActionType.FUNC_CALL,
+                TaskAction.FUNC_CALL,
                 FunctionCallBehavior.STORE_RETURNED_OBJECT,
-                (ops.return_arg, (self._owner, ))
-                )
+                (ops.return_arg, (self._owner,)),
+            )
             get_mc = Task(
-                TaskActionType.FUNC_CALL,
+                TaskAction.FUNC_CALL,
                 FunctionCallBehavior.CHAINED,
-                (self._get_driver, (self.name, ))
-                )
+                (self._get_driver, (self.name,)),
+            )
             prepare_recorders = Task(
-                TaskActionType.FUNC_CALL,
+                TaskAction.FUNC_CALL,
                 FunctionCallBehavior.CHAINED,
-                (self._prepare_recorders, (pool._type, worker_id))
-                )
+                (self._prepare_recorders, (pool._type, worker_id)),
+            )
             modify_cases = Task(
-                TaskActionType.FUNC_CALL,
+                TaskAction.FUNC_CALL,
                 FunctionCallBehavior.CHAINED,
-                (self._modify_cases, (rng, ))
-                )
+                (self._modify_cases, (index_range,)),
+            )
             compute_and_return_results = Task(
-                TaskActionType.FUNC_CALL,
+                TaskAction.FUNC_CALL,
                 FunctionCallBehavior.CHAINED | FunctionCallBehavior.RETURN_OBJECT,
-                (self._compute_and_return_results, ())
+                (self._compute_and_return_results, ()),
             )
             return Job([store_system, get_mc, prepare_recorders, modify_cases, compute_and_return_results])
         
-        batch = Batch(
-            [
-                create_job(i, rng)
-                for i, rng in enumerate(
-                    Batch.compute_blocks(len(self.cases), exec_policy.workers_count, 1)
-                )
-            ]
-        )
+        blocks = Batch.compute_blocks(len(self.cases), exec_policy.workers_count)
+        batch = Batch(map(create_job, enumerate(blocks)))
 
         with pool.activate():
             pool.run_batch(batch)
             batch.join()
-            err = self._get_parallel_results(batch)
+            error = self._get_parallel_results(batch)
 
-        if err:
-            raise err
+        if error:
+            raise error
 
     def run_once(self) -> None:
         """Run the driver once.

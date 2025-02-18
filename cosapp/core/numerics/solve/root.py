@@ -1,17 +1,21 @@
 from __future__ import annotations
 
 import logging
-from typing import (Any, Callable, Dict, Optional, Sequence, Tuple, TypeVar,
-                    Union)
-
+from typing import (
+    Any, Callable, Dict, Optional,
+    Sequence, Tuple, TypeVar, Union,
+)
 import numpy
 from scipy import optimize
 
 from cosapp.core.numerics.basics import SolverResults
 from cosapp.core.numerics.enum import NonLinearMethods
 
-from .non_linear_solver import (AbstractNonLinearSolver, NewtonRaphsonSolver,
-                                ScipyRootSolver)
+from .non_linear_solver import (
+    AbstractNonLinearSolver,
+    NewtonRaphsonSolver,
+    ScipyRootSolver,
+)
 
 logger = logging.getLogger(__name__)
 

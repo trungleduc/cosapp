@@ -1,25 +1,27 @@
+from __future__ import annotations
 import weakref
-from enum import Enum, IntEnum
-from typing import (TYPE_CHECKING, Any, Iterator, List, Optional, Sequence,
-                    Union)
+from enum import IntEnum
+from typing import (
+    TYPE_CHECKING,
+    Any, List, Tuple, Optional, Sequence,
+    Union, Iterator, Generator,
+)
 
 from cosapp.utils.state_io import object__getstate__
 
 if TYPE_CHECKING:
-    from .worker import AbstractWorker
+    from .worker import BaseWorker
 
 
-class TaskActionType(Enum):
+class TaskAction(IntEnum):
     """Defines the task action."""
-
     FUNC_CALL = 0
     MEMOIZE = 1
-    INTERRUPTION = 2
+    INTERRUPT = 2
 
 
 class FunctionCallBehavior(IntEnum):
     """Defines a function call behavior."""
-
     EXECUTE = 0
     RETURN_OBJECT = 1
     STORE_RETURNED_OBJECT = 1 << 1
@@ -29,7 +31,6 @@ class FunctionCallBehavior(IntEnum):
 
 class TaskState(IntEnum):
     """Defines the task state."""
-
     CREATED = 0
     DISPATCHED = 1
     QUEUED = 2
@@ -38,9 +39,8 @@ class TaskState(IntEnum):
     FINISHED = 5
 
 
-class TaskResponseStatusCode(Enum):
+class TaskResponseStatus(IntEnum):
     """Defines the task response status code."""
-
     OK = 200
     CREATED = 201
     ACCEPTED = 202
@@ -52,7 +52,6 @@ class TaskResponseStatusCode(Enum):
 
 class TaskResultNotAvailableYet:
     """A dummy type representing a result not available yet."""
-
     ...
 
 
@@ -61,7 +60,7 @@ class Task:
 
     __slots__ = (
         "_uid",
-        "_action_type",
+        "_action",
         "_options",
         "_data",
         "_result",
@@ -71,7 +70,7 @@ class Task:
         "_execution_count",
     )
 
-    def __init__(self, action_type: TaskActionType, options: int = 0, data: Any = ()):
+    def __init__(self, action: TaskAction, options: int = 0, data: Any = ()):
         """Initializes an instance of a `Task`.
 
         Parameters
@@ -83,20 +82,19 @@ class Task:
         data : Any
             Data to be passed to the worker (including function, and arguments)
         """
-
         self._uid: Optional[int] = None
-        self._action_type: TaskActionType = action_type
+        self._action: TaskAction = action
         self._options: int = options
         self._data: List[Any] = data
         self._result: Optional[Any] = None
         self._state: TaskState = TaskState.CREATED
-        self._worker: weakref.ReferenceType[AbstractWorker] = weakref.ref(lambda: None)
+        self._worker: weakref.ReferenceType[BaseWorker] = weakref.ref(lambda: None)
         self._active: bool = True
         self._execution_count: int = 0
 
     def __iter__(self):
         """Allows to unpack the object."""
-        return iter((self._action_type, self._options, self._data))
+        return iter((self._action, self._options, self._data))
 
     def __getstate__(self):
         """Defines custom `pickle` serialization."""
@@ -121,23 +119,18 @@ class Task:
         if self._state == TaskState.FINISHED:
             return self._result
 
-        worker = self._worker()
-        if worker is None:
-            if self._state == TaskState.CREATED:
-                raise RuntimeError(
-                    "Task result should not be queried before being dispatched to a `Pool`"
-                )
-            else:
-                raise RuntimeError(
-                    "Result must be queried *before* stopping execution pool or deleting worker"
-                )
-
+        worker = self._check_worker()
         worker.dequeue_results()
 
         if self._state != TaskState.FINISHED:
             return TaskResultNotAvailableYet
 
         return self._result
+
+    @result.setter
+    def result(self, value: Any) -> None:
+        """Sets the result."""
+        self._result = value
 
     def wait_for_result(self) -> Any:
         """Gets the result, waiting for it if not already available.
@@ -157,17 +150,7 @@ class Task:
         if self._state == TaskState.FINISHED:
             return self._result
 
-        worker = self._worker()
-        if worker is None:
-            if self._state == TaskState.CREATED:
-                raise RuntimeError(
-                    "Task result should not be queried before being dispatched to a `Pool`"
-                )
-            else:
-                raise RuntimeError(
-                    "Result must be queried *before* stopping execution pool or deleting worker"
-                )
-
+        worker = self._check_worker()
         worker.wait_for_results(self._uid)
 
         return self._result
@@ -175,11 +158,6 @@ class Task:
     def join(self) -> None:
         """Joins this task."""
         self.wait_for_result()
-
-    @result.setter
-    def result(self, value: Any) -> None:
-        """Sets the result."""
-        self._result = value
 
     @property
     def state(self) -> TaskState:
@@ -192,9 +170,25 @@ class Task:
         self._state = new_state
 
     @property
-    def worker(self) -> Optional["AbstractWorker"]:
+    def worker(self) -> BaseWorker:
         """Gets the worker handling the task."""
         return self._worker()
+
+    def _check_worker(self) -> BaseWorker:
+        """Returns task worker, if any; otherwise, raises `RuntimeError`.
+        For internal use only.
+        """
+        worker = self._worker()
+        if worker is None:
+            if self._state == TaskState.CREATED:
+                raise RuntimeError(
+                    "Task result should not be queried before being dispatched to a `Pool`"
+                )
+            else:
+                raise RuntimeError(
+                    "Result must be queried *before* stopping execution pool or deleting worker"
+                )
+        return worker
 
     @property
     def uid(self) -> int:
@@ -254,7 +248,7 @@ class Job:
         else:
             self._tasks = tasks
 
-        self._worker: weakref.ReferenceType[AbstractWorker] = weakref.ref(lambda: None)
+        self._worker: weakref.ReferenceType[BaseWorker] = weakref.ref(lambda: None)
 
     def __getstate__(self):
         """Defines custom `pickle` serialization."""
@@ -276,7 +270,7 @@ class Job:
         return self._tasks
 
     @property
-    def worker(self) -> Optional["AbstractWorker"]:
+    def worker(self) -> Optional[BaseWorker]:
         """Gets the worker handling the job."""
         return self._worker()
 
@@ -297,20 +291,21 @@ class Batch:
         block_min_size: int
             The minimum size of a group of jobs to be dispatched on the same worker; default 1
         """
-        if isinstance(jobs, Job):
-            self._jobs = [jobs]
-        else:
-            self._jobs = jobs
-
-        self._size: int = len(self._jobs)
-        self._block_min_size: int = block_min_size
+        self._jobs = self._make_jobs(jobs)
+        self._size = len(self._jobs)
+        self._block_min_size = max(block_min_size, 1)
 
     def new_with_same_affinity(self, jobs: Union[Sequence[Job], Job]):
-        if isinstance(jobs, Job):
-            jobs = [jobs]
+        """Create and return a new batch of identical affinity, i.e.
+        with jobs defined on the same worker pool.
+        """
+        jobs = self._make_jobs(jobs)
 
         if len(jobs) != len(self._jobs):
-            raise RuntimeError(f"A new batch with same affinity must have the exact same jobs count; got {len(jobs)}/{ len(self._jobs)}")
+            raise RuntimeError(
+                f"A new batch with same affinity must have the exact same jobs count"
+                f"; {len(jobs)=} instead of {len(self._jobs)}."
+            )
 
         for new_job, job in zip(jobs, self._jobs):
             new_job._worker = job._worker
@@ -319,24 +314,36 @@ class Batch:
 
         return Batch(jobs)
 
-    def __iter__(self):
+    @staticmethod
+    def _make_jobs(jobs: Union[Sequence[Job], Job]) -> Tuple[Job]:
+        if isinstance(jobs, Job):
+            return (jobs,)
+        else:
+            return tuple(jobs)
+
+    def __iter__(self) -> Iterator[Job]:
         """Allows to iterate easily over the jobs."""
         return iter(self._jobs)
 
     @property
     def jobs(self):
-        """Gets the jobs."""
+        """Returns all the jobs in the batch."""
         return self._jobs
 
-    def get_blocks(
-        self, block_count: int
-    ) -> Iterator[Iterator[int]]:
+    def get_blocks(self, block_count: int) -> Generator[range, None, None]:
         """
+        Generates `block_count` index ranges covering the range of jobs in the batch.
 
-        block_count: int
-            The number of blocks created to split the jobs
+        Parameters:
+        -----------
+        block_count [int]:
+            Number of blocks (ranges) to generate.
+
+        Returns:    
+        --------
+        Generator[range]
         """
-        return self.compute_blocks(self._size, block_count, self._block_min_size)
+        yield from self.compute_blocks(self._size, block_count, self._block_min_size)
 
     def join(self) -> None:
         """Joins all jobs for this batch."""
@@ -345,29 +352,39 @@ class Batch:
 
     @staticmethod
     def compute_blocks(
-        size: int,  block_count: int, block_min_size: int
-    ) -> Iterator[Iterator[int]]:
+        size: int,
+        block_count: int,
+        block_min_size: int = 1,
+    ) -> Generator[range, None, None]:
         """
+        Generates `block_count` index ranges covering range(`size`).
 
-        block_count: Optional[int]
-            The number of blocks created to split the jobs; default None
+        Parameters:
+        -----------
+        size [int]:
+            Extent of the total range to cover.
+        block_count [int]:
+            Number of blocks (ranges) to generate.
+        block_min_size [int, optional]:
+            Minimum size of individual blocks. Defaults to 1.
+
+        Returns:    
+        --------
+        Generator[range]
         """
-
         if block_count > size:
             block_count = size
 
-        if size / block_count < block_min_size:
-            block_count = max(1, int(size / block_min_size))
+        if size < block_min_size * block_count:
+            block_count = max(1, size // block_min_size)
 
-        block_size = int(size / block_count)
-        remainder = size % block_count
-        block_count = block_count
+        block_size, remainder = divmod(size, block_count)
 
         def start(index):
-            adder = index if index < remainder else remainder
-            return index * block_size + adder
+            return index * block_size + min(index, remainder)
 
         def end(index):
             return size if (index == block_count - 1) else start(index + 1)
-
-        return iter([range(start(i), end(i)) for i in range(block_count)])
+        
+        for i in range(block_count):
+            yield range(start(i), end(i))
