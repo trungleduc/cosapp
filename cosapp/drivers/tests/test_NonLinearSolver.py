@@ -1915,44 +1915,28 @@ def test_NonLinearSolver_monitor_multipoint(monitor):
     assert data['y'].values[-2:] == pytest.approx([0.0, -1.0])
 
 
-class CustomNLS(AbstractNonLinearSolver):
-    def setup(self): ...
-    def teardown(self): ...
-    def solve(self): ...
-
-
-class InvalidCustomNLS: ...
-
-
 def test_NonLinearSolver_custom_solver():
     """Tests custom solver class."""
+    class CustomNLS(AbstractNonLinearSolver):
+        def setup(self): ...
+        def teardown(self): ...
+        def solve(self): ...
+
+    class InvalidCustomNLS: ...
+
     system = Multiply2("s")
 
-    with pytest.raises(TypeError, match="'method' should be either a `NonLinearMethods` "
-                                        "or a derived class of 'AbstractNonLinearSolver'"):
-        system.add_driver(
-        NonLinearSolver(
-            "nls",
-            method=InvalidCustomNLS
-        )
-    )
+    with pytest.raises(
+        TypeError,
+        match="Argument 'method' must be either a `NonLinearMethods` or a derived class of `AbstractNonLinearSolver`"
+    ):
+        system.add_driver(NonLinearSolver("nls", method=InvalidCustomNLS))
 
     with pytest.raises(RuntimeError, match=r"Unknown option\(s\) \['tol', 'max_iter'\]"):
         system.add_driver(
-        NonLinearSolver(
-            "nls",
-            method=CustomNLS,
-            tol=1e-8,
-            max_iter=25,
-        )
-    )
+        NonLinearSolver("nls", method=CustomNLS, tol=1e-8, max_iter=25))
 
-    nls = system.add_driver(
-        NonLinearSolver(
-            "nls",
-            method=CustomNLS,
-        )
-    )
+    nls = system.add_driver(NonLinearSolver("nls", method=CustomNLS))
     assert has_keys(nls.options, "verbose") 
 
 
@@ -1960,13 +1944,13 @@ class TestSparseNonLinearSolver:
 
     class LargeSystem(System):
         def setup(self, size: int):
-            self.add_inward("x", np.full(size, 0.0))
+            self.add_inward("x", np.ones(size))
             self.add_inward("y", np.zeros(size))
 
             self.add_property("K", np.linspace(1, size, size))
 
         def compute(self):
-            self.y = (self.x - self.K) ** 2
+            self.y = self.x**2 - self.K
 
     class SparseJ(AbstractJacobianEvaluation):
         def __init__(self, size: int):
@@ -1978,7 +1962,7 @@ class TestSparseNonLinearSolver:
             pass
 
         def teardown(self):
-                pass
+            pass
 
         def get_stats(self):
             return JacobianStats(0, 0, self._counter)
@@ -1988,32 +1972,31 @@ class TestSparseNonLinearSolver:
         
         def __call__(self, x: np.ndarray, **kwargs):
             self._counter += 1
-            return diags(2 * (x - self._K), format="csc")  
+            return diags(2 * x, format="csc")  
  
     class J(SparseJ):
         def __call__(self, x: np.ndarray, **kwargs):
             self._counter += 1
-            return diags(2 * (x - self._K))   
+            return diags(2 * x)   
         
     def test_splu_and_ffd_jac(self):
         """Tests sparse linear solver and forward finite-difference Jacobian."""
         size = 50
-        tol = 1e-6
 
-        system = self.LargeSystem("s", size=size)
-        nls = system.add_driver(
+        system = self.LargeSystem("system", size=size)
+        solver = system.add_driver(
             NonLinearSolver(
-                "nls",
-                tol=tol,
+                "solver",
                 method=NonLinearMethods.NR,
                 max_iter=30,
                 linear_solver=SparseLUSolver(),
             )
         )
-        nls.add_equation("y == 0.").add_unknown("x")
+        solver.add_equation("y == 0").add_unknown("x")
+        system.x[:] = 2.0
         with pytest.warns(SparseEfficiencyWarning, match="splu converted its input to CSC format"):
             system.run_drivers()
-        assert np.allclose((system.x - system.K) ** 2, np.zeros(size), atol=tol)
+        assert np.allclose(system.x, np.sqrt(system.K), atol=1e-14)
 
     def test_splu_and_analytical_jac(self):
         """Tests sparse linear solver and analytical Jacobian.
@@ -2025,22 +2008,22 @@ class TestSparseNonLinearSolver:
         - hours with the analytical Jacobian evaluation
         """
         size = 10_000
-        tol = 1e-6
 
-        system = self.LargeSystem("s", size=size)
-        nls = system.add_driver(
+        system = self.LargeSystem("system", size=size)
+        solver = system.add_driver(
             NonLinearSolver(
-                "nls",
-                tol=tol,
+                "solver",
                 method=NonLinearMethods.NR,
                 jac=self.SparseJ(size),
+                tol=1e-12,
                 max_iter=30,
                 linear_solver=SparseLUSolver(),
             )
         )
-        nls.add_equation("y == 0.").add_unknown("x")
+        solver.add_equation("y == 0").add_unknown("x")
+        system.x[:] = 2.0
         system.run_drivers()
-        assert np.allclose((system.x - system.K) ** 2, np.zeros(size), atol=tol)
+        assert np.allclose(system.x, np.sqrt(system.K), rtol=1e-14)
 
     def test_splu_and_analytical_jac_non_csc(self):
         """Tests conversion of analytical Jacobian matrix to CSC format."""
@@ -2058,47 +2041,44 @@ class TestSparseNonLinearSolver:
                 linear_solver=SparseLUSolver(),
             )
         )
-        nls.add_equation("y == 0.").add_unknown("x")
+        nls.add_equation("y == 0").add_unknown("x")
+        system.x[:] = 2.0
         with pytest.warns(SparseEfficiencyWarning, match="splu converted its input to CSC format"):
             system.run_drivers()
-        assert np.allclose((system.x - system.K) ** 2, np.zeros(size), atol=tol)
+        assert np.allclose(system.x, np.sqrt(system.K), atol=tol)
 
 
 class TestNonLinearSolverParallelExecution:
 
     class LargeSystem(System):
         def setup(self, size: int):
-            self.add_inward("x", np.full(size, 0.0))
+            self.add_inward("x", np.ones(size))
             self.add_inward("y", np.zeros(size))
 
-            self.add_property("K", np.linspace(0., 1., size))
+            self.add_property("K", np.linspace(1., 2., size))
 
         def compute(self):
-            self.y = (self.x - self.K) ** 2
+            self.y = self.x**2 - self.K
 
     @pytest.mark.parametrize(argnames="pool_size", argvalues=[2, 3, 4])
     def test_parallel_ffd_jac(self, pool_size):
         """Tests sparse linear solver and forward finite-difference Jacobian."""
         size = 100
-        tol = 1e-6
 
-        system = self.LargeSystem("s", size=size)
-        nls = system.add_driver(
+        system = self.LargeSystem("system", size=size)
+        solver = system.add_driver(
             NonLinearSolver(
-                "nls",
-                tol=tol,
+                "solver",
                 method=NonLinearMethods.NR,
                 jac=FfdJacobianEvaluation(
                         execution_policy=ExecutionPolicy(pool_size, ExecutionType.MULTI_PROCESSING)
                 ),
-                max_iter=30,
-                linear_solver=SparseLUSolver(),
             )
         )
-        nls.add_equation("y == 0.").add_unknown("x")
-        with pytest.warns(SparseEfficiencyWarning, match="splu converted its input to CSC format"):
-            system.run_drivers()
-        assert np.allclose((system.x - system.K) ** 2, np.zeros(size), atol=tol)
+        solver.add_equation("y == 0").add_unknown("x")
+        system.x[:] = 2.0
+        system.run_drivers()
+        assert np.allclose(system.x, np.sqrt(system.K), atol=1e-14)
 
     @pytest.mark.parametrize(argnames="pool_size", argvalues=[2, 3, 4])
     def test_parallel_ffd_jac_multipoints(self, pool_size):

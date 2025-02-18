@@ -11,8 +11,8 @@ from cosapp.utils.state_io import object__getstate__
 
 from .comms import PoolComms, WorkerComms
 from .context import is_fork_available
-from .task import Batch, Job, Task, TaskActionType, TaskState
-from .worker import AbstractWorker, ForkServerWorker, ForkWorker, SpawnWorker
+from .task import Batch, Job, Task, TaskAction, TaskState
+from .worker import BaseWorker, ForkServerWorker, ForkWorker, SpawnWorker
 
 
 class ExecutionType(Enum):
@@ -26,7 +26,7 @@ class ExecutionType(Enum):
 
 class WorkerStartMethodDetails(NamedTuple):
     context_type: mp.context.BaseContext
-    worker_type: AbstractWorker
+    worker_type: BaseWorker
 
 
 class WorkerStartMethod(Enum):
@@ -54,7 +54,7 @@ class WorkerStartMethod(Enum):
         return self.value.context_type()
 
     @property
-    def worker_type(self) -> AbstractWorker:
+    def worker_type(self) -> BaseWorker:
         return self.value.worker_type
 
     def __json__(self):
@@ -106,7 +106,7 @@ class Pool:
         self._type = execution_type
         self._worker_start_method = start_method
 
-        self._workers: list[AbstractWorker] = [None] * size
+        self._workers: list[BaseWorker] = [None] * size
         self._context: mp.context.BaseContext = None
         self._worker_type = None
         self._set_worker_type_and_context()
@@ -279,7 +279,7 @@ class Pool:
         ]
 
         for worker_id, worker in workers_to_stop:
-            worker.run_task(Task(TaskActionType.INTERRUPTION, None, ()))
+            worker.run_task(Task(TaskAction.INTERRUPT, None, ()))
         for worker_id, worker in workers_to_stop:
             worker.dequeue_results()
             worker.join()
@@ -294,6 +294,6 @@ class Pool:
         self.stop()
 
     @property
-    def workers(self) -> List[AbstractWorker]:
+    def workers(self) -> List[BaseWorker]:
         """Gets the workers."""
         return self._workers

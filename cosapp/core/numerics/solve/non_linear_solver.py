@@ -107,10 +107,10 @@ def get_kwargs():
     """Returns kwargs as a dictionary, using `inspect.currentframe`"""
     frame = inspect.currentframe().f_back
     keys, _, _, values = inspect.getargvalues(frame)
-    kwargs = {}
-    for key in keys:
-        if key != "self":
-            kwargs[key] = values[key]
+    kwargs = {
+        key: values[key]
+        for key in set(keys) - {"self"}
+    }
     return kwargs
 
 
@@ -168,9 +168,10 @@ class ScipyRootSolver(GradientNLS):
     def _declare_options(self) -> None:
         """Declares options."""
         super()._declare_options()
+        method = self._method
         options = self._options
 
-        if self._method == NonLinearMethods.POWELL:
+        if method == NonLinearMethods.POWELL:
             self.__option_aliases = {
                 "tol": "xtol",
                 "max_eval": "maxfev",
@@ -206,7 +207,7 @@ class ScipyRootSolver(GradientNLS):
                 desc="A parameter determining the initial step bound factor * norm(diag * x). Should be in the interval [0.1, 100].",
             )
 
-        elif self._method == NonLinearMethods.BROYDEN_GOOD:
+        elif method == NonLinearMethods.BROYDEN_GOOD:
             self.__option_aliases = {
                 "tol": "fatol",
                 "num_iter": "nit",
@@ -253,7 +254,10 @@ class ScipyRootSolver(GradientNLS):
                 allow_none=True,
                 desc="Options for the respective Jacobian approximation. restart, simple or svd",
             )
-
+        
+        else:
+            raise NotImplementedError("'NonLinearMethods' value is not handled.")
+    
     def solve(self, fun, x0, args=(), **options) -> OptimizeResult:
         """Performs resolution of the non linear problem."""
         with self._bound_fresidue(fun, args):

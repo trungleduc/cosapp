@@ -1,6 +1,7 @@
 import numpy
 import abc
 import csv
+import inspect
 from io import StringIO
 from typing import (
     Any,
@@ -127,33 +128,29 @@ class NonLinearSolver(AbstractSolver):
         """
         if isinstance(method, str):
             method = NonLinearMethods[method]
-        else:
-            check_arg(method, "method", (NonLinearMethods, type))
-        self.__method = method
 
+        if isinstance(method, NonLinearMethods):
+            if method == NonLinearMethods.NR:
+                self._solver = NewtonRaphsonSolver()
+            else:
+                self._solver = ScipyRootSolver(method=method)
+
+        elif inspect.isclass(method) and issubclass(method, AbstractNonLinearSolver):
+            self._solver = method()
+
+        else:
+            raise TypeError(
+                "Argument 'method' must be either a `NonLinearMethods`"
+                f" or a derived class of `AbstractNonLinearSolver`; got {method!r}."
+            )
+
+        self.__method = method
         self.__trace: List[Dict[str, Any]] = list()
         self.__results: SolverResults = None
         self.__builder: BaseSolverBuilder = None
 
         self.compute_jacobian = True  # type: bool
         # desc='Should the Jacobian matrix be computed?'
-
-        if isinstance(method, NonLinearMethods):
-            if method == NonLinearMethods.NR:
-                self._solver = NewtonRaphsonSolver()
-            elif method == NonLinearMethods.POWELL:
-                self._solver = ScipyRootSolver(method=method)
-            elif method == NonLinearMethods.BROYDEN_GOOD:
-                self._solver = ScipyRootSolver(method=method)
-            else:
-                raise ValueError("'NonLinearMethods' value is not hendled yet.")
-        elif issubclass(method, AbstractNonLinearSolver):
-            self._solver = method()
-        else:
-            raise TypeError(
-                "'method' should be either a `NonLinearMethods` or a derived class of "
-                f"'AbstractNonLinearSolver', got {method}."
-            )
 
         super().__init__(name, owner, **options)
 

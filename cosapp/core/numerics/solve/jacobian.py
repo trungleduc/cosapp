@@ -1,7 +1,7 @@
 from abc import abstractmethod
 from typing import Any, Dict, NamedTuple, Optional, Set, Callable, Iterable
 
-import numpy as np
+import numpy
 
 from cosapp.utils.execution import (
     Batch,
@@ -11,7 +11,7 @@ from cosapp.utils.execution import (
     Job,
     Pool,
     Task,
-    TaskActionType,
+    TaskAction,
     ops,
 )
 from cosapp.utils.json import jsonify
@@ -88,7 +88,7 @@ class AbstractJacobianEvaluation(HasOptions):
         self._fun = None
         self._fargs = None
 
-    def _fresidues(self, x: np.ndarray) -> np.ndarray:
+    def _fresidues(self, x: numpy.ndarray) -> numpy.ndarray:
         """Calls the residue function."""
         return self._fun(x, *self._fargs)
 
@@ -116,8 +116,9 @@ class FfdJacobianEvaluation(AbstractJacobianEvaluation):
         eps: float = 2 ** (-16),
         partial_jac: bool = True,
         p_jac_tries: int = 10,
-        execution_policy: ExecutionPolicy = ExecutionPolicy(
-            workers_count=1, execution_type=ExecutionType.SINGLE_THREAD
+        execution_policy = ExecutionPolicy(
+            workers_count=1,
+            execution_type=ExecutionType.SINGLE_THREAD,
         ),
     ):
         super().__init__()
@@ -128,7 +129,7 @@ class FfdJacobianEvaluation(AbstractJacobianEvaluation):
         self._execution_policy = execution_policy
         self._pool: Optional[Pool] = None
 
-        self._x_copy = np.empty(0)
+        self._x_copy = numpy.empty(0)
 
         self.reset_stats()
 
@@ -200,9 +201,9 @@ class FfdJacobianEvaluation(AbstractJacobianEvaluation):
         )
 
     @staticmethod
-    def _set_worker_jac(res_size: int, unknown_size: int) -> np.ndarray:
+    def _set_worker_jac(res_size: int, unknown_size: int) -> numpy.ndarray:
         """Sets the default value of Jacobian matrix."""
-        return np.zeros((res_size, unknown_size))
+        return numpy.zeros((res_size, unknown_size))
 
     def setup(self, size: int) -> None:
         """Performs setup of the evaluation method."""
@@ -218,8 +219,8 @@ class FfdJacobianEvaluation(AbstractJacobianEvaluation):
 
     def _sequential_setup(self, size: int) -> None:
         """Performs setup of the evaluation method for sequential execution."""
-        self._x_copy = np.zeros(size)
-        self._r0 = np.zeros(size)
+        self._x_copy = numpy.zeros(size)
+        self._r0 = numpy.zeros(size)
         self._x_indices_to_update = list()
         self._size = size
 
@@ -238,42 +239,38 @@ class FfdJacobianEvaluation(AbstractJacobianEvaluation):
         self._size = size
         self._sequential_setup(size)
 
-        blocks = [rng for rng in Batch.compute_blocks(size, pool._size, 1)]
+        def make_setup_job(rng: range):
+            tasks = [
+                Task(
+                    TaskAction.FUNC_CALL,
+                    FunctionCallBehavior.STORE_RETURNED_OBJECT,
+                    (ops.return_arg, (fresidue,)),
+                ),
+                Task(
+                    TaskAction.MEMOIZE,
+                    data=0,
+                ),
+                Task(
+                    TaskAction.FUNC_CALL,
+                    FunctionCallBehavior.EXECUTE,
+                    (self._set_worker_jac, (size, len(rng))),
+                ),
+                Task(
+                    TaskAction.MEMOIZE,
+                    data=1,
+                ),
+            ]
+            return Job(tasks)
 
-        def make_setup_job(rng):
-            return Job(
-                [
-                    Task(
-                        TaskActionType.FUNC_CALL,
-                        FunctionCallBehavior.STORE_RETURNED_OBJECT,
-                        (ops.return_arg, (fresidue,)),
-                    ),
-                    Task(
-                        TaskActionType.MEMOIZE,
-                        (),  # options
-                        0,
-                    ),
-                    Task(
-                        TaskActionType.FUNC_CALL,
-                        FunctionCallBehavior.EXECUTE,
-                        (self._set_worker_jac, (size, len(rng))),
-                    ),
-                    Task(
-                        TaskActionType.MEMOIZE,
-                        (),  # options
-                        1,
-                    ),
-                ]
-            )
-
-        setup_batch = Batch([make_setup_job(rng) for rng in blocks])
+        blocks = list(Batch.compute_blocks(size, pool._size, 1))
+        setup_batch = Batch(map(make_setup_job, blocks))
         pool.start()
         pool.run_batch(setup_batch).join()
 
-        def create_job(rng):
+        def create_job(rng: range):
             return Job(
                 Task(
-                    TaskActionType.FUNC_CALL,
+                    TaskAction.FUNC_CALL,
                     FunctionCallBehavior.ARGS_IN_STORAGE
                     | FunctionCallBehavior.RETURN_OBJECT,
                     (
@@ -290,22 +287,20 @@ class FfdJacobianEvaluation(AbstractJacobianEvaluation):
                 )
             )
 
-        self._eval_batch = setup_batch.new_with_same_affinity(
-            [create_job(rng) for rng in blocks]
-        )
+        self._eval_batch = setup_batch.new_with_same_affinity(map(create_job, blocks))
 
     def __call__(
         self,
-        x0: np.ndarray,
+        x0: numpy.ndarray,
         *,
-        r0: np.ndarray = None,
-        jac: np.ndarray = None,
+        r0: numpy.ndarray = None,
+        jac: numpy.ndarray = None,
         res_index_to_update: Optional[Set[int]] = None,
-        dx: Optional[np.ndarray] = None,
-        dr: Optional[np.ndarray] = None,
+        dx: Optional[numpy.ndarray] = None,
+        dr: Optional[numpy.ndarray] = None,
         broyden_only: bool = False,
         **kwargs,
-    ) -> np.ndarray:
+    ) -> numpy.ndarray:
         """Performs a Jacobian evaluation."""
         size = x0.size
         x_indices_to_update = self._x_indices_to_update
@@ -325,7 +320,7 @@ class FfdJacobianEvaluation(AbstractJacobianEvaluation):
             self._consecutive_p_jac_counter += 1
 
         if jac is None or jac.shape != (size, size):
-            jac = np.zeros((size, size), dtype=float)
+            jac = numpy.zeros((size, size), dtype=float)
 
             x_indices_to_update.clear()
             x_indices_to_update += list(range(size))
@@ -356,9 +351,9 @@ class FfdJacobianEvaluation(AbstractJacobianEvaluation):
 
     def _sequential_evaluation(
         self,
-        jac: np.ndarray,
-        x0: np.ndarray,
-        r0: np.ndarray,
+        jac: numpy.ndarray,
+        x0: numpy.ndarray,
+        r0: numpy.ndarray,
         x_indices_to_update: Iterable[int],
     ) -> None:
         """Performs a Jacobian evaluation in sequential execution."""
@@ -377,13 +372,13 @@ class FfdJacobianEvaluation(AbstractJacobianEvaluation):
     @staticmethod
     def _compute_res(
         fresidue: Callable,
-        jac: np.ndarray,
-        x: np.ndarray,
-        r0: np.ndarray,
+        jac: numpy.ndarray,
+        x: numpy.ndarray,
+        r0: numpy.ndarray,
         rng: Iterable[int],
         x_indices_to_update: Iterable[int],
         eps: float,
-    ) -> np.ndarray:
+    ) -> numpy.ndarray:
         """Evaluates Jacobian matrix update for a subset of the unknowns."""
         for idx, j in enumerate(rng):
             if j in x_indices_to_update:
@@ -398,23 +393,23 @@ class FfdJacobianEvaluation(AbstractJacobianEvaluation):
 
         return jac
 
-    def _parallel_evaluation(self, jac: np.ndarray, x0: np.ndarray) -> None:
+    def _parallel_evaluation(self, jac: numpy.ndarray, x0: numpy.ndarray) -> None:
         """Performs a Jacobian evaluation in parallel execution."""
         self._x_copy[...] = x0
         eval_batch = self._eval_batch
         self._pool.run_batch(eval_batch).join()
-        jac[:] = np.concatenate(
+        jac[:] = numpy.concatenate(
             [job.tasks[-1].result[1] for job in eval_batch.jobs], axis=1
         )
 
-    def _broyden_update(self, jac: np.ndarray, dx: np.ndarray, dr: np.ndarray) -> None:
+    def _broyden_update(self, jac: numpy.ndarray, dx: numpy.ndarray, dr: numpy.ndarray) -> None:
         """Updates the Jacobian matrix with a good Broyden method.
 
         Source: https://nickcdryan.com/2017/09/16/broydens-method-in-python/
         """
         # logger.log(log_level, f"Broyden update")
         self._broyden_updates_counter += 1
-        corr = np.outer(dr - jac.dot(dx), dx) / dx.dot(dx)
+        corr = numpy.outer(dr - jac.dot(dx), dx) / dx.dot(dx)
         jac += corr
 
     def _update_counters(self) -> None:
