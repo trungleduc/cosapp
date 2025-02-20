@@ -3,7 +3,7 @@ Event handling and discrete stepping
 """
 from __future__ import annotations
 import scipy.optimize
-from math import inf
+import math
 
 from typing import NamedTuple, Iterator, List, Dict, Tuple, Any, TYPE_CHECKING
 from cosapp.multimode.event import Event, EventError
@@ -14,14 +14,16 @@ if TYPE_CHECKING:
     from cosapp.drivers.time.utils import SystemInterpolator
 
 
-class TimedEvent(NamedTuple):
-    """Named tuple associating an event and its occurrence time"""
-    event: Event
+class EventRecord(NamedTuple):
+    """Named tuple associating a list of joint events
+    and their occurrence time.
+    """
     time: float
+    events: List[Event]
 
     @classmethod
     def empty(cls):
-        return cls(None, inf)
+        return cls(math.inf, [])
 
 
 class DiscreteStepper():
@@ -113,6 +115,7 @@ class DiscreteStepper():
         and the interpolation data has been set."""
         try:
             t_event = event._trigger_time()  # implemented if event is explicitly timed
+
         except EventError:
             # Event is not a timed event; find occurrence time by root finding
             sysview = self._sysview
@@ -126,28 +129,29 @@ class DiscreteStepper():
         
         return t_event
 
-    def find_primal_event(self) -> TimedEvent:
-        """Returns a `TimedEvent` named tuple containing the first primitive event triggered,
-        together with its occurrence date ((None, inf) if no primitive event is triggered).
+    def find_primal_events(self) -> EventRecord:
+        """Returns a `EventRecord` named tuple containing the first primitive events triggered,
+        together with their occurrence time ((inf, []) if no primitive event is triggered).
         The internal state is only updated if an event is triggered.
         This method should only be called at the first microstep of the first discrete time step.
         """
-        # TODO: Possibility of several events at the same time (up to rounding errors)?
-        # For instance, if an event occurs every 0.2s and another event every s...
-        triggered_events = list(filter(lambda event: event.present, self._primitives))
-        primal = TimedEvent.empty()
+        triggered_events = set(filter(lambda event: event.present, self._primitives))
+        record = EventRecord.empty()
         for event in triggered_events:
-            time = self.trigger_time(event)
-            if time < primal.time:
-                primal = TimedEvent(event, time)
-        self._state[primal.event] = True
-        self._sysview.exec(primal.time)
-        # Cancel primitive events that occured after primal event
-        for event in triggered_events:
-            if event is not primal.event:
-                event._cancel()
-                event.reevaluate()
-        return primal
+            trigger_time = self.trigger_time(event)
+            if math.isclose(trigger_time, record.time, rel_tol=1e-12):
+                record.events.append(event)
+            elif trigger_time < record.time:
+                record = EventRecord(trigger_time, [event])
+        if record.events:
+            self._sysview.exec(record.time)
+        for event in record.events:
+            self._state[event] = True
+        # Cancel primitive events that occured after the earliest detected
+        for event in triggered_events.difference(record.events):
+            event._cancel()
+            event.reevaluate()
+        return record
 
     def event_detected(self) -> bool:
         """Tests all primitive events and returns a Boolean value indicating
@@ -166,15 +170,15 @@ class DiscreteStepper():
             has_changed |= triggered
         return has_changed
 
-    def first_discrete_step(self) -> TimedEvent:
-        """Performs the first discrete step and returns a `TimedEvent` indicating
-        which primitive event was triggered and at which date."""
+    def first_discrete_step(self) -> EventRecord:
+        """Performs the first discrete step and returns an `EventRecord`
+        indicating which primitive event was triggered and at which date."""
         for event in self._primitives:
             event.step()
-        occurring = self.find_primal_event()
+        record = self.find_primal_events()
         while self.__microstep():
             pass
-        return occurring
+        return record
 
     def discrete_step(self) -> List[Event]:
         """Performs a discrete step other than the first one"""

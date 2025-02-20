@@ -692,7 +692,9 @@ def test_MultimodeSystem_single_periodic_event(t0, period):
 @pytest.mark.parametrize("t0", [0.0, 2.4, 10.0])
 @pytest.mark.parametrize("period", [0.033, 0.87, 1.123, 1.0, 2.0])
 def test_MultimodeSystem_multiple_periodic_events(t0, period):
-    """Test a system with a periodic event.
+    """Test a system with two periodic events, one with twice larger period than the other.
+    Consequently, once every two records, one single event occurs (the faster one),
+    and both occur the rest of the time.
     """
     class PeriodicEventSystem(System):
         def setup(self, period=1.0):

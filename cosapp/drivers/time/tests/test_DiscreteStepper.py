@@ -80,6 +80,6 @@ def test_DiscreteStepper_primal_event(accelerated_case):
     # Manual stepping for testing purposes
     for event in system.all_events():
         event.step()
-    first = stepper.find_primal_event()
-    assert first.event is system.stop
-    assert first.time == pytest.approx(0.7183314)
+    record = stepper.find_primal_events()
+    assert record.events == [system.stop]
+    assert record.time == pytest.approx(0.7183314)
