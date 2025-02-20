@@ -18,21 +18,13 @@ from cosapp.drivers.time.utils import (
     TwoPointCubicInterpolator,
 )
 from cosapp.drivers.time.scenario import Scenario
-from cosapp.multimode.discreteStepper import DiscreteStepper
+from cosapp.multimode.discreteStepper import DiscreteStepper, EventRecord
 from cosapp.multimode.event import Event
 from cosapp.recorders import DataFrameRecorder
 from cosapp.utils.helpers import check_arg
 from cosapp.utils.logging import LogFormat, LogLevel
 
 logger = logging.getLogger(__name__)
-
-
-class EventRecord(NamedTuple):
-    """Named tuple associating a list of joint events
-    and their occurrence time.
-    """
-    time: float
-    events: List[Event]
 
 
 class ExplicitTimeDriver(Driver):
@@ -325,31 +317,32 @@ class ExplicitTimeDriver(Driver):
                         for name, data in tr_data.items()
                     }
                 )
-                occurring = stepper.first_discrete_step()  # first step: root finding + non-primitive events
-                record = EventRecord(occurring.time, [occurring.event])
+                record = stepper.first_discrete_step()  # first step: root finding + non-primitive events
+                n_primitives = len(record.events)
                 record_data()
                 record_event()
                 stepper.reevaluate_primitive_events()
-                self.transition(occurring.time, record.events)
-                record_event(occurring.event.contextual_name)
+                self.transition(record.time, record.events)
+                record_event(", ".join(event.contextual_name for event in record.events))
                 event_cascade = set(stepper.present_events())
                 stepper.tick()
                 stepper.update_events()
 
                 while stepper.event_detected():  # following steps: event cascade
                     new_events = set(stepper.discrete_step()) - event_cascade
-                    self.transition(occurring.time, new_events)
+                    self.transition(record.time, new_events)
                     event_cascade.update(new_events)
                     stamp = ", ".join(event.contextual_name for event in new_events)
                     record_event(stamp)
                     stepper.tick()
                     stepper.update_events()
 
-                record.events.extend(event_cascade - {occurring.event})
+                record.events.extend(event_cascade.difference(record.events))
                 self.__recorded_events.append(record)
-                record_data(occurring.event.contextual_name)
+                stamp = ", ".join(event.contextual_name for event in record.events[:n_primitives])
+                record_data(stamp)
                 must_stop = any(event.final for event in event_cascade)
-                next_t = occurring.time
+                next_t = record.time
                 dt = next_t - t
 
                 # Reevaluate transient values and derivatives @ occur.time,
