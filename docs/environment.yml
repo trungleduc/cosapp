@@ -9,7 +9,7 @@ dependencies:
   - jsonschema
   - pandas
   - jinja2
-  - sphinx
+  - sphinx<8.2
   - nbsphinx
   - sphinx-copybutton
   - sphinx-mdinclude>0.5.3
