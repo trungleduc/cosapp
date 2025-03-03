@@ -12,8 +12,11 @@ from cosapp.drivers.montecarlo import MonteCarlo
 from cosapp.drivers.metasystembuilder import MetaSystemBuilder
 from cosapp.drivers.influence import Influence
 
-from cosapp.drivers.time.euler import EulerExplicit
-from cosapp.drivers.time.runge_kutta import RungeKutta
+from cosapp.drivers.time import (
+    EulerExplicit,
+    RungeKutta,
+    CrankNicolson,
+)
 
 __all__ = [
     "Driver",
@@ -29,4 +32,5 @@ __all__ = [
     "ValidityCheck",
     "EulerExplicit",
     "RungeKutta",
+    "CrankNicolson",
 ]

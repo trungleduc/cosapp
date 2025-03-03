@@ -1,10 +1,10 @@
 from numbers import Number
 from typing import Optional
 
-from cosapp.drivers.time.interfaces import ExplicitTimeDriver, System
+from cosapp.drivers.time.base import AbstractTimeDriver, System
 
 
-class EulerExplicit(ExplicitTimeDriver):
+class EulerExplicit(AbstractTimeDriver):
     def __init__(
         self,
         name="Euler",

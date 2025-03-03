@@ -3,7 +3,8 @@ import numpy as np
 
 from cosapp.systems import System
 from cosapp.recorders import DataFrameRecorder
-from cosapp.drivers import RungeKutta
+from cosapp.drivers.time import RungeKutta, CrankNicolson
+from cosapp.drivers.time.base import AbstractTimeDriver
 from typing import Tuple
 
 
@@ -83,6 +84,11 @@ def ball() -> BouncingBall:
 def ball_case(ball: BouncingBall) -> Tuple[BouncingBall, RungeKutta]:
     """Bouncing ball + driver test case"""
     driver = ball.add_driver(RungeKutta(order=3))
+    setup_driver(driver)
+    return ball, driver
+
+
+def setup_driver(driver: AbstractTimeDriver):
     driver.time_interval = (0, 4)
     driver.dt = 0.01
 
@@ -99,7 +105,6 @@ def ball_case(ball: BouncingBall) -> Tuple[BouncingBall, RungeKutta]:
         },
         values = {'mass': 1.5, 'cf': 0.2, 'cr': 0.98},
     )
-    return ball, driver
 
 
 def test_BouncingBall(ball_case):
@@ -417,3 +422,153 @@ def test_PointMass_array():
         3.51819274, 0.0,  0.37993761,
         0.43977409, 0.21988705, -2.27972353,
     ])
+
+
+def test_BouncingBall_implicit():
+    """Test of `PointMass` system where N points are followed,
+    using (Nx3) 2D arrays for positions, velocities and accelerations.
+    """
+    ball = BouncingBall("ball")
+    driver = ball.add_driver(CrankNicolson())
+    setup_driver(driver)
+
+    ball.run_drivers()
+
+    # Retrieve recorded data
+    data = driver.recorder.export_data()
+
+    assert len(driver.recorded_events) == 3
+    assert [record.time for record in driver.recorded_events] == pytest.approx(
+        [1.457205, 2.517932, 3.3959818], abs=1e-4,  # values from RK3 simulation
+    )
+    # Check that all positions are above ground level, within numerical tolerance
+    x = np.asarray(data['x'].tolist())
+    assert min(x[:, 2]) > -1e-13
+    # Check positions, velocities and accelerations recorded at event times
+    event_data = driver.event_data
+    assert len(event_data) == 6
+    ae = np.asarray(event_data['a'].tolist())
+    ve = np.asarray(event_data['v'].tolist())
+    xe = np.asarray(event_data['x'].tolist())
+    # Note: reference values obtained from RK3 simulation
+    np.testing.assert_allclose(
+        xe, [
+            [6.416269698, 0.0, 0.0],
+            [6.416269698, 0.0, 0.0],  # no jump in x
+            [8.508373346, 0.0, 0.0],
+            [8.508373346, 0.0, 0.0],  # no jump in x
+            [9.674569363, 0.0, 0.0],
+            [9.674569363, 0.0, 0.0],  # no jump in x
+        ],
+        rtol=1e-4,
+        atol=1e-4,
+    )
+    np.testing.assert_allclose(
+        ve, [
+            [2.515184307, 0., -5.929093249],
+            [2.515184307, 0.,  5.810511384],  # jump in vz
+            [1.550781610, 0., -4.717679606],
+            [1.550781610, 0.,  4.623326014],  # jump in vz
+            [1.138267878, 0., -4.030487952],
+            [1.138267878, 0.,  3.949878193],  # jump in vz
+        ],
+        rtol=1e-4,
+    )
+    np.testing.assert_allclose(
+        ae, [
+            [-2.1598793362, 0., -4.718474119],
+            [-2.1233265999, 0., -14.71525221],  # jump in a
+            [-1.0268297864, 0., -6.686250073],
+            [-1.0083142767, 0., -12.81607486],  # jump in a
+            [-0.6356294918, 0., -7.559302200],
+            [-0.6238647968, 0., -11.97485943],  # jump in a
+        ],
+        rtol=1e-4,
+    )
+    # Check that `driver.recorder` and `driver.event_data`
+    # contain the same data at event times
+    for record in driver.recorded_events:
+        t = record.time
+        data_t = data[data["time"] == t]
+        data_e = event_data[event_data["time"] == t]
+        assert len(data_t) == 2
+        assert len(data_e) == 2
+        assert list(data_e.columns) == list(data_t.columns)
+        for name in ["a", "v", "x"]:
+            field_t = np.asarray(data_t[name].tolist())
+            field_e = np.asarray(data_e[name].tolist())
+            assert np.array_equal(field_e, field_t), f"{name} @ {t = }"
+
+
+def test_PointMass_array_implicit():
+    """Test of `PointMass` system where N points are followed,
+    using (Nx3) 2D arrays for positions, velocities and accelerations.
+    Solver: Crank-Nicolson implicit time driver.
+    """
+    points = PointMass("points")
+
+    driver = points.add_driver(CrankNicolson(time_interval=[0, 1], dt=0.01))
+
+    points.x = np.zeros((4, 3))
+    points.v = np.zeros((4, 3))
+    points.run_once()
+
+    assert points.a.shape == (4, 3)
+    assert points.force.shape == (4, 3)
+
+    # Add a recorder to capture time evolution in a dataframe
+    driver.add_recorder(
+        DataFrameRecorder(includes=['x', 'v', 'a']),
+        period=0.05,
+    )
+    # Define a simulation scenario
+    driver.set_scenario(
+        init = {
+            'x': np.array([[0., 0., 0.], [0., 0., 0.], [0., 0., 2.], [0., 0., 0.]]),
+            'v': np.array([[8., 0., 9.5], [8., 0., 9.5], [8., 0., 3.5], [1., 0.5, 2.]]),
+        },
+        values = {
+            'mass': np.r_[1.5, 0.2, 1.0, 1.0],
+            'cf': 0.2,
+        },
+    )
+
+    points.run_drivers()
+
+    # Retrieve recorded data
+    data = driver.recorder.export_data()
+    a = np.asarray(data['a'].tolist())
+    v = np.asarray(data['v'].tolist())
+    x = np.asarray(data['x'].tolist())
+
+    assert a.shape == (21, 4, 3)
+    assert v.shape == (21, 4, 3)
+    assert x.shape == (21, 4, 3)
+    assert points.a.shape == (4, 3)
+    assert points.v.shape == (4, 3)
+    assert points.x.shape == (4, 3)
+
+    assert points.a.ravel() == pytest.approx(
+        [
+            -2.83658781,  0.0, -6.50189163,
+            -0.01656637,  0.0,  0.61618199,
+            -2.45499481,  0.0, -2.64315849,
+            -0.30687435, -0.15343718, -2.18284696,
+        ],
+    )
+    assert points.v.ravel() == pytest.approx(
+        [
+            2.66371350, 0.0, -3.10649750,
+            2.07423206e-03, 0.0, -1.30543520,
+            1.53691765, 0.0, -4.48670816,
+            0.192114707, 9.60573534e-02, -4.77488022,
+        ],
+    )
+    assert points.x.ravel() == pytest.approx(
+        [
+            4.52854479, 0.0 ,  1.76365564,
+            0.59333046, 0.0 , -0.42762912,
+            3.51718174, 0.0 ,  0.37929091,
+            0.43964772, 0.21982386, -2.28018067,
+        ],
+    )

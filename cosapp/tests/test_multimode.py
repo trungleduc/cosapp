@@ -225,7 +225,7 @@ def test_TwoWayCircuit(case_TwoWayCircuit, caplog):
             "elec_in.V": f"cos({omega} * t)",
         }
     )
-    with caplog.at_level("INFO", logger="cosapp.drivers.time.interfaces"):
+    with caplog.at_level("INFO", logger="cosapp.drivers.time.base"):
         circuit.run_drivers()
 
     assert len(caplog.messages) == 2
@@ -273,7 +273,7 @@ def test_TwoWayCircuitWithEq(case_TwoWayCircuitWithEq, caplog):
             "elec_in.V": f"cos({omega} * t)",
         }
     )
-    with caplog.at_level("INFO", logger="cosapp.drivers.time.interfaces"):
+    with caplog.at_level("INFO", logger="cosapp.drivers.time.base"):
         circuit.run_drivers()
 
     assert len(caplog.messages) == 2

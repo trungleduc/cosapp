@@ -45,9 +45,10 @@ Modules
    cosapp.multimode.discreteStepper
 
    cosapp.drivers.driver
+   cosapp.drivers.time.base
    cosapp.drivers.time.euler
-   cosapp.drivers.time.interfaces
    cosapp.drivers.time.runge_kutta
+   cosapp.drivers.time.crank_nicolson
    cosapp.drivers.time.scenario
    cosapp.drivers.time.utils
    cosapp.drivers.abstractsetofcases
@@ -126,9 +127,10 @@ Inheritance
     cosapp.drivers.runonce
     cosapp.drivers.runsinglecase
     cosapp.drivers.validitycheck
+    cosapp.drivers.time.base
     cosapp.drivers.time.euler
-    cosapp.drivers.time.interfaces
     cosapp.drivers.time.runge_kutta
+    cosapp.drivers.time.crank_nicolson
     :parts: 1
 
 - cosapp.ports
