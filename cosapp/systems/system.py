@@ -1429,8 +1429,9 @@ class System(Module, TimeObserver):
                 if isinstance(ref.value, (System, BasePort)):
                     return False
                 elif "." in key:
-                    owner_name = key.rsplit(".", maxsplit=1)[0]
-                    return isinstance(self[owner_name], BasePort)
+                    owner_name, varname = key.rsplit(".", maxsplit=1)
+                    owner = self[owner_name]
+                    return isinstance(owner, BasePort) and varname in owner
                 else:  # Shortcut to inwards or outwards => not taken
                     return False
 

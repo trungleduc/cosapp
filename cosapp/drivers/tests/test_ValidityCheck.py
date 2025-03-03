@@ -180,3 +180,49 @@ def test_ArrayValidityException(make_simple, settings, expected):
     with pytest.raises(error, match=expected.get('match', None)):
         s = make_simple(settings)
         s.run_drivers()
+
+
+def test_ValidityCheck_port_property(caplog):
+    """Validity check involving a port with a read-only property.
+    Related to https://gitlab.com/cosapp/cosapp/-/issues/177
+    """
+    class PortWithProperty(Port):
+        """Geometry port, with a property depending on port variable"""
+        def setup(self) -> None:
+            self.add_variable(
+                name="height",
+                unit="m",
+                limits=(0.0, np.inf),
+            )
+            self.add_variable(
+                name="width",
+                unit="m",
+                limits=(0.0, np.inf),
+            )
+
+        @property
+        def area(self) -> float:
+            return self.height * self.width
+
+    class Model(System):
+        def setup(self):
+            self.add_input(PortWithProperty, "section")
+            self.add_outward("section_area", 0.0, valid_range=(0.0, 0.1))
+
+        def compute(self):
+            self.section_area = self.section.area
+
+    model = Model("model")
+    model.add_driver(RunOnce("run"))
+    model.add_driver(ValidityCheck("check"))
+
+    model.section.height = 1.0
+    model.section.width = 0.25
+
+    caplog.clear()
+    with caplog.at_level(logging.WARNING):
+        model.run_drivers()
+
+    assert len(caplog.records) == 1
+    assert model.section_area == pytest.approx(0.25, rel=1e-14)
+    assert "section_area = 0.25 not in [0.0, 0.1]" in caplog.messages[0]
