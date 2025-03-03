@@ -18,7 +18,7 @@ from cosapp.drivers.time.scenario import TimeAssignString
 from cosapp.utils.json import jsonify
 from cosapp.utils.state_io import object__getstate__
 if TYPE_CHECKING:
-    from cosapp.drivers.time.interfaces import ExplicitTimeDriver
+    from cosapp.drivers.time.base import AbstractTimeDriver
 
 
 T = TypeVar('T')
@@ -595,9 +595,9 @@ class SystemInterpolator:
     """Class providing a continuous time view on a system,
     by replacing transient variables by time functions.
     """
-    def __init__(self, driver: ExplicitTimeDriver):
-        from cosapp.drivers.time.interfaces import ExplicitTimeDriver
-        check_arg(driver, 'driver', ExplicitTimeDriver)
+    def __init__(self, driver: AbstractTimeDriver):
+        from cosapp.drivers.time.base import AbstractTimeDriver
+        check_arg(driver, 'driver', AbstractTimeDriver)
         self.__owner = driver
         self.__system = system = driver.owner
         problem = system.assembled_time_problem()

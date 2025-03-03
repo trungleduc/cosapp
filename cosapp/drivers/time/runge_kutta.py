@@ -2,11 +2,11 @@ import numpy
 from numbers import Number
 from typing import Optional
 
-from cosapp.drivers.time.interfaces import ExplicitTimeDriver, System
+from cosapp.drivers.time.base import AbstractTimeDriver, System
 from cosapp.utils.helpers import check_arg
 
 
-class RungeKutta(ExplicitTimeDriver):
+class RungeKutta(AbstractTimeDriver):
     """
     Implementation of a few Runge-Kutta methods for time integration.
     https://en.wikipedia.org/wiki/List_of_Runge%E2%80%93Kutta_methods

@@ -321,13 +321,18 @@ class MathematicalProblem(BaseProblem):
         """Dict[str, Unknown]: Unknown dictionary defined in problem."""
         return self._unknowns
 
+    def update_residues(self) -> None:
+        """Update the value of all residues"""
+        for residue in self._residues.values():
+            residue.update()
+
     def residue_vector(self) -> numpy.ndarray:
         """numpy.ndarray: Residue values stacked into a vector."""
-        return self.__as_vector(self.residues)
+        return self.__as_vector(self._residues)
 
     def unknown_vector(self):
         """numpy.ndarray: Unknown values stacked into a vector."""
-        return self.__as_vector(self.unknowns)
+        return self.__as_vector(self._unknowns)
 
     def __as_vector(self, collection: dict[str, Union[Unknown, Residue]]):
         values = tuple(
