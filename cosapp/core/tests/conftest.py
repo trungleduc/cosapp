@@ -117,8 +117,12 @@ def ufunc_test_data():
             },
         },
         'linspace': {
-            'expr': 'linspace(0, 10, 50)',
-            'check_val': numpy.linspace(0, 10, 50),
+            'expr': 'linspace(0, 1, 11)',
+            'check_val': numpy.linspace(0, 1, 11),
+        },
+        'logspace': {
+            'expr': 'logspace(-2, 3, 6)',
+            'check_val': numpy.logspace(-2, 3, 6),
         },
         'matmul': {
             'expr': 'matmul(x, y)',
@@ -127,6 +131,14 @@ def ufunc_test_data():
                 'x': numpy.random.random((3, 3)),
                 'y': numpy.random.random((3, 1)),
             },
+        },
+        'where': {
+            'expr': 'where(x > y, -x, y)',
+            'args': {
+                'x': numpy.linspace(0, 1, 11),
+                'y': numpy.linspace(-1, 2, 11),
+            },
+            'check_val': numpy.array([0.0, -0.1, -0.2, -0.3, -0.4, 0.5, 0.8, 1.1, 1.4, 1.7, 2.0]),
         },
         'maximum': {
             'expr': 'maximum(x, y)',
