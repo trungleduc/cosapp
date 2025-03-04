@@ -37,7 +37,7 @@ class AbstractSetOfCases(Driver):
         Keyword arguments will be used to set driver options
     """
 
-    __slots__ = ("cases", "_execution_policy")
+    __slots__ = ("cases", "_transients_variables", "_execution_policy")
 
     def __init__(
         self,
@@ -62,7 +62,7 @@ class AbstractSetOfCases(Driver):
         # variables may not be the same on all points.
         self.cases = None  # type: Optional[Iterable[Any]]
             # desc="List of cases to be carried out."
-
+        self._transients_variables = None 
         self._execution_policy: ExecutionPolicy = execution_policy  # Execution policy to use for computation
 
     def _precase(self, case_idx: int, case: Any):
@@ -100,6 +100,9 @@ class AbstractSetOfCases(Driver):
         """Actions performed prior to the `Module.compute` call."""
         super().setup_run()
         self._build_cases()
+        self._transients_variables = {
+            var: val.value for var, val in self._owner.transients.items()
+        }
 
     def run_children(self) -> None:
         """Runs all driver children.
