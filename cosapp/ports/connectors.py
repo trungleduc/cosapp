@@ -396,7 +396,7 @@ class BaseConnector(abc.ABC):
             if isinstance(mapping, str):
                 name_mapping = {mapping: mapping}
             elif isinstance(mapping, Mapping):
-                name_mapping = mapping
+                name_mapping = dict(mapping)
             elif isinstance(mapping, Collection):
                 name_mapping = dict()
                 for obj in mapping:

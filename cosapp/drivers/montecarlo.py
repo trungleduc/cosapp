@@ -182,6 +182,11 @@ class MonteCarlo(AbstractSetOfCases):
         sobol.random()
         self.cases = sobol.random(self.draws)
 
+    def _reset_transients(self):
+        """Reattribute initial transient values."""
+        for variable, value in self._transients_variables.items():
+            self._owner[variable] = value
+
     def _precompute(self):
         """Save reference and build cases."""
         super()._precompute()
@@ -228,7 +233,9 @@ class MonteCarlo(AbstractSetOfCases):
 
             for j, name in enumerate(self.responses):
                 self.Y0[j] = self.owner[name]
-
+        
+        self._reset_transients()
+        
     def _precase(self, case_idx, case):
         """Hook to be called before running each case.
         
@@ -294,3 +301,6 @@ class MonteCarlo(AbstractSetOfCases):
                 variable.set_perturbation(-delta)
             else:
                 variable.connector.clear_noise()
+
+        self._reset_transients()
+

@@ -9,6 +9,7 @@ from cosapp.drivers import (
     NonLinearSolver,
     RunOnce,
     RunSingleCase,
+    EulerExplicit
 )
 from cosapp.recorders import DataFrameRecorder
 from cosapp.systems import System
@@ -40,6 +41,13 @@ class SimpleUncentered(System):
 
     def compute(self):
         self.y = self.x * self.K1
+
+
+class SystemTime(System):
+    def setup(self):
+        self.add_inward("a", 0.0, distribution=Uniform(0.0, 1.0))
+        self.add_inward("m", 0.0)
+        self.add_transient("m", der="1.")
 
 
 def test_MonteCarlo_setup():
@@ -555,6 +563,22 @@ def test_MonteCarlo_embedded_solver():
         s.run_drivers()
 
 
+def test_MonteCarlo_with_time_driver():
+    s = SystemTime("s")
+    mc = s.add_driver(MonteCarlo("mc"))
+    mc.add_random_variable("a")
+    euler = mc.add_driver(EulerExplicit("euler", dt=0.1, time_interval=(0.0, 10.0)))
+    euler.add_recorder(DataFrameRecorder(hold=True))
+    mc.draws = 5
+
+    s.run_drivers()
+    results = euler.recorder.export_data()
+
+    assert pytest.approx(results["m"].iloc[-1]) == 10.0
+    assert pytest.approx(results["m"].iloc[101]) == 0.0
+    assert len(results["Section"]) == 606
+
+
 def _get_start_methods():
     if sys.platform == "win32":
         return (WorkerStartMethod.SPAWN, )
@@ -590,6 +614,30 @@ def test_MonteCarlo_multiprocessing(nprocs, start_method):
         s.run_drivers()
 
     assert len(rec.export_data()) == mc.draws + 1
+
+
+def test_MonteCarlo_multiprocessing_with_time_driver():
+    s = SystemTime("s")
+    mc = s.add_driver(
+        MonteCarlo(
+            "mc",
+            execution_policy=ExecutionPolicy(
+                workers_count=4,
+                execution_type=ExecutionType.MULTI_PROCESSING,
+            ),
+        )
+    )
+    mc.add_random_variable("a")
+    euler = mc.add_driver(EulerExplicit("euler", dt=1.0, time_interval=(0.0, 10.0)))
+    euler.add_recorder(DataFrameRecorder(hold=True))
+    mc.draws = 5
+
+    s.run_drivers()
+    results = euler.recorder.export_data()
+
+    assert pytest.approx(results["m"].iloc[-1]) == 10.0
+    assert pytest.approx(results["m"].iloc[11]) == 0.0
+    assert len(results["Section"]) == 66
 
 
 class TestMonteCarloPickling:
