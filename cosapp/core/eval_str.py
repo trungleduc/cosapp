@@ -233,6 +233,7 @@ class EvalString:
                 "full",
                 "full_like",
                 "linspace",
+                "logspace",
                 # Constants
                 "e",
                 "pi",
@@ -243,7 +244,7 @@ class EvalString:
                 "log10",
                 "log1p",
                 "power",
-                # Math operations
+                # Math & array operations
                 "abs",
                 "sqrt",
                 "cbrt",
@@ -255,9 +256,9 @@ class EvalString:
                 "minimum",
                 "round",
                 "sum",
-                # Reductions
                 "prod",
                 "tensordot",
+                "where",
                 # Linear algebra
                 "matmul",
                 "cross",

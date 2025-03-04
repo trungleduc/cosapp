@@ -29,10 +29,10 @@ def test_EvalString_functions(ufunc_test_data):
     assert tested <= available
 
 
-@pytest.mark.parametrize("fname", [
-        func_name for func_name in EvalString.available_symbols()
-        if not func_name.startswith('u')
-])
+@pytest.mark.parametrize("fname", filter(
+    lambda funcname: not funcname.startswith("u"),
+    EvalString.available_symbols()
+))
 def test_EvalString_exec_comp_value(fname, ufunc_test_data):
     class Test(System):
         def setup(self, **kwargs):
