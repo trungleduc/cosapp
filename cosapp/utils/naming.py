@@ -1,10 +1,12 @@
 import re
-from enum import Enum
-from typing import Any, List, Tuple, Set
+import enum
+from typing import Any
+from collections.abc import Collection, Callable
 from cosapp.utils.helpers import check_arg
 
 
-class CommonPorts(Enum):
+@enum.unique
+class CommonPorts(enum.Enum):
     """Port names common to every system.
     
     INWARDS : For orphan input variables
@@ -18,9 +20,9 @@ class CommonPorts(Enum):
     MODEVARS_OUT = "modevars_out"
 
     @classmethod
-    def names(cls) -> Set[str]:
-        """Returns common port names as a set."""
-        return set(case.value for case in cls)
+    def names(cls) -> tuple[str]:
+        """Returns common port names as a tuple."""
+        return tuple(case.value for case in cls)
 
 
 def has_time(expression: Any) -> bool:
@@ -40,7 +42,7 @@ class NameChecker:
     def __init__(self,
         pattern = r"^[A-Za-z][\w]*$",
         message = "Name must start with a letter, and contain only alphanumerics and '_'",
-        excluded: List[str] = [],
+        excluded: Collection[str] = tuple(),
     ):
         self.__error_message = lambda name: None  # type: Callable[[str], str]
         self.__message = ""  # type: str
@@ -51,8 +53,8 @@ class NameChecker:
         self.excluded = excluded
 
     @classmethod
-    def reserved(cls) -> List[str]:
-        """List of reserved names"""
+    def reserved(cls) -> list[str]:
+        """list of reserved names"""
         return ["t", "time"]
 
     @property
@@ -64,7 +66,7 @@ class NameChecker:
         self.__pattern = re.compile(pattern)
 
     @property
-    def excluded(self) -> Tuple[str]:
+    def excluded(self) -> tuple[str]:
         return self.__excluded
 
     @excluded.setter
@@ -73,7 +75,8 @@ class NameChecker:
         if isinstance(excluded, str):
             excluded = [excluded]
         else:
-            check_arg(excluded, 'excluded', (list, tuple, set),
+            check_arg(
+                excluded, "excluded", Collection,
                 value_ok = lambda col: all(isinstance(s, str) for s in col)
             )
         self.__excluded = tuple(excluded)
@@ -87,8 +90,8 @@ class NameChecker:
     def message(self, message: str) -> None:
         check_arg(message, "message", str)
         self.__message = message
-        if len(self.__message) > 0:
-            self.__error_message = lambda name: f"{self.__message}; got {name!r}."
+        if message:
+            self.__error_message = lambda name: f"{message}; got {name!r}."
         else:
             self.__error_message = lambda name: f"Invalid name {name!r}"
 
