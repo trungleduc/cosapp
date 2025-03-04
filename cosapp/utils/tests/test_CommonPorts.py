@@ -11,7 +11,7 @@ def test_CommonPorts_values(case):
 
 
 def test_CommonPorts_names():
-    assert CommonPorts.names() == {
+    assert set(CommonPorts.names()) == {
         'inwards',
         'outwards',
         'modevars_in',

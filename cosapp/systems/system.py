@@ -50,7 +50,7 @@ from cosapp.utils.json import (
     EncodingMetadata,
 )
 from cosapp.utils.logging import LogFormat, LogLevel, rollover_logfile
-from cosapp.utils.naming import natural_varname
+from cosapp.utils.naming import NameChecker, natural_varname
 from cosapp.utils.pull_variables import pull_variables
 from cosapp.utils.find_variables import get_attributes
 from cosapp.utils.surrogate_models import FloatKrigingSurrogate
@@ -179,7 +179,9 @@ class System(Module, TimeObserver):
     OUTWARDS = CommonPorts.OUTWARDS.value  # type: ClassVar[str]
     MODEVARS_IN = CommonPorts.MODEVARS_IN.value  # type: ClassVar[str]
     MODEVARS_OUT = CommonPorts.MODEVARS_OUT.value  # type: ClassVar[str]
-    COMMON_PORTS = list(CommonPorts.__members__)  # type: List[str]
+    COMMON_PORTS = CommonPorts.names()
+
+    _name_check = NameChecker(excluded=["inputs", "outputs", *CommonPorts.names()])
 
     tags = frozenset()  # type: ClassVar[FrozenSet[str]]
     _user_context = None  # type: ClassVar[Optional[Scope]]
@@ -277,10 +279,10 @@ class System(Module, TimeObserver):
         self.name2variable = dict()  # type: Dict[str, VariableReference]
 
         # Create extensible ports for orphan variables
-        self._add_port(ExtensiblePort(System.INWARDS, PortType.IN))
-        self._add_port(ExtensiblePort(System.OUTWARDS, PortType.OUT))
-        self._add_port(ModeVarPort(System.MODEVARS_IN, PortType.IN))
-        self._add_port(ModeVarPort(System.MODEVARS_OUT, PortType.OUT))
+        self._add_port(ExtensiblePort(System.INWARDS, PortType.IN), check=False)
+        self._add_port(ExtensiblePort(System.OUTWARDS, PortType.OUT), check=False)
+        self._add_port(ModeVarPort(System.MODEVARS_IN, PortType.IN), check=False)
+        self._add_port(ModeVarPort(System.MODEVARS_OUT, PortType.OUT), check=False)
 
     def _update(self, dt) -> None:
         """Required by `TimeObserver` base class"""
@@ -846,7 +848,7 @@ class System(Module, TimeObserver):
         self._add_port(new_port, desc)
         return new_port
 
-    def _add_port(self, port: BasePort, desc="", check: bool = True) -> None:
+    def _add_port(self, port: BasePort, desc="", check=True) -> None:
         """Add a port to the system
 
         Parameters
@@ -855,7 +857,8 @@ class System(Module, TimeObserver):
             instance of a port class
         """
         if check:
-            self.__check_attr(port.name, f"cannot add {type(port).__qualname__} {port.name!r}")
+            portname = self._name_check(port.name)
+            self.__check_attr(portname, f"cannot add {type(port).__qualname__} {portname!r}")
 
         port.owner = self
         port.description = desc

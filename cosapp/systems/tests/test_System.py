@@ -1044,6 +1044,30 @@ def test_System__add_port():
     assert s.p_out.description == "Some output port"
 
 
+@pytest.mark.parametrize("name", [
+    "inputs",
+    "outputs",
+    "inwards",
+    "outwards",
+    "modevars_in",
+    "modevars_out",
+])
+def test_System_protected_names(name):
+    """Test that invalid port and subsystem names are captured
+    Related to https://gitlab.com/cosapp/cosapp/-/issues/178
+    """
+    s = System("s")
+
+    with pytest.raises(ValueError, match="invalid"):
+        s._add_port(DummyPort(name, PortType.IN))
+
+    with pytest.raises(ValueError, match="invalid"):
+        s._add_port(DummyPort(name, PortType.OUT))
+
+    with pytest.raises(ValueError, match="invalid"):
+        s.add_child(System(name))
+
+
 def test_System_add_input():
     class T(System):
         def setup(self):
