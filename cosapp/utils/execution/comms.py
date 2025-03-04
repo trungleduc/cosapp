@@ -2,12 +2,11 @@ import ctypes
 import multiprocessing as mp
 import platform
 import queue
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Optional
 
 RUNNING_WINDOWS = platform.system() == "Windows"
 RUNNING_MACOS = platform.system() == "Darwin"
 
-import multiprocessing.synchronize
 from inspect import Traceback
 from signal import SIG_IGN, SIGINT, Signals, getsignal
 from signal import signal as signal_
