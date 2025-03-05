@@ -98,9 +98,9 @@ class Driver(Module, HasCompositeOptions):
         self._init_options(options)
         if options:
             raise RuntimeError(
-                    f"Unknown option(s) {list(options.keys())!r} for {type(self).__name__}"
-                    f"; available options are: {self.available_options(0)}."
-                )
+                f"Unknown option(s) {list(options.keys())!r} for {type(self).__name__}"
+                f"; available options are: {self.available_options(0)}."
+            )
 
     def _declare_options(self) -> None:
         """Declares options."""

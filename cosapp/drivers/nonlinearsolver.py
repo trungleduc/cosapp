@@ -23,8 +23,7 @@ from cosapp.drivers.driver import Driver, System
 from cosapp.drivers.abstractsolver import AbstractSolver
 from cosapp.drivers.runsinglecase import RunSingleCase
 from cosapp.drivers.utils import DesignProblemHandler
-from cosapp.utils.helpers import check_arg
-from cosapp.utils.logging import LogFormat, LogLevel
+from cosapp.utils.logging import LogFormat, LogLevel, HandlerWithContextFilters
 from cosapp.utils.options_dictionary import HasOptions
 
 from cosapp.core.numerics.solve import (
@@ -349,7 +348,7 @@ class NonLinearSolver(AbstractSolver):
         numpy.ndarray
             The list of residues of the `System`
         """
-        logger.debug(f"Call fresidues with x = {x!r}")
+        logger.debug(f"Call fresidues with {x = !r}")
         self.set_iteratives(x)
         self._update_system()
         self.__builder.update_residues()
@@ -455,7 +454,7 @@ class NonLinearSolver(AbstractSolver):
 
     def log_debug_message(
         self,
-        handler: "HandlerWithContextFilters",
+        handler: HandlerWithContextFilters,
         record: logging.LogRecord,
         format: LogFormat = LogFormat.RAW,
     ) -> bool:

@@ -7,7 +7,7 @@ from cosapp.utils.execution import (
     Batch,
     ExecutionPolicy,
     ExecutionType,
-    FunctionCallBehavior,
+    FunctionCallBehavior as FunctionBehavior,
     Job,
     Pool,
     Task,
@@ -221,21 +221,18 @@ class FfdJacobianEvaluation(AbstractJacobianEvaluation):
         """Performs setup of the evaluation method for sequential execution."""
         self._x_copy = numpy.zeros(size)
         self._r0 = numpy.zeros(size)
-        self._x_indices_to_update = list()
+        self._x_indices_to_update: list[int] = []
         self._size = size
 
         self.reset_stats()
 
     def _parallel_setup(self, size: int) -> None:
         """Performs setup of the evaluation method for parallel execution."""
-        self._pool = pool = Pool.from_policy(self._execution_policy)
-
-        if not hasattr(self, "_fun"):
+        fresidue = self._fun
+        if not callable(fresidue):
             raise RuntimeError(
                 "Residue function and args must be bound before parallel setup."
             )
-
-        fresidue = self._fun
         self._size = size
         self._sequential_setup(size)
 
@@ -243,7 +240,7 @@ class FfdJacobianEvaluation(AbstractJacobianEvaluation):
             tasks = [
                 Task(
                     TaskAction.FUNC_CALL,
-                    FunctionCallBehavior.STORE_RETURNED_OBJECT,
+                    FunctionBehavior.STORE_RETURNED_OBJECT,
                     (ops.return_arg, (fresidue,)),
                 ),
                 Task(
@@ -252,7 +249,7 @@ class FfdJacobianEvaluation(AbstractJacobianEvaluation):
                 ),
                 Task(
                     TaskAction.FUNC_CALL,
-                    FunctionCallBehavior.EXECUTE,
+                    FunctionBehavior.EXECUTE,
                     (self._set_worker_jac, (size, len(rng))),
                 ),
                 Task(
@@ -262,6 +259,7 @@ class FfdJacobianEvaluation(AbstractJacobianEvaluation):
             ]
             return Job(tasks)
 
+        self._pool = pool = Pool.from_policy(self._execution_policy)
         blocks = list(Batch.compute_blocks(size, pool._size, 1))
         setup_batch = Batch(map(make_setup_job, blocks))
         pool.start()
@@ -271,10 +269,9 @@ class FfdJacobianEvaluation(AbstractJacobianEvaluation):
             return Job(
                 Task(
                     TaskAction.FUNC_CALL,
-                    FunctionCallBehavior.ARGS_IN_STORAGE
-                    | FunctionCallBehavior.RETURN_OBJECT,
+                    FunctionBehavior.ARGS_IN_STORAGE | FunctionBehavior.RETURN_OBJECT,
                     (
-                        self._compute_res,
+                        self._compute_jacobian,
                         (
                             (0, 1),
                             self._x_copy,
@@ -321,9 +318,9 @@ class FfdJacobianEvaluation(AbstractJacobianEvaluation):
 
         if jac is None or jac.shape != (size, size):
             jac = numpy.zeros((size, size), dtype=float)
-
             x_indices_to_update.clear()
-            x_indices_to_update += list(range(size))
+            x_indices_to_update.extend(range(size))
+        
         elif broyden_only or (
             not res_index_to_update
             and res_index_to_update is not None
@@ -332,14 +329,15 @@ class FfdJacobianEvaluation(AbstractJacobianEvaluation):
         ):
             self._broyden_update(jac, dx, dr)
             return jac
+        
         else:
-            x_indices_to_update.clear()
             unique_res_index_to_update = set()
             for i in res_index_to_update:
                 unique_res_index_to_update.update(
                     j for j in range(size) if jac[i, j] != 0
                 )
-            x_indices_to_update += list(unique_res_index_to_update)
+            x_indices_to_update.clear()
+            x_indices_to_update.extend(unique_res_index_to_update)
 
         if self._execution_policy.is_sequential():
             self._sequential_evaluation(jac, x0, r0, x_indices_to_update)
@@ -370,7 +368,7 @@ class FfdJacobianEvaluation(AbstractJacobianEvaluation):
             x_copy[j] = x0[j]
 
     @staticmethod
-    def _compute_res(
+    def _compute_jacobian(
         fresidue: Callable,
         jac: numpy.ndarray,
         x: numpy.ndarray,
@@ -379,9 +377,10 @@ class FfdJacobianEvaluation(AbstractJacobianEvaluation):
         x_indices_to_update: Iterable[int],
         eps: float,
     ) -> numpy.ndarray:
-        """Evaluates Jacobian matrix update for a subset of the unknowns."""
+        """Evaluates Jacobian matrix in a subset of directions."""
         for idx, j in enumerate(rng):
             if j in x_indices_to_update:
+                xj = x[j]
                 delta = eps
                 if abs(x[j]) >= abs(eps):
                     delta = x[j] * eps
@@ -389,7 +388,7 @@ class FfdJacobianEvaluation(AbstractJacobianEvaluation):
                 logger.debug(f"Perturb unknown {j}")
                 residue = fresidue(x)
                 jac[:, idx] = (residue - r0) * (1 / delta)
-                x[j] -= delta
+                x[j] = xj
 
         return jac
 
