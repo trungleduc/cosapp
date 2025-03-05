@@ -707,39 +707,38 @@ def test_RungeKutta_multimode_scalar_ode_2(multimode_scalar_ode_case):
 
 @pytest.mark.parametrize(argnames="pool_size", argvalues=[2, 3, 4])
 def test_RungeKutta_point_mass_target_parallel(pool_size):
-    """Test parallel calculation with sparse linear solver
-      and forward finite-difference Jacobian."""
-
+    """Test parallel calculation of forward finite-difference Jacobian,
+    with a time driver as sub-driver of the nonlinear solver.
+    """
     # Set test case
-    traj = PointMassTarget('traj')
-    solver = traj.add_driver(NonLinearSolver(
-            "nls",
-            factor=0.9,
-            tol=1e-5,
-            method=NonLinearMethods.NR,
+    traj = PointMassTarget("traj")
+
+    solver = traj.add_driver(
+        NonLinearSolver(
+            "solver",
             jac=FfdJacobianEvaluation(
-                    execution_policy=ExecutionPolicy(pool_size, ExecutionType.MULTI_PROCESSING)
+                execution_policy=ExecutionPolicy(pool_size, ExecutionType.MULTI_PROCESSING)
             )
         )
     )
-    target = solver.add_child(RunSingleCase('target'))
-    driver = target.add_child(RungeKutta(time_interval=(0, 2), dt=0.1, order=3))
+    driver = solver.add_child(RungeKutta(time_interval=(0, 2), dt=0.1, order=3))
 
-    target.set_init({'v0': np.array([1, 1, 1])})
-    target.add_unknown('v0').add_equation("x == [10, 0, 10]")
+    # Set design problem
+    solver.add_unknown('v0').add_equation("x == [10, 0, 10]")
 
     # Define a simulation scenario
     driver.set_scenario(
         init={'x': [0, 0, 10], 'v': 'v0'},
-        values={'point.mass': 1.5, 'point.k': 0.9}
+        values={'point.mass': 1.5, 'point.k': 0.9},
     )
 
-    # Assertions
+    # Set initial guess & solve
+    traj.v0 = np.ones(3)
     traj.run_drivers()
 
     # Check that current position is target point
-    assert traj.time == pytest.approx(driver.time_interval[1], abs=1e-12)
-    assert traj.x == pytest.approx([10, 0, 10], abs=1e-5)
+    assert traj.time == pytest.approx(driver.time_interval[1], rel=1e-12)
+    assert traj.x == pytest.approx([10, 0, 10], rel=1e-12)
 
     # Check that pulling did not shadow subsystem variables
     assert traj.point.x == pytest.approx(traj.x, abs=0)

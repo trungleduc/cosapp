@@ -10,8 +10,8 @@ import ast
 from enum import Enum
 from numbers import Number
 from typing import (
-    Union, Any, Dict, Tuple, FrozenSet,
-    Iterable, Optional,
+    Union, Any,
+    Iterable, Optional, Callable,
     TYPE_CHECKING,
 )
 from cosapp.ports.port import BasePort
@@ -166,21 +166,21 @@ class EvalString:
     """
 
     # this dict will act as the global scope when we eval our expressions
-    __globals = {}  # type: Dict[str, Any]
+    __globals = {}  # type: dict[str, Any]
 
     @classmethod
-    def available_symbols(cls) -> Dict[str, Any]:
+    def available_symbols(cls) -> dict[str, Any]:
         """
         List of available symbols (constants and functions) in current execution context.
 
         Returns
         -------
-        Dict[str, Any]
+        dict[str, Any]
             Mapping of available symbols by their name.
         """
         mapping = cls.__globals
 
-        if len(mapping) > 0:
+        if mapping:
             return mapping
         
         def add_symbols(
@@ -310,31 +310,30 @@ class EvalString:
             return type(self), (self._value, ), {}
   
     class _EvalNotConstant:
-        def __init__(self, context, source_code, code, expr_vars):
+        def __init__(self, context: System, source_code: str, code: CodeType, expr_vars: dict[str, tuple]):
             self._context = context
             self._source_code = source_code
             self._code = code
             self._expr_vars = expr_vars
-            self._global_dict = EvalString._EvalString__globals
-            self.__locals = {}
-        
+            self._global_dict = EvalString.available_symbols()
+
         def __call__(self):
-            return eval(self._code, self._global_dict, self.locals)
+            return eval(self._code, self._global_dict, self.locals())
     
         @classmethod
-        def _builder(cls, context, source_code, expr_vars):
+        def _builder(cls, context: System, source_code: str, expr_vars: dict[str, tuple]):
             code = compile(source_code, "<string>", "eval")
             return cls(context, source_code, code, expr_vars)
         
-        def __reduce_ex__(self, _):
+        def __reduce_ex__(self, _) -> tuple[Callable, tuple, dict]:
             return self._builder, (self._context, self._source_code, self._expr_vars), {}
 
-        @property
-        def locals(self) -> Dict[str, Any]:
-            """Dict[str, Any]: Context attributes required to evaluate the string expression."""
-            for key, (ctx, name) in self._expr_vars.items():
-                self.__locals[key] = getattr(ctx, name)
-            return self.__locals
+        def locals(self) -> dict[str, Any]:
+            """dict[str, Any]: Context attributes required to evaluate the string expression."""
+            return {
+                key: getattr(obj, attr_name)
+                for key, (obj, attr_name) in self._expr_vars.items()
+            }
 
     def __init__(self, expression: Any, context: System) -> None:
         """Class constructor.
@@ -349,7 +348,7 @@ class EvalString:
             )
         self.__context = context
 
-        self.__str = self.string(expression)  # type: str
+        self.__str = self.string(expression)
 
         if len(self.__str) == 0:
             raise ValueError("Can't evaluate empty expressions")
@@ -395,7 +394,7 @@ class EvalString:
             eval_impl = self._EvalNotConstant(context, ast.unparse(ast_visited), code, self.__expr_vars)
         self._eval = eval_impl  # type: Callable[[], Any]
 
-    def __getstate__(self) -> Dict[str, Any]:
+    def __getstate__(self) -> dict[str, Any]:
         """Creates a state of the object.
 
         The state type does NOT match type specified in
@@ -404,17 +403,17 @@ class EvalString:
 
         Returns
         -------
-        Dict[str, Any]:
+        dict[str, Any]:
             state
         """
         return object__getstate__(self)
 
-    def __json__(self) -> Dict[str, Any]:
+    def __json__(self) -> dict[str, Any]:
         """Creates a JSONable dictionary representation of the object.
 
         Returns
         -------
-        Dict[str, Any]
+        dict[str, Any]
             The dictionary
         """
         return {"expression": self.__str}
@@ -455,16 +454,16 @@ class EvalString:
         return (pattern in self.__str)
 
     @property
-    def locals(self) -> Dict[str, Any]:
-        """Dict[str, Any]: Context attributes required to evaluate the string expression."""
+    def locals(self) -> dict[str, Any]:
+        """dict[str, Any]: Context attributes required to evaluate the string expression."""
         # Read attribute values from context or from variable reference mapping of the context
         for key, (port, name) in self.__expr_vars.items():
             self.__locals[key] = getattr(port, name)
         return self.__locals
 
     @property
-    def globals(self) -> Dict[str, Any]:
-        """Dict[str, Any]: Global functions and variables required to evaluate the string expression."""
+    def globals(self) -> dict[str, Any]:
+        """dict[str, Any]: Global functions and variables required to evaluate the string expression."""
         return EvalString.__globals
 
     @property
@@ -490,18 +489,18 @@ class EvalString:
         return self._eval()
 
     @property
-    def variables(self) -> FrozenSet[str]:
-        """FrozenSet[str]: Variables without system constant properties required for the evaluation of the expression."""
+    def variables(self) -> frozenset[str]:
+        """frozenset[str]: Variables without system constant properties required for the evaluation of the expression."""
         return self.__unconst_vars
 
     @property
-    def all_variables(self) -> FrozenSet[str]:
-        """FrozenSet[str]:  All variables required for the evaluation of the expression."""
+    def all_variables(self) -> frozenset[str]:
+        """frozenset[str]:  All variables required for the evaluation of the expression."""
         return self.__all_vars
 
     @property
-    def constants(self) -> FrozenSet[str]:
-        """FrozenSet[str]: System constant properties required for the evaluation of the expression."""
+    def constants(self) -> frozenset[str]:
+        """frozenset[str]: System constant properties required for the evaluation of the expression."""
         return self.__all_vars - self.__unconst_vars
 
     def __eq__(self, other: EvalString) -> bool:
@@ -515,14 +514,14 @@ class AssignString:
     """Create an executable assignment of the kind 'lhs = rhs' from two evaluable expressions lhs and rhs.
     """
     def __init__(self, lhs: str, rhs: Any, context: System) -> None:
-        lhs = EvalString(lhs, context)
-        if lhs.constant:
+        elhs = EvalString(lhs, context)
+        if elhs.constant:
             raise ValueError(
-                f"The left-hand side of an assignment expression cannot be constant ({lhs!r})")
+                f"The left-hand side of an assignment expression cannot be constant ({elhs!r})")
         # At this point, lhs is a valid expression within given context
         self.__sides = None
-        self.__raw_sides = [str(lhs), str(rhs)]  # raw sides lhs and rhs, without reformatting
-        value = lhs.eval()
+        self.__raw_sides = [str(elhs), str(rhs)]  # raw sides lhs and rhs, without reformatting
+        value = elhs.eval()
         if isinstance(value, numpy.ndarray):
             self.__shape = value.shape
             self.__dtype = value.dtype
@@ -530,15 +529,15 @@ class AssignString:
             self.__shape = None
             self.__dtype = type(value)
         self.__context = context
-        self.__lhs_vars = lhs.variables
+        self.__lhs_vars = elhs.variables
         self.__rhs_vars = frozenset()
-        self.__locals = lhs.locals.copy()
+        self.__locals = elhs.locals.copy()
         self.__locals.update({"rhs_value": value, context.name: context})
-        self._assignment = f"{context.name}.{lhs!s} = rhs_value"
+        self._assignment = f"{context.name}.{elhs!s} = rhs_value"
         self.__code = compile(self._assignment, "<string>", "single")  # assignment bytecode
         self.rhs = rhs
 
-    def __getstate__(self) -> Dict[str, Any]:
+    def __getstate__(self) -> dict[str, Any]:
         """Creates a state of the object.
         
         The state type depend on the object, see
@@ -547,7 +546,7 @@ class AssignString:
         
         Returns
         -------
-        Dict[str, Any]:
+        dict[str, Any]:
             state
         """
         
@@ -555,23 +554,23 @@ class AssignString:
         state.pop("_AssignString__code")
         return state
     
-    def __setstate__(self, state: Dict[str, Any]) -> None:
+    def __setstate__(self, state: dict[str, Any]) -> None:
         """Sets the object from a provided state.
 
         Parameters
         ----------
-        state : Dict[str, Any]
+        state : dict[str, Any]
             State
         """
         self.__dict__.update(state)
         self.__code = compile(state["_assignment"], "<string>", "single")
 
-    def __json__(self) -> Dict[str, Any]:
+    def __json__(self) -> dict[str, Any]:
         """Creates a JSONable dictionary representation of the object.
 
         Returns
         -------
-        Dict[str, Any]
+        dict[str, Any]
             The dictionary
         """
         state = self.__getstate__()
@@ -591,13 +590,13 @@ class AssignString:
         return self.__raw_sides[0]
 
     @property
-    def lhs_variables(self) -> FrozenSet[str]:
-        """FrozenSet[str]: set of variable names in left-hand side."""
+    def lhs_variables(self) -> frozenset[str]:
+        """frozenset[str]: set of variable names in left-hand side."""
         return self.__lhs_vars
 
     @property
-    def rhs_variables(self) -> FrozenSet[str]:
-        """FrozenSet[str]: set of variable names in right-hand side."""
+    def rhs_variables(self) -> frozenset[str]:
+        """frozenset[str]: set of variable names in right-hand side."""
         return self.__rhs_vars
 
     @property
@@ -640,13 +639,13 @@ class AssignString:
         """bool: `True` if assignment right-hand side is constant, `False` otherwise."""
         return self.__constant
 
-    def exec(self, context=None) -> Tuple[Any, bool]:
+    def exec(self, context=None) -> tuple[Any, bool]:
         """
         Evaluates rhs, and executes assignment lhs <- rhs.
 
         Returns
         -------
-        Tuple[Any, bool]
+        tuple[Any, bool]
             (rhs, changed), where 'changed' is True if the value of rhs has changed, False otherwise.
         """
         sides = self.__sides.eval()  # updates context at the same time
@@ -658,16 +657,16 @@ class AssignString:
         return sides[1], changed
 
     @property
-    def shape(self) -> Union[Tuple[int, int], None]:
-        """Union[Tuple[int, int], None]: shape of assigned object (lhs) if it is an array, else None."""
+    def shape(self) -> Union[tuple[int, int], None]:
+        """Union[tuple[int, int], None]: shape of assigned object (lhs) if it is an array, else None."""
         return self.__shape
 
-    def variables(self) -> FrozenSet[str]:
+    def variables(self) -> frozenset[str]:
         """Extracts all variables required for the assignment
         
         Returns
         -------
-        FrozenSet[str]:
+        frozenset[str]:
             Variable names as a set of strings
         """
         return self.__lhs_vars.union(self.__rhs_vars)

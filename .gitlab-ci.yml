@@ -5,7 +5,6 @@ stages:
   - deploy
 
 variables:
-  COSAPP_DEP: jsonschema numpy<2 scipy pandas wrapt pytest<8.1 jinja2 pyfmi pythonfmu asv_runner
   USER: "cosapp_test"
 
 .job_rules:
@@ -20,28 +19,27 @@ variables:
 
 # Test script for all OS
 .test_script:
-  script:  
-    - micromamba create -y -n cosapp python=$PYTHON_VERSION
+  script:
+    - micromamba create -y -n cosapp python=$PYTHON_VERSION jsonschema numpy=1 scipy pandas jinja2 pytest=8.0 pyfmi pythonfmu asv_runner
     - micromamba activate cosapp
-    - micromamba install -y $COSAPP_DEP
     - pip install . --trusted-host=files.pythonhosted.org
     - python -m pytest
 
-# # default windows job parameters
-# .windows_env:
-#   stage: "test"
-#   tags:
-#     - shared-windows
-#     - windows
-#     - windows-1809
-#   before_script:
-#     - Import-Module "$env:ChocolateyInstall\helpers\chocolateyProfile.psm1"
-#     - choco install -y miniconda3 --params="'/AddToPath:1'"
-#     - RefreshEnv
-#     - conda config --add channels conda-forge
-#     - conda init powershell
-#     - "if (test-path $PROFILE.CurrentUserAllHosts) { & $PROFILE.CurrentUserAllHosts}"
-#     - md -Path $env:USERPROFILE\.cosapp.d
+# default windows job parameters
+.windows_env:
+  stage: "test"
+  tags:
+    - saas-windows-medium-amd64
+  before_script:
+    - Invoke-Expression ((Invoke-WebRequest -Uri https://micro.mamba.pm/install.ps1 -UseBasicParsing).Content)
+    # Reload PATH manually to ensure Micromamba is recognized
+    - $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "User") + ";" + [System.Environment]::GetEnvironmentVariable("PATH", "Machine")
+    - echo $env:PATH
+    - micromamba shell init --shell powershell
+    - micromamba shell hook -s powershell | Out-String | Invoke-Expression
+    - micromamba config append channels conda-forge
+    - "if (test-path $PROFILE.CurrentUserAllHosts) {& $PROFILE.CurrentUserAllHosts}"
+    - md -Path $env:USERPROFILE\.cosapp.d
 
 # default linux environment parameters
 .linux_common_env:
@@ -90,9 +88,8 @@ linux_py311:
   variables:
     PYTHON_VERSION: "3.11"
   script:
-    - micromamba create -y -n cosapp python=$PYTHON_VERSION
+    - micromamba create -y -n cosapp python=$PYTHON_VERSION jsonschema numpy=1 scipy pandas jinja2 pytest=8.0 pyfmi pythonfmu asv_runner coverage
     - micromamba activate cosapp
-    - micromamba install -y $COSAPP_DEP coverage
     - pip install .
     - coverage erase
     - coverage run -m pytest -ra
@@ -107,6 +104,7 @@ linux_py311:
 # windows_py311:
 #     extends: 
 #      - ".windows_env"
+#      - ".job_rules"
 #      - ".test_script"
 #     variables:
 #       PYTHON_VERSION: "3.11"
@@ -177,7 +175,7 @@ deploy:
   rules:
     - if: $CI_COMMIT_TAG
 
-
+# Deployment on GitLab Pages
 pages:
   extends: 
     - ".deploy_env"
