@@ -17,7 +17,7 @@ dependencies:
   - watchdog
   - requests_ntlm
   - ipykernel
-  - plotly
+  - plotly<6
   - pyfmi
   - pythonfmu
   - asv
