@@ -107,6 +107,14 @@ class CrankNicolson(AbstractTimeDriver):
         result = self._solver.solve(self._fresidues, x0=self._x, args=(self.time, dt))
         self._x = result.x
 
+    def _postcompute(self) -> None:
+        # Synch unknown values with final system state,
+        # in case the simulation was ended by an event.
+        for unknown in self.problem.unknowns.values():
+            unknown.update_default_value(unknown.value, checks=False)
+            unknown.set_to_default()
+        super()._postcompute()
+
     def _fresidues_init(self, x: numpy.ndarray) -> numpy.ndarray:
         """Function returning the residue vector of the initial
         (intrinsic) problem of the owner system.
