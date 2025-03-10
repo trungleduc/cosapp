@@ -529,6 +529,7 @@ class System(Module, TimeObserver):
         data['exec_order'] = list(self.exec_order)
         data["drivers"] = self.drivers
         data["__master_set"] = self.__master_set
+        data['events'] = self.__events
 
         return data
 
@@ -582,6 +583,7 @@ class System(Module, TimeObserver):
 
         self.__child_connectors = state['child_connectors']
         self.__pulling_connectors = state['pulling_connectors']
+        self.__events = state['events']
 
         self.__readonly = state.pop('properties', {})
 

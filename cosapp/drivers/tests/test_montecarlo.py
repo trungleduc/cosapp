@@ -50,6 +50,19 @@ class SystemTime(System):
         self.add_transient("m", der="1.")
 
 
+class SystemEvent(System):
+    def setup(self):
+        self.add_inward("m", 10.0)
+        self.add_inward("event_time", -1.0, distribution=Uniform(worst=0.0, best=6.0))
+
+        self.add_transient("m", der="-1.")
+        self.add_event("m_event", trigger="time == event_time")
+
+    def transition(self):
+        if self.m_event.present:
+            self.m = 0.0
+
+
 def test_MonteCarlo_setup():
     mc = MonteCarlo("statistics")
     assert not mc.linear
@@ -579,6 +592,23 @@ def test_MonteCarlo_with_time_driver():
     assert len(results["Section"]) == 606
 
 
+def test_MonteCarlo_with_event():
+    s = SystemEvent("s")
+    mc = s.add_driver(MonteCarlo("mc"))
+    mc.add_random_variable("event_time")
+    euler = mc.add_driver(EulerExplicit("euler", dt=1.0, time_interval=(0.0, 10.0)))
+    euler.add_recorder(DataFrameRecorder(hold=True))
+    mc.draws = 5
+
+    s.run_drivers()
+    results = euler.recorder.export_data()
+
+    assert len(results) == 77
+    assert results["time"].iloc[0] == 0.0
+    assert results["time"].iloc[10] == 10.0
+    assert  all(results["time"].iloc[13:16] == 2.0)
+
+
 def _get_start_methods():
     if sys.platform == "win32":
         return (WorkerStartMethod.SPAWN, )
@@ -639,6 +669,30 @@ def test_MonteCarlo_multiprocessing_with_time_driver():
     assert pytest.approx(results["m"].iloc[11]) == 0.0
     assert len(results["Section"]) == 66
 
+
+def test_MonteCarlo_with_event_parallel():
+    s = SystemEvent("s")
+    mc = s.add_driver(
+        MonteCarlo(
+            "mc",
+            execution_policy=ExecutionPolicy(
+                workers_count=4,
+                execution_type=ExecutionType.MULTI_PROCESSING,
+            ),
+        )
+    )
+    mc.add_random_variable("event_time")
+    euler = mc.add_driver(EulerExplicit("euler", dt=1.0, time_interval=(0.0, 10.0)))
+    euler.add_recorder(DataFrameRecorder(hold=True))
+    mc.draws = 5
+
+    s.run_drivers()
+    results = euler.recorder.export_data()
+
+    assert len(results) == 77
+    assert results["time"].iloc[0] == 0.0
+    assert results["time"].iloc[10] == 10.0
+    assert  all(results["time"].iloc[13:16] == 2.0)
 
 class TestMonteCarloPickling:
   
