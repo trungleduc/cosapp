@@ -3,7 +3,7 @@ import pytest
 import numpy as np
 from cosapp.systems import System
 from cosapp.core.numerics.solve import FfdJacobianEvaluation
-from cosapp.drivers import NonLinearSolver, RunSingleCase, RungeKutta, NonLinearMethods
+from cosapp.drivers import NonLinearSolver, RunSingleCase, RungeKutta
 from cosapp.drivers.time.scenario import Interpolator
 from cosapp.recorders import DataFrameRecorder
 from cosapp.utils.execution import ExecutionPolicy, ExecutionType

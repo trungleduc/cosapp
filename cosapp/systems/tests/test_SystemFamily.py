@@ -6,7 +6,7 @@ from cosapp.tests.library.systems import Multiply1, Multiply2, MultiplySystem, C
 
 class TestMultiplyFamily:
     """Test SystemFamily through derived class MultiplyFamily"""
-    def setup(self):
+    def __init__(self):
         self.s = MultiplySystem("head")
         self.s1 = Multiply1("mult")
 

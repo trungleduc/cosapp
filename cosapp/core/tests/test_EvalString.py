@@ -1,6 +1,7 @@
 import pytest
 
 import math
+import copy
 import numpy as np
 import warnings
 
@@ -87,17 +88,17 @@ def test_EvalString_residue_as_context(self):
     ("0.3 <= 0.3", True),
     ("0.3 < 0.7 < 0.6", False),
     ("0.3 + 0.7 == 1", True),
-    ("[0., 0., 0.]", pytest.approx([0., 0., 0.], abs=0)),
-    ("[0.] * 3", pytest.approx([0., 0., 0.], abs=0)),
-    ("array([0, 0, 0], dtype=float)", pytest.approx([0., 0., 0.], abs=0)),
-    ("ones(4, dtype=int)", pytest.approx([1, 1, 1, 1], abs=0)),
-    ("ones(2, dtype=bool)", pytest.approx([True, True], abs=0)),
-    (repr(np.zeros(3)), pytest.approx([0., 0., 0.], abs=0)),
-    ("zeros(3)", pytest.approx([0., 0., 0.], abs=0)),
-    ("ones(3)", pytest.approx([1., 1., 1.], abs=0)),
-    (np.zeros(3), pytest.approx([0., 0., 0.], abs=0)),
-    (np.zeros((2, 5, 3)), pytest.approx(np.zeros((2, 5, 3)), abs=0)),
-    (np.ones(3), pytest.approx([1., 1., 1.], abs=0)),
+    ("[0., 0., 0.]", [0., 0., 0.]),
+    ("[0.] * 3", [0., 0., 0.]),
+    ("array([0, 0, 0], dtype=float)", [0., 0., 0.]),
+    ("ones(4, dtype=int)", [1, 1, 1, 1]),
+    ("ones(2, dtype=bool)", [True, True]),
+    (repr(np.zeros(3)), [0., 0., 0.]),
+    ("zeros(3)", [0., 0., 0.]),
+    ("ones(3)", [1., 1., 1.]),
+    (np.zeros(3), [0., 0., 0.]),
+    (np.zeros((2, 5, 3)), np.zeros((2, 5, 3))),
+    (np.ones(3), [1., 1., 1.]),
     ("-e", pytest.approx(-math.e, rel=1e-14)),
     ("9 + 3 + 6", 18),
     ("9 + 3 / 11", pytest.approx(9 + 3 / 11, rel=1e-14)),
@@ -128,7 +129,10 @@ def test_EvalString_constant_expr(eval_context, expression, expected):
     s = EvalString(expression, eval_context)
     assert s.eval_context is eval_context
     assert s.constant
-    assert s.eval() == expected
+    if isinstance(expected, (list, np.ndarray)):
+        assert np.array_equal(s.eval(), expected)
+    else:
+        assert s.eval() == expected
 
 
 @pytest.mark.parametrize("expression, expected", [
