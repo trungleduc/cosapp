@@ -455,7 +455,7 @@ class DeferredResidue:
     def equation(self) -> str:
         """Returns target equation with updated lhs value"""
         target_value = self.target_value()
-        if isinstance(target_value, numpy.float64):
+        if isinstance(target_value, Number):
             target_value = float(target_value)
         return f"{self.target} == {target_value!r}"
 

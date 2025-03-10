@@ -5,6 +5,6 @@ channels:
   - cosapp
 dependencies:
   - python>=3.11
-  - numpy<2
+  - numpy>1.12
   - pytest
   - plotly>=5

@@ -22,7 +22,7 @@ requirements:
     - python>=3.9
     - pandas
     - jsonschema
-    - numpy<2
+    - numpy>1.12
     - scipy
     - jinja2
 

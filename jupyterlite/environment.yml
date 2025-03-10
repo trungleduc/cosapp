@@ -6,7 +6,7 @@ dependencies:
   - xeus-python
   - pandas
   - jsonschema
-  - numpy<2
+  - numpy>1.12
   - scipy
   - jinja2
   - plotly
