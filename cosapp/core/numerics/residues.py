@@ -454,7 +454,10 @@ class DeferredResidue:
 
     def equation(self) -> str:
         """Returns target equation with updated lhs value"""
-        return f"{self.target} == {self.target_value()!r}"
+        target_value = self.target_value()
+        if isinstance(target_value, numpy.float64):
+            target_value = float(target_value)
+        return f"{self.target} == {target_value!r}"
 
     def make_residue(self, reference=None) -> Residue:
         """Generates the residue corresponding to equation 'target == value(target)'"""

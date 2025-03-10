@@ -10,8 +10,7 @@ import ast
 from enum import Enum
 from numbers import Number
 from typing import (
-    Union, Any,
-    Iterable, Optional, Callable,
+    Any, Optional, Callable,
     TYPE_CHECKING,
 )
 from cosapp.ports.port import BasePort
@@ -57,15 +56,15 @@ class AstVisitor(ast.NodeTransformer):
             if isinstance(var_ref.mapping, BasePort):
                 self._expr_vars[key] = (var_ref.mapping, var_ref.key)
 
-    def visit_Attribute(self, node: ast.Attribute) -> Union[ast.Attribute, ast.Name]:
+    def visit_Attribute(self, node: ast.Attribute) -> ast.Attribute | ast.Name:
         """Visit a `Attribute` and return a concatenate ast.Name if possible."""
         # Determine the longest object.attributes path
         attr_str = ast.unparse(node)
-        func_attr = ''
+        func_attr = ""
         max_iter = len(attr_str.split("."))
         i = 0
         while i < max_iter and not hasattr(self._context, attr_str):
-            split_attr = attr_str.rsplit('.', maxsplit=1)
+            split_attr = attr_str.rsplit(".", maxsplit=1)
             attr_str = split_attr[0]
             func_attr = ".".join(split_attr[1:])
             i += 1
@@ -185,7 +184,7 @@ class EvalString:
         
         def add_symbols(
             module: object,
-            names: Optional[Iterable[str]]=None,
+            names: Optional[list[str] | tuple[str, str]] = None,
         ) -> None:
             """
             Map attribute names from the given module into the global dict.
@@ -201,7 +200,7 @@ class EvalString:
             if names is None:
                 names = dir(module)
             for name in names:
-                if isinstance(name, tuple):
+                if isinstance(name, (list, tuple)):
                     name, alias = name
                 else:
                     alias = name
@@ -293,9 +292,7 @@ class EvalString:
         except ImportError:
             pass
         else:
-            add_symbols(scipy.special,
-                names=["factorial", "erf", "erfc"]
-            )
+            add_symbols(scipy.special, names=["factorial", "erf", "erfc"])
 
         return mapping
 
@@ -439,10 +436,10 @@ class EvalString:
             # Include a substitution pass to make sure that no spaces are left
             # between objects and attributes, that is "foo.bar" instead of "foo .  bar"
             return re.sub("(?![0-9]) *\. *(?![0-9])", ".", expression.strip())
-        elif isinstance(expression, (EvalString, Enum)):
-            return str(expression)
-        else:
+        elif isinstance(expression, numpy.ndarray):
             return repr(expression)
+        else:
+            return str(expression)
 
     def __str__(self) -> str:
         return self.__str
@@ -657,8 +654,8 @@ class AssignString:
         return sides[1], changed
 
     @property
-    def shape(self) -> Union[tuple[int, int], None]:
-        """Union[tuple[int, int], None]: shape of assigned object (lhs) if it is an array, else None."""
+    def shape(self) -> tuple[int, int] | None:
+        """tuple[int, int] | None: shape of assigned object (lhs) if it is an array, else None."""
         return self.__shape
 
     def variables(self) -> frozenset[str]:

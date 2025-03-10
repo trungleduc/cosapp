@@ -257,6 +257,7 @@ def test_AssignString_rhs(eval_context: System):
 @pytest.mark.parametrize("lhs, rhs, expected", [
     ("a", "b", False),
     ("a", "0", True),
+    ("a", "2 * pi", True),
     ("a", "cos(pi)", True),
     ("x[1]", "1 + a", False),
     ("x[1]", "1 + a - a", False),
@@ -274,13 +275,13 @@ def test_AssignString_subsystem_constant():
     """Test expressions involving sub-system constants
     """
     class SystemWithConstants(System):
-        def setup(self, constants: dict={}):
+        def setup(self, **constants):
             for name, value in constants.items():
                 self.add_property(name, value)
 
     top = System('top')
-    mid = top.add_child(SystemWithConstants('mid', constants={'g': 9.81}))
-    sub = mid.add_child(SystemWithConstants('sub', constants={'c': 0.12}))
+    mid = top.add_child(SystemWithConstants('mid', g=9.81))
+    sub = mid.add_child(SystemWithConstants('sub', c=0.12))
 
     expected = pytest.raises(ValueError, match="left-hand side.* cannot be constant")
 
@@ -398,6 +399,7 @@ def test_AssignString_exec_changed_masked_array(eval_context: System):
     ("0", 0),
     ("1 + 4", 5),
     ("1.23 / 10", 1.23 / 10),
+    ("2 * pi", 2.0 * np.pi),
     ("cos(pi)", np.cos(np.pi)),
     ("2 * g", 2 * 9.80665),
     ("26 * pi / 180", 26 * np.pi / 180),

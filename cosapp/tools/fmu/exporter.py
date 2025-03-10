@@ -247,7 +247,7 @@ class FmuBuilder:
             dtype = VariableType.Boolean
         elif isinstance(value, (int, numpy.int_)):
             dtype = VariableType.Integer
-        elif isinstance(value, (float, numpy.float_)):
+        elif isinstance(value, (float, numpy.float64)):
             dtype = VariableType.Real
         elif isinstance(value, (str, numpy.str_)):
             dtype = VariableType.String
