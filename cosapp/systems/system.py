@@ -6,7 +6,6 @@ from __future__ import annotations
 import collections
 import importlib
 import json
-import copy
 import logging
 import os
 import warnings
@@ -170,9 +169,9 @@ class System(Module, TimeObserver):
     __slots__ = (
         '__context_lock', '_is_tree_clean', '_locked', '_math', '_time_pb',
         'design_methods', 'drivers', 'inputs', 'outputs', 'name2variable',
-        '__readonly', '__events', '_meta', '__runner', '__input_mapping',
+        '__properties', '__events', '_meta', '__runner', '__input_mapping',
         '__loop_problem', '__child_connectors', '__pulling_connectors',
-        '__free_problem',
+        '__free_problem', '__readonly',
     )
 
     INWARDS = CommonPorts.INWARDS.value  # type: ClassVar[str]
@@ -257,6 +256,7 @@ class System(Module, TimeObserver):
         self.drivers = collections.OrderedDict()  # type: Dict[str, Driver]
         self.design_methods = dict()  # type: Dict[str, MathematicalProblem]
         self.__readonly = dict()  # type: Dict[str, Any]
+        self.__properties = dict()  # type: Dict[str, Any]
         self.__ctor_kwargs = kwargs.copy()
 
         self.__context_lock = ContextLock()
@@ -512,7 +512,8 @@ class System(Module, TimeObserver):
         data["setup_args"] = self.__ctor_kwargs.copy()
         data["name"] = self.name
         data["problem"] = self._math
-        data["properties"] = self.__readonly.copy()
+        data["properties"] = self.__properties.copy()
+        data["events"] = self.__events.copy()
 
         for direction in ["inputs", "outputs"]:
             ports: Dict[str, BasePort] = getattr(self, direction)
@@ -522,14 +523,13 @@ class System(Module, TimeObserver):
                 for name, port in ports.items()
             }
 
-        data['child_connectors'] = self.__child_connectors
-        data['pulling_connectors'] = self.__pulling_connectors
-        data['name2variable'] = self.name2variable
-        data['children'] = self.children
-        data['exec_order'] = list(self.exec_order)
+        data["child_connectors"] = self.__child_connectors
+        data["pulling_connectors"] = self.__pulling_connectors
+        data["name2variable"] = self.name2variable
+        data["children"] = self.children
+        data["exec_order"] = list(self.exec_order)
         data["drivers"] = self.drivers
         data["__master_set"] = self.__master_set
-        data['events'] = self.__events
 
         return data
 
@@ -581,14 +581,17 @@ class System(Module, TimeObserver):
 
         self.name2variable = state.pop("name2variable")
 
-        self.__child_connectors = state['child_connectors']
-        self.__pulling_connectors = state['pulling_connectors']
-        self.__events = state['events']
-
-        self.__readonly = state.pop('properties', {})
+        self.__child_connectors = state["child_connectors"]
+        self.__pulling_connectors = state["pulling_connectors"]
 
         self._math = state["problem"]
         self.exec_order = state.get("exec_order", [])
+        self.__properties = properties = state.get("properties", {})
+        self.__events = events = state.get("events", {})
+        self.__readonly = {
+            **properties,
+            **events,
+        }
 
         for driver in state.get("drivers", {}).values():
             self.add_driver(driver)
@@ -646,7 +649,6 @@ class System(Module, TimeObserver):
         for collection in (
             self.name2variable,
             self.__readonly,
-            self.__events,
         ):
             try:
                 return collection[name]
@@ -719,45 +721,36 @@ class System(Module, TimeObserver):
             rel2absname = lambda item: (f"{name}.{item[0]}", item[1])
             self.parent.append_name2variable(map(rel2absname, iter(additional_mapping)))
 
-    def pop_name2variable(self, keys: Iterable[str]) -> None:
-        """Remove the given keys from the name mapping dictionary.
-
-        The keys will be remove from the local mapping. Then the keys list will be sent
-        upward to the parent `System` for deletion.
-
-        Parameters
-        ----------
-        keys: Iterable[str]
-            Keys to remove
-        """
-        keys = list(keys)
-        name_mapping = self.name2variable
-        for key in keys:
-            name_mapping.pop(key)
-
-        if self.parent is not None:
-            rel2absname = lambda relname: f"{self.name}.{relname}"
-            self.parent.pop_name2variable(map(rel2absname, keys))
-
     def add_property(self, name: str, value: Any) -> None:
         """Create new read-only property `name`, set to `value`"""
         self.__lock_check("add_property")
         name = Variable.name_check(name)
         self.__check_attr(name, f"cannot add read-only property {name!r}")
-        self.__readonly[name] = value
+        self.__register_property(name, value)
         self._add_member(name)
-        cls = self.__class__
-        def getter(self):
-            try:
-                return self.__readonly[name]
-            except KeyError:
-                raise AttributeError(f"{cls.__name__} object {self.name!r} has no attribute {name!r}")
-        setattr(cls, name, property(getter))
+
+    def __register_property(self, name: str, value: Any):
+        """Register attribute `name` as a read-only property."""
+        self.__properties[name] = self.__readonly[name] = value
+
+    def __unregister(self, names: Iterable[str]):
+        """Unregister `names` as attributes of the system and its parent tree."""
+        names = list(names)
+        for name in names:
+            self.name2variable.pop(name, None)
+            self.__readonly.pop(name, None)
+            self.__properties.pop(name, None)
+            self.__events.pop(name, None)
+        
+        if (parent := self.parent):
+            child_name = self._name
+            rel2absname = lambda name: f"{child_name}.{name}"
+            parent.__unregister(map(rel2absname, names))
 
     @property
     def properties(self) -> Dict[str, Any]:
         """Dict[str, Any]: list of read-only properties and associated values"""
-        return MappingProxyType(self.__readonly)
+        return MappingProxyType(self.__properties)
 
     def add_input(self,
         port_class: Type[AnyPort],
@@ -1750,20 +1743,22 @@ class System(Module, TimeObserver):
         self.append_name2variable(keys)
         self.__reset_input_mapping()
 
-        # Add read-only constants to parent line
-        prefix = f"{child.name}."
-
-        for system in self.path_to_root():
-            for name, value in child.__readonly.items():
-                system.__readonly[f"{prefix}{name}"] = value
-            prefix = f"{system.name}.{prefix}"
-
-        if pulling is not None:
+        if pulling:
             try:
                 pull_variables(child, pulling)
             except (ConnectorError, UnitError):
                 self.pop_child(child.name)
                 raise
+
+        # Add read-only constants to parent line
+        prefix = f"{child.name}."
+
+        for system in self.path_to_root():
+            for name, value in child.__properties.items():
+                system.__register_property(f"{prefix}{name}", value)
+            for name, value in child.__events.items():
+                system.__register_event(f"{prefix}{name}", value)
+            prefix = f"{system.name}.{prefix}"
 
         # If child is added outside of `setup`, we must force system tree inspection
         # to ensure input propagation during the next system execution.
@@ -1842,10 +1837,10 @@ class System(Module, TimeObserver):
 
         # Remove references to popped child from name mapping
         popped_attr = lambda key: key.startswith(f"{name}.")
-        popped_keys = [name] + list(
-            filter(popped_attr, self.name2variable.keys())
-        )
-        self.pop_name2variable(popped_keys)
+        popped_keys = [name]
+        popped_keys.extend(filter(popped_attr, self.name2variable.keys()))
+        popped_keys.extend(filter(popped_attr, self.__readonly.keys()))
+        self.__unregister(popped_keys)
         self.__reset_input_mapping()
 
         return popped
@@ -2056,18 +2051,14 @@ class System(Module, TimeObserver):
         self.__check_attr(name, f"cannot add event {name!r}")
 
         # Event creation
-        self.__events[name] = event = Event(name, self, desc, trigger, final)
-
-        # Getter
-        cls = self.__class__
-        def getter(self):
-            try:
-                return self.__events[name]
-            except KeyError:
-                raise AttributeError(f"{cls.__name__} object {self.name!r} has no attribute {name!r}")
-        setattr(cls, name, property(getter))
+        event = Event(name, self, desc, trigger, final)
+        self.__register_event(name, event)
         self._add_member(name)
         return event
+
+    def __register_event(self, name: str, event: Event) -> None:
+        """Register attribute `name` as a system event and a read-only property."""
+        self.__events[name] = self.__readonly[name] = event
 
     def add_inward_modevar(self,
         name: str,
@@ -3416,7 +3407,7 @@ class System(Module, TimeObserver):
                     for key, val in value.items():
                         setattr(top_system[name], key, val)
             else:
-                top_system.__readonly[name] = value
+                top_system.__register_property(name, value)
 
         for name, port in (state.get("inputs", {}) | state.get("outputs", {})).items():
             variables = port["variables"]
@@ -3541,15 +3532,13 @@ class System(Module, TimeObserver):
 
         with_types, inputs_only, with_drivers, value_only = encoding_metadata
 
-        data['__class__'] = f"{self.__module__}.{self.__class__.__qualname__}"
-        data['name'] = self.name
+        data["__class__"] = f"{self.__module__}.{self.__class__.__qualname__}"
+        data["name"] = self.name
 
-        ctor_kwargs = self.__ctor_kwargs
-        if ctor_kwargs:
+        if (ctor_kwargs := self.__ctor_kwargs):
             data["setup_args"] = ctor_kwargs.copy()
 
-        properties = self.__readonly
-        if properties:
+        if (properties := self.__properties):
             data["properties"] = properties
 
         directions = ["inputs"]
@@ -3572,20 +3561,20 @@ class System(Module, TimeObserver):
 
         connections = [connector.info() for connector in self.all_connectors()]
         if connections:
-            data['connections'] = connections
+            data["connections"] = connections
 
-        if len(self.children) > 0:
-            data['subsystems'] = {
+        if self.children:
+            data["subsystems"] = {
                 name: component.__to_dict(
                     encoding_metadata=encoding_metadata,
                     export_encoding_metadata=False,
                 )
                 for name, component in self.children.items()
             }
-            data['exec_order'] = list(self.exec_order)
+            data["exec_order"] = list(self.exec_order)
 
         if with_drivers and self.drivers:
-            data["drivers"] = [d for d in self.drivers.values()]
+            data["drivers"] = list(self.drivers.values())
 
         return data
 

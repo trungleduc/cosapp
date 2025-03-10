@@ -46,8 +46,8 @@ def set_master_system():
 # Test partial connection
 class DummyPort(Port):
     def setup(self):
-        self.add_variable("a", 1)
-        self.add_variable("b", 2)
+        self.add_variable("a", 1.0)
+        self.add_variable("b", 2.0)
 
 
 class AnotherPort(Port):
@@ -112,6 +112,8 @@ class SubSystem(System):
             desc="banana",
             scope=Scope.PROTECTED,
         )
+        self.add_property("g", 9.81)
+        self.add_event("boom")
 
         self.add_outward("dummy", 1.0)
         self.add_equation("dummy == 0")
@@ -366,6 +368,12 @@ def test_System___setattr__():
     with pytest.raises(AttributeError, match="can't set attribute|no setter"):
         setattr(top, "sub.pi", 2.3)
 
+    with pytest.raises(AttributeError, match="can't set attribute|no setter"):
+        setattr(top, "boom", 2.3)
+
+    with no_exception():
+        top.boom.trigger = "x > 0"
+
     # Forbid creating new attributes
     with pytest.raises(AttributeError):
         top.sub.foo = 1.0
@@ -377,6 +385,7 @@ def test_System___contains__():
         outputs = get_args(DummyPort, 'p_out'),
         modevars_in = get_args('m_in', True),
         modevars_out = get_args('m_out', init=0, dtype=int),
+        events = get_args('zap', trigger="p_out.a < 0"),
     )
     Top = DummySystemFactory("Top",
         children = get_args(Sub('sub'), pulling=['p_in', 'p_out', 'm_out']),
@@ -408,6 +417,7 @@ def test_System___contains__():
     assert "sub.m_in" in top
     assert "m_in" in top.sub
     assert "boom" in top
+    assert "zap" in top.sub
 
     assert "parent" not in top
     assert "inputs" not in top
@@ -473,7 +483,7 @@ def test_System___getitem__():
     # Events
     assert top["boom"] is top.boom
     assert top.sub["beep"] is top.sub.beep
-    # assert s["sub.beep"] is s.sub.beep
+    assert top["sub.beep"] is top.sub.beep
 
     with pytest.raises(KeyError):
         top["sub.foo"]
@@ -979,10 +989,14 @@ def test_System_pop_child():
     head.add_child(sub1, pulling=["in_", "sloss", "tmp"])
     head.add_child(sub2)
     head.connect(sub1.out, sub2.in_)
-    assert_keys(head.children, "sub1", "sub2")
-    assert 'sub1' in dir(head)
-    assert 'sub2' in dir(head)
-    head.exec_order = ['sub2', 'sub1']
+    assert set(head.children) == {"sub1", "sub2"}
+    assert "sub1" in dir(head)
+    assert "sub2" in dir(head)
+    head.exec_order = ["sub2", "sub1"]
+    assert head["sub1.g"] == 9.81
+    assert head["sub2.g"] == 9.81
+    assert "sub1.boom" in head
+    assert "sub2.boom" in head
 
     assert set(head.connectors()) == {
         "in_ -> sub1.in_",
@@ -992,14 +1006,18 @@ def test_System_pop_child():
     }
 
     head.pop_child("sub1")
-    assert_keys(head.children, "sub2")
+    assert set(head.children) == {"sub2"}
     assert sub1.parent is None
     assert sub1.name not in head.exec_order
     assert list(head.exec_order) == [sub2.name]
     assert len(head.connectors()) == 0
-    assert not any(key.startswith('sub1') for key in head.name2variable)
-    assert 'sub2' in dir(head)
-    assert 'sub1' not in dir(head)
+    assert not any(key.startswith("sub1") for key in head.name2variable)
+    assert "sub2" in dir(head)
+    assert "sub1" not in dir(head)
+    assert "sub1.g" not in head
+    assert "sub2.g" in head
+    assert "sub1.boom" not in head
+    assert "sub2.boom" in head
 
 
 def test_System__add_port():
@@ -1520,13 +1538,13 @@ def test_System_append_name2variable():
         assert reference.value is d[key]
 
 
-def test_System_pop_name2variable():
+def test_System__unregister():
     s = TopSystem("test")
     keys = ["out.Pt", "out.W"]
     for key in keys:
         assert key in s.name2variable
 
-    s.pop_name2variable(keys)
+    s._System__unregister(keys)
     for key in keys:
         assert key not in s.name2variable
 
@@ -1535,7 +1553,7 @@ def test_System_pop_name2variable():
         abs_name = f"{s2.name}.{key}"
         assert abs_name in s.name2variable
 
-    s2.pop_name2variable(keys)
+    s2._System__unregister(keys)
     for key in keys:
         abs_key = f"{s2.name}.{key}"
         assert abs_key not in s.name2variable
