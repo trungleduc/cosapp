@@ -134,7 +134,7 @@ def test_Port__init__(PortClassFactory, direction, case_data, expected: dict):
     error = expected.get("error", None)
 
     if error is None:
-        port = DummyPort(name, direction, init, **settings)
+        port = DummyPort(name, direction, init)
         assert port.name == name
         assert port.direction is direction
         assert port.owner is settings.get("owner", None)

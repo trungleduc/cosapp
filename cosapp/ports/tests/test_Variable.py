@@ -561,16 +561,19 @@ def test_Variable__repr_markdown_(port, kwargs: dict, expected: str):
             "out_of_limits_comment": "",
             "distribution": None,
         }
-    ),(
-        get_args (unit="kg",
-        dtype=float,
-        valid_range=(-2, 0),
-        invalid_comment="No valid",
-        limits=(-4, 1),
-        out_of_limits_comment="No so far!",
-        desc="I'm a dummy donkey.",
-        scope=Scope.PROTECTED,
-        distribution=Uniform(1.0, 4.0, 0.2)),
+    ),
+    (
+        get_args(
+            unit="kg",
+            dtype=float,
+            valid_range=(-2, 0),
+            invalid_comment="No valid",
+            limits=(-4, 1),
+            out_of_limits_comment="No so far!",
+            desc="I'm a dummy donkey.",
+            scope=Scope.PROTECTED,
+            distribution=Uniform(1.0, 4.0, 0.2),
+        ),
         {
             "value": 2.0,
             "unit": "kg",
@@ -580,34 +583,36 @@ def test_Variable__repr_markdown_(port, kwargs: dict, expected: str):
             "invalid_comment": "No valid",
             "limits": [-4, 1],
             "out_of_limits_comment": "No so far!",
-            "distribution":{ "worst": 1.0, "pworst": 0.2, "best": 4.0, "pbest": 0.15 },
-        }
-        
-    )
+            "distribution": {"worst": 1.0, "pworst": 0.2, "best": 4.0, "pbest": 0.15},
+        },
+    ),
 ])
 def test_Variable___json__(port, data, expected):
     name = "var1"
     value = 2.0
     setattr(port, name, value)
 
-    v = Variable(name, port, value,**data[1])
+    v = Variable(name, port, value, **data[1])
     assert v.__json__() == expected
 
 
 @pytest.mark.parametrize("data, expected", [
     (
         get_args(),
-        {"value": 2.0, "dtype": "(<class 'numbers.Number'>, <class 'numpy.ndarray'>)"}
-    ),(
-        get_args (unit="kg",
-        dtype=float,
-        valid_range=(-2, 0),
-        invalid_comment="No valid",
-        limits=(-4, 1),
-        out_of_limits_comment="No so far!",
-        desc="I'm a dummy donkey.",
-        scope=Scope.PROTECTED,
-        distribution=Uniform(1.0, 4.0, 0.2)),
+        {"value": 2.0, "dtype": "(<class 'numbers.Number'>, <class 'numpy.ndarray'>)"},
+    ),
+    (
+        get_args(
+            unit="kg",
+            dtype=float,
+            valid_range=(-2, 0),
+            invalid_comment="No valid",
+            limits=(-4, 1),
+            out_of_limits_comment="No so far!",
+            desc="I'm a dummy donkey.",
+            scope=Scope.PROTECTED,
+            distribution=Uniform(1.0, 4.0, 0.2),
+        ),
         {
             "value": 2.0,
             "unit": "kg",
@@ -618,15 +623,15 @@ def test_Variable___json__(port, data, expected):
             "distribution": { "worst": 1.0, "pworst": 0.2, "best": 4.0, "pbest": 0.15 },
             "valid_range": [-2, 0],
             'limits': [-4, 1]
-        }
+        },
     )
 ])
 def test_Variable_to_dict(port, data, expected):
     name = "var1"
     value = 2.0  
     setattr(port, name, value)
-    w1 = Variable(name, port, value, **data[1])
-    d = w1.to_dict()
+    v = Variable(name, port, value, **data[1])
+    d = v.to_dict()
     assert are_same(d.pop("distribution", None), expected.pop("distribution", None))
     assert d == expected
 

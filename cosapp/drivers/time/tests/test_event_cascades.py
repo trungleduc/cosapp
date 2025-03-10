@@ -186,6 +186,7 @@ def test_MultimodeSystem_cascade2():
     assert np.asarray(data['c2.x']) == pytest.approx(expected['x2'], abs=1.e-12)
     assert np.asarray(data['c3.x']) == pytest.approx(expected['x3'], abs=1.e-12)
 
+
 class LongCascadeSystem(System):
     def setup(self):
 
@@ -195,7 +196,7 @@ class LongCascadeSystem(System):
         e_f = self.add_event("e_t", trigger = "f == 0.42")
 
         # Ad hoc variables for ensuring a cascade of events
-        self.add_outward("x", np.array([-0.5,-1.5,-2.5,-3.5,-4.5]))
+        self.add_outward("x", np.array([-0.5, -1.5, -2.5, -3.5, -4.5]))
         e_0 = self.add_event("e_0", trigger = "x[0] > 0")
         e_1 = self.add_event("e_1", trigger = "x[1] > 0")
         e_2 = self.add_event("e_2", trigger = "x[2] > 0")
@@ -212,6 +213,7 @@ class LongCascadeSystem(System):
             self.f = -1.
         if self.e_4.present: # e_f triggers once again after this transition
             self.f = 1.
+
 
 def test_MultimodeSystem_cascade_event_lock():
     """The event locking mechanism consists in preventing zero-crossing (ZC) events to erroneously trigger
