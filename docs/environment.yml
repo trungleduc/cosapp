@@ -4,7 +4,7 @@ channels:
   - nodefaults
 dependencies:
   - python=3.11
-  - numpy<2
+  - numpy
   - pytest
   - jsonschema
   - pandas
@@ -20,4 +20,4 @@ dependencies:
   - plotly<6
   - pyfmi
   - pythonfmu
-  - asv
+  - asv_runner

@@ -17,14 +17,14 @@ JsonBaseType = Union[None, int, float, str, bool]
 JsonType = Union[JsonBaseType, List[JsonBaseType], Dict[str, JsonBaseType]]
 
 
-def jsonify(o: Any) -> JsonType:
+def jsonify(obj: Any) -> JsonType:
     """Converts an arbitrary object to a valid JSON type.
 
     Raise
 
     Parameters
     ----------
-    o : Any
+    obj : Any
         Object to convert
 
     Returns
@@ -37,34 +37,34 @@ def jsonify(o: Any) -> JsonType:
     TypeError
         If the object is not convertible
     """
-    if isinstance(o, bytes):
-        return "data:text/plain;base64," + base64.b64encode(o).decode("utf-8")
-    if isinstance(o,(str, int, float, bool)) or o is None:
-        return o
-    if isinstance(o, (list, tuple)):
-        return [jsonify(item) for item in o]
-    if isinstance(o, (set, frozenset)):
-        return [jsonify(item) for item in sorted(o)]
-    if isinstance(o, dict):
-        return {jsonify(key): jsonify(val) for key,val in o.items()}
-    if isinstance(o, type):
-            return {"__type__": f"{o.__module__}.{o.__qualname__}"}
-    if hasattr(o, "__json__"):
-        j = jsonify(o.__json__())
-        j["__class__"] = f"{o.__module__}.{o.__class__.__qualname__}"
+    if isinstance(obj, bytes):
+        return "data:text/plain;base64," + base64.b64encode(obj).decode("utf-8")
+    if isinstance(obj, (str, int, float, bool)) or obj is None:
+        return obj
+    if isinstance(obj, (list, tuple)):
+        return list(map(jsonify, obj))
+    if isinstance(obj, (set, frozenset)):
+        return list(map(jsonify, sorted(obj)))
+    if isinstance(obj, dict):
+        return {jsonify(key): jsonify(val) for key, val in obj.items()}
+    if isinstance(obj, type):
+        return {"__type__": f"{obj.__module__}.{obj.__qualname__}"}
+    if hasattr(obj, "__json__"):
+        j = jsonify(obj.__json__())
+        j["__class__"] = f"{obj.__module__}.{obj.__class__.__qualname__}"
         return j
-    if isinstance(o, numpy.ndarray):
+    if isinstance(obj, numpy.ndarray):
         buf = io.BytesIO()
-        numpy.save(buf, o)
+        numpy.save(buf, obj)
         return "data:application/vnd.numpy.ndarray;base64," + base64.b64encode(
             buf.getvalue()
-        ).decode('utf-8')
-    if isinstance(o, numpy.int64):
-        return o
-    if isinstance(o, pandas.DataFrame):
-        return o.to_json()
+        ).decode("utf-8")
+    if isinstance(obj, (numpy.int32, numpy.int64)):
+        return obj
+    if isinstance(obj, pandas.DataFrame):
+        return obj.to_json()
 
-    raise TypeError(f"Type '{type(o)}' can not be JSONified")
+    raise TypeError(f"Type {type(obj).__name__!r} cannot be JSONified")
 
 
 class JSONEncoder(json.JSONEncoder):
@@ -79,7 +79,6 @@ class JSONEncoder(json.JSONEncoder):
 
 def get_cosapp_type(class_name: str):
     import importlib
-
     from cosapp.base import System
 
     if class_name == "System":
@@ -88,7 +87,7 @@ def get_cosapp_type(class_name: str):
     # check_arg(class_name, 'class_name', str, stack_shift=1)
 
     try:
-        module_name, class_name = class_name.rsplit('.', maxsplit=1)
+        module_name, class_name = class_name.rsplit(".", maxsplit=1)
     except ValueError:
         module_name = ""
 

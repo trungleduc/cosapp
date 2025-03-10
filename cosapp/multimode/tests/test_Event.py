@@ -1,6 +1,6 @@
 import pytest
 import numpy as np
-from numpy import pi, sin, NINF, array, absolute
+from numpy import pi, sin, inf, array, absolute
 from contextlib import nullcontext as does_not_raise
 
 from cosapp.multimode.event import (
@@ -116,7 +116,7 @@ class SineWave(System):
         # Time dependent variables
         self.add_outward('x', self.x0, desc='Sinewave')
         self.add_outward('z', False, desc='Event is present')
-        self.add_outward('d', NINF, desc='Date of last event')
+        self.add_outward('d', -inf, desc='Date of last event')
         self.add_outward('n', 0, desc='Event count')
         # Zero-crossing and event
         self.add_event('e', trigger=ZeroCrossing.updown("x - x1"))

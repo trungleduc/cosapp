@@ -121,7 +121,7 @@ class MaskedAttrRef(AttrRef):
         self.set_attributes(mask)
 
     def set_attributes(self, mask: numpy.ndarray) -> None:
-        self._mask = numpy.asarray(mask)
+        self._mask = numpy.atleast_1d(mask)
         self._mask_idx = self._mask.nonzero()[0]
 
         array = getattr(self._obj, self._key)
