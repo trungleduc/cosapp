@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import abc
+import copy
 from typing import Any, Iterable, Optional, Dict, Tuple
 
 from cosapp.drivers.driver import Driver, System
@@ -62,10 +63,10 @@ class AbstractSetOfCases(Driver):
         # variables may not be the same on all points.
         self.cases = None  # type: Optional[Iterable[Any]]
             # desc="List of cases to be carried out."
-        self._transients_variables = None 
+        self._transients_variables = {} 
         self._execution_policy: ExecutionPolicy = execution_policy  # Execution policy to use for computation
 
-    def _precase(self, case_idx: int, case: Any):
+    def _precase(self, index: int, case: Any):
         """Hook to be called before running each case.
         
         Parameters
@@ -83,7 +84,7 @@ class AbstractSetOfCases(Driver):
         """Generator of cases."""
         pass
 
-    def _postcase(self, case_idx: int, case: Any):
+    def _postcase(self, index: int, case: Any):
         """Hook to be called after running each case.
         
         Parameters
@@ -93,15 +94,17 @@ class AbstractSetOfCases(Driver):
         case : Any
             Parameters for this case
         """
-        if self._recorder is not None:
-            self._recorder.record_state(case_idx, self.status, self.error_code)
+        if (recorder := self._recorder):
+            recorder.record_state(index, self.status, self.error_code)
 
     def setup_run(self):
         """Actions performed prior to the `Module.compute` call."""
         super().setup_run()
         self._build_cases()
+        time_problem = self._owner.assembled_time_problem()
         self._transients_variables = {
-            var: val.value for var, val in self._owner.transients.items()
+            varname: copy.copy(transient.value)
+            for varname, transient in time_problem.transients.items()
         }
 
     def run_children(self) -> None:

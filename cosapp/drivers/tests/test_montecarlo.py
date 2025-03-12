@@ -592,6 +592,24 @@ def test_MonteCarlo_with_time_driver():
     assert len(results["Section"]) == 606
 
 
+def test_MonteCarlo_with_time_driver_subsystem():
+    """Same as `test_MonteCarlo_with_time_driver`, with `SystemTime` encapsulated in a top system"""
+    s = System("s")
+    s.add_child(SystemTime("sub"))
+    mc = s.add_driver(MonteCarlo("mc"))
+    mc.add_random_variable("sub.a")
+    euler = mc.add_driver(EulerExplicit("euler", dt=0.1, time_interval=(0.0, 10.0)))
+    euler.add_recorder(DataFrameRecorder(hold=True))
+    mc.draws = 5
+
+    s.run_drivers()
+    results = euler.recorder.export_data()
+
+    assert pytest.approx(results["sub.m"].iloc[-1]) == 10.0
+    assert pytest.approx(results["sub.m"].iloc[101]) == 0.0
+    assert len(results["Section"]) == 606
+
+
 def test_MonteCarlo_with_event():
     s = SystemEvent("s")
     mc = s.add_driver(MonteCarlo("mc"))
