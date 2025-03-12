@@ -5,7 +5,7 @@ from typing import Any, Iterable, Optional, Dict, Tuple
 
 from cosapp.drivers.driver import Driver, System
 from cosapp.utils.logging import logging
-from cosapp.utils.execution import (
+from cosapp.core.execution import (
     Pool,
     ExecutionPolicy,
     ExecutionType,

@@ -19,7 +19,7 @@ from cosapp.tests.library.systems import (
     Multiply4,
     MultiplySystem2,
 )
-from cosapp.utils.execution import ExecutionPolicy, ExecutionType, WorkerStartMethod
+from cosapp.core.execution import ExecutionPolicy, ExecutionType, WorkerStartMethod
 from cosapp.utils.testing import no_exception, pickle_roundtrip, are_same, has_keys
 
 

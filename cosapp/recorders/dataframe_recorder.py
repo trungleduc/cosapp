@@ -4,7 +4,7 @@ import pandas
 from typing import Any, List, Optional
 
 from cosapp.recorders.recorder import BaseRecorder, SearchPattern
-from cosapp.utils.execution import ExecutionType
+from cosapp.core.execution import ExecutionType
 
 
 class DataFrameRecorder(BaseRecorder):
