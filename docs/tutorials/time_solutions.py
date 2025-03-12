@@ -1,53 +1,67 @@
-import numpy
+import numpy as np
 
 
 class PointMassSolution:
     """Analytical solution of dynamic system PointMass"""
-    def __init__(self, system, v0, x0=numpy.zeros(3)):
+    def __init__(self, system, v0, x0=np.zeros(3)):
         if system.mass <= 0:
             raise ValueError("Mass must be strictly positive")
-        x0 = numpy.asarray(x0)
-        v0 = numpy.asarray(v0)
-        g = numpy.asarray(system.g)
-        if system.k > 0:
-            omega = system.k / system.mass
-            tau = 1 / omega
-            A = g * tau
+        self._x0 = np.atleast_2d(x0).T
+        self._v0 = np.atleast_2d(v0).T
+        self._g = g = np.atleast_2d(system.g).T
+        try:
+            cf = system.cf
+        except AttributeError:
+            cf = system.k
+        if cf > 0:
+            omega = cf / system.mass
+            self._A = g / omega
         else:
-            omega, tau = 0, numpy.inf
-            A = numpy.full_like(g, numpy.inf)
-        B = v0 - A
-        def x_impl(t):
-            wt = omega * t
-            if wt < 1e-7:  # asymptotic expansion, to avoid exp overflow
-                x = x0 + v0 * t + (0.5 * t) * (g * t - wt * v0) * (1 - wt / 3 * (1 - 0.25 * wt))
-            else:
-                x = x0 + A * t + B * tau * (1 - numpy.exp(-wt))
-            return x
-        def v_impl(t):
-            wt = omega * t
-            if wt < 1e-7:  # asymptotic expansion, to avoid exp overflow
-                v = v0 + (g * t - v0  * wt) * (1 - wt * (0.5 - wt / 6))
-            else:
-                v = A + B * numpy.exp(-wt)
-            return v
-        self.__x = x_impl
-        self.__v = v_impl
-        self.__a = lambda t: g - self.__v(t) * omega
+            omega = 0.0
+            self._A = np.full_like(g, np.inf)
+        self._B = self._v0 - self._A
         self.__omega = omega
 
     @property
-    def omega(self):
+    def omega(self) -> float:
         return self.__omega
 
     def a(self, t):
-        return self.__a(t)
+        """Acceleration at time t"""
+        v = self.__v(t)
+        a = self._g - v * self.__omega
+        return np.squeeze(a.T)
 
     def v(self, t):
-        return self.__v(t)
+        """Velocity at time t"""
+        v = self.__v(t)
+        return np.squeeze(v.T)
 
     def x(self, t):
-        return self.__x(t)
+        """Position at time t"""
+        t = np.asarray(t)
+        omega = self.__omega
+        wt = omega * t
+        x0 = self._x0
+        v0 = self._v0
+        with np.errstate(invalid='ignore'):
+            x = np.where(
+                wt < 1e-7,  # asymptotic expansion, to avoid exp overflow
+                x0 + v0 * t + (0.5 * t) * (self._g * t - wt * v0) * (1 - wt / 3 * (1 - 0.25 * wt)),
+                x0 + self._A * t + self._B / omega * (1 - np.exp(-wt)),
+            )
+        return np.squeeze(x.T)
+
+    def __v(self, t):
+        t = np.asarray(t)
+        wt = self.__omega * t
+        v0 = self._v0
+        with np.errstate(invalid='ignore'):
+            return np.where(
+                wt < 1e-7,  # asymptotic expansion, to avoid exp overflow
+                v0 + (self._g * t - v0 * wt) * (1 - wt * (0.5 - wt / 6)),
+                self._A + self._B * np.exp(-wt),
+            )
 
 
 class CoupledTanksSolution:
@@ -67,7 +81,7 @@ class CoupledTanksSolution:
         tau = self.__tau
         a = self.__area_ratio
         h1_0, h2_0 = self.initial_heights
-        dh = (h1_0 - h2_0) * numpy.exp(-t / tau)
+        dh = (h1_0 - h2_0) * np.exp(-t / tau)
         h1 = (a * h1_0 + h2_0 + dh) / (1 + a)
         h2 = h1 - dh
         return (h1, h2)
@@ -79,19 +93,19 @@ class HarmonicOscillatorSolution:
         c = system.c
         m = system.mass
         L = system.length
-        w0 = numpy.sqrt(K / m)
-        self.__damping = dc = 0.5 * c / numpy.sqrt(m * K)
+        w0 = np.sqrt(K / m)
+        self.__damping = dc = 0.5 * c / np.sqrt(m * K)
         a = w0 * dc
         x0, v0 = init
         x0 -= L
         if self.over_damped:
-            wd = w0 * numpy.sqrt(dc**2 - 1)
+            wd = w0 * np.sqrt(dc**2 - 1)
             A, B = 0.5 * (v0 + (a + wd) * x0) / wd, 0.5 * (v0 + (a - wd) * x0) / wd
-            self.__x = lambda t: L + (A * numpy.exp(-(a - wd) * t) - B * numpy.exp(-(a + wd) * t))
+            self.__x = lambda t: L + (A * np.exp(-(a - wd) * t) - B * np.exp(-(a + wd) * t))
         else:
-            wd = w0 * numpy.sqrt(1 - dc**2)
+            wd = w0 * np.sqrt(1 - dc**2)
             A, B = (v0 + a * x0) / wd, x0
-            self.__x = lambda t: L + numpy.exp(-a * t) * (A * numpy.sin(wd * t) + B * numpy.cos(wd * t))
+            self.__x = lambda t: L + np.exp(-a * t) * (A * np.sin(wd * t) + B * np.cos(wd * t))
         
     def x(self, t):
         return self.__x(t)
