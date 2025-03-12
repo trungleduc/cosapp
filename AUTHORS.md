@@ -23,4 +23,4 @@
 * [Virginie Zell](https://gitlab.com/VirginieZ)
 * [Sébastien Raymond](https://gitlab.com/ssg-aero)
 * [Célia Cisternino](https://gitlab.com/celiacisternino)
-* [Gaëtan Laurens](https://gitlab.com/GtnLrs) (gaetan.laurens@twiinit.com)
+* [Gaétan Laurens](https://gitlab.com/GtnLrs) (gaetan.laurens@twiinit.com)

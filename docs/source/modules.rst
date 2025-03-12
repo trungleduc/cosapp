@@ -11,8 +11,12 @@ Modules
    cosapp.core.numerics.boundary
    cosapp.core.numerics.enum
    cosapp.core.numerics.residues
-   cosapp.core.numerics.root
    cosapp.core.numerics.sobol_seq
+
+   cosapp.core.numerics.solve.jacobian
+   cosapp.core.numerics.solve.linear_solver
+   cosapp.core.numerics.solve.non_linear_solver
+   cosapp.core.numerics.solve.root
 
    cosapp.core.signal.signal
    cosapp.core.signal.slot
@@ -106,7 +110,6 @@ Inheritance
     cosapp.core.numerics.boundary
     cosapp.core.numerics.enum
     cosapp.core.numerics.residues
-    cosapp.core.numerics.root
     :parts: 1
 
 - cosapp.drivers

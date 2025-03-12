@@ -1,9 +1,88 @@
 # History
 
 
+## 1.0.0 (2025-03-12)
+
+### New feature: Parallel execution of drivers
+
+The parallelization of certain drivers was implemented by [Adrien Delsalle](https://gitlab.com/adriendelsalle) and [Gaétan Laurens](https://gitlab.com/GtnLrs) (MRs [#330](https://gitlab.com/cosapp/cosapp/-/merge_requests/330), [#332](https://gitlab.com/cosapp/cosapp/-/merge_requests/332), [#334](https://gitlab.com/cosapp/cosapp/-/merge_requests/334), [#335](https://gitlab.com/cosapp/cosapp/-/merge_requests/335), [#339](https://gitlab.com/cosapp/cosapp/-/merge_requests/339), [#341](https://gitlab.com/cosapp/cosapp/-/merge_requests/341), [#345](https://gitlab.com/cosapp/cosapp/-/merge_requests/345), [#348](https://gitlab.com/cosapp/cosapp/-/merge_requests/348), [#353](https://gitlab.com/cosapp/cosapp/-/merge_requests/353), [#357](https://gitlab.com/cosapp/cosapp/-/merge_requests/357), [#365](https://gitlab.com/cosapp/cosapp/-/merge_requests/365), [#374](https://gitlab.com/cosapp/cosapp/-/merge_requests/374), [#390](https://gitlab.com/cosapp/cosapp/-/merge_requests/390)):
+- `LinearDoE` and `MonteCarlo`;
+- `NonLinearSolver` (computation of the Jacobian matrix in parallel).
+
+This major feature relies on a robust serialization of systems, drivers and recorders, using either `pickle` or `json`.
+The serialization of all drivers, in particular, allows for the parallel execution of the drivers listed above, even when they contain sub-drivers.
+
+#### Example
+
+In the example below, using the `Ballistics` system from the advanced time driver tutorial, we compute the initial velocity leading to a targetted end point, after an imposed flight time of two seconds.
+This design case implies a `RungeKutta` time driver, embedded into a `NonLinearSolver` driver.
+For the latter, we request a parallel computation of the Jacobian matrix by forward finite differences, using three workers.
+
+```python
+from cosapp.drivers import NonLinearSolver, RungeKutta
+from cosapp.core.numerics.solve import FfdJacobianEvaluation
+from cosapp.utils.execution import ExecutionPolicy, ExecutionType
+
+# Set test case
+point = Ballistics("point")
+ncpus = 3  # compute the Jacobian matrix using 3 workers
+
+solver = point.add_driver(
+    NonLinearSolver(
+        "solver",
+        jac=FfdJacobianEvaluation(
+            execution_policy=ExecutionPolicy(ncpus, ExecutionType.MULTI_PROCESSING)
+        ),
+    )
+)
+driver = solver.add_child(RungeKutta(time_interval=(0, 2), dt=0.1, order=3))
+
+# Set design problem: compute initial velocity that leads to a target point
+solver.add_unknown("v0").add_equation("x == [10, 0, 0]")
+
+# Define a time simulation scenario
+driver.set_scenario(
+    init={"x": [0, 0, 0], "v": "v0"},
+    values={"point.mass": 1.5, "point.k": 0.9},
+)
+
+# Set initial guess & solve
+point.v0 = np.ones(3)
+point.run_drivers()
+```
+
+### Other new features & API changes
+
+- Implementation of second-order, implicit time driver `CrankNicolson` (MRs [#377](https://gitlab.com/cosapp/cosapp/-/merge_requests/377)).
+  This driver essentially works like a nonlinear solver, solving for both transient variables and intrinsic unknowns of the system of interest.
+  Therefore, it is highly recommended for dynamic systems containing algebraic loops or intrinsic constraints, instead of nesting a nonlinear solver inside an explicit time driver.
+- Detect the occurrence of multiple primary events at the same time (MR [#376](https://gitlab.com/cosapp/cosapp/-/merge_requests/376)).
+- Add the possibility to filter events with a Boolean expression evaluated in a specific context, other than that of the event owner (MR [#375](https://gitlab.com/cosapp/cosapp/-/merge_requests/375)).
+- Add `numpy.where` and `logspace` to the scope of evaluable expressions, used in equations and boundary conditions, *e.g.* (MR [#382](https://gitlab.com/cosapp/cosapp/-/merge_requests/382)).
+
+### Bug fixes and code improvements
+
+- Bug fix in `EvalString` serialization (MR [#383](https://gitlab.com/cosapp/cosapp/-/merge_requests/383)).
+- Bug fix in the serialization of events (MR [#386](https://gitlab.com/cosapp/cosapp/-/merge_requests/386)).
+- Bug fix in `MonteCarlo` with a time subdriver (MRs [#378](https://gitlab.com/cosapp/cosapp/-/merge_requests/378), [#392](https://gitlab.com/cosapp/cosapp/-/merge_requests/392)).
+- Prevent name clashes for ports and sub-systems (MR [#381](https://gitlab.com/cosapp/cosapp/-/merge_requests/381)).
+- Other bug fixes (MRs [#379](https://gitlab.com/cosapp/cosapp/-/merge_requests/379), [#380](https://gitlab.com/cosapp/cosapp/-/merge_requests/380), [#389](https://gitlab.com/cosapp/cosapp/-/merge_requests/389)).
+
+### Documentation
+
+- Add Crank-Nicolson driver in time driver tutorial (MR [#385](https://gitlab.com/cosapp/cosapp/-/merge_requests/385)).
+- New tutorial on multiprocessing (MR [#391](https://gitlab.com/cosapp/cosapp/-/merge_requests/391)).
+
+### Dependency management
+
+- Compatibility with `numpy` 2, with retrocompatibility with version 1 (MRs [#309](https://gitlab.com/cosapp/cosapp/-/merge_requests/309), [#387](https://gitlab.com/cosapp/cosapp/-/merge_requests/387)).
+- Compatibility with `pytest` 8.3 was restored (MR [#388](https://gitlab.com/cosapp/cosapp/-/merge_requests/388)).
+- The code is no longer compatible with Python 3.8, as it now contains type hints of the kind `list[str]` or `dict[str, float]` (instead of `typing.List` and `typing.Dict`), introduced in Python 3.9.
+
+
 ## 0.19.2 (2025-01-23)
 
-### Bug fixes and improvements
+### Bug fixes and code improvements
 
 - Improve the system transition mechanism (MR [#370](https://gitlab.com/cosapp/cosapp/-/merge_requests/370)).
 - Fix bug in event cascade resolution (MRs [#371](https://gitlab.com/cosapp/cosapp/-/merge_requests/371) & [#372](https://gitlab.com/cosapp/cosapp/-/merge_requests/372)).
@@ -28,7 +107,7 @@
 
 ### New features & API changes
 
-- Improve the performance of unknowns and residues (MRs [#350](https://gitlab.com/cosapp/cosapp/-/merge_requests/350), [#352](https://gitlab.com/cosapp/cosapp/-/merge_requests/352)).
+- Improve the performance of unknowns and residues (MRs [#350](https://gitlab.com/cosapp/cosapp/-/merge_requests/350), [#352](https://gitlab.com/cosapp/cosapp/-/merge_requests/352), by [Gaétan Laurens](https://gitlab.com/GtnLrs)).
   In particular, this version introduces the possiblity to declare as unknown any settable attribute of an input object (that is an object contained in an input port), which until now was only possible for input port variables.
   Example:
 
