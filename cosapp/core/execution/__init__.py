@@ -1,7 +1,12 @@
 from .pool import ExecutionPolicy, ExecutionType, Pool, WorkerStartMethod
-from .task import (Batch, FunctionCallBehavior, Job, Task, TaskAction,
-                   TaskResponseStatus, TaskResultNotAvailableYet,
-                   TaskState)
+from .task import (
+    Batch, Job, Task,
+    FunctionCallBehavior,
+    TaskAction,
+    TaskResponseStatus,
+    TaskResultNotAvailableYet,
+    TaskState,
+)
 
 __all__ = [
     "Pool",

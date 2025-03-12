@@ -3,7 +3,7 @@ from typing import Any, Dict, NamedTuple, Optional, Set, Callable, Iterable
 
 import numpy
 
-from cosapp.utils.execution import (
+from cosapp.core.execution import (
     Batch,
     ExecutionPolicy,
     ExecutionType,

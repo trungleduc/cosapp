@@ -8,7 +8,7 @@ from typing import Dict, Union, List, Optional, NamedTuple, Any, TYPE_CHECKING
 
 from cosapp.core.signal import Signal
 from cosapp.core.eval_str import EvalString
-from cosapp.utils.execution import ExecutionType
+from cosapp.core.execution import ExecutionType
 from cosapp.utils.helpers import is_numerical, check_arg
 from cosapp.utils.find_variables import SearchPattern, make_wishlist, find_variables
 from cosapp.utils.state_io import object__getstate__

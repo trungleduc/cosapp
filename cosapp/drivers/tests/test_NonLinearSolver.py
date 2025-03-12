@@ -26,7 +26,7 @@ from cosapp.drivers import (
 )
 from cosapp.base import Port, System
 from cosapp.recorders import DataFrameRecorder
-from cosapp.utils.execution import ExecutionPolicy, ExecutionType
+from cosapp.core.execution import ExecutionPolicy, ExecutionType
 from cosapp.utils.logging import LogFormat, LogLevel
 from cosapp.tests.library.systems import (
     Merger1d,

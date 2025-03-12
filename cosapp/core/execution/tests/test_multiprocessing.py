@@ -6,7 +6,7 @@ from typing import Any
 import pytest
 
 from cosapp.base import System
-from cosapp.utils.execution import (
+from cosapp.core.execution import (
     Batch,
     ExecutionType,
     FunctionCallBehavior,

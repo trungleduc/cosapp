@@ -6,7 +6,7 @@ from cosapp.base import System
 from cosapp.drivers import LinearDoE, RunOnce, NonLinearSolver
 from cosapp.recorders import DataFrameRecorder
 from cosapp.tests.library.systems import Multiply2, MultiplySystem2
-from cosapp.utils.execution import ExecutionPolicy, ExecutionType, WorkerStartMethod
+from cosapp.core.execution import ExecutionPolicy, ExecutionType, WorkerStartMethod
 from cosapp.utils.testing import pickle_roundtrip, are_same
 
 

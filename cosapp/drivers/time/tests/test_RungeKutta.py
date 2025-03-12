@@ -6,7 +6,7 @@ from cosapp.core.numerics.solve import FfdJacobianEvaluation
 from cosapp.drivers import NonLinearSolver, RunSingleCase, RungeKutta
 from cosapp.drivers.time.scenario import Interpolator
 from cosapp.recorders import DataFrameRecorder
-from cosapp.utils.execution import ExecutionPolicy, ExecutionType
+from cosapp.core.execution import ExecutionPolicy, ExecutionType
 from cosapp.utils.testing import rel_error
 from .conftest import case_factory, PointMass, PointMassWithPorts
 

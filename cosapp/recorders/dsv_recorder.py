@@ -7,7 +7,7 @@ from collections.abc import Collection
 from numbers import Integral
 
 from cosapp.recorders.recorder import BaseRecorder, SearchPattern
-from cosapp.utils.execution import ExecutionType
+from cosapp.core.execution import ExecutionType
 from cosapp.utils.helpers import is_numerical, check_arg
 
 
