@@ -2387,10 +2387,10 @@ class System(Module, TimeObserver):
         skip_drivers : bool
             Skip calling :py:meth:`cosapp.drivers.driver.Driver.setup_run`
         """
+        super().call_setup_run()
         if not skip_driver:
             for driver in self.drivers.values():
                 driver.call_setup_run()
-        super().call_setup_run()
 
     def call_clean_run(self, skip_driver=False) -> None:
         """Execute `clean_run` recursively on all modules.
