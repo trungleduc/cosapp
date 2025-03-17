@@ -56,6 +56,7 @@ from .elec import (
     Current,
     Dipole,
     Resistor,
+    Capacitor,
     Node,
     Source,
     Ground,
