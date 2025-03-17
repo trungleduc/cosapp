@@ -1,9 +1,10 @@
 """Regression test from tutorials"""
 import pytest
+import numpy as np
 
-from cosapp.tests.library.systems import Resistor, Node, Source, Ground
+from cosapp.tests.library.systems import Resistor, Capacitor, Node, Source, Ground
 from cosapp.systems import System
-from cosapp.drivers import NonLinearSolver, RunSingleCase
+from cosapp.drivers import NonLinearSolver, RunSingleCase, CrankNicolson
 from cosapp.recorders import DataFrameRecorder
 
 
@@ -41,6 +42,15 @@ class Circuit(System):
         self.add_inward('V2_design', 0.0)
         self.add_design_method('R1').add_unknown('R1.R').add_equation('n1.V == V1_design')
         self.add_design_method('R2').add_unknown('R2.R').add_equation('n2.V == V2_design')
+
+
+class RcCircuit(System):
+    """Simple serial RC circuit"""
+    def setup(self):
+        r = self.add_child(Resistor('res'), pulling=['V_in', 'R'])
+        c = self.add_child(Capacitor('capa'), pulling=['V_out', 'C', 'I'])
+
+        Node.make(self, 'node', incoming=[r], outgoing=[c])
 
 
 class LegacyCircuit(System):
@@ -105,6 +115,16 @@ def circuit():
     circuit.R3.R = 0.25e3
     circuit.source.I = 0.1
     return circuit
+
+
+@pytest.fixture
+def rc():
+    rc = RcCircuit('rc')
+    rc.C = 2e-3
+    rc.R = 100.
+    rc.V_in.V = 1.0
+    rc.V_out.V = 0.0
+    return rc
 
 
 def test_LegacyCircuit_solve(model):
@@ -209,3 +229,60 @@ def test_Circuit_design_multipoint(circuit):
     assert data.at[1, 'n1.V'] == pytest.approx(50)
     assert circuit.R1.R == pytest.approx(5000 / 9)
     assert circuit.R2.R == pytest.approx(5250 / 9)
+
+
+def test_RcCircuit_solve_initial(rc):
+    """Test initial equilibrium of RC circuit"""
+    solver = rc.add_driver(NonLinearSolver('solver'))
+    rc.run_drivers()
+
+    assert solver.problem.shape == (2, 2)
+
+    assert rc.I.I == pytest.approx(0.01, rel=1e-12)
+    assert rc.node.V == pytest.approx(0.0, abs=1e-12)
+    assert rc.capa.U == pytest.approx(0.0, abs=1e-12)
+    assert rc.capa.dUdt == pytest.approx(5.0, rel=1e-12)
+    assert rc.capa.deltaV == pytest.approx(0.0, abs=1e-12)
+
+
+def test_RcCircuit_solve_transient(rc):
+    """Test transient resolution of RC circuit"""
+    driver = rc.add_driver(CrankNicolson('solver'))
+    driver.time_interval = (0, 2)
+    driver.dt = 1e-2
+    driver.add_recorder(DataFrameRecorder())
+
+    rc.run_drivers()
+
+    assert driver._intrinsic_problem.shape == (2, 2)
+    assert driver.problem.shape == (3, 2)
+
+    data = driver.recorder.export_data()
+
+    # Test initial values
+    # Note: same values as in `test_RcCircuit_solve_initial`
+    assert data["I.I"][0] == pytest.approx(0.01, rel=1e-12)
+    assert data["node.V"][0] == pytest.approx(0.0, abs=1e-12)
+    assert data["capa.U"][0] == pytest.approx(0.0, abs=1e-12)
+    assert data["capa.dUdt"][0] == pytest.approx(5.0, rel=1e-12)
+    assert data["capa.deltaV"][0] == pytest.approx(0.0, abs=1e-12)
+
+    class RcSolution:
+        def __init__(self, R, C):
+            self.R = R
+            self.RC = R * C
+
+        def V(self, t: float):
+            return 1.0 - np.exp(-t / self.RC)
+
+        def I(self, t: float):
+            return (1.0 - self.V(t)) / self.R
+
+    exact = RcSolution(rc.R, rc.C)
+
+    time = np.asarray(data["time"])
+    Vnum = np.asarray(data["node.V"])
+    Inum = np.asarray(data["I.I"])
+
+    assert Vnum == pytest.approx(exact.V(time), rel=1e-3)
+    assert Inum == pytest.approx(exact.I(time), rel=5e-3)

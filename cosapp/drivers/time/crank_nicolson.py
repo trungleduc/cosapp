@@ -62,7 +62,9 @@ class CrankNicolson(AbstractTimeDriver):
         super()._initialize()
 
         # Equilibrate system @ t=0 (if necessary)
-        x0 = self._intrinsic_problem.unknown_vector()
+        initial_problem = self._intrinsic_problem
+        initial_problem.validate()
+        x0 = initial_problem.unknown_vector()
         if x0.size > 0:
             self._solver.solve(self._fresidues_init, x0=x0)
         
@@ -130,8 +132,8 @@ class CrankNicolson(AbstractTimeDriver):
             Residue vector
         """
         problem = self._intrinsic_problem
-        self._update_system()
         self._update_unknowns(problem, x)
+        self._update_system()
         problem.update_residues()
         return problem.residue_vector()
 
