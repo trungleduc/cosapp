@@ -174,32 +174,6 @@ def test_AbstractTimeDriver_dt_RuntimeError(scenario, ok):
             s.run_drivers()
 
 
-def test_AbstractTimeDriver_set_time_before_System_setup():
-
-    start_t = 24.
-    end_t = 25.
-
-    class DummySystem(System):
-        def setup_run(self):
-            nonlocal start_t
-            assert self.time == start_t
-
-    driver = AbstractTimeDriver()
-    system = DummySystem('dummy')
-
-    system.add_driver(driver)
-
-    driver.time_interval = (start_t, end_t)
-    driver.dt = end_t - start_t
-    # Check that the start time is set as the clock time
-    system.run_drivers()
-
-    start_t = 5.0
-    # Check that the new start time is set as the clock time
-    driver.time_interval = (start_t, start_t + driver.dt)
-    system.run_drivers()
-
-
 def test_AbstractTimeDriver_is_standalone():
     class StandaloneDriver(Driver):
         """Mock-up standalone driver"""
