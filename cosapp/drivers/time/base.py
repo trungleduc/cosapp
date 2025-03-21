@@ -37,7 +37,7 @@ class AbstractTimeDriver(Driver):
         '__time_interval', '__clock', '__recordPeriod',
         '_transients', '_rates', '_dt_manager', '_var_manager',
         '__scenario', 'record_dt', '__recorded_dt', '__stepper',
-        '__event_data', '__recorded_events',
+        '__event_data', '__recorded_events', '_tr_data',
     )
 
     def __init__(self,
@@ -79,6 +79,7 @@ class AbstractTimeDriver(Driver):
         self._var_manager: TimeVarManager = None
         self._transients = TimeUnknownDict()
         self._rates = dict()
+        self._tr_data = dict()
         self.dt = dt
         self.time_interval = time_interval
         self.record_dt = record_dt
@@ -184,17 +185,29 @@ class AbstractTimeDriver(Driver):
         """Setup the driver once before starting the simulation and before
         calling the systems `setup_run`.
         """
+        super().setup_run()
+
         if self.__time_interval is None:
             raise ValueError("Time interval was not specified")
 
         self.__stepper = DiscreteStepper(self)
-        self._var_manager = manager = TimeVarManager(self.owner)
+        self._var_manager = TimeVarManager(self.owner)
+        self.__reset_time_variables()
+        self.__reset_time()
+
+    def __reset_time_problem(self) -> None:
+        self.__stepper.update_sysview()
+        self._var_manager.update_transients()
+        self.__reset_time_variables()
+        self.__update_transient_dict()
+
+    def __reset_time_variables(self) -> None:
+        manager = self._var_manager
         self._dt_manager.transients = manager.transients
         self._transients = manager.transients
         self._rates = manager.rates
         logger.debug(f"Transient variables: {self._transients!r}")
         logger.debug(f"Rate variables: {self._rates!r}")
-        self.__reset_time()
 
     def run_once(self) -> None:
         """Run time driver once, assuming driver has already been initialized.
@@ -278,32 +291,20 @@ class AbstractTimeDriver(Driver):
         self._set_time(t0)
 
         stepper = self.__stepper
-        manager = self._var_manager
-        owner_transients = manager.problem.transients
         self.__recorded_events = []
         stepper.initialize()
 
-        def value_and_derivative(var: TimeUnknown):
-            return (
-                copy.copy(var.value),
-                copy.copy(var.d_dt),
-            )
-
-        tr_data = dict(
-            (key, [*value_and_derivative(var), None, None])
-            for key, var in owner_transients.items()
-        )
+        self._tr_data = {}
+        self.__update_transient_dict()
 
         def update_system(t, dt) -> float:
             """Continuously update owner system over one time step,
             and check for any event occurrence afterwards.
             """
-            nonlocal tr_data
             self._update_transients(dt)
             self._set_time(t + dt)
             # Store transient values and derivatives @ t + dt
-            for key, var in owner_transients.items():
-                tr_data[key][2:4] = value_and_derivative(var)
+            self.__update_transient_data()
             
             if stepper.event_detected():
                 stepper.set_data(
@@ -314,7 +315,7 @@ class AbstractTimeDriver(Driver):
                             ys = data[0::2],  # values
                             dy = data[1::2],  # derivatives
                         )
-                        for name, data in tr_data.items()
+                        for name, data in self._tr_data.items()
                     }
                 )
                 record = stepper.first_discrete_step()  # first step: root finding + non-primitive events
@@ -347,9 +348,8 @@ class AbstractTimeDriver(Driver):
 
                 # Reevaluate transient values and derivatives @ occur.time,
                 # in case one or more primitive events were cancelled
-                for key, var in owner_transients.items():
-                    tr_data[key][2:4] = value_and_derivative(var)
-            
+                self.__update_transient_data()
+
             else:
                 next_t = t + dt
                 stepper.reevaluate_primitive_events()
@@ -357,8 +357,7 @@ class AbstractTimeDriver(Driver):
                 must_stop = False
 
             record_dt(dt)
-            for data in tr_data.values():
-                data[0:2] = data[2:4]
+            self.__shift_transient_data()
 
             return next_t, must_stop
 
@@ -409,7 +408,8 @@ class AbstractTimeDriver(Driver):
             )
             owner.close_loops()
             owner.open_loops()
-            # Reinitialize sub-drivers
+            # Rest time problem & Reinitialize sub-drivers
+            self.__reset_time_problem()
             for driver in self.children.values():
                 driver.call_setup_run()
         for transient in self._transients.values():
@@ -420,6 +420,7 @@ class AbstractTimeDriver(Driver):
         self._synch_transients()
 
     def _set_time(self, t: Number) -> None:
+        """Set clock time at `t`."""
         dt = t - self.time
         self.__clock.time = t
         self.__scenario.update_values()
@@ -543,3 +544,43 @@ class AbstractTimeDriver(Driver):
             )
 
         return emit_record
+
+    @staticmethod
+    def value_and_derivative(var: TimeUnknown) -> Union[tuple[float, float], tuple[numpy.ndarray, numpy.ndarray]]:
+        return (
+            copy.copy(var.value),
+            copy.copy(var.d_dt),
+        )
+
+    def __update_transient_dict(self) -> None:
+        """Update (in place) the collectin of transient data."""
+        transient_data = self._tr_data
+        owner_transients = self._var_manager.problem.transients
+        value_and_derivative = self.value_and_derivative
+        new_data = dict(
+            (key, [*value_and_derivative(var), None, None])
+            for key, var in owner_transients.items()
+        )
+        self._intersect_dict(transient_data, new_data)
+
+    @staticmethod
+    def _intersect_dict(old: dict, new: dict) -> None:
+        old_keys = set(old.keys())
+        new_keys = set(new.keys())
+        for key in old_keys - new_keys:
+            old.pop(key)
+        for key in new_keys - old_keys:
+            old[key] = new[key]
+
+    def __update_transient_data(self) -> None:
+        """Update transient data from current values."""
+        transient_data = self._tr_data
+        owner_transients = self._var_manager.problem.transients
+        value_and_derivative = self.value_and_derivative
+        for key, var in owner_transients.items():
+            transient_data[key][2:4] = value_and_derivative(var)
+
+    def __shift_transient_data(self) -> None:
+        """Shift transient data from previous time step."""
+        for data in self._tr_data.values():
+            data[0:2] = data[2:4]

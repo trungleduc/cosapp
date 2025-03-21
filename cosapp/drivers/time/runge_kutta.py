@@ -2,7 +2,7 @@ import numpy
 from numbers import Number
 from typing import Optional
 
-from cosapp.drivers.time.base import AbstractTimeDriver, System
+from cosapp.drivers.time.base import AbstractTimeDriver, System, Collection, Event
 from cosapp.utils.helpers import check_arg
 
 
@@ -66,8 +66,11 @@ class RungeKutta(AbstractTimeDriver):
     def _precompute(self) -> None:
         super()._precompute()
         # Create memory buffer to store nstages intermediate values of dx/dt, and x at t = tn
+        self.__buffer = self._make_buffer()
+
+    def _make_buffer(self):
         nstages = len(self.__coefs)
-        self.__buffer = { name : [x.value] * (nstages + 1) for name, x in self._transients.items() }
+        return {name : [x.value] * (nstages + 1) for name, x in self._transients.items()}
 
     def _update_transients(self, dt: Number) -> None:
         """
@@ -99,3 +102,12 @@ class RungeKutta(AbstractTimeDriver):
             for stage, weight in enumerate(weights):
                 new_x += weight * buffer[name][stage]
             x.value = new_x
+
+    def transition(self, time: float, events: Collection[Event]=()) -> None:
+        """Execute owner system transition and reinitialize sub-drivers"""
+        super().transition(time, events)
+
+        buffer = self.__buffer
+        if set(self._transients) != set(buffer):
+            new_buffer = self._make_buffer()
+            self._intersect_dict(buffer, new_buffer)
