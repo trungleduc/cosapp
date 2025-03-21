@@ -58,6 +58,10 @@ class DiscreteStepper():
         slots.update({"_state": events})
         return slots
 
+    def update_sysview(self) -> None:
+        """Refresh the view on the system of interest, in case the latter has changed."""
+        self._sysview.refresh()
+
     def update_events(self) -> None:
         """Update event list from system of interest,
         and from stop criterion of owner time driver.

@@ -644,5 +644,12 @@ class SystemInterpolator:
     def exec(self, t: float) -> None:
         for assignment in self.__interp.values():
             assignment.exec(t)
-        driver = self.__owner
-        driver._set_time(t)
+        self.__owner._set_time(t)
+
+    def refresh(self) -> None:
+        """Reanalyse the system of interest, in case it has changed."""
+        problem = self.__system.assembled_time_problem()
+        transients = self.__transients
+        transients.clear()
+        transients.update(problem.transients)
+        self.__interp = dict.fromkeys(transients, None)

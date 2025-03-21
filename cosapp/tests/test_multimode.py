@@ -3,13 +3,12 @@
 from __future__ import annotations
 import pytest
 import numpy
-# import pandas
 
 from cosapp.base import Port, System
 from cosapp.drivers import EulerExplicit, RungeKutta, NonLinearSolver
 from cosapp.recorders import DataFrameRecorder
 from cosapp.multimode import PeriodicTrigger
-from typing import List
+from cosapp.utils import swap_system
 
 
 class ElecPort(Port):
@@ -128,7 +127,7 @@ class Node(System):
         self.sum_I_out = I * sum(I_frac)
 
     @classmethod
-    def make(cls, parent, name, incoming: List[ElecPort], outgoing: List[ElecPort], pulling=None) -> Node:
+    def make(cls, parent, name, incoming: list[ElecPort], outgoing: list[ElecPort], pulling=None) -> Node:
         """Factory method making appropriate connections with parent system"""
         node = cls(name, n_in=max(len(incoming), 1), n_out=max(len(outgoing), 1))
         parent.add_child(node, pulling=pulling)
@@ -843,3 +842,98 @@ def test_MultimodeSystem_filter_context():
     assert records[1].events == [head.ode.snap]
     assert records[2].events == [head.ode.snap, driver.scenario.stop]
     assert head.y > 2.0
+
+
+def test_MultimodeSystem_new_transients_1():
+    """Test a transition which brings in new transient variables.
+    Test #1: new transient variable x, with constant time derivative.
+    """
+    class MultimodeSystem(System):
+        """System having a transient that add un sub system having a transient.in `transition`.
+        """
+        def setup(self):
+            self.add_event("tada", trigger="time == 5.0")
+
+        def transition(self):
+            if self.tada.present:
+                self.add_child(TransientSystem("sub"))
+
+    class TransientSystem(System):
+        """System having a transient.
+        """
+        def setup(self) -> None:
+            self.add_inward("s", 1.0)
+            self.add_inward("x", 0.0)
+
+            self.add_transient("x", der="s")
+
+    system = MultimodeSystem("system")
+    system.add_driver(EulerExplicit(time_interval=[0, 10.0], dt=1.0))
+
+    assert not hasattr(system, "sub")
+
+    system.run_drivers()
+
+    assert hasattr(system, "sub")
+    assert system.sub.x == 5.0
+
+
+def test_MultimodeSystem_new_transients_2():
+    """Test a transition which brings in new transient variables.
+    Test #2: swap from variables (x, y) to (x, z), where (x, z) are stacked as a single transient.
+    """
+    class MultimodeSystem(System):
+        """System having a transient that add un sub system having a transient.in `transition`.
+        """
+        def setup(self):
+            self.add_event("tada", trigger="time == 5.0")
+            self.add_child(XyTransientSystem("sub"))
+
+        def transition(self):
+            if self.tada.present:
+                swap_system(self.sub, XzTransientSystem("sub"))
+                self.sub.s = -0.25
+                self.sub.z = 1.0
+
+    class XyTransientSystem(System):
+        """System having a transient.
+        """
+        def setup(self) -> None:
+            self.add_inward("s", 1.0)
+            self.add_inward("x", 0.0)
+
+            self.add_transient("x", der="s")
+            self.add_transient("y", der="2 * s")
+
+    class XzTransientSystem(System):
+        """System having a transient.
+        """
+        def setup(self) -> None:
+            self.add_inward("s", 1.0)
+            self.add_inward("x", 0.0)
+
+            self.add_transient("x", der="s")
+            self.add_transient("z", der="x")
+
+    system = MultimodeSystem("system")
+    system.add_driver(RungeKutta(time_interval=[0, 10.0], dt=1.0))
+
+    assert hasattr(system, "sub.x")
+    assert hasattr(system, "sub.y")
+    assert not hasattr(system, "sub.z")
+
+    te = 5.23  # event time
+    system.tada.trigger = f"t == {te}"
+
+    system.run_drivers()
+
+    assert hasattr(system, "sub.x")
+    assert not hasattr(system, "sub.y")
+    assert hasattr(system, "sub.z")
+
+    t = system.time
+    xe = te  # x @ t=te
+    exact_x = xe - 0.25 * (t - te)
+    exact_z = 1.0 + xe * (t - te) - 0.125 * (t - te)**2
+    assert system.sub.x == pytest.approx(exact_x, rel=1e-14)
+    assert system.sub.z == pytest.approx(exact_z, rel=1e-14)
