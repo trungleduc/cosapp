@@ -38,6 +38,7 @@ class AbstractTimeDriver(Driver):
         '_transients', '_rates', '_dt_manager', '_var_manager',
         '__scenario', 'record_dt', '__recorded_dt', '__stepper',
         '__event_data', '__recorded_events', '_tr_data',
+        '_transitioning',
     )
 
     def __init__(self,
@@ -75,6 +76,7 @@ class AbstractTimeDriver(Driver):
         self.__recorded_dt = numpy.array([])
         self.__clock = UniversalClock()
         self.__recordPeriod = None
+        self._transitioning = False
         self._dt_manager = TimeStepManager(max_growth_rate=dt_growth_rate)
         self._var_manager: TimeVarManager = None
         self._transients = TimeUnknownDict()
@@ -195,7 +197,7 @@ class AbstractTimeDriver(Driver):
         self.__reset_time_variables()
         self.__reset_time()
 
-    def __reset_time_problem(self) -> None:
+    def _reset_time_problem(self) -> None:
         self.__stepper.update_sysview()
         self._var_manager.update_transients()
         self.__reset_time_variables()
@@ -301,6 +303,7 @@ class AbstractTimeDriver(Driver):
             """Continuously update owner system over one time step,
             and check for any event occurrence afterwards.
             """
+            self._transitioning = False
             self._update_transients(dt)
             self._set_time(t + dt)
             # Store transient values and derivatives @ t + dt
@@ -318,6 +321,7 @@ class AbstractTimeDriver(Driver):
                         for name, data in self._tr_data.items()
                     }
                 )
+                self._transitioning = True
                 record = stepper.first_discrete_step()  # first step: root finding + non-primitive events
                 n_primitives = len(record.events)
                 record_data()
@@ -409,7 +413,7 @@ class AbstractTimeDriver(Driver):
             owner.close_loops()
             owner.open_loops()
             # Rest time problem & Reinitialize sub-drivers
-            self.__reset_time_problem()
+            self._reset_time_problem()
             for driver in self.children.values():
                 driver.call_setup_run()
         for transient in self._transients.values():
@@ -424,8 +428,14 @@ class AbstractTimeDriver(Driver):
         dt = t - self.time
         self.__clock.time = t
         self.__scenario.update_values()
+        if self._transitioning:
+            self._pre_update_system()
         self._update_system()
         self._update_rates(dt)
+
+    def _pre_update_system(self) -> None:
+        """Hook function called before `_update_system` during transitions"""
+        pass
 
     def __reset_time(self) -> None:
         """Reset clock time to driver start time"""
@@ -439,6 +449,7 @@ class AbstractTimeDriver(Driver):
         self.__scenario.update_values()
         self.owner.tree_init_mode()
         self._synch_transients()
+        self._transitioning = False
         logger.debug("Reset rates")
         for rate in self._rates.values():
             rate.reset()

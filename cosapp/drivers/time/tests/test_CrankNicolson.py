@@ -147,3 +147,60 @@ def test_CrankNicolson_tanks(two_tank_solution, dt):
     error = np.linalg.norm(error[0], np.inf)
     assert error < 0.07 * dt**2
     assert error > 0.06 * dt**2
+
+
+def test_CrankNicolson_new_problem():
+    """Test a transition which brings new intrinsic constraints
+    """
+    class MultimodeSystem(System):
+
+        def setup(self):
+            self.add_inward("x", 0.0)
+            self.add_inward("df", 0.0)
+            self.add_outward("y", 0.0)
+
+            self.add_transient("f", der="df")
+            self.add_event("tada")
+
+        def compute(self):
+            self.y = self.f - self.x**2
+
+        def transition(self):
+            if self.tada.present:
+                self.problem.clear()
+                self.add_unknown("x").add_equation("y == 0")
+                self.x = 1.0
+
+    system = MultimodeSystem("system")
+    driver = system.add_driver(CrankNicolson("driver"))
+    driver.time_interval = (0, 1)
+    driver.dt = 1e-2
+
+    driver.add_recorder(
+        DataFrameRecorder(),
+        period=0.1,
+    )
+    driver.set_scenario(
+        init={
+            "f": 0.0,
+            "x": 0.0,
+        },
+        values={
+            "df": "8 * t",
+        },
+    )
+    system.tada.trigger = "f > 2"
+    system.run_drivers()
+
+    data = driver.recorder.export_data()
+    x = np.asarray(data["x"])
+    y = np.asarray(data["y"])
+
+    assert x == pytest.approx(
+        [0., 0., 0., 0., 0., 0., 0., 0., 0., np.sqrt(2), 1.6, 1.8, 2.],
+        rel=1e-14,
+    )
+    assert y == pytest.approx(
+        [0., 0.04, 0.16, 0.36, 0.64, 1., 1.44, 1.96, 2., 0., 0., 0., 0.],
+        rel=1e-14,
+    )

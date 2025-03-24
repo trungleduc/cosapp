@@ -53,6 +53,19 @@ class RcCircuit(System):
         Node.make(self, 'node', incoming=[r], outgoing=[c])
 
 
+class RcSolution:
+    """Solution of a serial RC circuit subjected to a unit voltage difference"""
+    def __init__(self, R, C):
+        self.R = R
+        self.RC = R * C
+
+    def V(self, t: float):
+        return 1.0 - np.exp(-t / self.RC)
+
+    def I(self, t: float):
+        return (1.0 - self.V(t)) / self.R
+
+
 class LegacyCircuit(System):
     """Legacy circuit model, as originally given in tutorials"""
     def setup(self):
@@ -267,22 +280,76 @@ def test_RcCircuit_solve_transient(rc):
     assert data["capa.dUdt"][0] == pytest.approx(5.0, rel=1e-12)
     assert data["capa.deltaV"][0] == pytest.approx(0.0, abs=1e-12)
 
-    class RcSolution:
-        def __init__(self, R, C):
-            self.R = R
-            self.RC = R * C
-
-        def V(self, t: float):
-            return 1.0 - np.exp(-t / self.RC)
-
-        def I(self, t: float):
-            return (1.0 - self.V(t)) / self.R
-
     exact = RcSolution(rc.R, rc.C)
 
     time = np.asarray(data["time"])
     Vnum = np.asarray(data["node.V"])
     Inum = np.asarray(data["I.I"])
 
+    assert Vnum == pytest.approx(exact.V(time), rel=1e-3)
+    assert Inum == pytest.approx(exact.I(time), rel=5e-3)
+
+
+def test_RcCircuit_stop(rc):
+    """RC circuit resolution with a stop condition"""
+    driver = rc.add_driver(CrankNicolson("solver"))
+    driver.time_interval = (0, 2)
+    driver.dt = 1e-2
+
+    driver.set_scenario(
+        stop = "capa.deltaV == res.deltaV",
+    )
+
+    rc.run_drivers()
+
+    records = driver.recorded_events
+    t_cross = np.log(2) * rc.R * rc.C
+
+    assert len(records) == 1
+    assert records[0].time == pytest.approx(t_cross, rel=1e-3)
+    assert records[0].events == [driver.scenario.stop]
+
+    assert rc.res.deltaV == pytest.approx(0.5, abs=1e-12)
+    assert rc.capa.deltaV == pytest.approx(0.5, abs=1e-12)
+    assert rc.capa.U == pytest.approx(0.5, abs=1e-12)
+    assert rc.time == pytest.approx(t_cross, rel=1e-3)
+
+
+def test_RcCircuit_transition():
+    """RC circuit with a dummy event"""
+    class MultimodeRc(RcCircuit):
+        def setup(self):
+            super().setup()
+            self.add_event("tada")
+    
+    rc = MultimodeRc("rc")
+    rc.tada.trigger = "res.deltaV == capa.deltaV"
+    rc.C = 2e-3
+    rc.R = 100.
+    rc.V_in.V = 1.0
+    rc.V_out.V = 0.0
+
+    driver = rc.add_driver(CrankNicolson("solver"))
+    driver.add_recorder(DataFrameRecorder(), period=0.1)
+    driver.time_interval = (0, 1)
+    driver.dt = 1e-2
+
+    rc.run_drivers()
+
+    records = driver.recorded_events
+    t_cross = np.log(2) * rc.R * rc.C
+
+    assert len(records) == 1
+    assert records[0].time == pytest.approx(t_cross, rel=1e-3)
+    assert records[0].events == [rc.tada]
+
+    exact = RcSolution(rc.R, rc.C)
+
+    data = driver.recorder.export_data()
+    time = np.asarray(data["time"])
+    Vnum = np.asarray(data["node.V"])
+    Inum = np.asarray(data["I.I"])
+
+    assert len(data) == 13
     assert Vnum == pytest.approx(exact.V(time), rel=1e-3)
     assert Inum == pytest.approx(exact.I(time), rel=5e-3)
