@@ -1,6 +1,15 @@
 # History
 
 
+## 1.0.1 (2025-03-24)
+
+### Bug fixes & Improvements
+
+- New transient variables dynamically added during transitions are now accounted for in time drivers (MRs [#394](https://gitlab.com/cosapp/cosapp/-/merge_requests/394), [#396](https://gitlab.com/cosapp/cosapp/-/merge_requests/396)).
+- Bug fixes in `CrankNicolson` (MRs [#395](https://gitlab.com/cosapp/cosapp/-/merge_requests/395), [#397](https://gitlab.com/cosapp/cosapp/-/merge_requests/397)).
+- Refactoring of `state_io` functions (MR [#398](https://gitlab.com/cosapp/cosapp/-/merge_requests/398)).
+
+
 ## 1.0.0 (2025-03-12)
 
 ### New feature: Parallel execution of drivers
