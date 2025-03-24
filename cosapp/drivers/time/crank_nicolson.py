@@ -14,6 +14,7 @@ class CrankNicolson(AbstractTimeDriver):
         "_curr_res",
         "_transient_problem",
         "_intrinsic_problem",
+        "_has_intrinsic_problem",
         "_solver",
         "_x",
     )
@@ -29,6 +30,7 @@ class CrankNicolson(AbstractTimeDriver):
         self._curr_res = numpy.empty(0)
         self._intrinsic_problem: MathematicalProblem = None
         self._transient_problem: MathematicalProblem = None
+        self._has_intrinsic_problem = False
         self._solver = NewtonRaphsonSolver()
         self._x = numpy.empty(0)
         super().__init__(name, owner, time_interval, dt, record_dt, **options)
@@ -42,10 +44,14 @@ class CrankNicolson(AbstractTimeDriver):
 
     def setup_run(self) -> None:
         super().setup_run()
+        self._reset_time_problem()
+        self._update_solver_options()
 
+    def _reset_time_problem(self) -> None:
         # Get intrinsic problem of owner system
         context = self._owner
         self._intrinsic_problem = context.assembled_problem()
+        self._has_intrinsic_problem = not self._intrinsic_problem.is_empty()
 
         # Add transient variables as unknowns of the time-dependent problem
         self._transient_problem = problem = context.new_problem()
@@ -55,8 +61,9 @@ class CrankNicolson(AbstractTimeDriver):
             path = context.get_path_to_child(transient.context)
             name = f"{path}.{transient.name}" if path else transient.name
             problem.add_unknown(name, max_abs_step=transient.max_abs_step)
-        
-        self._update_solver_options()
+
+        self._x = problem.unknown_vector()
+        super()._reset_time_problem()
 
     def _initialize(self):
         super()._initialize()
@@ -65,7 +72,8 @@ class CrankNicolson(AbstractTimeDriver):
         initial_problem = self._intrinsic_problem
         initial_problem.validate()
         x0 = initial_problem.unknown_vector()
-        if x0.size > 0:
+        self._has_intrinsic_problem = (x0.size > 0)
+        if self._has_intrinsic_problem:
             self._solver.solve(self._fresidues_init, x0=x0)
         
         # Initialize the unknown vector
@@ -193,3 +201,11 @@ class CrankNicolson(AbstractTimeDriver):
             Ability to solve a system or not.
         """
         return True
+
+    def _pre_update_system(self) -> None:
+        """Solve intrinsic problem (if any) during transitions
+        before calling method `_update_system`.
+        """
+        if self._has_intrinsic_problem:
+            x0 = self._intrinsic_problem.unknown_vector()
+            self._solver.solve(self._fresidues_init, x0=x0)
