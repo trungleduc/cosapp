@@ -11,7 +11,6 @@ Modules
    cosapp.core.numerics.boundary
    cosapp.core.numerics.enum
    cosapp.core.numerics.residues
-   cosapp.core.numerics.sobol_seq
 
    cosapp.core.numerics.solve.jacobian
    cosapp.core.numerics.solve.linear_solver
