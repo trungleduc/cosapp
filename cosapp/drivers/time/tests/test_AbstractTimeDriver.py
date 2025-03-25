@@ -6,7 +6,7 @@ import re
 import numpy as np
 
 from cosapp.recorders import DataFrameRecorder
-from cosapp.drivers.time import interfaces
+from cosapp.drivers.time import base as time_driver_base
 from cosapp.drivers.time.base import AbstractTimeDriver
 from cosapp.systems import System
 from cosapp.drivers import Driver
@@ -332,7 +332,7 @@ def test_AbstractTimeDriver_recorder(ode_case_1, caplog, driver_settings, period
     if error is None:
         # run simulation and capture potential warnings
         caplog.clear()
-        with caplog.at_level(logging.WARNING, logger=interfaces.__name__):
+        with caplog.at_level(logging.WARNING, logger=time_driver_base.__name__):
             system.run_drivers()
 
         assert driver.recording_period == expected['period']
