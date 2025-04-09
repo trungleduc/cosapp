@@ -15,7 +15,7 @@ from cosapp.drivers.time.utils import (
     TimeUnknownDict,
     TimeVarManager,
     TimeStepManager,
-    TwoPointCubicInterpolator,
+    TwoPointCubicPolynomial,
 )
 from cosapp.drivers.time.scenario import Scenario
 from cosapp.multimode.discreteStepper import DiscreteStepper, EventRecord
@@ -313,7 +313,7 @@ class AbstractTimeDriver(Driver):
                 stepper.set_data(
                     interval = (t, t + dt),
                     interpol = {
-                        name: TwoPointCubicInterpolator(
+                        name: TwoPointCubicPolynomial(
                             xs = (t, t + dt),
                             ys = data[0::2],  # values
                             dy = data[1::2],  # derivatives
@@ -350,7 +350,7 @@ class AbstractTimeDriver(Driver):
                 next_t = record.time
                 dt = next_t - t
 
-                # Reevaluate transient values and derivatives @ occur.time,
+                # Reevaluate transient values and derivatives @ record.time,
                 # in case one or more primitive events were cancelled
                 self.__update_transient_data()
 
