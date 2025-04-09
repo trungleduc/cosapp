@@ -2,11 +2,12 @@ from __future__ import annotations
 from collections.abc import MutableMapping
 from numbers import Number
 from typing import (
-    Any, Dict, List, Optional, Callable,
-    Iterator, TypeVar, Union, Tuple,
+    Any, Optional, Callable,
+    Iterator, TypeVar, Union,
+    Sequence,
     TYPE_CHECKING,
 )
-import numpy, numpy.polynomial
+import numpy
 
 from cosapp.core.eval_str import EvalString
 from cosapp.core.variableref import VariableReference
@@ -36,7 +37,7 @@ class TimeUnknownStack(AbstractTimeUnknown):
         System CoSApp in which all transients to be stacked are defined
     name : str
         Name of this time unknown stack
-    transients : List[TimeUnknown]
+    transients : list[TimeUnknown]
         Stacked unknowns
 
     Notes
@@ -46,7 +47,7 @@ class TimeUnknownStack(AbstractTimeUnknown):
     def __init__(self,
         context: System,
         name: str,
-        transients: List[TimeUnknown],
+        transients: list[TimeUnknown],
     ):
         super().__init__()
         self.__context = context
@@ -111,7 +112,7 @@ class TimeUnknownStack(AbstractTimeUnknown):
         return self.__value
 
     @value.setter
-    def value(self, new: Union[List[float], numpy.ndarray]) -> None:
+    def value(self, new: Union[list[float], numpy.ndarray]) -> None:
         if numpy.shape(new) != self.__value.shape:
             raise ValueError("Incompatible array shapes")
         self.__value = numpy.array(new)
@@ -150,8 +151,8 @@ class TimeUnknownDict(MutableMapping):
     """
     def __init__(self, **mapping):
         super().__init__()
-        self.__transients: Dict[str, AbstractTimeUnknown] = {}
-        self.__constrained: Dict[str, AbstractTimeUnknown] = {}
+        self.__transients: dict[str, AbstractTimeUnknown] = {}
+        self.__constrained: dict[str, AbstractTimeUnknown] = {}
         self.update(mapping)
 
     def __str__(self) -> str:
@@ -181,10 +182,7 @@ class TimeUnknownDict(MutableMapping):
         if value.constrained:
             self.__constrained[key] = value
         else:
-            try:
-                self.__constrained.pop(key)
-            except KeyError:
-                pass
+            self.__constrained.pop(key, None)
 
     def __delitem__(self, key: str) -> None:
         self.__transients.__delitem__(key)
@@ -216,7 +214,7 @@ class TimeUnknownDict(MutableMapping):
         If `constrained` is True, the iterator applies only to time step constrained variables."""
         return self.__constrained.values() if constrained else self.__transients.values()
 
-    def items(self, constrained=False) -> Iterator[Tuple[str, AbstractTimeUnknown]]:
+    def items(self, constrained=False) -> Iterator[tuple[str, AbstractTimeUnknown]]:
         """Iterator on (key, value) tuples, akin to dict.items().
         If `constrained` is True, the iterator applies only to time step constrained variables."""
         return self.__constrained.items() if constrained else self.__transients.items()
@@ -234,7 +232,7 @@ class TimeUnknownDict(MutableMapping):
         finally:
             return self.__transients.pop(key, *default)
 
-    def update(self, mapping: Dict) -> None:
+    def update(self, mapping: dict[str, Any]) -> None:
         for key, value in mapping.items():
             self.__setitem__(key, value)
 
@@ -258,16 +256,16 @@ class TimeUnknownDict(MutableMapping):
         return dt
 
     @property
-    def constrained(self) -> Dict[str, AbstractTimeUnknown]:
-        """Dict[str, AbstractTimeUnknown]: shallow copy of the subset of time step constrained variables."""
+    def constrained(self) -> dict[str, AbstractTimeUnknown]:
+        """dict[str, AbstractTimeUnknown]: shallow copy of the subset of time step constrained variables."""
         return self.__constrained.copy()
     
-    def __json__(self) -> Dict[str, Any]:
+    def __json__(self) -> dict[str, Any]:
         """Creates a JSONable dictionary representation of the object.
         
         Returns
         -------
-        Dict[str, Any]
+        dict[str, Any]
             The dictionary
         """
         return object__getstate__(self).copy()
@@ -293,12 +291,12 @@ class TimeVarManager:
     def __init__(self, context: System):
         self.context = context
 
-    def __json__(self) -> Dict[str, Any]:
+    def __json__(self) -> dict[str, Any]:
         """Creates a JSONable dictionary representation of the object.
 
         Returns
         -------
-        Dict[str, Any]
+        dict[str, Any]
             The dictionary
         """
         state = object__getstate__(self).copy()
@@ -333,7 +331,7 @@ class TimeVarManager:
         return self.__transients
 
     @property
-    def rates(self) -> Dict[str, TimeDerivative]:
+    def rates(self) -> dict[str, TimeDerivative]:
         """
         Dictionary of all rate variables in current system, linking each
         variable (key) to its associated TimeDerivative object (value).
@@ -402,7 +400,7 @@ class TimeVarManager:
             return f"{ref.mapping.name}.{ref.key}"
 
     @staticmethod
-    def get_tree(ders: Dict[T, T]) -> Dict[T, List[T]]:
+    def get_tree(ders: dict[T, T]) -> dict[T, list[T]]:
         """
         Parse a dictionary of the kind (var, d(var)/dt), to detect a dependency
         chain from one root variable to its successive time derivatives.
@@ -414,7 +412,7 @@ class TimeVarManager:
         der_list = ders.values()
         roots = list(filter(lambda var: var not in der_list, var_list))
         leaves = list(filter(lambda der: der not in var_list, der_list))
-        tree = dict()
+        tree: dict[T, list[T]] = {}
         for root in roots:
             tree[root] = [root]
             var = root
@@ -505,90 +503,79 @@ class TimeStepManager:
 
         return dt
     
-    def __json__(self) -> Dict[str, Any]:
+    def __json__(self) -> dict[str, Any]:
         """Creates a JSONable dictionary representation of the object.
         
         Returns
         -------
-        Dict[str, Any]
+        dict[str, Any]
             The dictionary
         """
         return object__getstate__(self).copy()
 
 
+class Polynomial:
+    """Polynomial function that accepts array coefficients,
+    in order to fit array quantities over a one-dimensional interval.
+    """
+    def __init__(self, coefs: Sequence[float], shift=0.0):
+        self._coefs = numpy.array(coefs)
+        self._shift = shift
+
+    def __call__(self, x: float) -> Union[float, numpy.ndarray]:
+        coefs = self._coefs
+        x = x - self._shift
+        y = coefs[-1]
+        for c in coefs[-2::-1]:
+            y = c + x * y
+        return y
+
+    def degree(self) -> int:
+        return len(self._coefs) - 1
+
+    def deriv(self) -> Polynomial:
+        """Derivative of the polynomial"""
+        der_coefs = [
+            (n + 1) * coef
+            for (n, coef) in enumerate(self._coefs[1:])
+        ]
+        return Polynomial(der_coefs, self._shift)
+
+
 def TwoPointCubicPolynomial(
-    xs: Tuple[float, float],
-    ys: Tuple[float, float],
-    dy: Tuple[float, float],
-) -> numpy.polynomial.Polynomial:
+    xs: tuple[float, float],
+    ys: tuple[float, float] | numpy.ndarray,
+    dy: tuple[float, float] | numpy.ndarray,
+) -> Polynomial:
     """Function returning a cubic polynomial interpolating
     two end points (x, y), with imposed derivatives dy/dx.
 
-    Arguments:
+    y(x) can be either a scalar or a multi-dimensional quantity, based on
+    the format of input arrays `ys` and `dy`. If `ys` and `dy` are tuples
+    of floats or 1D arrays (resp. ND), they are interpreted as the values
+    and derivatives of a scalar (resp. vector) quantity at end points `xs`.
+
+    Parameters
     ----------
-    - xs, Tuple[float, float]: end point abscissa
-    - ys, Tuple[float, float]: end point values
-    - dy, Tuple[float, float]: end point derivatives
+    - xs, tuple[float, float]: end point abscissa.
+    - ys, tuple[float, float] | numpy.ndarray: end point values as a one- or multi-dimensional array.
+    - dy, tuple[float, float] | numpy.ndarray: end point derivatives as a one- or multi-dimensional array.
 
-    Returns:
-    --------
-    poly: cubic numpy.polynomial.Polynomial function
-    """
-    h = xs[1] - xs[0]
-    h2 = h * h
-    mat = numpy.array(
-        [
-            [h, h2, h * h2],
-            [1, 0, 0],
-            [1, 2 * h, 3 * h2],
-        ],
-        dtype=float,
-    )
-    coefs = numpy.zeros(4)
-    coefs[0] = ys[0]
-    coefs[1:] = numpy.linalg.solve(mat, [ys[1] - ys[0], *dy])
-    return numpy.polynomial.Polynomial(coefs, xs, [0, h])
-
-
-def TwoPointCubicInterpolator(
-    xs: Tuple[float, float],
-    ys: numpy.ndarray,
-    dy: numpy.ndarray,
-) -> Callable[[float], Union[float, numpy.ndarray]]:
-    """Function returning a cubic polynomial interpolator
-    for either scalar or vector quantities, based on the
-    format of input arrays `ys` and `dy`.
-    If `ys` and `dy` are 1D (resp. 2D) arrays, they are
-    interpreted as the values and derivatives of a scalar
-    (resp. vector) quantity at end points `xs`.
-
-    Arguments:
-    ----------
-    - xs, Tuple[float, float]: end point abscissa
-    - ys, numpy.ndarray: end point values as a 1D or 2D array
-    - dy, numpy.ndarray: end point derivatives as a 1D or 2D array
-
-    Returns:
-    --------
+    Returns
+    -------
     poly: cubic polynomial function returning either
         a float or a numpy array of floats, depending on
         the dimension of input data `ys` and `dy`.
     """
-    if numpy.ndim(ys) == 1:
-        return TwoPointCubicPolynomial(xs, ys, dy)
+    h = xs[1] - xs[0]
+    h2 = h * h
     ys = numpy.asarray(ys)
     dy = numpy.asarray(dy)
-    shape = dy.shape[1:]
-    ys = ys.reshape((2, -1))
-    dy = dy.reshape((2, -1))
-    # Multi-dimensional polynomial
-    fs = [
-        TwoPointCubicPolynomial(xs, val, der)
-        for (val, der) in zip(ys.T, dy.T)
-    ]
-    def ndpoly(t: float) -> numpy.ndarray:
-        return numpy.reshape([f(t) for f in fs], shape)
-    return ndpoly
+    d2 = (ys[1] - ys[0]) / h2
+    a2 = 3 * d2 - (dy[1] + 2 * dy[0]) / h
+    a3 = (d2 - a2 - dy[0] / h) / h
+    coefs = [ys[0], dy[0], a2, a3]
+    return Polynomial(coefs, shift=xs[0])
 
 
 class SystemInterpolator:
@@ -604,12 +591,12 @@ class SystemInterpolator:
         self.__transients = transients = problem.transients
         self.__interp = dict.fromkeys(transients, None)
 
-    def __json__(self) -> Dict[str, Any]:
+    def __json__(self) -> dict[str, Any]:
         """Creates a JSONable dictionary representation of the object.
 
         Returns
         -------
-        Dict[str, Any]
+        dict[str, Any]
             The dictionary
         """
         state = object__getstate__(self).copy()
@@ -623,16 +610,16 @@ class SystemInterpolator:
         return self.__system
 
     @property
-    def transients(self) -> Dict[str, TimeUnknown]:
+    def transients(self) -> dict[str, TimeUnknown]:
         return self.__transients
 
     @property
-    def interp(self) -> Dict[str, Callable]:
-        """Dict[str, Callable]: interpolant dictionary"""
+    def interp(self) -> dict[str, Callable]:
+        """dict[str, Callable]: interpolant dictionary"""
         return self.__interp
 
     @interp.setter
-    def interp(self, interp: Dict[str, Callable]):
+    def interp(self, interp: dict[str, Callable]):
         check_arg(
             interp, "interp", dict,
             lambda d: set(d) == set(self.__transients)
