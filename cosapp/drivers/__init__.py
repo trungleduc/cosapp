@@ -16,6 +16,7 @@ from cosapp.drivers.time import (
     EulerExplicit,
     RungeKutta,
     CrankNicolson,
+    BdfIntegrator,
 )
 
 __all__ = [
@@ -33,4 +34,5 @@ __all__ = [
     "EulerExplicit",
     "RungeKutta",
     "CrankNicolson",
+    "BdfIntegrator",
 ]
