@@ -327,6 +327,7 @@ class AbstractTimeDriver(Driver):
                 record_data()
                 record_event()
                 stepper.reevaluate_primitive_events()
+                self._pre_transition()
                 self.transition(record.time, record.events)
                 record_event(", ".join(event.contextual_name for event in record.events))
                 event_cascade = set(stepper.present_events())
@@ -352,6 +353,7 @@ class AbstractTimeDriver(Driver):
 
                 # Reevaluate transient values and derivatives @ record.time,
                 # in case one or more primitive events were cancelled
+                self._post_transition(dt)
                 self.__update_transient_data()
 
             else:
@@ -412,7 +414,7 @@ class AbstractTimeDriver(Driver):
             )
             owner.close_loops()
             owner.open_loops()
-            # Rest time problem & Reinitialize sub-drivers
+            # Reset time problem & Reinitialize sub-drivers
             self._reset_time_problem()
             for driver in self.children.values():
                 driver.call_setup_run()
@@ -422,6 +424,12 @@ class AbstractTimeDriver(Driver):
             event.context.touch()
         self._set_time(time)
         self._synch_transients()
+
+    def _pre_transition(self) -> None:
+        """Hook function for pre-transition actions"""
+
+    def _post_transition(self, dt: float) -> None:
+        """Hook function for post-transition actions"""
 
     def _set_time(self, t: Number) -> None:
         """Set clock time at `t`."""

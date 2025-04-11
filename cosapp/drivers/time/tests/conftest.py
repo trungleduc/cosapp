@@ -106,26 +106,46 @@ def gaussian_ode():
 # <codecell>
 
 class ScalarOde(System):
-    """System representing ODE df/dt = F(t)"""
-    def setup(self):
-        self.add_inward('df')
-        self.add_transient('f', der='df')
+    """ODE of the kind dy/dt = F(y, t)
+    """
+    def setup(self, varname="f", **options):
+        self.add_inward(f"d{varname}", 0.0)
+        self.add_transient(varname, der=f"d{varname}", **options)
+
+
+class MultimodeOde(ScalarOde):
+    """Multimode ODE of the kind df/dt = df,
+    with event `snap` (undefined by default).
+    """
+    def setup(self, varname="f", **options):
+        super().setup(varname=varname, **options)
+        self.add_event("snap")
+        self.add_outward_modevar("snapped", init=False)
+
+    def transition(self):
+        if self.snap.present:
+            self.snapped = True
 
 
 class VectorOde(System):
-    """System representing ODE dv/dt = V(t) in vectorial form"""
+    """System representing ODE dv/dt = V(t) in vectorial form
+    """
     def setup(self, size=3):
         self.add_inward('dv', np.zeros(max(size, 1)))
         self.add_transient('v', der='dv')
 
 
-@pytest.fixture(scope='function')
+@pytest.fixture
 def scalar_ode_case():
-    return case_factory(ScalarOde, 'scalar_ode')
+    return case_factory(ScalarOde, "ode")
 
-@pytest.fixture(scope='function')
+@pytest.fixture
+def stiff_ode_case():
+    return case_factory(ScalarOde, "ode", varname="y", max_abs_step=0.01)
+
+@pytest.fixture
 def vector_ode_case():
-    return case_factory(VectorOde, 'vector_ode')
+    return case_factory(VectorOde, "vector_ode")
 
 # <codecell>
 
