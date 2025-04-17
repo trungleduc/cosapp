@@ -5,10 +5,11 @@ import pandas
 import copy
 from io import StringIO
 from numbers import Number
-from typing import Tuple, List, Dict, Union, Optional, Any
+from typing import Union, Optional, Any
 from collections.abc import Collection
 
 from cosapp.core.time import UniversalClock
+from cosapp.core.signal import Signal
 from cosapp.drivers.driver import Driver, System, AnyRecorder
 from cosapp.drivers.time.utils import (
     TimeUnknown,
@@ -38,13 +39,13 @@ class AbstractTimeDriver(Driver):
         '_transients', '_rates', '_dt_manager', '_var_manager',
         '__scenario', 'record_dt', '__recorded_dt', '__stepper',
         '__event_data', '__recorded_events', '_tr_data',
-        '_transitioning',
+        '_transitioning', '_system_update_signal',
     )
 
     def __init__(self,
         name = "Time driver",
         owner: Optional[System] = None,
-        time_interval: Optional[Tuple[float, float]] = None,
+        time_interval: Optional[tuple[float, float]] = None,
         dt: Optional[float] = None,
         record_dt: bool = False,
         **options,
@@ -57,7 +58,7 @@ class AbstractTimeDriver(Driver):
             Driver's name; default: "Explicit time driver"
         owner : System, optional
             :py:class:`~cosapp.systems.system.System` to which this driver belongs; default None
-        time_interval : Tuple[float, float]
+        time_interval : tuple[float, float]
             Time interval [t_begin, t_end], with t_end > t_begin; defaut None
         dt : float
             Time step; defaut None. If None, will be tentatively determined
@@ -65,7 +66,7 @@ class AbstractTimeDriver(Driver):
         record_dt : bool
             If True, driver will store actual time steps used in simulation; default False.
             This option is only useful for post-run analysis, when `dt` is unspecified.
-        **options : Dict[str, Any]
+        **options : dict[str, Any]
             Optional keywords arguments for generic `Driver` objects
         """
         dt_growth_rate = options.pop('max_dt_growth_rate', 2.0)
@@ -88,7 +89,8 @@ class AbstractTimeDriver(Driver):
         self.__scenario = Scenario("empty", self)
         self.__stepper: DiscreteStepper = None
         self.__event_data: pandas.DataFrame = None
-        self.__recorded_events: List[EventRecord] = []
+        self.__recorded_events: list[EventRecord] = []
+        self._system_update_signal = Signal(name="AbstracTimeDriver.system_update_signal")
 
     @property
     def dt(self) -> Union[None, Number]:
@@ -105,12 +107,12 @@ class AbstractTimeDriver(Driver):
         return self.__clock.time
 
     @property
-    def time_interval(self) -> Tuple[Number, Number]:
+    def time_interval(self) -> tuple[Number, Number]:
         """Time interval covered by driver"""
         return self.__time_interval
 
     @time_interval.setter
-    def time_interval(self, interval: Tuple[Number, Number]) -> None:
+    def time_interval(self, interval: tuple[Number, Number]) -> None:
         if interval is not None:
             check_arg(interval, 'time_interval', (tuple, list), lambda it: len(it) == 2)
             interval = tuple(interval)
@@ -125,8 +127,8 @@ class AbstractTimeDriver(Driver):
         return self.__event_data
 
     @property
-    def recorded_events(self) -> List[EventRecord]:
-        """List[EventRecord]: list of recorded event cascades"""
+    def recorded_events(self) -> list[EventRecord]:
+        """list[EventRecord]: list of recorded event cascades"""
         return self.__recorded_events
 
     # @property
@@ -139,8 +141,8 @@ class AbstractTimeDriver(Driver):
 
     def set_scenario(self,
         name = "scenario",
-        init: Dict[str, Any] = dict(),
-        values: Dict[str, Any] = dict(),
+        init: dict[str, Any] = dict(),
+        values: dict[str, Any] = dict(),
         stop: Optional[Union[str, Event]] = None,
     ) -> None:
         """
@@ -291,6 +293,7 @@ class AbstractTimeDriver(Driver):
         n_record = 0
         prev_dt = None
         self._set_time(t0)
+        self._system_update_signal.emit()
 
         stepper = self.__stepper
         self.__recorded_events = []
@@ -327,6 +330,7 @@ class AbstractTimeDriver(Driver):
                 record_data()
                 record_event()
                 stepper.reevaluate_primitive_events()
+                self._system_update_signal.emit()  # signal emission before transition
                 self._pre_transition()
                 self.transition(record.time, record.events)
                 record_event(", ".join(event.contextual_name for event in record.events))
@@ -390,6 +394,7 @@ class AbstractTimeDriver(Driver):
             else:
                 prev_dt = dt
             t, stopped = update_system(t, dt)
+            self._system_update_signal.emit()
 
         self.__recorded_dt = numpy.asarray(recorded_dt)
         self.__event_data = event_rec.export_data()
@@ -402,6 +407,11 @@ class AbstractTimeDriver(Driver):
                 logger.info(
                     f"Stop criterion met at t = {last_record.time}"
                 )
+
+    @property
+    def system_update_signal(self):
+        """Signal emitted after the owner system is updated, at each time step"""
+        return self._system_update_signal
 
     def transition(self, time: float, events: Collection[Event]=()) -> None:
         """Execute owner system transition and reinitialize sub-drivers"""
@@ -603,3 +613,21 @@ class AbstractTimeDriver(Driver):
         """Shift transient data from previous time step."""
         for data in self._tr_data.values():
             data[0:2] = data[2:4]
+
+    def __getstate__(self) -> tuple[None, dict[str, Any]]:
+        """Creates a state of the object.
+
+        The state type depend on the object, see
+        https://docs.python.org/3/library/pickle.html#object.__getstate__
+        for further details.
+        
+        Returns
+        -------
+        tuple[None, dict[str, Any]]:
+            state
+        """
+        _, slots = super().__getstate__()
+
+        slots.pop("_system_update_signal")
+
+        return None, slots
