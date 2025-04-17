@@ -630,3 +630,61 @@ def test_AbstractTimeDriver_subdriver_setup():
         s.run_drivers()
         assert setup_run_callback.call_count == 1
         assert compute_callback.call_count == 3
+
+
+@pytest.mark.parametrize(
+    "trigger, expected", [
+        (None, 5),
+        ("t > 2", 5),
+        ("t > 0.235", 7),
+    ]
+)
+def test_AbstractTimeDriver_system_update_signal(trigger, expected):
+    """Test signal `AbstractTimeDriver.system_update_signal`
+    """
+    class Bogus(System):
+        def setup(self):
+            self.add_event("tada")
+    
+    system = Bogus("system")
+    system.tada.trigger = trigger
+
+    driver = system.add_driver(AbstractTimeDriver("driver", time_interval=[0, 1], dt=0.25))
+
+    with patch("cosapp.core.signal.signal.inspect"):
+        # Add bogus slot to `system_update_signal`
+        update_callback = MagicMock()
+        driver.system_update_signal.connect(Slot(update_callback))
+
+        system.run_drivers()
+        assert update_callback.call_count == expected
+
+
+def test_AbstractTimeDriver_global_max():
+    """Use signal `AbstractTimeDriver.system_update_signal`
+    to compute the maximum value of a variable over time.
+    """
+    class Bogus(System):
+        def setup(self):
+            self.add_inward("x", 0.0)
+            self.add_outward("x_max", 0.0)
+    
+        def init_mode(self):
+            self.x_max = -np.inf
+
+        def update_x_max(self):
+            self.x_max = max(self.x, self.x_max)
+
+    system = Bogus("system")
+
+    driver = system.add_driver(AbstractTimeDriver("driver", time_interval=[0, 2], dt=0.1))
+
+    driver.set_scenario(values={"x": "sin(t)"})
+
+    driver.system_update_signal.connect(system.update_x_max)
+
+    system.x_max = np.inf
+    system.run_drivers()
+    
+    assert system.x == pytest.approx(np.sin(2))
+    assert system.x_max == pytest.approx(1, abs=1e-3)
