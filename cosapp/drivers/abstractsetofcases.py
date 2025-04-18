@@ -38,7 +38,7 @@ class AbstractSetOfCases(Driver):
         Keyword arguments will be used to set driver options
     """
 
-    __slots__ = ("cases", "_transients_variables", "_execution_policy")
+    __slots__ = ("cases", "_transients", "_execution_policy")
 
     def __init__(
         self,
@@ -63,7 +63,7 @@ class AbstractSetOfCases(Driver):
         # variables may not be the same on all points.
         self.cases = None  # type: Optional[Iterable[Any]]
             # desc="List of cases to be carried out."
-        self._transients_variables = {} 
+        self._transients = {} 
         self._execution_policy: ExecutionPolicy = execution_policy  # Execution policy to use for computation
 
     def _precase(self, index: int, case: Any):
@@ -102,7 +102,7 @@ class AbstractSetOfCases(Driver):
         super().setup_run()
         self._build_cases()
         time_problem = self._owner.assembled_time_problem()
-        self._transients_variables = {
+        self._transients = {
             varname: copy.copy(transient.value)
             for varname, transient in time_problem.transients.items()
         }

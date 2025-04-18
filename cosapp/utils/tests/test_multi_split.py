@@ -1,6 +1,6 @@
 import pytest
 
-from cosapp.utils.parsing import multi_split
+from cosapp.utils.parsing import multi_split, multi_join
 
 
 @pytest.mark.parametrize("expression, symbols, expected", [
@@ -42,8 +42,10 @@ from cosapp.utils.parsing import multi_split
 ])
 def test_multi_split(expression, symbols, expected):
     expressions, separators = multi_split(expression, symbols)
+    assert len(expressions) == len(separators) + 1
     assert expressions == expected['expressions']
     assert separators == expected['separators']
+    assert multi_join(expressions, separators) == expression
 
 
 @pytest.mark.parametrize("expression, expected_terms, expected_ops", [
@@ -69,10 +71,10 @@ def test_multi_split(expression, symbols, expected):
         ["<", ">", ">", "<", "==", "<"],
     ),
 ])
-def test_multi_split_inequalities(expression, expected_terms, expected_ops):
-    terms, operators = multi_split(
-        expression,
-        separators = {"<", "==", ">"}
-    )
+def test_multi_split_operators(expression, expected_terms, expected_ops):
+    """Test multi_split with {"<", "==", ">"} separators.
+    """
+    terms, operators = multi_split(expression, separators={"<", "==", ">"})
+    assert len(terms) == len(operators) + 1
     assert terms == expected_terms
     assert operators == expected_ops

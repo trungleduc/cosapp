@@ -95,7 +95,6 @@ def dealias_problem(problem: MathematicalProblem, name=None) -> MathematicalProb
         raise ValueError(f"problem is not defined on a system")
     if not name:
         name = f"{problem.name}[filtered]"
-    from cosapp.base import System
     context: System = problem.context
     input_mapping = context.input_mapping
 
