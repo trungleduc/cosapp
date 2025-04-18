@@ -6,15 +6,11 @@ from io import StringIO
 from typing import (
     Any,
     Callable,
-    Dict,
-    List,
     Optional,
     Sequence,
-    Tuple,
     Union,
     Iterable,
     TypeVar,
-    Type,
 )
 
 from cosapp.core.numerics.basics import MathematicalProblem, SolverResults
@@ -48,7 +44,7 @@ class BaseSolverBuilder(abc.ABC):
         self.solver = solver
         self.problem = MathematicalProblem(solver.name, solver.owner)
         self.initial_values = numpy.empty(0)
-        self.is_design_unknown: Dict[str, bool] = dict()
+        self.is_design_unknown: dict[str, bool] = dict()
 
     @abc.abstractmethod
     def build_system(self) -> None:
@@ -108,7 +104,7 @@ class NonLinearSolver(AbstractSolver):
         name: str,
         owner: Optional[System] = None,
         method: Union[
-            NonLinearMethods, Type[AbstractNonLinearSolver]
+            NonLinearMethods, type[AbstractNonLinearSolver]
         ] = NonLinearMethods.NR,
         **options,
     ) -> None:
@@ -120,7 +116,7 @@ class NonLinearSolver(AbstractSolver):
             Name of the `Driver`.
         owner: System, optional
             :py:class:`~cosapp.systems.system.System` to which this driver belong; defaults to `None`.
-        method : Union[NonLinearMethods, Type[AbstractNonLinearSolver]]
+        method : Union[NonLinearMethods, type[AbstractNonLinearSolver]]
             Resolution method to use
         **kwargs:
             Additional keywords arguments forwarded to base class.
@@ -144,7 +140,7 @@ class NonLinearSolver(AbstractSolver):
             )
 
         self.__method = method
-        self.__trace: List[Dict[str, Any]] = list()
+        self.__trace: list[dict[str, Any]] = list()
         self.__results: SolverResults = None
         self.__builder: BaseSolverBuilder = None
 
@@ -246,8 +242,8 @@ class NonLinearSolver(AbstractSolver):
         self,
         fresidues: Callable[[Sequence[float], Union[float, str], bool], numpy.ndarray],
         x0: Sequence[float],
-        args: Tuple[Union[float, str]] = (),
-        options: Optional[Dict[str, Any]] = None,
+        args: tuple[Union[float, str]] = (),
+        options: Optional[dict[str, Any]] = None,
         callback: Optional[Callable[[], None]] = None,
     ) -> SolverResults:
         """Solves the mathematical problem with a non linear method."""
@@ -296,15 +292,13 @@ class NonLinearSolver(AbstractSolver):
     def _init_problem(self):
         """Initialize mathematical problem"""
         logger.debug(
-            "\n".join(
-                [
-                    "*" * 40,
-                    "*",
-                    "* Assemble mathematical problem",
-                    "*",
-                    "*" * 40,
-                ]
-            )
+            "\n".join([
+                "*" * 40,
+                "*",
+                "* Assemble mathematical problem",
+                "*",
+                "*" * 40,
+            ])
         )
         run_cases = list(
             filter(
@@ -323,12 +317,10 @@ class NonLinearSolver(AbstractSolver):
         self.__builder = builder
         self.touch_unknowns()
         logger.debug(
-            "\n".join(
-                [
-                    "Mathematical problem:",
-                    f"{'<empty>' if self.problem.is_empty() else self.problem}",
-                ]
-            )
+            "\n".join([
+                "Mathematical problem:",
+                f"{'<empty>' if self.problem.is_empty() else self.problem}",
+            ])
         )
 
     def _fresidues(self, x: Sequence[float]) -> numpy.ndarray:
@@ -393,7 +385,7 @@ class NonLinearSolver(AbstractSolver):
                 callback=callback,
             )
             self.__results = results
-            self.__trace = getattr(results, "trace", list())
+            self.__trace = getattr(results, "trace", [])
 
             if results.success:
                 self.status = ""
@@ -443,7 +435,7 @@ class NonLinearSolver(AbstractSolver):
             callback = SolverRecorderCallback(self)
             callback.record()
 
-    def _get_solver_options(self) -> Dict[str, Any]:
+    def _get_solver_options(self) -> dict[str, Any]:
         options = self._filter_options(self.__option_aliases)
 
         if self.method == NonLinearMethods.NR:
@@ -522,7 +514,7 @@ class NonLinearSolver(AbstractSolver):
                     for residue, line in zip(residue_names, jacobian.splitlines()):
                         message += f"{residue}, {line}\n"
 
-            def format_record(records: numpy.ndarray, headers: List[str]) -> str:
+            def format_record(records: numpy.ndarray, headers: list[str]) -> str:
                 records = numpy.atleast_2d(records)
                 with StringIO() as stream:
                     writer = csv.writer(stream, delimiter=",", lineterminator="\n")
@@ -551,9 +543,7 @@ class NonLinearSolver(AbstractSolver):
         super()._declare_options()
         self.__option_aliases = dict()
 
-    def extend(
-        self, problem: MathematicalProblem, *args, **kwargs
-    ) -> MathematicalProblem:
+    def extend(self, problem: MathematicalProblem, *args, **kwargs) -> MathematicalProblem:
         """Extend solver inner problem.
 
         Parameters
@@ -675,7 +665,7 @@ class MultipointSolverBuilder(BaseSolverBuilder):
     and off-design problems declared at case level.
     """
 
-    def __init__(self, solver: NonLinearSolver, points: List[RunSingleCase]):
+    def __init__(self, solver: NonLinearSolver, points: list[RunSingleCase]):
         super().__init__(solver)
         self.points = points
 

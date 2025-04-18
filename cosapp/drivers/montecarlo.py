@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy
 import logging
 from collections import OrderedDict
-from typing import Any, Iterable, Dict, List, Optional, Union, NamedTuple
+from typing import Any, Iterable, Optional, Union, NamedTuple
 
 from scipy.stats import qmc
 
@@ -49,15 +49,11 @@ class MonteCarlo(AbstractSetOfCases):
     """
 
     __slots__ = (
-        'draws', 'linear', 'random_variables', 'responses', 'solver', 'reference_case_solution',
-        'X0', 'Y0', 'A', 'perturbations'
+        'draws', 'linear', 'random_variables', 'responses', 'solver',
+        'X0', 'Y0', 'A', 'perturbations', 'reference_case_solution',
     )
 
-    def __init__(self,
-        name: str,
-        owner: Optional[System] = None,
-        **options
-    ) -> None:
+    def __init__(self, name: str, owner: Optional[System]=None, **options) -> None:
         """Initialize driver
 
         Parameters
@@ -75,14 +71,14 @@ class MonteCarlo(AbstractSetOfCases):
         self.linear = False  # type: bool
             # desc="True for linearisation of system before Montecarlo calculation. Default False."
 
-        self.random_variables: Dict[str, RandomVariable] = OrderedDict()
+        self.random_variables: dict[str, RandomVariable] = OrderedDict()
             # desc="Random variables in the system."
-        self.responses = list()  # type: List[str]
+        self.responses = list()  # type: list[str]
             # We need a list as set is not ordered
             # desc="Variable names to study through Monte Carlo calculations."
         self.solver = None  # type: Optional[AbstractSolver]
             # desc="Solver acting. Used for re-init of case."
-        self.reference_case_solution = dict()  # type: Dict[str, float]
+        self.reference_case_solution = dict()  # type: dict[str, float]
 
         self.X0 = None  # type: Optional[numpy.ndarray]
             # desc="Vector of imposed disturbed values"
@@ -184,8 +180,9 @@ class MonteCarlo(AbstractSetOfCases):
 
     def _reset_transients(self):
         """Reattribute initial transient values."""
-        for variable, value in self._transients_variables.items():
-            self._owner[variable] = value
+        owner = self._owner
+        for varname, value in self._transients.items():
+            setattr(owner, varname, value)
 
     def _precompute(self):
         """Save reference and build cases."""
@@ -204,39 +201,38 @@ class MonteCarlo(AbstractSetOfCases):
             n_output = len(self.responses)
             if n_output == 0:
                 raise ValueError("You need to define response variables to use MonteCarlo linear mode.")
-            self.X0 = numpy.zeros(n_input)
-            self.Y0 = numpy.zeros(n_output)
-            self.A = numpy.zeros((n_output, n_input))
 
-            # reference for influence matrix computation through center differentiation scheme
-            for i, name in enumerate(self.random_variables):
-                self.X0[i] = self.owner[name]
-            for j, name in enumerate(self.responses):
-                self.Y0[j] = self.owner[name]
+            owner = self.owner
+            
+            self.X0 = X0 = numpy.array([owner[name] for name in self.random_variables])
+            self.Y0 = Y0 = numpy.array([owner[name] for name in self.responses])
+            self.A = A = numpy.zeros((n_output, n_input))
 
+            # Reference for influence matrix computation through center differentiation scheme
             variation = 0.5 * (numpy.max(self.cases, axis=0) - numpy.min(self.cases, axis=0))
+            
             for i, input_name in enumerate(self.random_variables):
-                self.owner[input_name] = self.X0[i] + variation[i]
+                owner[input_name] = X0[i] + variation[i]
                 self.run_children()
 
                 for j, response_name in enumerate(self.responses):
-                    self.A[j, i] = 0.5 * (self.owner[response_name] - self.Y0[j]) / variation[i]
+                    A[j, i] = 0.5 * (owner[response_name] - Y0[j]) / variation[i]
 
-                self.owner[input_name] = self.X0[i] - variation[i]
+                owner[input_name] = X0[i] - variation[i]
                 self.run_children()
 
                 for j, response_name in enumerate(self.responses):
-                    self.A[j, i] -= 0.5 * (self.owner[response_name] - self.Y0[j]) / variation[i]
+                    A[j, i] -= 0.5 * (owner[response_name] - Y0[j]) / variation[i]
 
                 # Restore system value
-                self.owner[input_name] = self.X0[i]
+                owner[input_name] = X0[i]
 
             for j, name in enumerate(self.responses):
-                self.Y0[j] = self.owner[name]
+                Y0[j] = owner[name]
         
         self._reset_transients()
-        
-    def _precase(self, case_idx, case):
+
+    def _precase(self, case_idx, case) -> None:
         """Hook to be called before running each case.
         
         Parameters
@@ -260,29 +256,30 @@ class MonteCarlo(AbstractSetOfCases):
     @staticmethod
     def _compute_sequential(mc: MonteCarlo) -> None:
         """Contains the customized `Module` calculation, to execute after children."""
-        for case_idx, case in enumerate(mc.cases):
+        for index, case in enumerate(mc.cases):
             if len(case) > 0:
-                mc._precase(case_idx, case)
+                mc._precase(index, case)
                 if mc.linear:
                     mc.__run_linear()
                 else:
                     mc.run_children()
-                mc._postcase(case_idx, case)
+                mc._postcase(index, case)
 
     def __run_linear(self) -> None:
         """Approximate MonteCarlo simulation using partial derivatives matrix."""
         # TODO this is not great as we set variables in the system breaking its consistency.
         if len(self.responses) > 0:
+            owner = self.owner
             X = numpy.zeros(len(self.random_variables))
             for i, name in enumerate(self.random_variables):
-                self.X0[i] = self.owner[name]
+                self.X0[i] = getattr(owner, name)
 
             Y = self.Y0 + numpy.matmul(self.A, X - self.X0)
 
             for j, name in enumerate(self.responses):
-                self.owner[name] = Y[j]
+                setattr(owner, name, Y[j])
 
-    def _postcase(self, case_idx: int, case: Any):
+    def _postcase(self, index: int, case: Any) -> None:
         """Hook to be called before running each case.
         
         Parameters
@@ -293,7 +290,7 @@ class MonteCarlo(AbstractSetOfCases):
             Parameters for this case
         """
         # Store the results
-        super()._postcase(case_idx, case)
+        super()._postcase(index, case)
 
         # Remove the perturbation
         for variable, delta in zip(self.random_variables.values(), self.perturbations):
@@ -303,4 +300,3 @@ class MonteCarlo(AbstractSetOfCases):
                 variable.connector.clear_noise()
 
         self._reset_transients()
-

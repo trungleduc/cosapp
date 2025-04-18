@@ -233,7 +233,6 @@ class BaseConnector(abc.ABC):
 
     def contextual_name(self, context: Optional[System]=None, with_mapping=True) -> str:
         """Contextual name of the connector, of the kind system[source -> sink]."""
-        name = self.name
         sink = self.sink
         source = self.source
         if source.owner.parent is sink.owner.parent:
