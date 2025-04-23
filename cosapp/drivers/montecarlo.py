@@ -2,12 +2,11 @@ from __future__ import annotations
 
 import numpy
 import logging
-from collections import OrderedDict
-from typing import Any, Iterable, Optional, Union, NamedTuple
-
+from collections.abc import Iterable, Iterator
+from typing import Any, Optional, Union
+from functools import singledispatchmethod
 from scipy.stats import qmc
 
-from cosapp.core.variableref import VariableReference
 from cosapp.ports.port import BasePort
 from cosapp.drivers.abstractsetofcases import AbstractSetOfCases, System
 from cosapp.drivers.abstractsolver import AbstractSolver
@@ -18,25 +17,76 @@ from cosapp.systems.system import SystemConnector
 logger = logging.getLogger(__name__)
 
 
-class RandomVariable(NamedTuple):
-    variable: VariableReference
-    distribution: Distribution
-    connector: Optional[SystemConnector] = None
+class RandomVariable:
+    """Class representing a random variable in a system of interest"""
+
+    __slots__ = ("name", "_ref", "distribution", "connector")
+
+    def __init__(self, system: System, varname: str, distribution: Optional[Distribution]=None):
+        ref = system.name2variable[varname]
+        port = ref.mapping
+
+        if not isinstance(port, BasePort):
+            raise TypeError(f"{varname!r} is not a variable of {system.name!r}.")
+
+        if not port.is_input:
+            raise TypeError(f"{varname!r} is not an input variable.")
+
+        if distribution is None:
+            distribution = port.get_details(ref.key).distribution
+        elif not isinstance(distribution, Distribution):
+            raise TypeError(
+                f"Distribution for '{system.name}.{varname}' is expected to be of type `Distribution`"
+                f"; got a {type(distribution).__name__}."
+            )
+
+        self._ref = ref
+        self.name = varname
+        self.distribution: Optional[Distribution] = distribution
+        self.connector: Optional[SystemConnector] = None
+
+        # Test if the variable is aliased or connected
+        try:
+            alias = system.input_mapping[varname]
+
+        except KeyError:
+            parent: System = port.owner.parent
+            if parent is not None:
+                port_varname = ref.key
+                connectors = parent.all_connectors()
+                for connector in filter(lambda c: c.sink is port, connectors):
+                    if port_varname in connector.sink_variables():
+                        self.connector = connector
+                        break
+
+        else:
+            self._ref = alias
+
+    @property
+    def value(self):
+        return self._ref.value
+
+    @value.setter
+    def value(self, value):
+        self._ref.value = value
     
-    def add_noise(self, quantile=None) -> float:
+    def add_noise(self, quantile: Optional[float]=None) -> float:
         delta = self.draw(quantile)
         self.set_perturbation(delta)
         return delta
 
-    def draw(self, quantile=None) -> float:
+    def draw(self, quantile: Optional[float]=None) -> float:
         return self.distribution.draw(quantile)
 
     def set_perturbation(self, value) -> None:
-        connector = self.connector
-        if connector is None:
-            self.variable.value += value
+        if (connector := self.connector):
+            connector.set_perturbation(self._ref.key, value)
         else:
-            connector.set_perturbation(self.variable.key, value)
+            self._ref.value += value
+
+    def __repr__(self):
+        distribution = self.distribution
+        return f"RandomVariable({self.name}, {distribution=})"
 
 
 # TODO linearization does not support multipoint cases
@@ -49,7 +99,7 @@ class MonteCarlo(AbstractSetOfCases):
     """
 
     __slots__ = (
-        'draws', 'linear', 'random_variables', 'responses', 'solver',
+        'draws', 'linear', '_random_variables', 'response_varnames', '_solver',
         'X0', 'Y0', 'A', 'perturbations', 'reference_case_solution',
     )
 
@@ -66,88 +116,85 @@ class MonteCarlo(AbstractSetOfCases):
             Additional keywords arguments forwarded to base class.
         """
         super().__init__(name, owner, **options)
-        self.draws = 200  # type: int
-            # desc="Number of cases performed for Montecarlo calculations."
-        self.linear = False  # type: bool
-            # desc="True for linearisation of system before Montecarlo calculation. Default False."
+        self.draws = 200   # desc="Number of cases performed for Montecarlo calculations."
+        self.linear = False  # desc="True for linearisation of system before Montecarlo calculation. Default False."
 
-        self.random_variables: dict[str, RandomVariable] = OrderedDict()
-            # desc="Random variables in the system."
-        self.responses = list()  # type: list[str]
-            # We need a list as set is not ordered
-            # desc="Variable names to study through Monte Carlo calculations."
-        self.solver = None  # type: Optional[AbstractSolver]
-            # desc="Solver acting. Used for re-init of case."
-        self.reference_case_solution = dict()  # type: dict[str, float]
+        self._random_variables: dict[str, RandomVariable] = {}  # desc="Random variables in the system."
+        self.response_varnames: list[str] = []  #  desc="Variable names to study through Monte Carlo calculations."
+        self._solver: AbstractSolver = None  # desc="Solver acting. Used for re-init of case."
+        self.reference_case_solution: dict[str, float] = {}
 
-        self.X0 = None  # type: Optional[numpy.ndarray]
-            # desc="Vector of imposed disturbed values"
-        self.Y0 = None  # type: Optional[numpy.ndarray]
-            # desc="Vector of output evaluated disturbed values."            
-        self.A = None  # type: Optional[numpy.ndarray]
-            # desc="Matrice of influence of imposed disturbed values on results."
-        self.perturbations = None  # type: Optional[numpy.ndarray]
-            # desc="Array of perturbations applied on the system."
+        self.X0: numpy.ndarray = None  # desc="Vector of imposed disturbed values"
+        self.Y0: numpy.ndarray = None  # desc="Vector of output evaluated disturbed values."            
+        self.A: numpy.ndarray = None   # desc="Matrice of influence of imposed disturbed values on results."
+        self.perturbations = numpy.empty(0)  # desc="Array of perturbations applied on the system."
 
     @classmethod
     def _slots_not_jsonified(cls) -> tuple[str]:
         """Returns slots that must not be JSONified."""
-        return (*super()._slots_not_jsonified(), "random_variables")
-    
-    def add_random_variable(self, names: Union[str, Iterable[str]]) -> None:
-        """Add variable to be perturbated.
+        return (*super()._slots_not_jsonified(), "_random_variables")
+
+    @singledispatchmethod
+    def add_random_variable(self, name, distribution: Optional[Distribution]=None) -> None:
+        """Add variable to be randomly perturbated, following an optional distribution.
 
         The perturbation distribution is defined by the variable distribution details.
 
-        ..
-            from cosapp.core.numerics.distribution import Normal
-
-            port.get_details('my_variable').distribution = Normal(worst=0.0, best=5.0)
-
         Parameters
         ----------
-        names : Union[str, Iterable[str]]
-            List of variables to be perturbated
+        varname : Union[str, Iterable[str], dict[str, Distribution]]
+            Name of the variable to be perturbed, or iterable thereof.
+            If the argument is a dict, it is interpreted as a {name: distribution} specification
+        distribution : cosapp.utils.distributions.Distribution | None
+            Distribution of the variable(s) to be perturbed.
+            If `None` (default), distributions are deduced from variable names.
+            This argument is only meaningful when a variable name or a list thereof is provided.
+
+        Examples
+        --------
+        >>> from cosapp.utils.distributions import Normal, Uniform
+        >>>
+        >>> montecarlo = system.add_driver(MonteCarlo("montecarlo"))
+        >>>
+        >>> montecarlo.add_random_variable("port.v")
+        >>> montecarlo.add_random_variable("port.v", Normal(...))
+        >>>
+        >>> montecarlo.add_random_variable(["x", "port.v"])
+        >>> montecarlo.add_random_variable(["x", "port.v"], Normal(...))
+        >>>
+        >>> montecarlo.add_random_variable({
+        >>>     "x": Normal(...),
+        >>>     "port.v": Uniform(...),
+        >>> })
         """
-        # TODO it should be possible to set the distribution directly
-        name2variable = self.owner.name2variable
+        raise TypeError("Variable name is expected to be a string or an iterable of strings")
 
-        def add_unique_input_var(name: str):
-            self.check_owner_attr(name)
-            ref = name2variable[name]
-            port = ref.mapping
+    @add_random_variable.register(dict)
+    def _add_random_variable_dict(self, specs: dict[str, Distribution], /) -> None:
+        """Add several random variables to be randomly perturbated, with specified distributions.
+        """
+        for varname, distribution in specs.items():
+            self.__add_new_random_var(varname, distribution)
 
-            if not isinstance(port, BasePort):
-                raise TypeError(f"{name!r} is not a variable.")
+    @add_random_variable.register(str)
+    def _(self, varname: str, distribution: Optional[Distribution]=None) -> None:
+        """Add a variable to be randomly perturbated, following an optional distribution.
+        """
+        self.__add_new_random_var(varname, distribution)
 
-            if not port.is_input:
-                raise TypeError(f"{name!r} is not an input variable.")
-
-            distribution = port.get_details(ref.key).distribution
-            if distribution is None:
-                raise ValueError(
-                    f"No distribution specified for {name!r}"
-                )
-
-            # Test if the variable is connected
-            connection = None
-            if port.owner.parent is not None:
-                connectors = port.owner.parent.all_connectors()
-                for connector in filter(lambda c: c.sink is port, connectors):
-                    if ref.key in connector.sink_variables():
-                        connection = connector
-                        break
-
-            self.random_variables[name] = RandomVariable(ref, distribution, connection)
-
-        check_arg(names, 'names', (str, set, list))
-
-        if isinstance(names, str):
-            add_unique_input_var(names)
-        else:
-            for name in names:
-                check_arg(name, f"{name} in 'names'", str)
-                add_unique_input_var(name)
+    @add_random_variable.register(Iterable)
+    def _(self, varnames: Iterable[str], distribution: Optional[Distribution]=None) -> None:
+        """Add several variables to be randomly perturbated, following an optional distribution.
+        """
+        for varname in varnames:
+            check_arg(varname, f"{varname} in 'varnames'", str)
+            self.__add_new_random_var(varname, distribution)
+    
+    def __add_new_random_var(self, varname: str, distribution: Optional[Distribution]=None) -> None:
+        """Add owner[varname] to random variable collection"""
+        check_arg(varname, 'varname', str, stack_shift=1)
+        self.check_owner_attr(varname)
+        self._random_variables[varname] = RandomVariable(self._owner, varname, distribution)
 
     def add_response(self, name: Union[str, Iterable[str]]) -> None:
         """Add a variable for which the statistical response will be calculated.
@@ -159,8 +206,8 @@ class MonteCarlo(AbstractSetOfCases):
         """
         def add_unique_response_var(name: str):
             self.check_owner_attr(name)
-            if name not in self.responses:
-                self.responses.append(name)
+            if name not in self.response_varnames:
+                self.response_varnames.append(name)
 
         check_arg(name, 'name', (str, set, list))
 
@@ -171,10 +218,42 @@ class MonteCarlo(AbstractSetOfCases):
                 check_arg(n, f"{n} in 'name'", str)
                 add_unique_response_var(n)
 
+    def clear_random_variables(self) -> None:
+        """Purge all random variables"""
+        self._random_variables.clear()
+
+    def random_variable_data(self) -> dict[str, Distribution]:
+        """Builds and returns the dictionary associating distributions to random variable names"""
+        return {
+            varname: variable.distribution
+            for varname, variable in self._random_variables.items()
+        }
+
+    @property
+    def random_variables(self) -> Iterator[RandomVariable]:
+        """Generator yielding all random variable names"""
+        return self._random_variables.values()
+
+    @property
+    def random_variable_names(self) -> Iterator[str]:
+        """Generator yielding all random variable names"""
+        return self._random_variables.keys()
+
+    def setup_run(self) -> None:
+        """Actions performed prior to the `compute` call."""
+        super().setup_run()
+        unset_distributions = []
+        for varname, random_variable in self._random_variables.items():
+            if random_variable.distribution is None:
+                unset_distributions.append(varname)
+        if unset_distributions:
+            varnames = ", ".join(unset_distributions)
+            raise ValueError(f"No distribution was specified for {varnames}")
+
     def _build_cases(self) -> None:
         """Build the list of cases to run during execution
         """
-        sobol = qmc.Sobol(d=len(self.random_variables), scramble=False)
+        sobol = qmc.Sobol(d=len(self._random_variables), scramble=False)
         sobol.random()
         self.cases = sobol.random(self.draws)
 
@@ -189,46 +268,48 @@ class MonteCarlo(AbstractSetOfCases):
         super()._precompute()
         self.run_children()
 
-        self.solver = None
+        self._solver = None
         for child in self.children.values():
             if isinstance(child, AbstractSolver):
-                self.solver = child
+                self._solver = child
                 self.reference_case_solution = child.save_solution()
                 break
 
         if self.linear:  # precompute linear system
-            n_input = len(self.random_variables)
-            n_output = len(self.responses)
+            n_input = len(self._random_variables)
+            n_output = len(self.response_varnames)
             if n_output == 0:
                 raise ValueError("You need to define response variables to use MonteCarlo linear mode.")
 
-            owner = self.owner
-            
-            self.X0 = X0 = numpy.array([owner[name] for name in self.random_variables])
-            self.Y0 = Y0 = numpy.array([owner[name] for name in self.responses])
+            # Store variable references (faster than calling owner's getattr/setattr)
+            name2variable = self._owner.name2variable
+            response_variables = [name2variable[name] for name in self.response_varnames]
+            random_variables = list(self.random_variables)
+
+            self.X0 = X0 = numpy.array([variable.value for variable in random_variables])
+            self.Y0 = Y0 = numpy.array([variable.value for variable in response_variables])
             self.A = A = numpy.zeros((n_output, n_input))
 
             # Reference for influence matrix computation through center differentiation scheme
             variation = 0.5 * (numpy.max(self.cases, axis=0) - numpy.min(self.cases, axis=0))
-            
-            for i, input_name in enumerate(self.random_variables):
-                owner[input_name] = X0[i] + variation[i]
+
+            for i, random_variable in enumerate(random_variables):
+                random_variable.value = X0[i] + variation[i]
                 self.run_children()
 
-                for j, response_name in enumerate(self.responses):
-                    A[j, i] = 0.5 * (owner[response_name] - Y0[j]) / variation[i]
+                for j, response in enumerate(response_variables):
+                    A[j, i] = 0.5 * (response.value - Y0[j]) / variation[i]
 
-                owner[input_name] = X0[i] - variation[i]
+                random_variable.value = X0[i] - variation[i]
                 self.run_children()
 
-                for j, response_name in enumerate(self.responses):
-                    A[j, i] -= 0.5 * (owner[response_name] - Y0[j]) / variation[i]
+                for j, response in enumerate(response_variables):
+                    A[j, i] -= 0.5 * (response.value - Y0[j]) / variation[i]
 
                 # Restore system value
-                owner[input_name] = X0[i]
+                random_variable.value = X0[i]
 
-            for j, name in enumerate(self.responses):
-                Y0[j] = owner[name]
+            self.Y0 = numpy.array([variable.value for variable in response_variables])
         
         self._reset_transients()
 
@@ -245,13 +326,12 @@ class MonteCarlo(AbstractSetOfCases):
         super()._precase(case_idx, case)
 
         # Set perturbation
-        self.perturbations = numpy.zeros(len(self.random_variables))
-        for i, variable in enumerate(self.random_variables.values()):
-            perturbation = variable.add_noise(case[i])
-            self.perturbations[i] = perturbation
+        self.perturbations = numpy.zeros(len(self._random_variables))
+        for i, variable in enumerate(self._random_variables.values()):
+            self.perturbations[i] = variable.add_noise(case[i])
 
-        if len(self.reference_case_solution) > 0:
-            self.solver.load_solution(self.reference_case_solution)
+        if (solution := self.reference_case_solution):
+            self._solver.load_solution(solution)
 
     @staticmethod
     def _compute_sequential(mc: MonteCarlo) -> None:
@@ -268,15 +348,15 @@ class MonteCarlo(AbstractSetOfCases):
     def __run_linear(self) -> None:
         """Approximate MonteCarlo simulation using partial derivatives matrix."""
         # TODO this is not great as we set variables in the system breaking its consistency.
-        if len(self.responses) > 0:
-            owner = self.owner
-            X = numpy.zeros(len(self.random_variables))
-            for i, name in enumerate(self.random_variables):
-                self.X0[i] = getattr(owner, name)
+        n_output = len(self.response_varnames)
 
-            Y = self.Y0 + numpy.matmul(self.A, X - self.X0)
+        if n_output > 0:
+            owner = self._owner
+            self.X0 = X0 = numpy.array([variable.value for variable in self._random_variables.values()])
+            X = numpy.zeros(n_output)
+            Y = self.Y0 + numpy.matmul(self.A, X - X0)
 
-            for j, name in enumerate(self.responses):
+            for j, name in enumerate(self.response_varnames):
                 setattr(owner, name, Y[j])
 
     def _postcase(self, index: int, case: Any) -> None:
@@ -293,7 +373,7 @@ class MonteCarlo(AbstractSetOfCases):
         super()._postcase(index, case)
 
         # Remove the perturbation
-        for variable, delta in zip(self.random_variables.values(), self.perturbations):
+        for variable, delta in zip(self._random_variables.values(), self.perturbations):
             if variable.connector is None:
                 variable.set_perturbation(-delta)
             else:

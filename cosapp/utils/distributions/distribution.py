@@ -1,9 +1,7 @@
 """Basic class to define a variable distribution."""
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
-import scipy
-import numpy
 
 EPS = 1e-12
 
@@ -47,12 +45,12 @@ class Distribution(ABC):
         self.pworst = pworst
         self.pbest = pbest
 
-    def __json__(self) -> Dict[str, Any]:
+    def __json__(self) -> dict[str, Any]:
         """Creates a JSONable dictionary representation of the object.
 
         Returns
         -------
-        Dict[str, Any]
+        dict[str, Any]
             The dictionary
         """
         return {
@@ -134,7 +132,7 @@ class Distribution(ABC):
         self._set_distribution()
 
     @abstractmethod
-    def draw(self, quantile: Optional[float] = None) -> float:
+    def draw(self, quantile: Optional[float]=None) -> float:
         """Generate a random number.
 
         If a quantile is given, generate the perturbation for that quantile.
