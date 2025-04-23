@@ -9,7 +9,8 @@ from cosapp.drivers import (
     NonLinearSolver,
     RunOnce,
     RunSingleCase,
-    EulerExplicit
+    EulerExplicit,
+    Driver,
 )
 from cosapp.recorders import DataFrameRecorder
 from cosapp.systems import System
@@ -20,7 +21,7 @@ from cosapp.tests.library.systems import (
     MultiplySystem2,
 )
 from cosapp.core.execution import ExecutionPolicy, ExecutionType, WorkerStartMethod
-from cosapp.utils.testing import no_exception, pickle_roundtrip, are_same, has_keys
+from cosapp.utils.testing import no_exception, pickle_roundtrip, are_same
 
 
 class SimpleCentered(System):
@@ -67,8 +68,16 @@ def test_MonteCarlo_setup():
     mc = MonteCarlo("statistics")
     assert not mc.linear
     assert len(mc.random_variables) == 0
-    assert len(mc.responses) == 0
+    assert len(mc.response_varnames) == 0
     assert mc.cases is None
+
+
+def test_MonteCarlo_add_child():
+    mc = MonteCarlo("mc")
+    solver = mc.add_child(NonLinearSolver("solver"))
+    driver = mc.add_child(Driver("driver"))
+    assert mc.solver is solver
+    assert mc.driver is driver
 
 
 def test_MonteCarlo__build_cases():
@@ -90,70 +99,171 @@ def test_MonteCarlo__build_cases():
 
 
 def test_MonteCarlo_add_random_variable():
-    s = Multiply2("mult")
-    s.K1 = 5.0
-    s.K2 = 10.0
+    mult = Multiply2("mult")
+    mult.K1 = 5.0
+    mult.K2 = 10.0
 
-    mc = s.add_driver(MonteCarlo("mc"))
+    mc = mult.add_driver(MonteCarlo("mc"))
 
-    mc.add_random_variable({"K1", "K2"})
-    assert set(mc.random_variables) == {"K1", "K2"}
+    mc.add_random_variable(["K1", "K2"])
+    assert set(mc.random_variable_names) == {"K1", "K2"}
     
-    assert mc.random_variables["K1"].variable is s.name2variable["K1"]
-    assert mc.random_variables["K1"].connector is None
-    assert mc.random_variables["K1"].distribution is s.inwards.get_details("K1").distribution
+    for random_variable in mc.random_variables:
+        name = random_variable.name
+        assert random_variable._ref is mult.name2variable[name]
+        assert random_variable.connector is None
+        assert random_variable.distribution is mult.inwards.get_details(name).distribution
 
-    assert mc.random_variables["K2"].variable is s.name2variable["K2"]
-    assert mc.random_variables["K2"].connector is None
-    assert mc.random_variables["K2"].distribution is s.inwards.get_details("K2").distribution
-
-    mc.random_variables.clear()
+    mc.clear_random_variables()
+    assert len(mc.random_variable_names) == 0
     mc.add_random_variable(["K1"])
-    assert set(mc.random_variables) == {"K1"}
+    assert set(mc.random_variable_names) == {"K1"}
 
-    mc.random_variables.clear()
+    mc.clear_random_variables()
+    assert len(mc.random_variable_names) == 0
     mc.add_random_variable("K1")
-    assert set(mc.random_variables) == {"K1"}
+    assert set(mc.random_variable_names) == {"K1"}
 
     # Don't duplicate input
     mc.add_random_variable("K1")
-    assert set(mc.random_variables) == {"K1"}
+    assert set(mc.random_variable_names) == {"K1"}
 
     # Protection
-    with pytest.raises(TypeError):
+    with pytest.raises(TypeError, match="Variable name"):
         mc.add_random_variable(1.0)
-    with pytest.raises(
-        TypeError, match=r"'p_out.x' is not an input variable"
-    ):
+    
+    with pytest.raises(TypeError, match=r"'p_out.x' is not an input variable"):
         mc.add_random_variable("p_out.x")
 
-    with pytest.raises(
-        AttributeError, match=r"'[\w\.]+' not found in System '[\w\.]+'"
-    ):
+    with pytest.raises(AttributeError, match=r"'[\w\.]+' not found in System '[\w\.]+'"):
         mc.add_random_variable("x")
 
-    with pytest.raises(TypeError, match=r"'[\w\.]+' is not a variable\."):
-        mc.add_random_variable("p_out")
+    with pytest.raises(TypeError, match=r"'[\w\.]+' is not a variable of '[\w\.]+'\."):
+        mc.add_random_variable("p_in")
 
-    with pytest.raises(
-        ValueError, match=r"No distribution specified for '[\w\.]+\.\w+'"
-    ):
+    with no_exception():
         mc.add_random_variable("p_in.x")
 
-    # Add a connected variable
-    s = Multiply2("mult")
-    t = System("top")
-    t.add_child(s, pulling="p_in")
-    dummy = Normal(best=2.0, worst=0.0)
-    s.p_in.get_details("x").distribution = dummy
-    mc = t.add_driver(MonteCarlo("mc"))
-    mc.add_random_variable("mult.p_in.x")
-    connector = list(filter(lambda c: c.sink is s.p_in, t.all_connectors()))[0]
-    assert set(mc.random_variables) == {"mult.p_in.x"}
-    random_variable = mc.random_variables["mult.p_in.x"]
-    assert random_variable.variable is t.name2variable["mult.p_in.x"]
+    with pytest.raises(ValueError, match=r"No distribution was specified for [\w\.]+\.\w+"):
+        mc.setup_run()
+
+
+def test_MonteCarlo_add_random_variable_connected():
+    class Assembly(System):
+        """Bogus assembly"""
+        def setup(self):
+            m1 = self.add_child(Multiply2("m1"), pulling="p_in")
+            m2 = self.add_child(Multiply2("m2"), pulling="p_out")
+
+            self.connect(m1.p_out, m2.p_in)
+    
+    top = Assembly("top")
+    mc = top.add_driver(MonteCarlo("mc"))
+
+    top.m2.p_in.get_details("x").distribution = distribution = Normal(best=2.0, worst=0.0)
+
+    assert len(mc.random_variable_names) == 0
+
+    mc.add_random_variable("m2.p_in.x")
+    assert set(mc.random_variable_names) == {"m2.p_in.x"}
+    assert mc.random_variable_data() == {"m2.p_in.x": distribution}
+
+    random_variables = list(mc.random_variables)
+    connector = list(filter(lambda c: c.sink is top.m2.p_in, top.all_connectors()))[0]
+
+    assert len(random_variables) == 1
+    random_variable = random_variables[0]
+    assert random_variable.name == "m2.p_in.x"
+    assert random_variable._ref is top.name2variable["m2.p_in.x"]
     assert random_variable.connector is connector
-    assert random_variable.distribution is dummy
+    assert random_variable.distribution is distribution
+
+
+def test_MonteCarlo_add_random_variable_pulled():
+    top = System("top")
+    mult = top.add_child(Multiply2("mult"), pulling="p_in")
+    mult.p_in.get_details("x").distribution = distribution = Normal(best=2.0, worst=0.0)
+
+    mc = top.add_driver(MonteCarlo("mc"))
+
+    mc.add_random_variable("mult.p_in.x")
+    assert set(mc.random_variable_names) == {"mult.p_in.x"}
+    assert mc.random_variable_data() == {"mult.p_in.x": distribution}
+
+    random_variables = list(mc.random_variables)
+    assert len(random_variables) == 1
+    random_variable = random_variables[0]
+    assert random_variable.name == "mult.p_in.x"
+    assert random_variable._ref is top.name2variable["p_in.x"]  # p_in.x is the free variable, here
+    assert random_variable.connector is None  # due to pulling
+    assert random_variable.distribution is distribution
+
+
+def test_MonteCarlo_add_random_variable_with_distribution_1():
+    """Test method `MonteCarlo_add_random_variable`.
+    Case 1: one variables and one distribution at a time.
+    """
+    s = Multiply2("s")
+    mc = s.add_driver(MonteCarlo("mc"))
+
+    normal = Normal(best=-1.0, worst=3.0)
+    uniform = Uniform(worst=-0.1, best=0.1)
+    
+    mc.add_random_variable("K1", normal)
+    assert mc.random_variable_data() == {"K1": normal}
+    
+    mc.add_random_variable("K2", uniform)
+    assert mc.random_variable_data() == {"K1": normal, "K2": uniform}
+
+
+@pytest.mark.parametrize("collection", [tuple, list, set])
+def test_MonteCarlo_add_random_variable_with_distribution_2(collection):
+    """Test method `MonteCarlo_add_random_variable`.
+    Case 2: several variables and a single distribution.
+    """
+    s = Multiply2("s")
+    mc = s.add_driver(MonteCarlo("mc"))
+
+    normal = Normal(best=-1.0, worst=3.0)
+    
+    mc.add_random_variable(collection(["K1", "K2"]), normal)
+    assert mc.random_variable_data() == {"K1": normal, "K2": normal}
+
+
+def test_MonteCarlo_add_random_variable_with_distribution_3():
+    """Test method `MonteCarlo_add_random_variable`.
+    Case 3: several variables with associated distributions.
+    """
+    s = Multiply2("s")
+    mc = s.add_driver(MonteCarlo("mc"))
+
+    normal = Normal(best=-1.0, worst=3.0)
+    uniform = Uniform(worst=-0.1, best=0.1)
+    
+    mc.add_random_variable({"K1": normal, "K2": uniform})
+    assert mc.random_variable_data() == {"K1": normal, "K2": uniform}
+    
+    # Add existing varname with a different distribution
+    mc.add_random_variable({"K2": normal})
+    assert mc.random_variable_data() == {"K1": normal, "K2": normal}
+
+    # Clear and check erroneous case
+    s.drivers.clear()
+    mc = s.add_driver(MonteCarlo("mc"))
+    
+    with pytest.raises(TypeError, match="Distribution for 's\.K2'"):
+        mc.add_random_variable({"K1": normal, "K2": 3.14})
+
+    # assert list(var_data) == ["K1"]
+
+    # Clear and check erroneous case
+    s.drivers.clear()
+    mc = s.add_driver(MonteCarlo("mc"))
+    
+    with pytest.raises(TypeError, match="Distribution for 's\.K1'"):
+        mc.add_random_variable({"K1": 3.14, "K2": normal})
+
+    # assert list(var_data) == []
 
 
 def test_MonteCarlo_add_response():
@@ -161,25 +271,25 @@ def test_MonteCarlo_add_response():
     mc = s.add_driver(MonteCarlo("mc"))
 
     mc.add_response("K1")
-    assert "K1" in mc.responses
-    assert set(mc.responses) == {"K1"}
+    assert "K1" in mc.response_varnames
+    assert set(mc.response_varnames) == {"K1"}
 
     mc.add_response("K1")
-    assert set(mc.responses) == {"K1"}
+    assert set(mc.response_varnames) == {"K1"}
 
     mc.add_response("K2")
-    assert set(mc.responses) == {"K1", "K2"}
+    assert set(mc.response_varnames) == {"K1", "K2"}
 
-    mc.responses.clear()
+    mc.response_varnames.clear()
     mc.add_response(["K1", "K2"])
-    assert mc.responses == ["K1", "K2"]
-    assert set(mc.responses) == {"K1", "K2"}
+    assert mc.response_varnames == ["K1", "K2"]
+    assert set(mc.response_varnames) == {"K1", "K2"}
 
-    mc.responses.clear()
+    mc.response_varnames.clear()
     mc.add_response({"K1", "K2"})
-    assert set(mc.responses) == {"K1", "K2"}
+    assert set(mc.response_varnames) == {"K1", "K2"}
 
-    mc.responses.clear()
+    mc.response_varnames.clear()
     with pytest.raises(TypeError):
         mc.add_response(1)
     with pytest.raises(AttributeError, match=r"'[\w\.]+' not found in System '[\w\.]+'"):
@@ -293,13 +403,12 @@ def test_MonteCarlo__postcase():
 
 def test_MonteCarlo_cases_centered():
     s = SimpleCentered("s")
-    distribution = Normal(best=0.1, worst=-0.1)
-    s.inwards.get_details("K1").distribution = distribution
     mc = s.add_driver(MonteCarlo("mc"))
     rec = mc.add_recorder(DataFrameRecorder(includes=["K1"], raw_output=True))
     mc.add_child(RunOnce("run"))
 
-    mc.add_random_variable({"K1"})
+    distribution = Normal(best=0.1, worst=-0.1)
+    mc.add_random_variable("K1", distribution)
 
     mc.draws = 100
     s.run_drivers()
@@ -312,13 +421,12 @@ def test_MonteCarlo_cases_centered():
 def test_MonteCarlo_cases_uncentered():
 
     s = SimpleCentered("s")
-    distribution = Normal(best=0.0, worst=-0.4)
-    s.inwards.get_details("K1").distribution = distribution
     mc = s.add_driver(MonteCarlo("mc"))
     rec = mc.add_recorder(DataFrameRecorder(includes=["K1"], raw_output=True))
     mc.add_child(RunOnce("run"))
 
-    mc.add_random_variable({"K1"})
+    distribution = Normal(best=0.0, worst=-0.4)
+    mc.add_random_variable("K1", distribution)
 
     mc.draws = 100
     s.run_drivers()
@@ -413,21 +521,21 @@ def test_MonteCarlo_multipts_iterative_nonlinear():
     design = NonLinearSolver("design", method=NonLinearMethods.NR, factor=0.4)
     design = snl.add_driver(design)
 
-    snl.splitter.inwards.split_ratio = 0.1
-    snl.mult2.inwards.K1 = 1
-    snl.mult2.inwards.K2 = 1
-    snl.nonlinear.inwards.k1 = 1
-    snl.nonlinear.inwards.k2 = 0.5
+    snl.splitter.split_ratio = 0.1
+    snl.mult2.K1 = 1
+    snl.mult2.K2 = 1
+    snl.nonlinear.k1 = 1
+    snl.nonlinear.k2 = 0.5
 
     run1 = design.add_child(RunSingleCase("run1"))
     run2 = design.add_child(RunSingleCase("run2"))
 
     run1.set_values({"p_in.x": 1})
-    run1.design.add_unknown("nonlinear.inwards.k1").add_equation("splitter.p2_out.x == 10")
+    run1.design.add_unknown("nonlinear.k1").add_equation("splitter.p2_out.x == 10")
 
     run2.set_values({"p_in.x": 10})
     run2.design.add_unknown(
-        ["mult2.inwards.K1", "nonlinear.inwards.k2", "splitter.inwards.split_ratio"]
+        ["mult2.K1", "nonlinear.k2", "splitter.split_ratio"]
     ).add_equation(
         ["splitter.p2_out.x == 50", "merger.p_out.x == 30", "splitter.p1_out.x == 5"]
     )
@@ -435,7 +543,7 @@ def test_MonteCarlo_multipts_iterative_nonlinear():
     mc = MonteCarlo("mc")
     rec = design.add_recorder(
         DataFrameRecorder(
-            includes=["mult2.inwards.K1", "mult2.inwards.K2", "p_out.x"],
+            includes=["mult2.K1", "mult2.K2", "p_out.x"],
             raw_output=True,
             hold=True,
         )
@@ -445,10 +553,8 @@ def test_MonteCarlo_multipts_iterative_nonlinear():
 
     distribution = Uniform(best=0.1, worst=-0.1)
     std = distribution._rv.kwds["scale"] / np.sqrt(12)
-    snl.mult2.inwards.get_details("K2").distribution = distribution
 
-    mc.add_random_variable({"mult2.inwards.K2"})
-
+    mc.add_random_variable("mult2.K2", distribution)
     mc.draws = 64
 
     snl.run_drivers()
@@ -479,8 +585,7 @@ def test_MonteCarlo_multipts_iterative_nonlinear():
 def test_MonteCarlo_multipts_iterative_nonlinear_linearized():
     snl = IterativeNonLinear("nl")
 
-    design = NonLinearSolver("design", method=NonLinearMethods.NR)
-    design = snl.add_driver(design)
+    design = snl.add_driver(NonLinearSolver("design"))
 
     snl.splitter.split_ratio = 0.1
     snl.mult2.K1 = 1
@@ -491,22 +596,27 @@ def test_MonteCarlo_multipts_iterative_nonlinear_linearized():
     run1 = design.add_child(RunSingleCase("run 1"))
     run2 = design.add_child(RunSingleCase("run 2"))
 
-    run1.set_values({"p_in.x": 1})
-    run1.design.add_unknown("nonlinear.inwards.k1").add_equation(
-        "splitter.p2_out.x == 10"
-    )
+    design.add_unknown([
+        "mult2.K1",
+        "nonlinear.k1",
+        "nonlinear.k2",
+        "splitter.split_ratio",
+    ])
 
-    run2.set_values({"p_in.x": 10})
-    run2.design.add_unknown(
-        ["mult2.inwards.K1", "nonlinear.inwards.k2", "splitter.inwards.split_ratio"]
-    ).add_equation(
-        ["splitter.p2_out.x == 50", "merger.p_out.x == 30", "splitter.p1_out.x == 5"]
-    )
+    run1.set_values({"p_in.x": 1.0})
+    run1.add_equation("splitter.p2_out.x == 10")
+
+    run2.set_values({"p_in.x": 10.0})
+    run2.design.add_equation([""
+        "merger.p_out.x == 30",
+        "splitter.p1_out.x == 5",
+        "splitter.p2_out.x == 50",
+    ])
 
     mc = MonteCarlo("mc")
     rec = design.add_recorder(
         DataFrameRecorder(
-            includes=["mult2.inwards.K1", "mult2.inwards.K2", "p_out.x"],
+            includes=["mult2.K?", "p_out.x"],
             raw_output=True,
             hold=True,
         )
@@ -517,9 +627,8 @@ def test_MonteCarlo_multipts_iterative_nonlinear_linearized():
 
     distribution = Uniform(best=0.2, worst=-0.2)
     std = distribution._rv.kwds["scale"] / np.sqrt(12)
-    snl.mult2.inwards.get_details("K2").distribution = distribution
-    mc.add_random_variable({"mult2.inwards.K2"})
-    mc.add_response(["mult2.inwards.K1", "mult2.inwards.K2", "p_out.x"])
+    mc.add_random_variable("mult2.K2", distribution)
+    mc.add_response(["mult2.K1", "mult2.K2", "p_out.x"])
 
     run1.set_values({"p_in.x": 1})
     mc.draws = 1000
@@ -562,18 +671,21 @@ def test_MonteCarlo_embedded_solver():
     """
     s = MultiplySystem2("s")
     s.run_once()
-    s.mult1.p_in.get_details("x").distribution = Normal(best=0.1, worst=-0.1)
-    s.mult2.p_in.get_details("x").distribution = Normal(best=0.2, worst=-0.2)
 
     mc = s.add_driver(MonteCarlo("mc"))
-    mc.add_child(NonLinearSolver('solver'))
+    solver = mc.add_child(NonLinearSolver("solver"))
     mc.add_child(RunOnce("runonce"))  # last mc child is *not* a solver
 
-    mc.add_random_variable({"mult1.p_in.x", "mult2.p_in.x"})
+    mc.add_random_variable({
+        "mult1.p_in.x": Normal(best=0.1, worst=-0.1),
+        "mult2.p_in.x": Normal(best=0.2, worst=-0.2),
+    })
     mc.draws = 10
 
     with no_exception():
         s.run_drivers()
+
+    assert mc._solver is solver
 
 
 def test_MonteCarlo_with_time_driver():
@@ -629,9 +741,10 @@ def test_MonteCarlo_with_event():
 
 def _get_start_methods():
     if sys.platform == "win32":
-        return (WorkerStartMethod.SPAWN, )
+        return (WorkerStartMethod.SPAWN,)
+    else:
+        return (WorkerStartMethod.FORK, WorkerStartMethod.SPAWN)
 
-    return (WorkerStartMethod.FORK, WorkerStartMethod.SPAWN)
 
 @pytest.mark.parametrize(argnames="nprocs", argvalues=[2, 4])    
 @pytest.mark.parametrize("start_method", _get_start_methods())
@@ -642,14 +755,15 @@ def test_MonteCarlo_multiprocessing(nprocs, start_method):
     s.mult1.p_in.get_details("x").distribution = Normal(best=0.1, worst=-0.1)
     s.mult2.p_in.get_details("x").distribution = Normal(best=0.2, worst=-0.2)
 
-    mc = s.add_driver(MonteCarlo(
-        "mc", 
-        execution_policy=ExecutionPolicy(
-            workers_count=nprocs,
-            execution_type=ExecutionType.MULTI_PROCESSING,
-            start_method=start_method
-            )
-        )
+    mc = s.add_driver(
+        MonteCarlo(
+            "mc", 
+            execution_policy=ExecutionPolicy(
+                workers_count=nprocs,
+                execution_type=ExecutionType.MULTI_PROCESSING,
+                start_method=start_method
+            ),
+        ),
     )
     nls = mc.add_child(NonLinearSolver('solver'))
     mc.add_child(RunOnce("runonce"))  # last mc child is *not* a solver
@@ -712,6 +826,7 @@ def test_MonteCarlo_with_event_parallel():
     assert results["time"].iloc[10] == 10.0
     assert  all(results["time"].iloc[13:16] == 2.0)
 
+
 class TestMonteCarloPickling:
   
     @pytest.fixture
@@ -729,33 +844,33 @@ class TestMonteCarloPickling:
         assert are_same(mc, mc_copy)
 
     def test_default(self, system):
-        """Test driver with default options."""
-
+        """Test driver with default options.
+        """
         system_copy = pickle_roundtrip(system)
         assert are_same(system, system_copy)
 
     def test_random_variables(self, system):
-        """Test driver with input vars."""
-
-        mc = system.drivers["mc"]
+        """Test driver with input vars.
+        """
+        mc: MonteCarlo = system.drivers["mc"]
         distribution = Uniform(best=0.2, worst=-0.2)
-        system.p_in.get_details("x").distribution = distribution
-        mc.add_random_variable({"p_in.x"})
+        mc.add_random_variable("p_in.x", distribution)
 
         system_copy = pickle_roundtrip(system)
         assert are_same(system, system_copy)
 
         mc_copy = system_copy.drivers["mc"]
-        assert has_keys(mc_copy.random_variables, "p_in.x")
-        random_var = mc_copy.random_variables["p_in.x"]
-        assert are_same(random_var.distribution, distribution)
-        assert are_same(system_copy.p_in.get_details("x").distribution, distribution)
-
+        assert isinstance(mc_copy, MonteCarlo)
+        assert set(mc_copy.random_variable_names) == {"p_in.x"}
+        random_variables = list(mc_copy.random_variables)
+        random_variable = random_variables[0]
+        assert random_variable.name == "p_in.x"
+        assert are_same(random_variable.distribution, distribution)
 
     def test_responses(self, system):
-        """Test driver with response vars."""
-
-        mc = system.drivers["mc"]
+        """Test driver with response vars.
+        """
+        mc: MonteCarlo = system.drivers["mc"]
         mc.add_response("K1")
         mc.add_response("K2")
 
@@ -763,13 +878,13 @@ class TestMonteCarloPickling:
         assert are_same(system, system_copy)
 
         mc_copy = system_copy.drivers["mc"]
-        assert set(mc_copy.responses) == {"K1", "K2"}
-
+        assert isinstance(mc_copy, MonteCarlo)
+        assert set(mc_copy.response_varnames) == {"K1", "K2"}
 
     def test_recorder(self, system):
         """Test pickling of driver with recorder."""
 
-        mc = system.drivers["mc"]
+        mc: MonteCarlo = system.drivers["mc"]
         mc.add_recorder(DataFrameRecorder(hold=True, includes="a*"))
         assert are_same(system, pickle_roundtrip(system))
 
@@ -783,13 +898,13 @@ class TestMonteCarloPickling:
     def test_execution(self, system):
         """Test execution of pickled driver."""
 
-        mc = system.drivers["mc"]
+        mc: MonteCarlo = system.drivers["mc"]
         mc.add_child(RunOnce("run"))
         mc.add_recorder(DataFrameRecorder(includes=["K?", "p_in.x"], raw_output=True))
 
         distribution = Uniform(best=0.2, worst=-0.2)
         system.p_in.get_details("x").distribution = distribution
-        mc.add_random_variable({"p_in.x"})
+        mc.add_random_variable("p_in.x")
         mc.draws = 10
         system.run_drivers()
 
