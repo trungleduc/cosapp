@@ -1065,7 +1065,7 @@ def convert_units(val: float,
 
 
 # Load in the default unit library
-with open(os.path.join(os.path.dirname(__file__), 'unit_library.ini')) as default_lib:
+with open(os.path.join(os.path.dirname(__file__), 'unit_library.dat')) as default_lib:
     import_library(default_lib)
 
 
