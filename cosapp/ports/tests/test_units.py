@@ -82,7 +82,7 @@ def test_NumberDict__div__KnownValues():
 
 
 with open(
-    os.path.join(os.path.dirname(units.__file__), "unit_library.ini")
+    os.path.join(os.path.dirname(units.__file__), "unit_library.dat")
 ) as default_lib:
     _unitLib = import_library(default_lib)
 

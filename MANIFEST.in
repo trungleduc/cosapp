@@ -5,7 +5,7 @@ include LICENSE.rst
 include README.md
 
 include cosapp/core/configuration_schema.json
-include cosapp/ports/unit_library.ini
+include cosapp/ports/unit_library.dat
 recursive-include cosapp *.schema.json
 recursive-include cosapp/tools/templates *
 recursive-include cosapp/tools/problem_viewer/visualization *
