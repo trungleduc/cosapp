@@ -3,20 +3,17 @@ Basic class handling model tree structure.
 """
 from __future__ import annotations
 import abc
-import collections
 import logging
+from collections import OrderedDict
+from collections.abc import Sequence, Generator, MappingView
 from numbers import Integral
-from typing import (
-    Optional, Any, List, Dict, OrderedDict,
-    Generator, MappingView, Sequence, Union,
-    TypeVar,
-)
+from typing import Optional, Any, TypeVar
 
 from cosapp.patterns.visitor import Visitor, Component as VisitedComponent
 from cosapp.core.signal import Signal
 from cosapp.utils.naming import NameChecker, CommonPorts
+from cosapp.utils.logging import LoggerContext, LogFormat, LogLevel, HandlerWithContextFilters
 from cosapp.utils.helpers import check_arg
-from cosapp.utils.logging import LoggerContext, LogFormat, LogLevel
 from cosapp.utils.state_io import object__getstate__
 
 logger = logging.getLogger(__name__)
@@ -85,7 +82,7 @@ class Module(LoggerContext, VisitedComponent, metaclass=abc.ABCMeta):
         """
         self._name = self._name_check(name)
         self._desc = ""
-        self.children: Dict[str, ModuleType] = collections.OrderedDict()
+        self.children: dict[str, ModuleType] = OrderedDict()
         self.parent: Optional[ModuleType] = None
         self._active: bool = True
         self._compute_calls: int = 0
@@ -102,7 +99,7 @@ class Module(LoggerContext, VisitedComponent, metaclass=abc.ABCMeta):
             )
         )
 
-    def __getstate__(self) -> tuple[None, Dict[str, Any]]:
+    def __getstate__(self) -> tuple[None, dict[str, Any]]:
         """Creates a state of the object.
         
         The state type depend on the object, see
@@ -111,7 +108,7 @@ class Module(LoggerContext, VisitedComponent, metaclass=abc.ABCMeta):
         
         Returns
         -------
-        tuple[None, Dict[str, Any]]:
+        tuple[None, dict[str, Any]]:
             state
         """
         
@@ -238,23 +235,23 @@ class Module(LoggerContext, VisitedComponent, metaclass=abc.ABCMeta):
             continue
         return root
 
-    def path(self: ModuleType) -> List[ModuleType]:
+    def path(self: ModuleType) -> list[ModuleType]:
         """Returns full path from root Module as a list.
         
         Returns
         -------
-        List[Module]
+        list[Module]
             Full module list from root to self
         """
         path = list(self.path_to_root())
         return list(reversed(path))
 
-    def path_namelist(self) -> List[str]:
+    def path_namelist(self) -> list[str]:
         """Returns full name list from root Module.
         
         Returns
         -------
-        List[str]
+        list[str]
             The module full name list
         """
         names = [elem.name for elem in self.path_to_root()]
@@ -333,9 +330,8 @@ class Module(LoggerContext, VisitedComponent, metaclass=abc.ABCMeta):
         if not trim_top:
             path.append(self.name)
         return ".".join(reversed(path))
-    
 
-    def _add_child(self, child: Child, execution_index: Optional[int]=None, desc="", check: bool = True) -> Child:
+    def _add_child(self, child: ModuleType, execution_index: Optional[int]=None, desc="", check=True) -> ModuleType:
         """Add a child to the current `Module`.
         
         This method is the internal implementation of `add_child` but also offer
@@ -502,7 +498,7 @@ class Module(LoggerContext, VisitedComponent, metaclass=abc.ABCMeta):
 
     def log_debug_message(
         self,
-        handler: "HandlerWithContextFilters",
+        handler: HandlerWithContextFilters,
         record: logging.LogRecord,
         format: LogFormat = LogFormat.RAW,
     ) -> bool:

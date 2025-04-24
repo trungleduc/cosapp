@@ -7,7 +7,7 @@ import logging
 import copy
 from collections.abc import MutableSequence
 from numbers import Number
-from typing import Any, Dict, Iterable, Optional, Tuple, Union, NoReturn, TYPE_CHECKING
+from typing import Any, Iterable, Optional, Union, TYPE_CHECKING
 
 from cosapp.ports import units
 from cosapp.ports.enum import Scope, Validity, RangeType
@@ -20,9 +20,9 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-RangeValue = Optional[Tuple[Any, Any]]
+RangeValue = tuple[Any, Any]
 ArrayIndices = Optional[Union[int, Iterable[int], Iterable[Iterable[int]], slice]]
-Types = Optional[Union[Any, Tuple[Any, ...]]]
+Types = Union[type, tuple[type, ...]]
 
 
 class BaseVariable(abc.ABC):
@@ -71,10 +71,10 @@ class BaseVariable(abc.ABC):
         name: str,
         port: BasePort,
         value: Any,
-        unit: str = "",
-        dtype: Types = None,
-        desc: str = "",
-        scope: Scope = Scope.PRIVATE,
+        unit = "",
+        dtype: Optional[Types] = None,
+        desc = "",
+        scope = Scope.PRIVATE,
     ):
         self._name = self.name_check(name)
 
@@ -92,7 +92,7 @@ class BaseVariable(abc.ABC):
                 except TypeError:
                     failed = True
                 if failed:
-                    raise TypeError(f"Types must be defined by a type; got {dtype}.")
+                    raise TypeError(f"Type must be defined by one or several types; got {dtype}.")
 
         check_arg(desc, 'desc', str)
         check_arg(scope, 'scope', Scope)
@@ -108,10 +108,10 @@ class BaseVariable(abc.ABC):
 
         value, dtype = self._process_value(value, dtype)
 
-        self._unit = unit  # type: str
-        self._desc = desc  # type: str
-        self._dtype = dtype  # type: Types
-        self._scope = scope  # type: Scope
+        self._unit = unit
+        self._desc = desc
+        self._scope = scope
+        self._dtype: Optional[Types] = dtype
 
     @abc.abstractmethod
     def copy(self, port: BasePort, name: Optional[str]=None) -> BaseVariable:
@@ -182,8 +182,8 @@ class BaseVariable(abc.ABC):
         return self._unit
 
     @property
-    def dtype(self) -> Types:
-        """Type[Any] or Tuple of Type[Any] or None : Type of the variable; default None (i.e. type of default value is set)"""
+    def dtype(self) -> Optional[Types]:
+        """Type[Any] or tuple of Type[Any] or None : Type of the variable; default None (i.e. type of default value is set)"""
         return self._dtype
 
     @property
@@ -202,12 +202,12 @@ class BaseVariable(abc.ABC):
     def __repr__(self) -> str:
         return self._repr_markdown_()
     
-    def __json__(self) -> Dict[str, Any]:
+    def __json__(self) -> dict[str, Any]:
         """Creates a JSONable dictionary representation of the object.
 
         Returns
         -------
-        Dict[str, Any]
+        dict[str, Any]
             The dictionary
         """
         return jsonify(self.to_dict())
@@ -221,7 +221,7 @@ class BaseVariable(abc.ABC):
             value = numpy.asarray(value)
         return value
 
-    def _to_raw_dict(self) -> Dict[str, Any]:
+    def _to_raw_dict(self) -> dict[str, Any]:
         """Convert this variable into a dictionary.
    
         Returns
@@ -236,12 +236,12 @@ class BaseVariable(abc.ABC):
             "desc" : self.description or None,
         }
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         """Convert this variable into a dictionary.
    
         Returns
         -------
-        Dict[str, Any]:
+        dict[str, Any]:
             Dictionary representing variable. Attributes with `None` value are filtered out.
         """
         data = self._to_raw_dict()
@@ -271,14 +271,14 @@ class Variable(BaseVariable):
         Variable type; default None (i.e. type of initial value).
     - desc [str, optional]:
         Variable description; default to ''.
-    - valid_range [Tuple[Any, Any] or Tuple[Tuple], optional]:
+    - valid_range [tuple[Any, Any] or tuple[tuple], optional]:
         Validity range of the variable; default None (i.e. all values are valid).
-        Tuple[Any, Any] in case of scalar value, tuple of tuples in case of vector value.
+        tuple[Any, Any] in case of scalar value, tuple of tuples in case of vector value.
     - invalid_comment [str, optional]:
         Comment to show in case the value is not valid; default ''
-    - limits [Tuple[Any, Any] or Tuple[Tuple], optional]:
+    - limits [tuple[Any, Any] or tuple[tuple], optional]:
         Limits over which the use of the model is wrong; default valid_range.
-        Tuple[Any, Any] in case of scalar value, tuple of tuples in case of vector value.
+        tuple[Any, Any] in case of scalar value, tuple of tuples in case of vector value.
     - out_of_limits_comment [str, optional]:
         Comment to show in case the value is not valid; default ''
     - distribution [Distribution, optional]:
@@ -300,15 +300,15 @@ class Variable(BaseVariable):
         name: str,
         port: BasePort,
         value: Any,
-        unit: str = "",
-        dtype: Types = None,
-        valid_range: RangeValue = None,
-        invalid_comment: str = "",
-        limits: RangeValue = None,
-        out_of_limits_comment: str = "",
-        desc: str = "",
+        unit = "",
+        dtype: Optional[Types] = None,
+        valid_range: Optional[RangeValue] = None,
+        invalid_comment = "",
+        limits: Optional[RangeValue] = None,
+        out_of_limits_comment = "",
+        desc = "",
         distribution: Optional[Distribution] = None,
-        scope: Scope = Scope.PRIVATE,
+        scope = Scope.PRIVATE,
     ):
         super().__init__(name, port, value, unit, dtype, desc, scope)
         # Additional value check
@@ -334,17 +334,17 @@ class Variable(BaseVariable):
                 f"Out-of-limits comment specified for variable {name!r} without limits."
             )
 
-        self._valid_range = valid_range  # type: RangeValue
-        self._invalid_comment = ""  # type: str
+        self._valid_range = valid_range
+        self._invalid_comment = ""
         self.invalid_comment = invalid_comment
-        self._limits = limits  # type: RangeValue
-        self._out_of_limits_comment = ""  # type: str
+        self._limits = limits
+        self._out_of_limits_comment = ""
         self.out_of_limits_comment = out_of_limits_comment
-        self._distribution = None  # type: Optional[Distribution]
+        self._distribution: Optional[Distribution] = None
         self.distribution = distribution
 
     @staticmethod
-    def _get_limits_from_type(variable: Any) -> RangeValue:
+    def _get_limits_from_type(variable: Any) -> Optional[RangeValue]:
         """Get default limits for a variable depending of its type.
 
         Parameters
@@ -354,7 +354,7 @@ class Variable(BaseVariable):
 
         Returns
         -------
-        Tuple[float, float] or None
+        tuple[float, float] or None
             Default (lower, upper) limits
         """
         if is_numerical(variable):
@@ -410,24 +410,24 @@ class Variable(BaseVariable):
             ) 
 
     def _check_range(self,
-        limits: RangeValue,
-        valid_range: RangeValue,
+        limits: Optional[RangeValue],
+        valid_range: Optional[RangeValue],
         value: Any,
-    ) -> Tuple[RangeValue, RangeValue]:
+    ) -> tuple[Optional[RangeValue], Optional[RangeValue]]:
         """Correct coherence of limits and validation range depending on value type.
 
         Parameters
         ----------
-        limits : Tuple[Any, Any] or Tuple[Tuple] or None
+        limits : tuple[Any, Any] or tuple[tuple] or None
             (lower, upper) limits
-        valid_range : Tuple[Any, Any] Tuple[Tuple] or None
+        valid_range : tuple[Any, Any] tuple[tuple] or None
             (lower, upper) validation range
         value : Any
 
         Returns
         -------
-        Tuple[Tuple[Any, Any] or Tuple[Tuple] or None, Tuple[Any, Any] or Tuple[Tuple] or None]
-            Tuple of corrected (limits, validation range)
+        tuple[tuple[Any, Any] or tuple[tuple] or None, tuple[Any, Any] or tuple[tuple] or None]
+            tuple of corrected (limits, validation range)
         """
         default = Variable._get_limits_from_type(value)
         range_type = self.check_range_type(valid_range)
@@ -435,14 +435,14 @@ class Variable(BaseVariable):
 
         if default is not None:
 
-            def get_bounds(lower, upper) -> Tuple[float, float]:
+            def get_bounds(lower, upper) -> tuple[float, float]:
                 if lower is None:
                     lower = default[0]
                 if upper is None:
                     upper = default[1]
                 return (lower, upper) if lower < upper else (upper, lower)
 
-            def raise_inconsistency() -> NoReturn:
+            def raise_inconsistency() -> None:
                 name = self.full_name
                 raise ValueError(
                     f"valid_range {valid_range} and limits {limits} of variable {name!r} have different formats"
@@ -557,12 +557,12 @@ class Variable(BaseVariable):
             "{description}".format(**msg)
         )
     
-    def __json__(self) -> Dict[str, Any]:
+    def __json__(self) -> dict[str, Any]:
         """Creates a JSONable dictionary representation of the object.
 
         Returns
         -------
-        Dict[str, Any]
+        dict[str, Any]
             The dictionary
         """
         data = super().__json__()
@@ -576,14 +576,12 @@ class Variable(BaseVariable):
         return jsonify(data)
 
     @property
-    def valid_range(self) -> RangeValue:
-        """Tuple[Any, Any] or None : alidity range of the variable and optional comment if unvalid"""
-        
+    def valid_range(self) -> Optional[RangeValue]:
+        """tuple[Any, Any] or None : alidity range of the variable and optional comment if unvalid"""
         return self._valid_range
 
     @valid_range.setter
-    def valid_range(self, new_range: RangeValue):
-        
+    def valid_range(self, new_range: Optional[RangeValue]):
         range_type = self.check_range_type(new_range)
 
         value = self.value
@@ -635,12 +633,12 @@ class Variable(BaseVariable):
         self._invalid_comment = new_comment
 
     @property
-    def limits(self) -> RangeValue:
-        """Tuple[Any, Any] or None : Variable limits and optional comment if unvalid"""
+    def limits(self) -> Optional[RangeValue]:
+        """tuple[Any, Any] or None : Variable limits and optional comment if unvalid"""
         return self._limits
 
     @limits.setter
-    def limits(self, new_limits: RangeValue):
+    def limits(self, new_limits: Optional[RangeValue]):
 
         limits_type = self.check_range_type(new_limits)
 
@@ -808,9 +806,12 @@ class Variable(BaseVariable):
         str
             Validity comment
         """
+        def get_range_repr(valid, fmt: str):
+            if not isinstance(valid, (list, tuple, numpy.ndarray)):
+                fmt.replace("{}", "{:.5g}")
+            return fmt.format(valid)
 
-        def range2str(range: RangeValue) -> str:
-
+        def range2str(range: Optional[RangeValue]) -> str:
             range_type = self.check_range_type(range)
 
             if range_type == RangeType.VALUE:
@@ -821,12 +822,6 @@ class Variable(BaseVariable):
 
             elif range_type == RangeType.NONE:
                 min_valid, max_valid = (None, None)
-
-
-            def get_range_repr(valid, fmt):
-                if not isinstance(valid, (list, tuple, numpy.ndarray)):
-                    fmt.replace("{}", "{:.5g}")
-                return fmt.format(valid)
 
             if min_valid is None:
                 range_repr = "] ,"
@@ -846,11 +841,9 @@ class Variable(BaseVariable):
         else:  # Variable is ok
             return ""
 
-    def copy(self, port: BasePort, name: Optional[str] = None) -> Variable:
-        if name is None:
-            name = self.name
+    def copy(self, port: BasePort, name: Optional[str]=None) -> Variable:
         return Variable(
-            name,
+            name or self.name,
             value = copy.copy(self.value),
             port = port,
             unit = self._unit,
@@ -864,7 +857,7 @@ class Variable(BaseVariable):
             scope = self._scope,
         )
 
-    def _to_raw_dict(self) -> Dict:
+    def _to_raw_dict(self) -> dict:
         """Convert this variable into a dictionary.
    
         Returns
