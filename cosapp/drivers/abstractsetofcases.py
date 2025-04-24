@@ -63,7 +63,7 @@ class AbstractSetOfCases(Driver):
         # variables may not be the same on all points.
         self.cases = None  # type: Optional[Iterable[Any]]
             # desc="List of cases to be carried out."
-        self._transients = {} 
+        self._transients: dict[str, Any] = {} 
         self._execution_policy: ExecutionPolicy = execution_policy  # Execution policy to use for computation
 
     def _precase(self, index: int, case: Any):

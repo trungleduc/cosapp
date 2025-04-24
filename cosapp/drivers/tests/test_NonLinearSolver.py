@@ -343,6 +343,9 @@ def test_NonLinearSolver_setup_run(caplog, set_master_system):
     point1 = solver.add_child(RunSingleCase("point1"))
     point2 = solver.add_child(RunSingleCase("point2"))
     
+    assert solver.point1 is point1
+    assert solver.point2 is point2
+
     solver.add_unknown(["K1", "K2"]).add_equation("p_out.x == 20")
     point1.add_unknown("p_in.x").add_equation("p_in.x == 2")     # local
     point2.add_unknown("p_in.x").add_equation("p_in.x**2 == 6")  # local
@@ -732,6 +735,9 @@ def test_NonLinearSolver_problem_multiPoint(set_master_system):
         return solver, point1, point2
 
     solver, point1, point2 = make_case()
+    assert solver.point1 is point1
+    assert solver.point2 is point2
+
     solver.add_unknown(["K1", "K2"]).add_equation("p_in.x == 2")
     point1.add_unknown("p_in.x").add_equation("p_out.x == 20")  # local
     point2.add_unknown("p_in.x").add_equation("Ksum == 10")     # local

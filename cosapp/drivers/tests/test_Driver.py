@@ -76,50 +76,52 @@ def test_Driver__init__(ctor_data, expected):
 
 
 def test_Driver_from_System():
-    s = System('boss')
-    d = s.add_driver(Driver('a_driver'))
-    assert isinstance(d.options, OptionsDictionary)
-    assert d.options["verbose"] == 0
-    assert d.start_time == 0
-    assert d.owner is s
-    assert d.recorder is None
+    boss = System('boss')
+    driver = boss.add_driver(Driver('a_driver'))
+    assert isinstance(driver.options, OptionsDictionary)
+    assert driver.options["verbose"] == 0
+    assert driver.start_time == 0
+    assert driver.owner is boss
+    assert driver.recorder is None
 
 
 def test_Driver_owner():
     """Test getter/setter for attribute `Driver.owner`
     """
     def make_objects():
-        return Driver('d'), System('s')
+        return Driver('driver'), System('system')
     
-    d = Driver('d')
-    assert d.owner is None
+    driver = Driver('driver')
+    assert driver.owner is None
 
-    d, s = make_objects()
-    s.add_driver(d)
-    assert d.owner is s
+    driver, system = make_objects()
+    system.add_driver(driver)
+    assert driver.owner is system
 
-    d, s = make_objects()
-    d.owner = s
-    assert d.owner is s
+    driver, system = make_objects()
+    driver.owner = system
+    assert driver.owner is system
 
-    d, s = make_objects()
-    foo = d.add_child(Driver('foo'))
-    bar = d.add_child(Driver('bar'))
+    driver, system = make_objects()
+    foo = driver.add_child(Driver('foo'))
+    bar = driver.add_child(Driver('bar'))
     sub = foo.add_child(Driver('sub'))
-    assert d.owner is None
+    assert driver.owner is None
     assert foo.owner is None
     assert bar.owner is None
     assert sub.owner is None
-    d.owner = s
-    assert d.owner is s
-    assert foo.owner is s
-    assert bar.owner is s
-    assert sub.owner is s
+    assert driver.foo is foo
+    assert driver.bar is bar
+    assert foo.sub is sub
+    driver.owner = system
+    assert driver.owner is system
+    assert foo.owner is system
+    assert bar.owner is system
+    assert sub.owner is system
 
-    d = Driver('d')
-    foo = Driver('foo')
+    driver = Driver('driver')
     with pytest.raises(TypeError):
-        d.owner = foo
+        driver.owner = Driver('other')
 
 
 def test_Driver_is_standalone():

@@ -58,7 +58,7 @@ def composite():
      |     |         |    |    |
     aaa   aab       aca  acb  acc
     """
-    def add_children(module, names):
+    def add_children(module: Module, names: list[str]):
         prefix = module.name
         for name in names:
             module.add_child(Module(f"{prefix}{name}"))
@@ -215,6 +215,8 @@ def test_Module_add_child_desc():
     bar = top.add_child(Module("bar"), desc="A great sub-module")
     assert foo.description == ""
     assert bar.description == "A great sub-module"
+    assert top.foo is foo
+    assert top.bar is bar
 
 
 def test_Module_size():

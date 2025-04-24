@@ -81,7 +81,8 @@ class Driver(Module, HasCompositeOptions):
         super().__init__(name)
         HasCompositeOptions.__init__(self)
 
-        self._owner: Optional[System] = None
+        self.children: dict[str, Driver] = {}
+        self._owner: System = None
         self._recorder: Optional[BaseRecorder] = None
         self.owner = owner
 
@@ -360,4 +361,4 @@ class Driver(Module, HasCompositeOptions):
         self._recorder.watched_object = self.owner
         self._recorder._owner = self
 
-        return self.recorder
+        return recorder
