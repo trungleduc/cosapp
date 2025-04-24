@@ -27,8 +27,8 @@ class SystemWithKwargs(System):
     (get_args(SystemWithKwargs, xi=0.5), does_not_raise()),
     (get_args(SystemWithKwargs, xi=0.5, n=3), does_not_raise()),
     (get_args(SystemWithKwargs('foo', xi=0.5)), does_not_raise()),
-    (get_args(SystemWithKwargs, 0.5), pytest.raises(TypeError, match="takes [\d] positional argument")),
-    (get_args(SystemWithKwargs), pytest.raises(TypeError, match="missing [\d] required positional argument")),
+    (get_args(SystemWithKwargs, 0.5), pytest.raises(TypeError, match=r"takes [\d] positional argument")),
+    (get_args(SystemWithKwargs), pytest.raises(TypeError, match=r"missing [\d] required positional argument")),
 ])
 def test_DocDisplay__init__(args_kwargs: ArgsKwargs, expected):
     args, kwargs = args_kwargs

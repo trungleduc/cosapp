@@ -287,7 +287,7 @@ class AbstractSolver(Driver):
             )
 
         def extract_varname(driver: Driver, key: str):
-            matches = re.findall(f"{driver.name}\[(.*)\]", key)
+            matches = re.findall(f"{driver.name}\\[(.*)\\]", key)
             if matches:  # Off-design variable
                 return matches[0]
             else:

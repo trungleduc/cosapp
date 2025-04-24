@@ -314,7 +314,7 @@ def test_partialjacobian_coupledmatrix(
     matches = map(
         lambda r: re.search(
             r"Converged \((\d)+(?:\.\d*)(?:[eE][+-]\d+)\) in \d+ iterations, "
-            f"{full_update_count} complete, {partial_update_count} partial Jacobian and \d+ Broyden",
+            f"{full_update_count} complete, {partial_update_count} partial Jacobian and \\d+ Broyden",
             r,
         ),
         info_messages,

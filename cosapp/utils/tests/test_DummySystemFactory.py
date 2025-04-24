@@ -113,7 +113,7 @@ def test_DummySystemFactory_children():
 
 
 def test_DummySystemFactory_wrong_settings():
-    with pytest.warns(UserWarning, match="\['bar', 'foo'\] are not supported"):
+    with pytest.warns(UserWarning, match=r"\['bar', 'foo'\] are not supported"):
         DummySystemFactory(
             "Dummy",
             inputs=[],

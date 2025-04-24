@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 # TODO
 # [ ] Pull unknowns from Systems
 class Optimizer(AbstractSolver):
-    """Driver running an optimization problem on its `System` owner.
+    r"""Driver running an optimization problem on its `System` owner.
 
     In general, the optimization problems are of the form::
 

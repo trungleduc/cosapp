@@ -37,7 +37,7 @@ def load_fmu_class(module_name: str, filepath: str):
     # Instantiate the interface
     with open(filepath, "r") as f:
         data = f.read()
-        class_name = re.search("class (\w+)\(\s*Fmi2Slave\s*\)\s*:", data).group(1)
+        class_name = re.search(r"class (\w+)\(\s*Fmi2Slave\s*\)\s*:", data).group(1)
     return getattr(fmu_interface, class_name)(instance_name="instance")
 
 

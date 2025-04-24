@@ -128,7 +128,7 @@ def test_RunOnce_set_init(ExtendedMultiply, hat_case):
 
     d = RunOnce('compute')
 
-    with pytest.raises(AttributeError, match="Driver '\w+' must be attached to a System"):
+    with pytest.raises(AttributeError, match=r"Driver '\w+' must be attached to a System"):
         d.set_init({'K1': 11.5})
 
     # Test vector variables

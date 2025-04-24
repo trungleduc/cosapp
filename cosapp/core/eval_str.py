@@ -435,7 +435,7 @@ class EvalString:
         if isinstance(expression, str):
             # Include a substitution pass to make sure that no spaces are left
             # between objects and attributes, that is "foo.bar" instead of "foo .  bar"
-            return re.sub("(?![0-9]) *\. *(?![0-9])", ".", expression.strip())
+            return re.sub(r"(?![0-9]) *\. *(?![0-9])", ".", expression.strip())
         elif isinstance(expression, numpy.ndarray):
             return repr(expression)
         else:

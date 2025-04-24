@@ -212,7 +212,7 @@ def test_system121_redundant_1(system121):
     d = s.add_driver(NonLinearSolver("solver"))
     d.add_unknown("sp.x")
 
-    with pytest.raises(ValueError, match="'sp\.x' is defined as design and off-design unknown"):
+    with pytest.raises(ValueError, match=r"'sp\.x' is defined as design and off-design unknown"):
         s.run_drivers()
 
 
@@ -226,7 +226,7 @@ def test_system121_redundant_2(system121):
     solver.add_child(RunSingleCase("case"))
     solver.case.add_unknown("sp.x")
 
-    with pytest.raises(ValueError, match="'sp\.x' already exists in 'offdesign'"):
+    with pytest.raises(ValueError, match=r"'sp\.x' already exists in 'offdesign'"):
         s.run_drivers()
 
 
@@ -287,5 +287,5 @@ def test_system222_redundant(system222):
     solver.add_child(RunSingleCase("case"))
     solver.case.add_unknown(["p2.s21.x", "s1.x"])
 
-    with pytest.raises(ValueError, match="\['p2\.s21\.x', 's1\.x'\] already exist in 'offdesign'"):
+    with pytest.raises(ValueError, match=r"\['p2\.s21\.x', 's1\.x'\] already exist in 'offdesign'"):
         s.run_drivers()

@@ -50,7 +50,7 @@ def test_design_unknown_aliasing_1(caplog):
     
     assert len(caplog.records) > 0
     assert re.match(
-        "Replace unknown 'foo.k' by 'c'",
+        r"Replace unknown 'foo\.k' by 'c'",
         caplog.records[0].message
     )
     assert top.foo.k == pytest.approx(1.5)
@@ -88,7 +88,7 @@ def test_design_unknown_aliasing_2(caplog):
     assert len(caplog.records) > 0
     assert any(
         re.match(
-            "Unknown 'foo.k' is aliased by 'top.c', defined outside the context of 'foo'",
+            r"Unknown 'foo\.k' is aliased by 'top\.c', defined outside the context of 'foo'",
             record.message
         )
         for record in caplog.records
@@ -111,13 +111,13 @@ def test_design_unknown_aliasing_3(caplog):
     solver.add_equation('sub2.foo.y == 7').add_unknown('sub2.bar.k')
 
     caplog.clear()
-    with pytest.raises(ArithmeticError, match="numbers of params \[0\] and residues \[1\]"):
+    with pytest.raises(ArithmeticError, match=r"numbers of params \[0\] and residues \[1\]"):
         with caplog.at_level(logging.WARNING):
             top.run_drivers()
     
     assert len(caplog.records) > 0
     assert re.match(
-        "Skip connected unknown 'sub2.bar.k'",
+        r"Skip connected unknown 'sub2\.bar\.k'",
         caplog.records[0].message
     )
 
@@ -143,7 +143,7 @@ def test_design_unknown_aliasing_4(caplog):
     assert sub.foo.k == sub.c
     assert len(caplog.records) > 0
     assert re.match(
-        "Replace unknown 'sub.foo.k' by 'sub.c'",
+        r"Replace unknown 'sub\.foo\.k' by 'sub\.c'",
         caplog.records[0].message
     )
 
@@ -156,13 +156,13 @@ def test_design_connected_unknown_1(caplog):
     solver.add_equation('bar.y == 7').add_unknown('bar.k')
 
     caplog.clear()
-    with pytest.raises(ArithmeticError, match="numbers of params \[0\] and residues \[1\]"):
+    with pytest.raises(ArithmeticError, match=r"numbers of params \[0\] and residues \[1\]"):
         with caplog.at_level(logging.WARNING):
             top.run_drivers()
     
     assert len(caplog.records) > 0
     assert re.match(
-        "Skip connected unknown 'bar.k'",
+        r"Skip connected unknown 'bar\.k'",
         caplog.records[0].message
     )
 
@@ -179,13 +179,13 @@ def test_design_connected_unknown_2(caplog):
     solver.add_unknown('k').add_equation('y == 7')
 
     caplog.clear()
-    with pytest.raises(ArithmeticError, match="numbers of params \[0\] and residues \[1\]"):
+    with pytest.raises(ArithmeticError, match=r"numbers of params \[0\] and residues \[1\]"):
         with caplog.at_level(logging.WARNING):
             top.run_drivers()
     
     assert len(caplog.records) > 0
     assert re.match(
-        "Skip connected unknown 'k'",
+        r"Skip connected unknown 'k'",
         caplog.records[0].message
     )
 
@@ -216,7 +216,7 @@ def test_design_offdesign_aliasing_1(caplog):
     assert len(caplog.records) > 0
     assert any(
         re.match(
-            "Replace unknown 'foo.k' by 'c'",
+            r"Replace unknown 'foo\.k' by 'c'",
             record.message
         )
         for record in caplog.records
@@ -249,7 +249,7 @@ def test_design_offdesign_aliasing_2(caplog):
     assert len(caplog.records) > 0
     assert any(
         re.match(
-            "Replace unknown 'foo.k' by 'c'",
+            r"Replace unknown 'foo\.k' by 'c'",
             record.message
         )
         for record in caplog.records
@@ -283,7 +283,7 @@ def test_design_offdesign_aliasing_3(caplog):
     assert len(caplog.records) > 0
     assert any(
         re.match(
-            "Replace unknown 'foo.k' by 'c'",
+            r"Replace unknown 'foo\.k' by 'c'",
             record.message
         )
         for record in caplog.records
@@ -319,13 +319,13 @@ def test_connected_unknown_changing_conf(caplog):
     top.connect(foo, bar, {'y': 'x'})
 
     caplog.clear()
-    with pytest.raises(ArithmeticError, match="numbers of params \[0\] and residues \[1\]"):
+    with pytest.raises(ArithmeticError, match=r"numbers of params \[0\] and residues \[1\]"):
         with caplog.at_level(logging.WARNING):
             top.run_drivers()
     
     assert len(caplog.records) > 0
     assert re.match(
-        "Skip connected unknown 'bar.x'",
+        r"Skip connected unknown 'bar\.x'",
         caplog.records[0].message
     )
 

@@ -251,7 +251,7 @@ def test_MonteCarlo_add_random_variable_with_distribution_3():
     s.drivers.clear()
     mc = s.add_driver(MonteCarlo("mc"))
     
-    with pytest.raises(TypeError, match="Distribution for 's\.K2'"):
+    with pytest.raises(TypeError, match=r"Distribution for 's\.K2'"):
         mc.add_random_variable({"K1": normal, "K2": 3.14})
 
     # assert list(var_data) == ["K1"]
@@ -260,7 +260,7 @@ def test_MonteCarlo_add_random_variable_with_distribution_3():
     s.drivers.clear()
     mc = s.add_driver(MonteCarlo("mc"))
     
-    with pytest.raises(TypeError, match="Distribution for 's\.K1'"):
+    with pytest.raises(TypeError, match=r"Distribution for 's\.K1'"):
         mc.add_random_variable({"K1": 3.14, "K2": normal})
 
     # assert list(var_data) == []
