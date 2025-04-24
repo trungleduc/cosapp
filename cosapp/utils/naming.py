@@ -34,7 +34,7 @@ def natural_varname(name: str) -> str:
     """Strip references to common port names from variable name
     """
     pattern = "|".join(CommonPorts.names())
-    return re.sub(f"({pattern})\.", "", name.strip())
+    return re.sub(f"({pattern})\\.", "", name.strip())
 
 
 class NameChecker:
@@ -44,10 +44,10 @@ class NameChecker:
         message = "Name must start with a letter, and contain only alphanumerics and '_'",
         excluded: Collection[str] = tuple(),
     ):
-        self.__error_message = lambda name: None  # type: Callable[[str], str]
-        self.__message = ""  # type: str
-        self.__pattern = None  # type: re.Pattern
-        self.__excluded = tuple()
+        self.__error_message: Callable[[str], str] = lambda name: None
+        self.__message = ""
+        self.__pattern: re.Pattern = None
+        self.__excluded: tuple[str] = tuple()
         self.pattern = pattern
         self.message = message
         self.excluded = excluded

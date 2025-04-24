@@ -1270,7 +1270,7 @@ def test_System_pulling_error():
             self.add_child(Foo('foo'), pulling=['a'])
             self.add_child(Bar('bar'), pulling=['a'])
 
-    with pytest.raises(ValueError, match="cannot add outward 'a'; s\.a already exists as an inward"):
+    with pytest.raises(ValueError, match=r"cannot add outward 'a'; s\.a already exists as an inward"):
         Composite('s')
 
 
@@ -3743,7 +3743,7 @@ def test_System_connect_port_connectors(caplog):
 
     assert len(caplog.records) == 1
     assert re.match(
-        "'s1.p_out' and 's2.p_in' connected by.* `AbPort\.Connector`",
+        r"'s1\.p_out' and 's2\.p_in' connected by.* `AbPort\.Connector`",
         caplog.records[0].message
     )
 

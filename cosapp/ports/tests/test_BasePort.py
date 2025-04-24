@@ -553,29 +553,29 @@ def test_BasePort_add_variable(direction, caplog):
 
 @pytest.mark.parametrize("direction", PortType)
 @pytest.mark.parametrize("scope", Scope)
-@pytest.mark.parametrize("options, message", [
+@pytest.mark.parametrize("options, pattern", [
     (
         dict(value="hello", unit="kg"),
-        "A physical unit is defined for non-numerical variable '.*'; it will be ignored"
+        r"A physical unit is defined for non-numerical variable '.*'; it will be ignored"
     ),
     (
         dict(value=False, unit="kg"),
-        "A physical unit is defined for non-numerical variable '.*'; it will be ignored"
+        r"A physical unit is defined for non-numerical variable '.*'; it will be ignored"
     ),
     (
         dict(value="hello", valid_range=(0.0, 5.0), invalid_comment="Not acceptable"),
-        "Invalid comment specified for variable '.*' without validity range"
+        r"Invalid comment specified for variable '.*' without validity range"
     ),
     (
         dict(value=True, out_of_limits_comment="Not acceptable"),
-        "Out-of-limits comment specified for variable '.*' without limits"
+        r"Out-of-limits comment specified for variable '.*' without limits"
     ),
     (
         dict(value=True, invalid_comment="Not acceptable"),
-        "Invalid comment specified for variable '.*' without validity range"
+        r"Invalid comment specified for variable '.*' without validity range"
     ),
 ])
-def test_BasePort_add_variable_warning(caplog, direction, scope, options, message):
+def test_BasePort_add_variable_warning(caplog, direction, scope, options, pattern):
     logging.disable(logging.NOTSET)  # enable all logging levels
     options["scope"] = scope
 
@@ -584,7 +584,7 @@ def test_BasePort_add_variable_warning(caplog, direction, scope, options, messag
     with caplog.at_level(logging.WARNING):
         port.add_variable("var", **options)
         assert len(caplog.records) == 1
-        assert re.match(message, caplog.messages[-1])
+        assert re.match(pattern, caplog.messages[-1])
 
 
 @pytest.mark.parametrize("direction", PortType)

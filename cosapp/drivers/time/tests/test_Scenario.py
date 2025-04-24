@@ -504,23 +504,23 @@ def test_Scenario_aliasing_0(assembly, caplog):
         })
     assert len(caplog.records) == 5
     assert re.match(
-        "Replace 'foo1.x_in.z' by 'x_in.z'",
+        r"Replace 'foo1\.x_in\.z' by 'x_in\.z'",
         caplog.records[0].message
     )
     assert re.match(
-        "Replace 'bar2.x' by 'alpha'",
+        r"Replace 'bar2\.x' by 'alpha'",
         caplog.records[1].message
     )
     assert re.match(
-        "Replace 'foo1.x_in.x' by 'x_in.x'",
+        r"Replace 'foo1\.x_in\.x' by 'x_in\.x'",
         caplog.records[2].message
     )
     assert re.match(
-        "Replace 'foo1.x_in.y' by 'x_in.y'",
+        r"Replace 'foo1\.x_in\.y' by 'x_in\.y'",
         caplog.records[3].message
     )
     assert re.match(
-        "Replace 'bar1.v' by 'theta'",
+        r"Replace 'bar1\.v' by 'theta'",
         caplog.records[4].message
     )
     
@@ -562,19 +562,19 @@ def test_Scenario_aliasing_1(assembly, caplog):
         })
     assert len(caplog.records) == 4
     assert re.match(
-        "Replace 'foo1.x_in.z' by 'x_in.z'",
+        r"Replace 'foo1\.x_in\.z' by 'x_in\.z'",
         caplog.records[0].message
     )
     assert re.match(
-        "Replace 'bar2.x' by 'alpha'",
+        r"Replace 'bar2\.x' by 'alpha'",
         caplog.records[1].message
     )
     assert re.match(
-        "Replace 'foo1.x_in.y' by 'x_in.y'",
+        r"Replace 'foo1\.x_in\.y' by 'x_in\.y'",
         caplog.records[2].message
     )
     assert re.match(
-        "Replace 'bar1.v' by 'theta'",
+        r"Replace 'bar1\.v' by 'theta'",
         caplog.records[3].message
     )
     # Add connected inputs to scenario

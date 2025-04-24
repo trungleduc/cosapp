@@ -139,7 +139,7 @@ def test_OptionsDictionary_type_and_values():
 
     # Test with both type_ and values
     with pytest.raises(
-        Exception, match="'dtype' and 'values' were both specified for option 'test3'."
+        Exception, match="'dtype' and 'values' were both specified for option 'test3'"
     ):
         opt.declare("test3", dtype=int, values=["a", "b"])
 
@@ -161,7 +161,7 @@ def test_OptionsDictionary_unnamed_args():
     # KeyError ends up with an extra set of quotes.
     with pytest.raises(
         KeyError,
-        match="\"Option 'test' cannot be set because it has not been declared.\"",
+        match="Option 'test' cannot be set because it has not been declared",
     ):
         opt["test"] = 1
 
@@ -232,18 +232,18 @@ def test_OptionsDictionary_update_extra():
     # KeyError ends up with an extra set of quotes.
     with pytest.raises(
         KeyError,
-        match="\"Option 'test' cannot be set because it has not been declared.\"",
+        match="Option 'test' cannot be set because it has not been declared",
     ):
         opt.update({"test": 2})
 
 
-def test_OptionsDictionary_get_missing():
+def test_OptionsDictionary_getitem_missing():
     opt = OptionsDictionary()
-    with pytest.raises(KeyError, match="\"Option 'missing' cannot be found\""):
+    with pytest.raises(KeyError, match="Option 'missing' cannot be found"):
         opt["missing"]
 
 
-def test_OptionsDictionary_get_default():
+def test_OptionsDictionary_getitem_default():
     opt = OptionsDictionary()
     obj_def = object()
     obj_new = object()
@@ -276,7 +276,6 @@ def test_OptionsDictionary_values():
 
 
 def test_OptionsDictionary_read_only():
-    opt = OptionsDictionary()
     opt = OptionsDictionary(read_only=True)
     opt.declare("permanent", 3.0)
 

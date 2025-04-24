@@ -279,16 +279,28 @@ def test_Module_pop_child_driver():
     (None, ['ab', 'ac', 'aa'], does_not_raise()),
     (None, ['aa', 'ac', 'ab'], does_not_raise()),
     (None, ('aa', 'ac', 'ab'), does_not_raise()),  # tuples work
-    (None, {'aa', 'ac', 'ab'}, pytest.raises(TypeError,
-        match="exec_order must be an ordered sequence")),  # sets fail
-    (None, ['foo', 1, True], pytest.raises(ValueError,
-        match="exec_order must be a permutation of \['aa', 'ab', 'ac'\]")),
-    (None, ['aa', 'ac', 'aa', 'ab', 'ac', 'aa'],
-        pytest.raises(ValueError, match="Repeated items \['aa', 'ac'\]")),
+    (
+        None, {'aa', 'ac', 'ab'},
+        pytest.raises(
+            TypeError,  # sets fail
+            match="exec_order must be an ordered sequence",
+        ),
+    ),
+    (
+        None, ['foo', 1, True],
+        pytest.raises(
+            ValueError,
+            match=r"exec_order must be a permutation of \['aa', 'ab', 'ac'\]",
+        ),
+    ),
+    (
+        None, ['aa', 'ac', 'aa', 'ab', 'ac', 'aa'],
+        pytest.raises(ValueError, match=r"Repeated items \['aa', 'ac'\]"),
+    ),
     ('aa', ['aab', 'aaa'], does_not_raise()),
     ('aa', ['aab', 'aaa', 'extra'], pytest.raises(ValueError)),  # too many elements
     ('aa', ['aab'], pytest.raises(ValueError)),  # too few elements
-    ('ab', ['foo'], pytest.raises(ValueError, match="'ab' has no children")),
+    ('ab', ['foo'], pytest.raises(ValueError, match=r"'ab' has no children")),
     ('ab', [], does_not_raise()),
 ])
 def test_Module_exec_order(composite, child_name, values, expected):

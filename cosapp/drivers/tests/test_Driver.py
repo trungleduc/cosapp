@@ -42,7 +42,7 @@ def driver():
     (get_args(1.0), dict(error=TypeError)),
     (get_args(dict(a=True)), dict(error=TypeError)),
     (get_args(list()), dict(error=TypeError)),
-    (get_args("driver", tada=0), dict(error=RuntimeError, match="Unknown option\(s\) \['tada'\]")),
+    (get_args("driver", tada=0), dict(error=RuntimeError, match=r"Unknown option\(s\) \['tada'\]")),
     # Tests with specified owner:
     (get_args("foobar", System("boss")), dict()),
     (get_args("foobar", owner=System("boss")), dict()),

@@ -897,7 +897,7 @@ def _find_unit(unit: Union[str, PhysicalUnit, None]) -> Optional[PhysicalUnit]:
 
                 # First character of a unit is always alphabet.
                 # Remaining characters may include numbers.
-                regex = re.compile('[A-z][A-z0-9]*')
+                regex = re.compile(r"[A-z][A-z0-9]*")
 
                 if not regex.match(name):
                     return None

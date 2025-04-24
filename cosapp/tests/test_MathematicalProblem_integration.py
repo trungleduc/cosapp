@@ -201,7 +201,7 @@ def test_MathematicalProblem_repr_2(s1: System, caplog):
     # print("", problem, sep="\n")
     assert len(caplog.records) > 0
     assert re.match(
-        "Replace unknown 'a.aun.p_in.y' by 'a.p.y'",
+        r"Replace unknown 'a\.aun\.p_in\.y' by 'a\.p\.y'",
         caplog.records[0].message
     )
     # Note: in a single-point problem, all equations
@@ -225,7 +225,6 @@ def test_MathematicalProblem_repr_2(s1: System, caplog):
         r"  b\.area == 10 := .*",
         r"  foo\.beq: v\[::2\] == \[0, 1\] := \[.* .*\]",
     ])
-    # print(pattern, problem, sep="\n")
     assert re.match(pattern, repr(problem))
 
 
@@ -247,7 +246,7 @@ def test_MathematicalProblem_repr_3(s1: System, caplog):
     
     assert len(caplog.records) > 0
     assert re.match(
-        "Replace unknown 'foo.beq.p_in.y' by 'foo.xyz_in.y'",
+        r"Replace unknown 'foo\.beq\.p_in\.y' by 'foo\.xyz_in\.y'",
         caplog.records[0].message
     )
     problem = solver.problem
@@ -288,7 +287,6 @@ def test_MathematicalProblem_repr_3(s1: System, caplog):
         r"  point2\[foo\.beq: v\[::2\] == \[0, 1\]\] := \[.* .*\]",
         r"  point2\[q_out\.a == x \+ y\] := .*",
     ])
-    # print(pattern, problem, sep="\n")
     assert re.match(pattern, repr(problem))
 
 

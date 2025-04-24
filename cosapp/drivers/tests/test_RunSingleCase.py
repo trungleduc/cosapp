@@ -202,10 +202,10 @@ def test_RunSingleCase_set_values(ExtendedMultiply, hat_case):
 
     d = RunSingleCase("case")
 
-    with pytest.raises(AttributeError, match="Driver '\w+' must be attached to a System to set case values."):
+    with pytest.raises(AttributeError, match=r"Driver '\w+' must be attached to a System to set case values."):
         d.add_value("K1", 11.5)
 
-    with pytest.raises(AttributeError, match="Driver '\w+' must be attached to a System to set case values."):
+    with pytest.raises(AttributeError, match=r"Driver '\w+' must be attached to a System to set case values."):
         d.add_values({"K1": 11.5})
 
     # Test vector variables

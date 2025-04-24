@@ -709,7 +709,7 @@ def test_MathematicalProblem_extend_pulled_target(caplog):
     
     assert len(caplog.records) == 1
     assert re.match(
-        "Target on 'norm\(s.v\)' will be based on 'norm\(v_alias\)'",
+        r"Target on 'norm\(s.v\)' will be based on 'norm\(v_alias\)'",
         caplog.records[0].message
     )
     assert mx is mr
@@ -733,7 +733,7 @@ def test_MathematicalProblem_extend_pulled_target(caplog):
     
     assert len(caplog.records) == 1
     assert re.match(
-        "Target on 's.u' will be based on 'U'",
+        r"Target on 's.u' will be based on 'U'",
         caplog.records[0].message
     )
     assert mx is mr
@@ -757,11 +757,11 @@ def test_MathematicalProblem_extend_pulled_target(caplog):
     
     assert len(caplog.records) == 2
     assert re.match(
-        "Target on 'r\.g' will be based on 'g'",
+        r"Target on 'r\.g' will be based on 'g'",
         caplog.records[0].message
     )
     assert re.match(
-        "Target on '2 \* r\.h' will be based on '2 \* H'",
+        r"Target on '2 \* r\.h' will be based on '2 \* H'",
         caplog.records[1].message
     )
 
@@ -786,11 +786,11 @@ def test_MathematicalProblem_extend_pulled_target(caplog):
     
     assert len(caplog.records) == 2
     assert re.match(
-        "Target on 'r\.g' will be based on 'G'",
+        r"Target on 'r\.g' will be based on 'G'",
         caplog.records[0].message
     )
     assert re.match(
-        "Target on 'r\.out\.m' will be based on 'bogus_out\.m'",
+        r"Target on 'r\.out\.m' will be based on 'bogus_out\.m'",
         caplog.records[1].message
     )
     assert mx is ms
