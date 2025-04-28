@@ -52,6 +52,7 @@ Modules
    cosapp.drivers.time.euler
    cosapp.drivers.time.runge_kutta
    cosapp.drivers.time.crank_nicolson
+   cosapp.drivers.time.bdf
    cosapp.drivers.time.scenario
    cosapp.drivers.time.utils
    cosapp.drivers.abstractsetofcases

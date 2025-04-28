@@ -1,6 +1,30 @@
 # History
 
 
+## 1.1.0 (2025-04-28)
+
+### New features & API changes
+
+- New implicit time drivers: backward Euler and order 1-4 Backward Difference Formula (BDF) integrators (MRs [#405](https://gitlab.com/cosapp/cosapp/-/merge_requests/405), [#415](https://gitlab.com/cosapp/cosapp/-/merge_requests/415)).
+- Add new signal `system_update_signal` for all time drivers, emitted at each time step (MR [#406](https://gitlab.com/cosapp/cosapp/-/merge_requests/406)).
+- Improvement of driver `MonteCarlo` (MR [#409](https://gitlab.com/cosapp/cosapp/-/merge_requests/409)).
+- Expose exception `EventError` in module `cosapp.multimode` (MR [#407](https://gitlab.com/cosapp/cosapp/-/merge_requests/407)).
+
+### Bug fixes & Code improvements
+
+- Improved type hints and general refactoring pass (MRs [#400](https://gitlab.com/cosapp/cosapp/-/merge_requests/400), [#408](https://gitlab.com/cosapp/cosapp/-/merge_requests/408), [#410](https://gitlab.com/cosapp/cosapp/-/merge_requests/410)).
+- Support for polynomials with multi-dimensional coefficients in `TwoPointCubicPolynomial` (MR [#404](https://gitlab.com/cosapp/cosapp/-/merge_requests/404)).
+
+### Documentation
+
+- Updated section on "Tips & Tricks" (MR [#412](https://gitlab.com/cosapp/cosapp/-/merge_requests/412)).
+- Updated tutorial on time drivers (MR [#415](https://gitlab.com/cosapp/cosapp/-/merge_requests/415)).
+
+### Dependency management
+
+- Update of the `JupyterLite` image (MRs [#401](https://gitlab.com/cosapp/cosapp/-/merge_requests/401), [#402](https://gitlab.com/cosapp/cosapp/-/merge_requests/402), [#403](https://gitlab.com/cosapp/cosapp/-/merge_requests/403), [#411](https://gitlab.com/cosapp/cosapp/-/merge_requests/411), [#413](https://gitlab.com/cosapp/cosapp/-/merge_requests/413)).
+
+
 ## 1.0.1 (2025-03-24)
 
 ### Bug fixes & Improvements
