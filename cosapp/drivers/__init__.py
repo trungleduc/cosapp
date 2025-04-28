@@ -12,8 +12,10 @@ from cosapp.drivers.montecarlo import MonteCarlo
 from cosapp.drivers.metasystembuilder import MetaSystemBuilder
 from cosapp.drivers.influence import Influence
 
+# Time drivers
 from cosapp.drivers.time import (
     EulerExplicit,
+    EulerImplicit,
     RungeKutta,
     CrankNicolson,
     BdfIntegrator,
@@ -25,6 +27,7 @@ __all__ = [
     "LinearDoE",
     "NonLinearMethods",
     "NonLinearSolver",
+    "FixedPointSolver",
     "MetaSystemBuilder",
     "MonteCarlo",
     "Optimizer",
@@ -32,6 +35,7 @@ __all__ = [
     "RunSingleCase",
     "ValidityCheck",
     "EulerExplicit",
+    "EulerImplicit",
     "RungeKutta",
     "CrankNicolson",
     "BdfIntegrator",
