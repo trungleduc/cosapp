@@ -18,7 +18,7 @@ This module comes from OpenMDAO 2.2.0. It was slightly modified for CoSApp integ
 import pytest
 
 from cosapp.systems import System
-from cosapp.utils.options_dictionary import OptionsDictionary
+from cosapp.utils.options_dictionary import OptionsDictionary, OptionError
 
 
 def check_even(name, value):
@@ -139,7 +139,7 @@ def test_OptionsDictionary_type_and_values():
 
     # Test with both type_ and values
     with pytest.raises(
-        Exception, match="'dtype' and 'values' were both specified for option 'test3'"
+        OptionError, match="'dtype' and 'values' were both specified for option 'test3'"
     ):
         opt.declare("test3", dtype=int, values=["a", "b"])
 
@@ -188,7 +188,7 @@ def test_OptionsDictionary_keys(options):
 
 
 def test_OptionsDictionary_values(options):
-    with pytest.raises(RuntimeError, match="required but has not been set"):
+    with pytest.raises(OptionError, match="required but has not been set"):
         values = list(options.values())
     # Define required options
     options['test'] = 'b'
@@ -203,7 +203,7 @@ def test_OptionsDictionary_values(options):
 
 
 def test_OptionsDictionary_items(options):
-    with pytest.raises(RuntimeError, match="required but has not been set"):
+    with pytest.raises(OptionError, match="required but has not been set"):
         list(options.items())
     # Define required options
     options['test'] = 'b'
@@ -239,7 +239,7 @@ def test_OptionsDictionary_update_extra():
 
 def test_OptionsDictionary_getitem_missing():
     opt = OptionsDictionary()
-    with pytest.raises(KeyError, match="Option 'missing' cannot be found"):
+    with pytest.raises(KeyError, match="Option 'missing' does not exist"):
         opt["missing"]
 
 
@@ -254,6 +254,25 @@ def test_OptionsDictionary_getitem_default():
 
     opt["test"] = obj_new
     assert opt["test"] is obj_new
+
+
+def test_OptionsDictionary_get():
+    opt = OptionsDictionary()
+    opt.declare("foo", 0)
+    opt.declare("bar")
+
+    assert opt.get("foo") == 0
+    assert opt.get("foo", 1) == 0
+
+    with pytest.raises(OptionError, match="'bar' is required but has not been set"):
+        opt.get("bar")
+
+    opt.get("bar", 2) == 2
+
+    with pytest.raises(KeyError):
+        opt.get("baz")
+    
+    assert opt.get("baz", 3) == 3
 
 
 def test_OptionsDictionary_values():
@@ -313,7 +332,7 @@ def test_OptionsDictionary_undeclare():
     opt.undeclare("test")
 
     # prove it is no longer in the dict
-    with pytest.raises(KeyError, match="Option 'test' cannot be found"):
+    with pytest.raises(KeyError, match="Option 'test' does not exist"):
         opt["test"]
 
 

@@ -16,19 +16,21 @@ limitations under the License.
 
 This module comes from OpenMDAO 2.2.0. It was slightly modified for CoSApp integration.
 """
-
 from __future__ import annotations
-
-# unique object to check if default is given
 
 from typing import Any, Dict, Union, Optional, Callable, Container, Iterable
 from cosapp.utils.state_io import object__getstate__
 
 
+# unique object to check if default is given
 _undefined = object()
 
 
-class OptionsDictionary(object):
+class OptionError(Exception):
+    """Raised if an option-related error is encountered."""
+
+
+class OptionsDictionary:
     """
     Dictionary with pre-declaration of keys for value-checking and default values.
 
@@ -46,7 +48,7 @@ class OptionsDictionary(object):
         If True, no options can be set after declaration.
     """
 
-    __slots__ = ["_dict", "_read_only"]
+    __slots__ = ("_dict", "_read_only")
 
     def __init__(self, read_only=False):
         """
@@ -186,7 +188,7 @@ class OptionsDictionary(object):
         for output in outputs:
             line = ""
             for j, item in enumerate(output):
-                line += "%s " % str(item)
+                line += f"{item} "
                 size = max_sizes[j]
                 space = size - len(str(item))
                 if space > 0:
@@ -332,7 +334,6 @@ class OptionsDictionary(object):
         tag : Optional[str]
             Specify a tag to allow later filtering of options.
         """
-
         if values is not None and not isinstance(values, (set, list, tuple)):
             raise TypeError(
                 "In declaration of option '%s', the 'values' arg must be of type None,"
@@ -345,8 +346,8 @@ class OptionsDictionary(object):
             )
 
         if dtype is not None and values is not None:
-            raise RuntimeError(
-                "'dtype' and 'values' were both specified for option '%s'." % name
+            raise OptionError(
+                f"'dtype' and 'values' were both specified for option {name!r}."
             )
 
         default_provided = default is not _undefined
@@ -382,17 +383,17 @@ class OptionsDictionary(object):
         if name in self._dict:
             del self._dict[name]
 
-    def update(self, in_dict):
+    def update(self, dictionary: dict) -> None:
         """
         Update the internal dictionary with the given one.
 
         Parameters
         ----------
-        in_dict : dict
+        dictionary : dict
             The incoming dictionary to add to the internal one.
         """
-        for name in in_dict:
-            self[name] = in_dict[name]
+        for name, option in dictionary.items():
+            self[name] = option
 
     def clear(self):
         if self._read_only:
@@ -416,7 +417,7 @@ class OptionsDictionary(object):
 
     def values(self):
         """Return an iterator over dict values.
-        Raises `RuntimeError` if a required option is undefined.
+        Raises `OptionError` if a required option is undefined.
         """
         for key in self.keys():
             yield self[key]
@@ -426,7 +427,7 @@ class OptionsDictionary(object):
 
         The items can be filtered by tags if provided.
 
-        Raises `RuntimeError` if a required option is undefined.
+        Raises `OptionError` if a required option is undefined.
 
         Parameters
         ----------
@@ -465,6 +466,9 @@ class OptionsDictionary(object):
         """
         return key in self._dict
 
+    def __bool__(self) -> bool:
+        return bool(self._dict)
+
     def __len__(self):
         return len(self._dict)
 
@@ -486,8 +490,9 @@ class OptionsDictionary(object):
             meta = self._dict[name]
         except KeyError:
             # The key must have been declared.
-            msg = f"Option {name!r} cannot be set because it has not been declared."
-            raise KeyError(msg)
+            raise KeyError(
+                f"Option {name!r} cannot be set because it has not been declared."
+            )
 
         self._assert_valid(name, value)
 
@@ -505,29 +510,47 @@ class OptionsDictionary(object):
 
         Returns
         -------
-        value : -
+        value : Any
             value of the option.
         """
         # If the option has been set in this system, return the set value
         try:
             meta = self._dict[name]
+        except KeyError:
+            raise KeyError(f"Option {name!r} does not exist")
+        else:
             if meta["has_been_set"]:
                 return meta["value"]
             else:
-                raise RuntimeError(f"Option {name!r} is required but has not been set.")
-        except KeyError:
-            raise KeyError(f"Option {name!r} cannot be found")
+                raise OptionError(f"Option {name!r} is required but has not been set.")
 
     def __getattr__(self, name):
         if name in self.__getattribute__("_dict"):
             return self[name]
         return self.__getattribute__(name)
 
-    def get(self, name: str, default: Optional[Any] = None) -> Any:
-        if name in self:
-            return self[name]
+    def get(self, key: str, fallback: Any=_undefined, /) -> Any:
+        """Return the value associated with `key`, if any, or a fallback value.
+        
+        Parameters
+        ----------
+        - key [str]: dictionary key
+        - fallback [Any, optional]: fallback value if key does not exist
 
-        return default
+        Returns
+        -------
+        Any: the value associated to `key`, or `fallback`, if prescribed.
+
+        Raises
+        ------
+        `KeyError` if the key does not exist and no fallback value was given.
+        """
+        try:
+            return self[key]
+        except (KeyError, OptionError):
+            if fallback is _undefined:
+                raise
+            return fallback
 
     def merge(self, other: OptionsDictionary) -> None:
         self._dict.update(other._dict)
