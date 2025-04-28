@@ -12,7 +12,7 @@
 
 ### Bug fixes & Code improvements
 
-- Improved type hints and general refactoring pass (MRs [#400](https://gitlab.com/cosapp/cosapp/-/merge_requests/400), [#408](https://gitlab.com/cosapp/cosapp/-/merge_requests/408), [#410](https://gitlab.com/cosapp/cosapp/-/merge_requests/410)).
+- Improved type hints and general refactoring pass (MRs [#400](https://gitlab.com/cosapp/cosapp/-/merge_requests/400), [#408](https://gitlab.com/cosapp/cosapp/-/merge_requests/408), [#410](https://gitlab.com/cosapp/cosapp/-/merge_requests/410), [#416](https://gitlab.com/cosapp/cosapp/-/merge_requests/416)).
 - Support for polynomials with multi-dimensional coefficients in `TwoPointCubicPolynomial` (MR [#404](https://gitlab.com/cosapp/cosapp/-/merge_requests/404)).
 
 ### Documentation
