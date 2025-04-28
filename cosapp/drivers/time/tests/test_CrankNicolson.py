@@ -4,34 +4,12 @@ import numpy as np
 from cosapp.systems import System
 from cosapp.drivers import CrankNicolson
 from cosapp.recorders import DataFrameRecorder
-from .conftest import CoupledTanks
-
-
-class Ode(System):
-    """ODE of the kind df/dt = df
-    """
-    def setup(self, varname="f", **options):
-        self.add_inward(f"d{varname}", 0.0)
-        self.add_transient(varname, der=f"d{varname}", **options)
-
-
-class MultimodeOde(Ode):
-    """Multimode ODE of the kind df/dt = df,
-    with event `snap` (undefined by default).
-    """
-    def setup(self, varname="f", **options):
-        super().setup(varname=varname, **options)
-        self.add_event("snap")
-        self.add_outward_modevar("snapped", init=False)
-
-    def transition(self):
-        if self.snap.present:
-            self.snapped = True
+from .conftest import CoupledTanks, ScalarOde
 
 
 @pytest.fixture
 def ode_case():
-    ode = Ode("ode")
+    ode = ScalarOde("ode")
     driver = ode.add_driver(CrankNicolson())
     driver.add_recorder(DataFrameRecorder())
     return ode, driver
@@ -78,7 +56,7 @@ def test_CrankNicolson_ode_stiff(delta):
     with y(0) = 1 / delta,
     t in [0, 2 / delta]
     """
-    ode = Ode("ode", varname="y", max_abs_step=0.02)
+    ode = ScalarOde("ode", varname="y", max_abs_step=0.02)
     driver = ode.add_driver(CrankNicolson(record_dt=True))
     driver.set_scenario(
         init={"y": delta},
