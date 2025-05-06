@@ -34,6 +34,7 @@ from cosapp.ports.enum import PortType, Scope, Validity
 from cosapp.ports.port import BasePort, ExtensiblePort, ModeVarPort, Port
 from cosapp.ports.units import UnitError
 from cosapp.ports.variable import RangeValue, Types, Variable
+from cosapp.ports.mode_variable import ModeVariable
 from cosapp.ports.connectors import BaseConnector, Connector, ConnectorError
 from cosapp.utils.distributions import Distribution
 from cosapp.utils.context import ContextLock
@@ -671,6 +672,20 @@ class System(Module, TimeObserver):
 
     def __repr__(self) -> str:
         return f"{self.name} - {type(self).__name__}"
+
+    def get_variable(self, varname: str) -> Union[Variable, ModeVariable]:
+        try:
+            var = self.name2variable[varname]
+        except KeyError:
+            if varname in self.__readonly:
+                port = None
+            else:
+                raise AttributeError(f"{varname!r} is not a variable of {self.name}")
+        else:
+            port = var.mapping
+        if not isinstance(port, BasePort):
+            raise ValueError(f"{varname!r} is not a variable of {self.name}")
+        return port.get_variable(var.key)
 
     @property
     def input_mapping(self) -> dict[str, VariableReference]:
@@ -3398,24 +3413,25 @@ class System(Module, TimeObserver):
                 try:
                     top_system[name].__setstate__(value)
                 except AttributeError:
-                    for key, val in value.items():
-                        setattr(top_system[name], key, val)
+                    for key, vardata in value.items():
+                        setattr(top_system[name], key, vardata)
             else:
                 top_system.__register_property(name, value)
 
-        for name, port in (state.get("inputs", {}) | state.get("outputs", {})).items():
-            variables = port["variables"]
-            port.pop("__class__", None)
+        for name, port_data in (state.get("inputs", {}) | state.get("outputs", {})).items():
+            variables: dict[str, Any] = port_data["variables"]
+            port_data.pop("__class__", None)
+            port: BasePort = top_system[name]
             if value_only:
-                top_system[name].set_values(**{var: val for var, val in variables.items()})
+                port.set_values(**{var: val for var, val in variables.items()})
             else:
-                top_system[name].set_values(**{var: val["value"] for var, val in variables.items()})
-                for var, val in variables.items():
-                    top_system[name][var] = val.pop("value")
+                port.set_values(**{var: val["value"] for var, val in variables.items()})
+                for varname, vardata in variables.items():
+                    port[varname] = vardata.pop("value")
 
-                    v = top_system[name].get_details(var)
-                    for metadata_name, metadata_value in val.items():
-                        setattr(v, f"_{metadata_name}", metadata_value)
+                    var = port.get_variable(varname)
+                    for metadata_name, metadata_value in vardata.items():
+                        setattr(var, f"_{metadata_name}", metadata_value)
 
         for driver in state.get("drivers", {}).values():
             top_system.add_driver(driver)

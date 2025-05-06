@@ -292,12 +292,12 @@ def test_MultimodeSystem_modevar_pulling_attr():
     top = System('top')
     top.add_child(BasicMultimodeSystem('d'), pulling=['m_in', 'm_out'])
 
-    m = top['modevars_in'].get_details('m_in')
+    m = top.get_variable('m_in')
     assert isinstance(m, ModeVariable)
     assert m.unit == 'm'
     assert m.description == ''
 
-    m = top['modevars_out'].get_details('m_out')
+    m = top.get_variable('m_out')
     assert isinstance(m, ModeVariable)
     assert m.unit == ''
     assert m.description == 'System state'

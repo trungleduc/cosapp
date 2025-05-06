@@ -459,25 +459,27 @@ def test_BasePort___len__(direction):
         dict(limits=None, valid_range=None, dtype=str)
     ),
 ])
-def test_BasePort_get_details(direction, scope, options, expected):
+def test_BasePort_get_variable(direction, scope, options, expected):
+    """Test methods `BasePort.get_variable` and `BasePort.variable_dict`"""
     error = expected.get("error", None)
     port = BasePort("myPort", direction)
     options["scope"] = scope
 
     if error is None:
         port.add_variable("var", **options)
-        assert isinstance(port.get_details("var"), Variable)
-        details = port.get_details()
-        assert set(details) == {'var'}
-        # Check that `details` is immutable
+        var = port.get_variable("var")
+        assert isinstance(var, Variable)
+        vardict = port.variable_dict()
+        assert set(vardict) == {"var"}
+        assert set(vardict) == set(port)
+        # Check that `vardict` is immutable
         with pytest.raises(TypeError):
-            details["var"] = 0
+            vardict["var"] = 0
         with pytest.raises(TypeError):
-            details["newkey"] = 0
-        assert port.get_details("var") is details["var"]
-        assert len(details) == len(port)
-        with pytest.raises(KeyError):
-            assert port.get_details("foobar")
+            vardict["newkey"] = 0
+        assert var is vardict["var"]
+        with pytest.raises(AttributeError):
+            assert port.get_variable("foobar")
 
         default = dict(
             unit = "",
@@ -491,7 +493,7 @@ def test_BasePort_get_details(direction, scope, options, expected):
         default.update(options)
         for key, value in default.items():
             expected.setdefault(key, value)
-        detail = port.get_details("var")
+        detail = port.get_variable("var")
         assert detail.unit == expected["unit"]
         assert detail.dtype == expected["dtype"]
         assert detail.valid_range == expected["valid_range"]
@@ -544,7 +546,7 @@ def test_BasePort_add_variable(direction, caplog):
     d = Uniform(-1, 2, 0.2)
     port = BasePort("myPort", direction)
     port.add_variable("var", 1.0, distribution=d)
-    assert port.get_details("var").distribution is d
+    assert port.get_variable("var").distribution is d
 
     with pytest.raises(TypeError,
             match="Random distribution should be of type 'Distribution'"):
@@ -594,8 +596,8 @@ def test_BasePort_add_variable_multiscope(direction, scope1, scope2):
     port = BasePort("dummy", direction)
     port.add_variable("var1", 3.14, scope=scope1)
     port.add_variable("var2", True, scope=scope2)
-    assert port.get_details("var1").scope is scope1
-    assert port.get_details("var2").scope is scope2
+    assert port.get_variable("var1").scope is scope1
+    assert port.get_variable("var2").scope is scope2
 
 
 @pytest.mark.parametrize("direction", PortType)
@@ -664,7 +666,7 @@ def test_BasePort_copy(direction1, direction2):
         desc="my stupid description",
     )
     p_copy = port.copy("new", direction2)
-    details = p_copy.get_details()
+    details = p_copy.variable_dict()
     assert set(details.keys()) == {"var1"}
 
     assert details["var1"].valid_range == (0.0, 5.0)
@@ -684,7 +686,7 @@ def test_BasePort_copy(direction1, direction2):
     port.add_variable("var2", True)
 
     p_copy = port.copy(direction=direction2)
-    details = p_copy.get_details()
+    details = p_copy.variable_dict()
     assert set(details.keys()) == {"var1", "var2"}
 
     assert details["var1"].valid_range == (1, 2)

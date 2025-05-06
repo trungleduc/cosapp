@@ -33,7 +33,7 @@ class RandomVariable:
             raise TypeError(f"{varname!r} is not an input variable.")
 
         if distribution is None:
-            distribution = port.get_details(ref.key).distribution
+            distribution = port.get_variable(ref.key).distribution
         elif not isinstance(distribution, Distribution):
             raise TypeError(
                 f"Distribution for '{system.name}.{varname}' is expected to be of type `Distribution`"
