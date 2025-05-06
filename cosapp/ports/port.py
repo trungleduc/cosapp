@@ -1,13 +1,12 @@
 from __future__ import annotations
-import json
-import logging
-import copy
 import abc
+import json
+import copy
+import logging
 from collections import OrderedDict
+from collections.abc import Iterator, Generator
 from typing import (
-    Any, Dict, Tuple,
-    Optional, Union, Callable,
-    Iterator, Generator,
+    Any, Optional, Union, Callable,
     TypeVar, TYPE_CHECKING,
 )
 from types import MappingProxyType
@@ -56,11 +55,10 @@ class BasePort(visitor.Component, metaclass=abc.ABCMeta):
             Port direction
         """
         if not isinstance(direction, PortType):
-            raise TypeError(f"Direction must be PortType; got {direction}.")
-        from cosapp.systems import System
+            raise TypeError(f"Direction must be PortType; got {direction!r}.")
 
         self.__is_clean = False
-        self._variables: Dict[str, BaseVariable] = OrderedDict()
+        self._variables: dict[str, BaseVariable] = OrderedDict()
         self._name: str = self._name_check(name)
         self._desc: str = ""
         self._direction: PortType = direction
@@ -176,7 +174,7 @@ class BasePort(visitor.Component, metaclass=abc.ABCMeta):
 
         return port_to_md(self)
 
-    def __json__(self) -> Dict[str, Any]:
+    def __json__(self) -> dict[str, Any]:
         """Creates a JSONable dictionary representation of the object.
         
         Break circular dependencies by not relying
@@ -184,7 +182,7 @@ class BasePort(visitor.Component, metaclass=abc.ABCMeta):
 
         Returns
         -------
-        Dict[str, Any]
+        dict[str, Any]
             The dictionary
         """
         return jsonify(dict((name, variable.__json__()) for name, variable in self._variables.items()))
@@ -204,41 +202,36 @@ class BasePort(visitor.Component, metaclass=abc.ABCMeta):
             this method, and the state of the object
         """
         state = {"owner": self._owner}
-        state.update({key: (val, self._variables[key]) for (key, val) in self.items()})
-
-        return (
-            type(self),
-            (
-                self.name,
-                self.direction,
-            ),
-            state,
+        state.update(
+            (key, (val, self._variables[key]))
+            for (key, val) in self.items()
         )
+        return (type(self), (self._name, self._direction), state)
 
-    def __setstate__(self, state: Dict[str, Any]) -> None:
+    def __setstate__(self, state: dict[str, Any]) -> None:
         """Sets the object from a provided state.
 
         Parameters
         ----------
-        state : Dict[str, Any]
+        state : dict[str, Any]
             State
         """
         self._owner = state.pop("owner")
 
         for name, (val, var) in state.items():
-            if isinstance(self, ExtensiblePort):
+            try:
                 self.add_variable(name, val)
-            else:
-                self[name] = val
+            except:
+                pass
             self._variables[name] = var
-            # print(var, var.distribution)
+            setattr(self, name, val)
 
-    def serialize_data(self) -> Dict[str, Any]:
+    def serialize_data(self) -> dict[str, Any]:
         """Serialize the variable values in a dictionary.
         
         Returns
         -------
-        Dict[str, Any]
+        dict[str, Any]
             The dictionary (variable name, value)
         """
         return dict(self.items())
@@ -272,11 +265,11 @@ class BasePort(visitor.Component, metaclass=abc.ABCMeta):
             Variable unit; default empty string (i.e. dimensionless)
         dtype : type or iterable of type, optional
             Variable type; default None (i.e. type of initial value)
-        valid_range : Tuple[Any, Any] or Tuple[Tuple], optional
+        valid_range : tuple[Any, Any] or tuple[tuple], optional
             Validity range of the variable; default None (i.e. all values are valid)
         invalid_comment : str, optional
             Comment to show in case the value is not valid; default ''
-        limits : Tuple[Any, Any] or Tuple[Tuple], optional
+        limits : tuple[Any, Any] or tuple[tuple], optional
             Limits over which the use of the model is wrong; default valid_range
         out_of_limits_comment : str, optional
             Comment to show in case the value is not valid; default ''
@@ -315,10 +308,10 @@ class BasePort(visitor.Component, metaclass=abc.ABCMeta):
 
     # TODO should we override __setattr__ to forward setting to the source port? and/or raise an
     #   error if it is not possible - for example if the source is an output variable
-    def __set_notype_checking(self, key, value):
-        super().__setattr__(key, value)
+    def __set_notype_checking(self, name: str, value: Any):
+        super().__setattr__(name, value)
 
-        if self.__is_clean and key in self._variables:
+        if self.__is_clean and name in self._variables:
             self.touch()
 
     def validate(self, key: str, value: Any) -> None:
@@ -352,26 +345,26 @@ class BasePort(visitor.Component, metaclass=abc.ABCMeta):
                     )
                 )
 
-    def __set_variable(self, key, value):
-        """Set the variable `key` with `value`.
+    def __set_variable(self, name: str, value: Any):
+        """Set the variable `name` with `value`.
         
         Parameters
         ----------
-        key : str
+        name : str
             Name of the variable to be set
         value : Any
             Value to set
         """
-        if key.startswith("_"):
-            super().__setattr__(key, value)
-        elif key in self._variables:
-            self.validate(key, value)
-            self.__set_notype_checking(key, value)
-        elif hasattr(self, key):
-            super().__setattr__(key, value)
+        if name.startswith("_"):
+            super().__setattr__(name, value)
+        elif name in self._variables:
+            self.validate(name, value)
+            self.__set_notype_checking(name, value)
+        elif hasattr(self, name):
+            super().__setattr__(name, value)
         else:
             raise AttributeError(
-                f"Port variable {self.contextual_name}.{key} can only be created using method 'add_variable'."
+                f"Port variable {self.contextual_name}.{name} can only be created using method 'add_variable'."
             )
 
     __setattr__ = __set_variable
@@ -413,7 +406,7 @@ class BasePort(visitor.Component, metaclass=abc.ABCMeta):
     def __len__(self) -> int:
         return len(self._variables)
 
-    def items(self) -> Generator[Tuple[str, Any], None, None]:
+    def items(self) -> Generator[tuple[str, Any], None, None]:
         """Dictionary-like item generator yielding (name, value) tuples
         for all port variables."""
         for name in self._variables:
@@ -514,29 +507,44 @@ class BasePort(visitor.Component, metaclass=abc.ABCMeta):
         """
         return self.__out_of_scope(name)
 
-    def get_details(self, name: Optional[str] = None) -> Union[Dict[str, BaseVariable], BaseVariable]:
-        """Return the variable(s).
+    def get_variable(self, varname: str) -> BaseVariable:
+        """Return the variable named `varname`.
         
         Parameters
         ----------
-        name : str, optional
-            Name of the variable looked for; default None (all variable are returned).
+        name: str
+            Name of the variable.
 
         Returns
         -------
-        types.MappingProxyType[str, cosapp.ports.variable.Variable] or cosapp.ports.variable.Variable
-            The sought variable, or a read-only view on all port variables.
+        cosapp.ports.variable.Variable
+
+        Raises
+        ------
+        `AttributeError` if the variable does not exist in the port
         """
-        if name is None:
-            return MappingProxyType(self._variables)
-        else:
-            return self._variables[name]
+        try:
+            return self._variables[varname]
+        except KeyError:
+            raise AttributeError(
+                f"Variable {varname!r} does not exist in port {self.contextual_name}"
+            )
+
+    def variable_dict(self) -> dict[str, BaseVariable]:
+        """Return an immutable variable dictionary of the kind {varname: variable}.
+        
+        Returns
+        -------
+        types.MappingProxyType[str, cosapp.ports.variable.Variable]
+            Read-only view on all port variables.
+        """
+        return MappingProxyType(self._variables)
 
     def variables(self) -> Iterator[BaseVariable]:
         """Iterator over port `BaseVariable` instances."""
         return self._variables.values()
 
-    def check(self, name: Optional[str] = None) -> Union[Dict[str, Validity], Validity]:
+    def check(self, name: Optional[str] = None) -> Union[dict[str, Validity], Validity]:
         """Get the variable value validity.
 
         If `name` is not provided, returns a dictionary with the validity of all variables. Else
@@ -549,7 +557,7 @@ class BasePort(visitor.Component, metaclass=abc.ABCMeta):
 
         Returns
         -------
-        Dict[str, Validity] or Validity
+        dict[str, Validity] or Validity
             (Dictionary of) the variable(s) value validity
         """
       
@@ -564,7 +572,7 @@ class BasePort(visitor.Component, metaclass=abc.ABCMeta):
     def get_validity_ground(self,
         status: Validity,
         name: Optional[str] = None,
-    ) -> Union[Dict[str, str], str]:
+    ) -> Union[dict[str, str], str]:
         # TODO unit tests
         """Get the ground arguments used to established the variable validity range.
 
@@ -579,7 +587,7 @@ class BasePort(visitor.Component, metaclass=abc.ABCMeta):
 
         Returns
         -------
-        Dict[str, str] or str
+        dict[str, str] or str
             (Dictionary of) the variable(s) validity ground
         """
         if name is None:
@@ -700,7 +708,7 @@ class BasePort(visitor.Component, metaclass=abc.ABCMeta):
 
     def to_dict(
         self, *, with_types: bool, value_only: bool
-    ) -> Dict[str, Union[str, Tuple[Dict[str, str], str]]]:
+    ) -> dict[str, Union[str, tuple[dict[str, str], str]]]:
         """Convert this port in a dictionary.
 
         Parameters
@@ -829,7 +837,7 @@ class Port(BasePort):
         `Port` name
     direction : {PortType.IN, PortType.OUT}
         `Port` direction
-    variables : Dict[str, Any], optional
+    variables : dict[str, Any], optional
         Dictionary of variables with their value and details; default: None = default value
 
     Attributes
@@ -867,12 +875,11 @@ class Port(BasePort):
     >>>     }
     >>> )
     """
-
     def __init__(
         self,
         name: str,
         direction: PortType,
-        variables: Optional[Dict[str, Any]] = None,
+        variables: Optional[dict[str, Any]] = None,
     ) -> None:
         """`Port` constructor.
 
@@ -887,7 +894,7 @@ class Port(BasePort):
             `Port` name
         direction : {PortType.IN, PortType.OUT}
             `Port` direction
-        variables : Dict[str, Any], optional
+        variables : dict[str, Any], optional
             Dictionary of variables with their value and details; default: None = default value
         """
         super().__init__(name, direction)
@@ -900,12 +907,11 @@ class Port(BasePort):
             for name, value in variables.items():
                 variable_value = value
                 if isinstance(value, dict):
+                    variable = self.get_variable(name)
                     variable_value = value.pop("value", None)
-
-                    details = self.get_details(name)
                     try:
                         for field, param in value.items():
-                            setattr(details, field, param)
+                            setattr(variable, field, param)
                     except AttributeError:  # Unexpected keyword for details
                         # If current variable is of type dict
                         if isinstance(self[name], dict):
@@ -973,11 +979,11 @@ class Port(BasePort):
             Variable unit; default empty string (i.e. dimensionless)
         dtype : type or iterable of type, optional
             Variable type; default None (i.e. type of initial value)
-        valid_range : Tuple[Any, Any] or Tuple[Tuple], optional
+        valid_range : tuple[Any, Any] or tuple[tuple], optional
             Validity range of the variable; default None (i.e. all values are valid)
         invalid_comment : str, optional
             Comment to show in case the value is not valid; default ''
-        limits : Tuple[Any, Any] or Tuple[Tuple], optional
+        limits : tuple[Any, Any] or tuple[tuple], optional
             Limits over which the use of the model is wrong; default valid_range
         out_of_limits_comment : str, optional
             Comment to show in case the value is not valid; default ''

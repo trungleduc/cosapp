@@ -476,8 +476,8 @@ class Connector(BaseConnector):
             key : str
                 Name of the connected variable for which the unit converter should be updated.
             """
-            target = sink.get_details(key)
-            origin = source.get_details(mapping[key])
+            target = sink.get_variable(key)
+            origin = source.get_variable(mapping[key])
             has_unit = {
                 'target': bool(target.unit),
                 'origin': bool(origin.unit),

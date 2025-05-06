@@ -4,7 +4,7 @@ import abc
 import copy
 import pandas
 import warnings
-from typing import Dict, Union, List, Optional, NamedTuple, Any, TYPE_CHECKING
+from typing import Union, Optional, NamedTuple, Any, TYPE_CHECKING
 
 from cosapp.core.signal import Signal
 from cosapp.core.eval_str import EvalString
@@ -13,7 +13,7 @@ from cosapp.utils.helpers import is_numerical, check_arg
 from cosapp.utils.find_variables import SearchPattern, make_wishlist, find_variables
 from cosapp.utils.state_io import object__getstate__
 if TYPE_CHECKING:
-    from cosapp.core.module import Module
+    from cosapp.systems import System
 
 
 class SpecialColumns(NamedTuple):
@@ -118,21 +118,21 @@ class BaseRecorder(abc.ABC):
         check_arg(raw_output, 'raw_output', bool)
         check_arg(numerical_only, 'numerical_only', bool)
 
-        self.__includes = make_wishlist(includes, "includes")  # type: List[str]
-        self.__excludes = make_wishlist(excludes, "excludes")  # type: List[str]
-        self._numerical_only = numerical_only  # type: bool
-        # self.__metadata = metadata  # type: List[str]
-        self.__section = ""  # type: str
+        self.__includes = make_wishlist(includes, "includes")
+        self.__excludes = make_wishlist(excludes, "excludes")
+        self._numerical_only = numerical_only
+        # self.__metadata: list[str] = metadata
+        self.__section = ""
         self.section = section
-        self.__hold = False  # type: bool
+        self.__hold = False
         self.hold = hold
-        self.__precision = 9  # type: int
+        self.__precision = 9
         self.precision = precision
-        self._raw_output = raw_output  # type: bool
-        self.__variables = None  # type: Optional[List[str]]
-        self.__expressions = None  # type: EvalString
-        self._watch_object = None  # type: Optional[cosapp.core.module.Module]
-        self._owner = None  # type: Optional[str]
+        self._raw_output = raw_output
+        self.__variables: Optional[list[str]] = None
+        self.__expressions: EvalString = None
+        self._watch_object: System = None
+        self._owner: Optional[str] = None
         self.paused = False
 
         # Signal
@@ -142,7 +142,7 @@ class BaseRecorder(abc.ABC):
         )
         self.cleared = Signal(name="cosapp.recorders.recorder.BaseRecorder.cleared")
 
-    def __getstate__(self) -> Dict[str, Any]:
+    def __getstate__(self) -> dict[str, Any]:
         """Creates a state of the object.
 
         The state type depend on the object, see
@@ -151,18 +151,18 @@ class BaseRecorder(abc.ABC):
 
         Returns
         -------
-        Dict[str, Any]:
+        dict[str, Any]:
             state
         """
         state = object__getstate__(self).copy()
         return state
 
-    def __json__(self) -> Dict[str, Any]:
+    def __json__(self) -> dict[str, Any]:
         """Creates a JSONable dictionary representation of the object.
 
         Returns
         -------
-        Dict[str, Any]
+        dict[str, Any]
             The dictionary
         """
         qualname = f"{self.__module__}.{self.__class__.__qualname__}"
@@ -213,15 +213,15 @@ class BaseRecorder(abc.ABC):
         return new
 
     @property
-    def watched_object(self) -> Optional[Module]:
-        """Module : The object from which data are read."""
+    def watched_object(self) -> Optional[System]:
+        """System : The object from which data are read."""
         return self._watch_object
 
     @watched_object.setter
-    def watched_object(self, module: Module):
-        from cosapp.core.module import Module
+    def watched_object(self, module: System):
+        from cosapp.base import System
 
-        if not (module is None or isinstance(module, Module)):
+        if not (module is None or isinstance(module, System)):
             typename = type(module).__qualname__
             raise TypeError(
                 f"Recorder must be attached to a System or a Driver; got {typename}."
@@ -235,12 +235,12 @@ class BaseRecorder(abc.ABC):
 
     @property
     @abc.abstractmethod
-    def _raw_data(self) -> List[List[Any]]:
+    def _raw_data(self) -> list[list[Any]]:
         """Returns a raw/unformated version of records.
 
         Returns
         -------
-        List[List[Any]]
+        list[list[Any]]
             Records of `watched_object` for variables given by method `field_names()`
         """
         pass
@@ -263,12 +263,12 @@ class BaseRecorder(abc.ABC):
         pass
 
     @property
-    def includes(self) -> List[str]:
+    def includes(self) -> list[str]:
         """str or list of str : Variables matching these patterns will be included."""
         return self.__includes
 
     @property
-    def excludes(self) -> List[str]:
+    def excludes(self) -> list[str]:
         """str or list of str: Variables matching these patterns will be excluded."""
         return self.__excludes
 
@@ -302,12 +302,12 @@ class BaseRecorder(abc.ABC):
         check_arg(value, 'precision', int, lambda n: n > 0)
         self.__precision = value
 
-    def field_names(self) -> List[str]:
+    def field_names(self) -> list[str]:
         """Returns list of requested variables and expressions.
 
         Returns
         -------
-        List[str]
+        list[str]
             Variable names matching the includes/excludes patterns of the user in the watched object.
 
         .. note::
@@ -361,32 +361,31 @@ class BaseRecorder(abc.ABC):
         self.__variables = variables = sorted(variables)
         self.__expressions = EvalString(", ".join(variables).join("[]"), context)
 
-    def _get_units(self, varnames: Optional[List[str]] = None) -> List[str]:
+    def _get_units(self, varnames: Optional[list[str]] = None) -> list[str]:
         """Generate the list of units associated with the requested variables.
 
         Parameters
         ----------
         vars : list of str, optional
-            List of the variables to get the units; if not provided, takes field_names
+            list of the variables to get the units; if not provided, takes field_names
 
         Returns
         -------
-        List[str]
+        list[str]
             Variable units for the variables matching the includes/excludes patterns of the user.
         """
         if varnames is None:
             varnames = self.field_names()
 
-        units = list()
-        if self.watched_object is not None:
-            name2variable = self.watched_object.name2variable
-            for name in varnames:
+        units = []
+        if (system := self.watched_object):
+            for varname in varnames:
                 try:
-                    ref = name2variable[name]
-                    details = ref.mapping.get_details(ref.key)
-                    unit = details.unit
+                    variable = system.get_variable(varname)
                 except:
-                    unit = None
+                    unit = ""
+                else:
+                    unit = variable.unit
                 units.append(unit or "-")
 
         return units
@@ -416,18 +415,18 @@ class BaseRecorder(abc.ABC):
         self.state_recorded.emit(time_ref=time_ref, status=status, error_code=error_code)
 
     @abc.abstractmethod
-    def formatted_data(self) -> List[Any]:
+    def formatted_data(self) -> list[Any]:
         """Returns collected data from watched object as a formatted list."""
         pass
 
-    def collected_data(self) -> List[Any]:
+    def collected_data(self) -> list[Any]:
         """Collects and returns recorded data from watched object as a list."""
         if self.__expressions is None:
             self.__update_varlist()
         return self.__expressions.eval()
 
     @abc.abstractmethod
-    def _record(self, line: List[Any]) -> None:
+    def _record(self, line: list[Any]) -> None:
         """
         Internally record data collected into list `line`.
         Required by `record_state` method.
@@ -435,7 +434,7 @@ class BaseRecorder(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def _batch_record(self, lines: List[List[Any]]) -> None:
+    def _batch_record(self, lines: list[list[Any]]) -> None:
         """Records multiple lines at a time.
 
         Internal API allowing efficient concatenation of recorders.

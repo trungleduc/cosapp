@@ -6,6 +6,7 @@ import logging
 import re
 from io import StringIO
 from collections import OrderedDict
+from numbers import Number
 
 import itertools
 import numpy as np
@@ -81,8 +82,8 @@ class VPort(Port):
 
 class PtWPort(Port):
     def setup(self):
-        self.add_variable("Pt", 101325.0, unit="Pa", limits=(0.0, None))
-        self.add_variable("W", 1.0, unit="kg/s", valid_range=(0.0, None))
+        self.add_variable("Pt", 101325.0, unit="Pa", limits=(0.0, None), desc="Total pressure")
+        self.add_variable("W", 1.0, unit="kg/s", valid_range=(0.0, None), desc="Mass flowrate")
 
 
 class SubSystem(System):
@@ -683,6 +684,59 @@ def test_System_convert_to():
         s.convert_to("foobar")
 
 
+def test_System_get_variable(DummyFactory):
+    dummy: System = DummyFactory(
+        name="dummy",
+        inputs = get_args(PtWPort, "fl_in"),
+        outputs = get_args(PtWPort, "fl_out"),
+        inwards=[
+            get_args(
+                "A", 0.0,
+                dtype=(int, float),
+                unit="m**2",
+                desc="area",
+                valid_range=(0.0, 5.0),
+                limits=(0, None),
+                scope=Scope.PROTECTED,
+            ),
+        ],
+        outwards = get_args("H", 2.0, unit="m"),
+        modevars_in = get_args("m_in", 1.0),
+        modevars_out = get_args("m_out", True),
+        events = get_args("tada", trigger="fl_out.Pt < fl_in.Pt"),
+        properties = get_args("const", 3.14),
+    )
+    A = dummy.get_variable("A")
+    assert A.name == "A"
+    assert A.unit == "m**2"
+    assert A.dtype == (int, float)
+    assert A.valid_range == (0.0, 5.0)
+    assert A.limits == (0.0, math.inf)
+    assert A.description == "area"
+    assert A.scope == Scope.PROTECTED
+
+    Pt = dummy.get_variable("fl_out.Pt")
+    assert Pt.name == "Pt"
+    assert Pt.unit == "Pa"
+    assert Pt.dtype == (Number, np.ndarray)
+    assert Pt.valid_range == (0.0, math.inf)
+    assert Pt.limits == (0.0, math.inf)
+    assert Pt.description == "Total pressure"
+    assert Pt.scope == Scope.PUBLIC
+
+    with pytest.raises(AttributeError):
+        dummy.get_variable("foo")
+
+    with pytest.raises(ValueError, match="not a variable of dummy"):
+        dummy.get_variable("fl_in")
+
+    with pytest.raises(ValueError, match="not a variable of dummy"):
+        dummy.get_variable("tada")
+
+    with pytest.raises(ValueError, match="not a variable of dummy"):
+        dummy.get_variable("const")
+
+
 def test_System_add_child():
     s = System("s")
     s2 = SubSystem("sub")
@@ -840,30 +894,30 @@ def test_System_add_child_pulling(caplog, DummyFactory):
         r"s\.\w+ has been duplicated from s\.\w+\.\w+",
         records[-1].message,
     )
-    assert s.inwards['sloss'] == s2a['sloss']
-    source = s2a.inwards.get_details("sloss")
-    pulled = s.inwards.get_details("sloss")
+    assert s.inwards["sloss"] == s2a["sloss"]
+    source = s2a.get_variable("sloss")
+    pulled = s.get_variable("sloss")
     attribute_names = [
         "unit", "dtype", "description", "scope",
         "valid_range", "invalid_comment",
         "limits", "out_of_limits_comment",
     ]
-    for attr in attribute_names:
-        assert getattr(pulled, attr) == getattr(source, attr)
+    for attr_name in attribute_names:
+        assert getattr(pulled, attr_name) == getattr(source, attr_name)
 
     s = System("s")
     s2a = s.add_child(SubSystem("sub_a"), pulling=["sloss", "tmp"])
-    assert s.inwards['sloss'] == s2a['sloss']
-    assert s.outwards['tmp'] == s2a['tmp']
+    assert s.inwards["sloss"] == s2a["sloss"]
+    assert s.outwards["tmp"] == s2a["tmp"]
 
     s = System("s")
     s2a = s.add_child(SubSystem("sub_a"), pulling={"sloss": "a_sloss"})
-    assert s.inwards['a_sloss'] == s2a['sloss']
+    assert s.inwards['a_sloss'] == s2a["sloss"]
 
     # Pulling all inwards
     s = System("s")
     s2a = s.add_child(SubSystem("sub_a"), pulling="inwards")
-    assert s.inwards['sloss'] == s2a['sloss']
+    assert s.inwards["sloss"] == s2a["sloss"]
 
     # Pulling outwards
     caplog.clear()
@@ -876,11 +930,11 @@ def test_System_add_child_pulling(caplog, DummyFactory):
         r"s\.\w+ has been duplicated from s.\w+\.\w+", 
         records[-1].message,
     )
-    assert s.outwards['tmp'] == s2a['tmp']
-    source = s2a.outwards.get_details("tmp")
-    pulled = s.outwards.get_details("tmp")
-    for attr in attribute_names:
-        assert getattr(pulled, attr) == getattr(source, attr)
+    assert s.outwards["tmp"] == s2a["tmp"]
+    source = s2a.get_variable("tmp")
+    pulled = s.get_variable("tmp")
+    for attr_name in attribute_names:
+        assert getattr(pulled, attr_name) == getattr(source, attr_name)
 
     s = System("s")
     s2a = s.add_child(SubSystem("sub_a"), pulling={"tmp": "a_tmp"})
@@ -1157,7 +1211,7 @@ def test_System_add_data(DummyFactory):
     assert s.K == 2.0
     assert s.switch == True
     assert s.r == 1
-    assert s[System.INWARDS].get_details("r").scope == Scope.PUBLIC
+    assert s.get_variable("r").scope == Scope.PUBLIC
     assert s.q == {"a": 1, "b": 2}
 
     # Test variables attributes
@@ -1173,14 +1227,14 @@ def test_System_add_data(DummyFactory):
             scope=Scope.PRIVATE,
         ),
     )
-    assert_keys(s.inwards.get_details(), "K")
-    details = s.inwards.get_details("K")
-    assert details.unit == "m"
-    assert details.dtype == float
-    assert details.valid_range == (0.0, 5.0)
-    assert details.limits == (-5.0, 10.0)
-    assert details.description == "my little description."
-    assert details.scope == Scope.PRIVATE
+    assert set(s.inwards) == {"K"}
+    K = s.get_variable("K")
+    assert K.unit == "m"
+    assert K.dtype == float
+    assert K.valid_range == (0.0, 5.0)
+    assert K.limits == (-5.0, 10.0)
+    assert K.description == "my little description."
+    assert K.scope == Scope.PRIVATE
 
 
 @pytest.mark.parametrize("port_kind", ["inputs", "outputs"])
@@ -1344,7 +1398,7 @@ def test_System_add_locals(DummyFactory):
     assert s.r == 42.0
     assert s.q == 12
     assert s.s == 1
-    assert s[System.OUTWARDS].get_details("s").scope == Scope.PUBLIC
+    assert s.get_variable("s").scope == Scope.PUBLIC
     assert s.x == {"a": 1, "b": 2}
 
     # Add multiple outwards with attributes
@@ -1359,8 +1413,8 @@ def test_System_add_locals(DummyFactory):
     assert "q" in s
     assert s.r == 42.0
     assert s.q == 12
-    assert s.outwards.get_details("q").description == ""
-    assert s.outwards.get_details("r").description == "my value"
+    assert s.get_variable("q").description == ""
+    assert s.get_variable("r").description == "my value"
     with pytest.raises(AttributeError):
         s.add_outward("a", 10.0)
 
@@ -1377,14 +1431,15 @@ def test_System_add_locals(DummyFactory):
             scope=Scope.PROTECTED,
         ),
     )
-    assert_keys(s.outwards.get_details(), "K")
-    details = s.outwards.get_details("K")
-    assert details.unit == "m"
-    assert details.dtype == (int, float)
-    assert details.valid_range == (0.0, 5.0)
-    assert details.limits == (-5.0, 10.0)
-    assert details.description == "my little description."
-    assert details.scope == Scope.PROTECTED
+    assert set(s.inwards) == set()
+    assert set(s.outwards) == {"K"}
+    K = s.get_variable("K")
+    assert K.unit == "m"
+    assert K.dtype == (int, float)
+    assert K.valid_range == (0.0, 5.0)
+    assert K.limits == (-5.0, 10.0)
+    assert K.description == "my little description."
+    assert K.scope == Scope.PROTECTED
 
 
 @pytest.mark.parametrize("drivers, expected", [
@@ -4020,10 +4075,9 @@ def test_System_add_outward_modevar_init(DummyFactory):
     assert s.a == 0.1
     assert s.b == 1.5
     assert s.c == 0.3
-    port = s[System.MODEVARS_OUT]
-    a = port.get_details('a')
-    b = port.get_details('b')
-    c = port.get_details('c')
+    a = s.get_variable('a')
+    b = s.get_variable('b')
+    c = s.get_variable('c')
     s.x = -1.5
     s.y = -0.2
     assert a.value == 0.1

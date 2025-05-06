@@ -41,25 +41,29 @@ def test_ExtensiblePort__init__(name, direction, error):
 
 
 @pytest.mark.parametrize("direction", PortType)
-def test_ExtensiblePort_pop_variable(direction, caplog):
+def test_ExtensiblePort_pop_variable(direction):
     port = ExtensiblePort("myPort", direction)
-    port.add_variable("var1", 0.0)
-    port.add_variable("var2", 100.1)
+    port.add_variable("x", 0.0)
+    port.add_variable("y", 100.1)
+
+    vardict = port.variable_dict()
 
     assert len(port) == 2
-    assert set(port) == {"var1", "var2"}
-    assert hasattr(port, "var1")
-    assert hasattr(port, "var2")
-    assert "var1" in port
-    assert "var1" in port.get_details()
+    assert set(port) == {"x", "y"}
+    assert set(vardict) == {"x", "y"}
+    assert hasattr(port, "x")
+    assert hasattr(port, "y")
+    assert "x" in port
+    assert "y" in port
 
-    port.pop_variable("var1")
+    port.pop_variable("x")
     assert len(port) == 1
-    assert set(port) == {"var2"}
-    assert hasattr(port, "var2")
-    assert not hasattr(port, "var1")
-    assert "var1" not in port
-    assert "var1" not in port.get_details()
+    assert set(port) == {"y"}
+    assert set(vardict) == {"y"}
+    assert hasattr(port, "y")
+    assert not hasattr(port, "x")
+    assert "x" not in port
+    assert "y" in port
 
     with pytest.raises(AttributeError):
-        port.pop_variable("var3")
+        port.pop_variable("z")

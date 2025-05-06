@@ -145,7 +145,7 @@ def test_Port__init__(PortClassFactory, direction, case_data, expected: dict):
         # check variable details
         expected_details = expected.get("details", dict())
         for varname, details in expected_details.items():
-            actual = port.get_details(varname)
+            actual = port.get_variable(varname)
             assert isinstance(actual.distribution, (type(None), Distribution))
             for name, value in details.items():
                 assert getattr(actual, name) == value
@@ -222,18 +222,19 @@ def test_Port_copy(PortFactory, direction, copy_dir):
     assert c.name == p.name
     assert c.Pt == 101325
     assert c.W == 1
-    details = c.get_details()
-    assert_keys(details, "Pt", "W")
 
-    assert details["Pt"].valid_range == (-np.inf, np.inf)
-    assert details["Pt"].limits == (-np.inf, np.inf)
-    assert details["Pt"].description == ""
-    assert details["Pt"].unit == "Pa"
+    vardict = c.variable_dict()
+    assert set(vardict) == {"Pt", "W"}
 
-    assert details["W"].valid_range == (0, 2)
-    assert details["W"].limits == (-5, 3)
-    assert details["W"].description == "my lovely W"
-    assert details["W"].unit == "kg/s"
+    assert vardict["Pt"].valid_range == (-np.inf, np.inf)
+    assert vardict["Pt"].limits == (-np.inf, np.inf)
+    assert vardict["Pt"].description == ""
+    assert vardict["Pt"].unit == "Pa"
+
+    assert vardict["W"].valid_range == (0, 2)
+    assert vardict["W"].limits == (-5, 3)
+    assert vardict["W"].description == "my lovely W"
+    assert vardict["W"].unit == "kg/s"
 
     c = p.copy("other_name", copy_dir)
     assert c.name == "other_name"

@@ -112,7 +112,7 @@ def test_MonteCarlo_add_random_variable():
         name = random_variable.name
         assert random_variable._ref is mult.name2variable[name]
         assert random_variable.connector is None
-        assert random_variable.distribution is mult.inwards.get_details(name).distribution
+        assert random_variable.distribution is mult.get_variable(name).distribution
 
     mc.clear_random_variables()
     assert len(mc.random_variable_names) == 0
@@ -160,7 +160,7 @@ def test_MonteCarlo_add_random_variable_connected():
     top = Assembly("top")
     mc = top.add_driver(MonteCarlo("mc"))
 
-    top.m2.p_in.get_details("x").distribution = distribution = Normal(best=2.0, worst=0.0)
+    top.get_variable("m2.p_in.x").distribution = distribution = Normal(best=2.0, worst=0.0)
 
     assert len(mc.random_variable_names) == 0
 
@@ -181,8 +181,8 @@ def test_MonteCarlo_add_random_variable_connected():
 
 def test_MonteCarlo_add_random_variable_pulled():
     top = System("top")
-    mult = top.add_child(Multiply2("mult"), pulling="p_in")
-    mult.p_in.get_details("x").distribution = distribution = Normal(best=2.0, worst=0.0)
+    top.add_child(Multiply2("mult"), pulling="p_in")
+    top.get_variable("mult.p_in.x").distribution = distribution = Normal(best=2.0, worst=0.0)
 
     mc = top.add_driver(MonteCarlo("mc"))
 
@@ -355,7 +355,7 @@ def test_MonteCarlo__precase():
     s = t.add_child(Multiply2("mult"), pulling="p_in")
     s.p_in.x = 22.0
     s.K2 = 10.0
-    s.p_in.get_details("x").distribution = Normal(best=-1.0, worst=-3.0)
+    s.get_variable("p_in.x").distribution = Normal(best=-1.0, worst=-3.0)
     mc = t.add_driver(MonteCarlo("mc"))
     mc.add_random_variable({"mult.p_in.x", "mult.K2"})
 
@@ -387,7 +387,7 @@ def test_MonteCarlo__postcase():
     s.p_in.x = 22.0
     s.K2 = 10.0
     t = System("top")
-    s.p_in.get_details("x").distribution = Normal(best=-1.0, worst=-3.0)
+    s.get_variable("p_in.x").distribution = Normal(best=-1.0, worst=-3.0)
     t.add_child(s, pulling="p_in")
     mc = t.add_driver(MonteCarlo("mc"))
     mc.add_random_variable({"mult.p_in.x", "mult.K2"})
@@ -443,7 +443,7 @@ def test_MonteCarlo_run_driver_perturbation_internal():
     initial_value = s.mult2.p_in.x
     distribution = Uniform(best=0.2, worst=-0.2)
     std = distribution._rv.kwds["scale"] / np.sqrt(12.0)
-    s.mult2.p_in.get_details("x").distribution = distribution
+    s.get_variable("mult2.p_in.x").distribution = distribution
 
     mc = s.add_driver(MonteCarlo("mc"))
     mc.add_child(RunOnce("run"))
@@ -463,7 +463,7 @@ def test_MonteCarlo_run_driver_perturbation_input():
     s = MultiplySystem2("s")
     distribution = Uniform(best=0.1, worst=-0.1)
     std = distribution._rv.kwds["scale"] / np.sqrt(12.0)
-    s.mult1.p_in.get_details("x").distribution = distribution
+    s.get_variable("mult1.p_in.x").distribution = distribution
 
     mc = s.add_driver(MonteCarlo("mc"))
     mc.add_recorder(
@@ -486,11 +486,9 @@ def test_MonteCarlo_run_driver_perturbation_combined():
     s.run_once()
     init_mult1_p_out_x = s.mult1.p_out.x
     init_mult2_p_in_x = s.mult2.p_in.x
-    distribution1 = Normal(best=0.1, worst=-0.1)
+    s.get_variable("mult1.p_in.x").distribution = distribution1 = Normal(best=0.1, worst=-0.1)
+    s.get_variable("mult2.p_in.x").distribution = distribution2 = Normal(best=0.2, worst=-0.2)
     std1 = distribution1._rv.kwds["scale"]
-    s.mult1.p_in.get_details("x").distribution = distribution1
-    distribution2 = Normal(best=0.2, worst=-0.2)
-    s.mult2.p_in.get_details("x").distribution = distribution2
     std2 = distribution2._rv.kwds["scale"]
 
     mc = s.add_driver(MonteCarlo("mc"))
@@ -752,8 +750,8 @@ def test_MonteCarlo_multiprocessing(nprocs, start_method):
     """Tests the execution of a MonteCarlo on multiple (sub)processes."""
     s = MultiplySystem2("s")
     s.run_once()
-    s.mult1.p_in.get_details("x").distribution = Normal(best=0.1, worst=-0.1)
-    s.mult2.p_in.get_details("x").distribution = Normal(best=0.2, worst=-0.2)
+    s.get_variable("mult1.p_in.x").distribution = Normal(best=0.1, worst=-0.1)
+    s.get_variable("mult2.p_in.x").distribution = Normal(best=0.2, worst=-0.2)
 
     mc = s.add_driver(
         MonteCarlo(
@@ -902,8 +900,7 @@ class TestMonteCarloPickling:
         mc.add_child(RunOnce("run"))
         mc.add_recorder(DataFrameRecorder(includes=["K?", "p_in.x"], raw_output=True))
 
-        distribution = Uniform(best=0.2, worst=-0.2)
-        system.p_in.get_details("x").distribution = distribution
+        system.get_variable("p_in.x").distribution = Uniform(best=0.2, worst=-0.2)
         mc.add_random_variable("p_in.x")
         mc.draws = 10
         system.run_drivers()
