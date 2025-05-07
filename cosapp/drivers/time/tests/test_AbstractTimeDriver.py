@@ -174,6 +174,33 @@ def test_AbstractTimeDriver_dt_RuntimeError(scenario, ok):
             s.run_drivers()
 
 
+def test_AbstractTimeDriver_set_time_before_System_init_mode():
+    """Check that system time is synchronized with time driver
+    when method `System.init_mode` is invoked.
+    Related to https://gitlab.com/cosapp/cosapp/-/issues/156
+    """
+    t_start = 1.25  # arbitrary value
+
+    class DummySystem(System):
+        def init_mode(self):
+            nonlocal t_start
+            if self.time != t_start:
+                pytest.fail("System time is not synched with driver time")
+
+    system = DummySystem("dummy")
+    driver = system.add_driver(AbstractTimeDriver())
+
+    driver.dt = dt = 1.0
+    driver.time_interval = (t_start, t_start + dt)
+    # Check that start time is set as driver clock time
+    system.run_drivers()
+
+    t_start = 5.0
+    # Check that the new start time is set as driver clock time
+    driver.time_interval = (t_start, t_start + dt)
+    system.run_drivers()
+
+
 def test_AbstractTimeDriver_is_standalone():
     class StandaloneDriver(Driver):
         """Mock-up standalone driver"""
