@@ -659,6 +659,7 @@ def test_System_call_setup_run(mock_RunOnce_setup_run, mock_System_setup_run):
     mock_System_setup_run.assert_called_once()
     mock_RunOnce_setup_run.assert_not_called()
 
+
 @mock.patch.object(System, 'clean_run')
 @mock.patch.object(RunOnce, 'clean_run')
 def test_System_call_clean_run(mock_RunOnce_clean_run, mock_System_clean_run):
@@ -4092,7 +4093,7 @@ def test_System_problem_lock():
     """Check that attribute `System.problem`
     can only be accessed at setup and during transitions.
     """
-    from cosapp.drivers import EulerExplicit
+    from cosapp.drivers import EulerImplicit
     from cosapp.recorders import DataFrameRecorder
 
     class MultimodeSystem(System):
@@ -4100,12 +4101,13 @@ def test_System_problem_lock():
         in methods `setup` and `transition`.
         """
         def setup(self) -> None:
-            self.add_inward('a', 1.0)
-            self.add_inward('x', 1.0)
-            self.add_outward('y', 1.0)
+            self.add_inward("a", 1.0)
+            self.add_inward("x", 1.0)
+            self.add_outward("y", 1.0)
 
-            self.add_event('tada')
-            self.add_outward_modevar('modified', init=False)
+            self.add_event("tada")
+            self.add_outward_modevar("modified", init=False)
+            self.add_outward_modevar("pb_shape", tuple())
 
             # Check that self.problem is accessible at setup
             self.problem.clear()  # authorized, here
@@ -4113,14 +4115,21 @@ def test_System_problem_lock():
         def compute(self) -> None:
             self.y = self.a * self.x**2 - 1
 
+        def update_problem_shape(self):
+            self.pb_shape = self.problem.shape  # OK only if self.problem is accessible
+
+        def setup_run(self):
+            self.update_problem_shape()  # should not raise any exception
+
         def transition(self):
             self.modified = False
             if self.tada.present:
                 self.modified = True
                 self.problem.clear()  # authorized, here
-                self.add_unknown('a').add_equation("y == 0")
+                self.add_unknown("a").add_equation("y == 0")
+                self.update_problem_shape()
     
-    system = MultimodeSystem('system')
+    system = MultimodeSystem("system")
 
     # Check that problem is not accessible
     with pytest.raises(AttributeError, match="problem"):
@@ -4128,16 +4137,17 @@ def test_System_problem_lock():
     
     assert system.assembled_problem().is_empty()
 
-    driver = system.add_driver(EulerExplicit(time_interval=[0, 1.5], dt=0.2))
-    driver.add_child(NonLinearSolver('solver'))
+    driver = system.add_driver(EulerImplicit(time_interval=[0, 1.5], dt=0.2))
     driver.set_scenario(
-        init={'a': 1.0},
-        values={'x': '0.8 + 0.5 * sin(t)'},
+        init={"a": 1.0},
+        values={"x": "0.8 + 0.5 * sin(t)"},
     )
     driver.add_recorder(DataFrameRecorder(), period=driver.dt)
     x_event = 1.1
-    t_event = np.arcsin(2 * (x_event - 0.8))
+    t_event = np.arcsin(2 * (x_event - 0.8))  # expected event time
     system.tada.trigger = f"x > {x_event}"
+
+    system.pb_shape = (-1, -1)  # bogus initial value
 
     system.run_drivers()
 
@@ -4146,11 +4156,10 @@ def test_System_problem_lock():
 
     # Retrieve recorded data
     data = driver.recorder.export_data()
-    # print('\n', data.drop(['Section', 'Status', 'Error code'], axis=1))
-    a = np.asarray(data['a'])
-    x = np.asarray(data['x'])
-    y = np.asarray(data['y'])
-    after = np.asarray(data['modified'])
+    a = np.asarray(data["a"])
+    x = np.asarray(data["x"])
+    y = np.asarray(data["y"])
+    after = np.asarray(data["modified"])
     before = np.logical_not(after)
     # Check values *before* event occurrence
     assert all(a[before] == 1.0)
@@ -4166,6 +4175,8 @@ def test_System_problem_lock():
         x[after]**(-2),  # solution of y == 0
         rtol=1e-14,
     )
+    assert all(shape == (0, 0) for shape in data["pb_shape"][before])
+    assert all(shape == (1, 1) for shape in data["pb_shape"][after])
 
     # Check that problem is not accessible
     with pytest.raises(AttributeError, match="problem"):
