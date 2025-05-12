@@ -335,7 +335,6 @@ class NewtonRaphsonSolver(GradientNLS):
         options.declare(
             "max_iter", 100, dtype=int, desc="The maximum number of iterations."
         )
-
         options.declare(
             "factor",
             1.0,
@@ -377,28 +376,28 @@ class NewtonRaphsonSolver(GradientNLS):
         options.declare(
             "lower_bound",
             None,
-            dtype=np.ndarray,
+            dtype=(list, tuple, np.ndarray),
             allow_none=True,
             desc="Min values for parameters iterated by solver.",
         )
         options.declare(
             "upper_bound",
             None,
-            dtype=np.ndarray,
+            dtype=(list, tuple, np.ndarray),
             allow_none=True,
             desc="Max values for parameters iterated by solver.",
         )
         options.declare(
             "abs_step",
             None,
-            dtype=np.ndarray,
+            dtype=(list, tuple, np.ndarray),
             allow_none=True,
             desc="Max absolute step for parameters iterated by solver.",
         )
         options.declare(
             "rel_step",
             None,
-            dtype=np.ndarray,
+            dtype=(list, tuple, np.ndarray),
             allow_none=True,
             desc="Max relative step for parameters iterated by solver.",
         )
