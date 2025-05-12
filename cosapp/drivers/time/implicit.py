@@ -81,7 +81,7 @@ class ImplicitTimeDriver(AbstractTimeDriver):
         self._prev_x = self._transient_problem.unknown_vector()
 
     @abc.abstractmethod
-    def _time_residues(self, dt: float, current: bool):
+    def _time_residues(self, dt: float, current: bool) -> numpy.ndarray:
         """Computes and returns the current- or next-time component
         of the transient problem residue vector.
         
@@ -108,8 +108,10 @@ class ImplicitTimeDriver(AbstractTimeDriver):
     def _update_transients(self, dt: float):
         """Integrate transient variable over time step `dt`."""
         self._curr_res = self._time_residues(dt, current=True)
-        result = self._solver.solve(self._fresidues, x0=self._prev_x, args=(self.time, dt))
-        self._prev_x[:] = result.x
+        prev_x = self._prev_x
+        if len(prev_x) > 0:
+            result = self._solver.solve(self._fresidues, x0=prev_x, args=(self.time, dt))
+            prev_x[:] = result.x
 
     def _postcompute(self) -> None:
         # Synch unknown values with final system state,
