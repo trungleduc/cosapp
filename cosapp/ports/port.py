@@ -3,6 +3,7 @@ import abc
 import json
 import copy
 import logging
+import warnings
 from collections import OrderedDict
 from collections.abc import Iterator, Generator
 from typing import (
@@ -506,6 +507,21 @@ class BasePort(visitor.Component, metaclass=abc.ABCMeta):
         >>> assert port.out_of_scope("z")
         """
         return self.__out_of_scope(name)
+
+    def get_details(self, varname: Optional[str]=None) -> Union[dict[str, BaseVariable], BaseVariable]:
+        """Return the variable named `varname` (if prescribed),
+        or an immutable variable dictionary of the kind {varname: variable}.
+
+        Deprecated: use `get_variable(varname)` or `variable_dict()` instead.
+        """
+        warnings.warn(
+            "Deprecated method; use `get_variable(varname)` or `variable_dict()` instead.",
+            category=DeprecationWarning,
+        )
+        if varname is None:
+            return self.variable_dict()
+        else:
+            return self.get_variable(varname)
 
     def get_variable(self, varname: str) -> BaseVariable:
         """Return the variable named `varname`.

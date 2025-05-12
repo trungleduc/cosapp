@@ -1,17 +1,17 @@
 import pytest
 
 from cosapp.base import Port
-from typing import Tuple, List, Dict, Any, Type
+from typing import Any
 
 
-Args, Kwargs = Tuple[Any], Dict[str, Any]
+Args, Kwargs = tuple[Any], dict[str, Any]
 
 
 @pytest.fixture(scope="function")
 def PortClassFactory():
     """Factory creating a new port class with custom attributes
     """
-    def Factory(classname, variables: List[Tuple[Args, Kwargs]], base: Type[Port]=Port):
+    def Factory(classname: str, variables: list[tuple[Args, Kwargs]], base: type[Port]=Port) -> type[Port]:
         # variables should be (args, kwargs) or a list thereof
         method_dict = {
             # correspondance method / option
@@ -35,8 +35,8 @@ def PortClassFactory():
 def PortFactory(PortClassFactory):
     """Factory creating a dummy port with custom attributes
     """
-    def Factory(name, direction, init_values=None, owner=None, **options):
-        PortClass: Type[Port] = PortClassFactory(
+    def Factory(name: str, direction, init_values=None, owner=None, **options):
+        PortClass: type[Port] = PortClassFactory(
             classname="PrototypePort",
             variables=options.pop('variables', []),
             base=options.pop('base', Port),
