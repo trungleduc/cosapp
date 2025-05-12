@@ -509,6 +509,23 @@ def test_BasePort_get_variable(direction, scope, options, expected):
 
 
 @pytest.mark.parametrize("direction", PortType)
+def test_BasePort_get_details(direction):
+    """Check that method `get_details` issues a deprecation warning."""
+    port = BasePort("myPort", direction)
+    port.add_variable("foo", 0.0)
+
+    with pytest.warns(DeprecationWarning):
+        details = port.get_details()
+
+    assert details == port.variable_dict()
+
+    with pytest.warns(DeprecationWarning):
+        variable = port.get_details("foo")
+
+    assert variable == port.get_variable("foo")
+
+
+@pytest.mark.parametrize("direction", PortType)
 def test_BasePort_add_variable(direction, caplog):
     logging.disable(logging.NOTSET)  # enable all logging levels
 
