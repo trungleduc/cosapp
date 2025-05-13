@@ -245,18 +245,6 @@ class BaseRecorder(abc.ABC):
         """
         pass
 
-    @property
-    def data(self) -> pandas.DataFrame:
-        """
-        pandas.DataFrame: DataFrame containing the results.
-        Deprecated property; use `export_data()` instead.
-        """
-        warnings.warn(
-            "Deprecated property; use export_data() instead",
-            DeprecationWarning
-        )
-        return self.export_data()
-
     @abc.abstractmethod
     def export_data(self) -> pandas.DataFrame:
         """Export recorded results into a pandas.DataFrame object."""
