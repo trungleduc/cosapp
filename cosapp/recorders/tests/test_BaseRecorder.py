@@ -454,12 +454,6 @@ def test_BaseRecorder_clear():
         fake_callback.assert_called_once_with()
 
 
-def test_BaseRecorder_data_warning():
-    recorder = BaseRecorder()
-    with pytest.warns(DeprecationWarning, match="use export_data()"):
-        recorder.data
-
-
 class XyPort(Port):
     def setup(self):
         self.add_variable('x', 1.0)
