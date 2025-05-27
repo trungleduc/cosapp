@@ -8,17 +8,20 @@ import warnings
 import itertools
 from numbers import Number
 from contextlib import contextmanager
-from typing import Tuple, Dict, Any, Union, Iterable, Type, Optional
+from typing import Any, Union, Iterable, Optional
+
 from cosapp.base import System, Driver
 from cosapp.utils.distributions import Distribution
-
 from cosapp.utils.json import to_json
 
-ArgsKwargs = Tuple[Tuple[Any], Dict[str, Any]]
+
+ArgsKwargs = tuple[tuple[Any, ...], dict[str, Any]]
 
 
-def has_keys(dictionary, *keys):
+def has_keys(dictionary: dict, *keys) -> bool:
+    """Utility function to test if a dictionary has the given keys"""
     return set(dictionary.keys()) == set(keys)
+
 
 def assert_keys(dictionary, *keys):
     """Utility function to test dictionary keys"""
@@ -119,9 +122,9 @@ def not_raised(ExpectedException):
 
 def DummySystemFactory(
     classname: str,
-    base: Optional[Type[System]]=None,
+    base: Optional[type[System]]=None,
     **settings
-) -> Type[System]:
+) -> type[System]:
     """Factory creating a dummy system class with custom attributes.
     System is "dummy" in the sense it has no compute, and no connectors.
     
@@ -245,15 +248,20 @@ def DummySystemFactory(
 
 
 def are_same(o1: Union[Driver, System, Distribution], o2: Union[Driver, System, Distribution]) -> bool:
+    """Utility function to compare two objects for equality.
+    It serializes both objects to JSON and compares the resulting strings.
+    """
     j1 = to_json(o1)
     j2 = to_json(o2)
-    are_equal = j1 ==j2
-    if not are_equal:
-        print(j1)
-        print(j2)
-
+    are_equal = (j1 == j2)
+    # if not are_equal:
+    #     print(j1)
+    #     print(j2)
     return are_equal
 
 
 def pickle_roundtrip(s: System) -> System:
+    """Utility function to pickle and unpickle a System object.
+    This is useful for testing serialization and deserialization of systems.
+    """
     return pickle.loads(pickle.dumps(s))

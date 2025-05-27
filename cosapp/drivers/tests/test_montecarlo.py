@@ -20,7 +20,7 @@ from cosapp.tests.library.systems import (
     Multiply4,
     MultiplySystem2,
 )
-from cosapp.core.execution import ExecutionPolicy, ExecutionType, WorkerStartMethod
+from cosapp.core.execution import ExecutionPolicy, ExecutionType, get_start_methods
 from cosapp.utils.testing import no_exception, pickle_roundtrip, are_same
 
 
@@ -737,15 +737,8 @@ def test_MonteCarlo_with_event():
     assert  all(results["time"].iloc[13:16] == 2.0)
 
 
-def _get_start_methods():
-    if sys.platform == "win32":
-        return (WorkerStartMethod.SPAWN,)
-    else:
-        return (WorkerStartMethod.FORK, WorkerStartMethod.SPAWN)
-
-
 @pytest.mark.parametrize(argnames="nprocs", argvalues=[2, 4])    
-@pytest.mark.parametrize("start_method", _get_start_methods())
+@pytest.mark.parametrize("start_method", get_start_methods())
 def test_MonteCarlo_multiprocessing(nprocs, start_method):
     """Tests the execution of a MonteCarlo on multiple (sub)processes."""
     s = MultiplySystem2("s")

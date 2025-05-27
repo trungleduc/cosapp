@@ -15,23 +15,13 @@ from typing import (
 if TYPE_CHECKING:
     from cosapp.systems import System
 
+from cosapp.systems.batch import BatchRunner
 from cosapp.utils.surrogate_models.base import SurrogateModel
 from cosapp.ports.enum import PortType
 from cosapp.utils.logging import LogLevel
 from cosapp.utils.helpers import check_arg
 from cosapp.utils.find_variables import find_variables, make_wishlist, natural_varname
-from cosapp.core.execution import (
-    Pool,
-    ExecutionPolicy,
-    ExecutionType,
-    Task,
-    Job,
-    Batch,
-    TaskAction,
-    TaskResponseStatus,
-    FunctionCallBehavior,
-    ops,
-)
+from cosapp.core.execution import ExecutionPolicy, ExecutionType
 
 
 logger = logging.getLogger(__name__)
@@ -285,61 +275,11 @@ class SystemSurrogate:
         logger.debug(f"Setting and executing in order to build data for training")
         owner = self.__owner
         state = self.__state
-        policy = self.execution_policy
         output_varnames = tuple(state.output_varnames())
 
-        if policy.is_sequential():
-            doe_out = self._compute_and_return_results(owner, state.doe_in, output_varnames)
-            self.__state = state._replace(doe_out=doe_out)
-
-        else:
-            def create_job(index_range: range):
-                run = Task(
-                    TaskAction.FUNC_CALL,
-                    FunctionCallBehavior.RETURN_OBJECT,
-                    (self._compute_and_return_results, (owner, state.doe_in.iloc[index_range], output_varnames,)),
-                )
-                return Job(run)
-
-            blocks = Batch.compute_blocks(len(state.doe_in), policy.workers_count)
-            batch = Batch(map(create_job, blocks))
-
-            pool = Pool.from_policy(policy)
-
-            with pool.activate():
-                pool.run_batch(batch)
-                batch.join()
-                error = self._gather_parallel_results(batch, state.doe_out)
-
-            if isinstance(error, Exception):
-                raise error
-
-    @staticmethod
-    def _compute_and_return_results(system: System, doe_in: pandas.DataFrame, output_varnames: tuple[str]):
-        """Compute outputs for a given system and input dataframe. For internal use only."""
-        doe_out = {varname: [] for varname in output_varnames}
-        for i, row in doe_in.iterrows():
-            for varname, value in row.items():
-                setattr(system, varname, value)
-            system.run_drivers()
-            for varname in output_varnames:
-                doe_out[varname].append(system[varname])
-        return doe_out
-
-    @staticmethod
-    def _gather_parallel_results(batch: Batch, doe_out: dict[str, list]) -> Optional[Exception]:
-        """Gathers results from a batch of jobs and appends them to the provided `doe_out` dictionary.
-        For internal use only.
-        """
-        for job in batch.jobs:
-            status, data = job.tasks[-1].result
-            if status != TaskResponseStatus.OK:
-                return data  # should be an exception
-            try:
-                for varname, values in doe_out.items():
-                    values.extend(data[varname])
-            except Exception as error:
-                return error
+        runner = BatchRunner(owner, output_varnames, policy=self.execution_policy)
+        outputs = runner.run(state.doe_in)
+        self.__state = state._replace(doe_out=outputs)
 
     def add_data(self, new_doe: pandas.DataFrame) -> None:
         # TODO: Should merge input lists when matching names (not working yet)

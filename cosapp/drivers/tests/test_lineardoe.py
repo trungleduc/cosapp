@@ -6,7 +6,7 @@ from cosapp.base import System
 from cosapp.drivers import LinearDoE, RunOnce, NonLinearSolver
 from cosapp.recorders import DataFrameRecorder
 from cosapp.tests.library.systems import Multiply2, MultiplySystem2
-from cosapp.core.execution import ExecutionPolicy, ExecutionType, WorkerStartMethod
+from cosapp.core.execution import ExecutionPolicy, ExecutionType, get_start_methods
 from cosapp.utils.testing import pickle_roundtrip, are_same
 
 
@@ -187,14 +187,9 @@ class TestLinearDoEPickling:
         assert df.iloc[8]["K2"] == 200.0
         assert df.iloc[8]["p_out.x"] == 4000.0
 
-def _get_start_methods():
-    if sys.platform == "win32":
-        return (WorkerStartMethod.SPAWN, )
-    return (WorkerStartMethod.FORK, WorkerStartMethod.SPAWN)
-
 
 @pytest.mark.parametrize(argnames="nprocs", argvalues=[2, 4])    
-@pytest.mark.parametrize("start_method", _get_start_methods())
+@pytest.mark.parametrize("start_method", get_start_methods())
 def test_LinearDoE_multiprocessing(nprocs, start_method):
     """Tests the execution of a MonteCarlo on multiple (sub)processes."""
     s = MultiplySystem2("s")

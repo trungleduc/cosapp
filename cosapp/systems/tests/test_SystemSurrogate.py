@@ -30,7 +30,7 @@ from cosapp.tests.library.systems.basicalgebra import (
 from cosapp.tests.library.systems.vectors import Strait1dLine, Splitter1d
 from cosapp.utils.testing import get_args, no_exception
 from cosapp.utils import get_state, set_state
-from cosapp.core.execution import ExecutionPolicy, ExecutionType, WorkerStartMethod
+from cosapp.core.execution import ExecutionPolicy, ExecutionType, get_start_methods
 
 
 """Meta model can be used on:
@@ -108,13 +108,6 @@ def no_output_sys():
             self.add_child(A('a'))
             self.add_child(B('b'))
     return NoOutputSystem('no_output_sys')
-
-
-def get_start_methods():
-    if sys.platform == "win32":
-        return (WorkerStartMethod.SPAWN,)
-    else:
-        return (WorkerStartMethod.FORK, WorkerStartMethod.SPAWN)
 
 
 def cubic_DoE(axes: dict):
