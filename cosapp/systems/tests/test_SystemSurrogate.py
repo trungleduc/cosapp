@@ -1,4 +1,5 @@
 import pytest
+import sys
 import numpy
 import pandas
 import itertools
@@ -29,6 +30,7 @@ from cosapp.tests.library.systems.basicalgebra import (
 from cosapp.tests.library.systems.vectors import Strait1dLine, Splitter1d
 from cosapp.utils.testing import get_args, no_exception
 from cosapp.utils import get_state, set_state
+from cosapp.core.execution import ExecutionPolicy, ExecutionType, WorkerStartMethod
 
 
 """Meta model can be used on:
@@ -106,6 +108,13 @@ def no_output_sys():
             self.add_child(A('a'))
             self.add_child(B('b'))
     return NoOutputSystem('no_output_sys')
+
+
+def get_start_methods():
+    if sys.platform == "win32":
+        return (WorkerStartMethod.SPAWN,)
+    else:
+        return (WorkerStartMethod.FORK, WorkerStartMethod.SPAWN)
 
 
 def cubic_DoE(axes: dict):
@@ -424,6 +433,34 @@ def test_SystemSurrogate_prepare_and_train_predict(p1e2mg, data_in):
     assert state.doe_out == expected_doe_out
     assert state.model.predict(numpy.array([2.5, 1.5])) == pytest.approx(
         [13.00059934, 14.50059842, 2.50014984, 5.00029967, 5.00029967, 10.00059934], rel=1e-7)
+
+
+@pytest.mark.filterwarnings("ignore:The.*unknowns/transients are not part of the training set")
+@pytest.mark.parametrize("start_method", get_start_methods())
+@pytest.mark.parametrize("n_procs", [2, 4])
+def test_SystemSurrogate_prepare_and_train_predict_parallel(p1e2mg, data_in, n_procs, start_method):
+    meta = SystemSurrogate(
+        p1e2mg.Eq_2Mult, data_in, FloatKrigingSurrogate,
+        execution_policy=ExecutionPolicy(
+            n_procs,
+            ExecutionType.MULTI_PROCESSING,
+            start_method=start_method,
+        ),
+    )
+    expected_doe_out = {
+        'x_out.x': [11.0, 11.0, 11.0, 11.0, 12.332, 12.332, 12.332, 12.332, 13.664, 13.664, 13.664, 13.664, 15.0, 15.0, 15.0, 15.0],
+        'u_out.x': [12.0, 12.3333, 12.6666, 13.0, 13.332, 13.6653, 13.998600000000001, 14.332, 14.664, 14.9973, 15.3306, 15.664, 16.0, 16.3333, 16.6666, 17.0],
+        'Mult_by_2_1.x_out.x': [4.0, 4.0, 4.0, 4.0, 4.666, 4.666, 4.666, 4.666, 5.332, 5.332, 5.332, 5.332, 6.0, 6.0, 6.0, 6.0],
+        'Mult_by_2_1.x_in.x': [2.0, 2.0, 2.0, 2.0, 2.333, 2.333, 2.333, 2.333, 2.666, 2.666, 2.666, 2.666, 3.0, 3.0, 3.0, 3.0],
+        'Mult_by_2_2.x_out.x': [8.0, 8.0, 8.0, 8.0, 9.332, 9.332, 9.332, 9.332, 10.664, 10.664, 10.664, 10.664, 12.0, 12.0, 12.0, 12.0],
+        'Mult_by_2_2.x_in.x': [4.0, 4.0, 4.0, 4.0, 4.666, 4.666, 4.666, 4.666, 5.332, 5.332, 5.332, 5.332, 6.0, 6.0, 6.0, 6.0],
+    }
+    state = meta.state
+    assert state.doe_out == expected_doe_out
+    assert state.model.predict(numpy.array([2.5, 1.5])) == pytest.approx(
+        [13.00059934, 14.50059842, 2.50014984, 5.00029967, 5.00029967, 10.00059934],
+        rel=1e-7,
+    )
 
 
 @pytest.mark.filterwarnings("ignore:The.*unknowns/transients are not part of the training set")

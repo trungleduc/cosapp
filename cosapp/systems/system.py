@@ -30,6 +30,7 @@ from cosapp.core.variableref import VariableReference
 from cosapp.core.numerics.basics import MathematicalProblem, TimeProblem
 from cosapp.core.numerics.boundary import TimeDerivative, TimeUnknown, Unknown
 from cosapp.core.time import TimeObserver
+from cosapp.core.execution import ExecutionPolicy
 from cosapp.ports.enum import PortType, Scope, Validity
 from cosapp.ports.port import BasePort, ExtensiblePort, ModeVarPort, Port
 from cosapp.ports.units import UnitError
@@ -3670,13 +3671,16 @@ class System(Module, TimeObserver):
         from cosapp.tools.views.markdown import system_to_md
         return system_to_md(self)
 
-    def make_surrogate(self,
+    def make_surrogate(
+        self,
         data_in: Union[pandas.DataFrame, dict[str, list[float]]],
         model: type[SurrogateModel] = FloatKrigingSurrogate,
         activate = True,
         data_out: Optional[Union[pandas.DataFrame, dict[str, Any]]] = None,
         postsynch: Union[str, list[str]] = "*",
-        *args, **kwargs) -> SystemSurrogate:
+        execution_policy: Optional[ExecutionPolicy] = None,
+        *args, **kwargs,
+    ) -> SystemSurrogate:
         """
         Creates a surrogate model superseding the normal behaviour of `compute()`.
         The surrogate model is trained from datasets `data_in` and `data_out`,
@@ -3710,7 +3714,7 @@ class System(Module, TimeObserver):
             System surrogate attached to the system.
         """
         check_arg(data_in, 'data_in', (pandas.DataFrame, dict))
-        surrogate = SystemSurrogate(self, data_in, model, data_out, postsynch, *args, **kwargs)
+        surrogate = SystemSurrogate(self, data_in, model, data_out, postsynch, execution_policy, *args, **kwargs)
         self.__set_surrogate(surrogate, activate)
         return surrogate
 
