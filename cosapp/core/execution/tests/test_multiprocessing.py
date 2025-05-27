@@ -19,15 +19,10 @@ from cosapp.core.execution import (
     TaskResultNotAvailableYet,
     WorkerStartMethod,
     ops,
+    get_start_methods,
 )
 from cosapp.utils.testing import are_same
 
-
-def _get_start_methods():
-    if sys.platform == "win32":
-        return (WorkerStartMethod.SPAWN, )
-
-    return (WorkerStartMethod.FORK, WorkerStartMethod.SPAWN)
 
 class S(System):
     def setup(self):
@@ -68,7 +63,7 @@ def f_use_a_member(arg: Any) -> Any:
 
 class TestProcessPool:
 
-    @pytest.mark.parametrize("start_method", _get_start_methods())
+    @pytest.mark.parametrize("start_method", get_start_methods())
     def test_start_pool(self, start_method):
         """Test process pool start."""
 
@@ -78,7 +73,7 @@ class TestProcessPool:
         assert all([worker.is_alive() for worker in pool._workers])
 
 
-    @pytest.mark.parametrize("start_method", _get_start_methods())
+    @pytest.mark.parametrize("start_method", get_start_methods())
     def test_stop_pool(self, start_method):
         """Test process pool stop."""
 
@@ -87,7 +82,7 @@ class TestProcessPool:
         pool.stop()
         assert all([worker is None for worker in pool._workers])
 
-    @pytest.mark.parametrize("pool1", _get_start_methods(), indirect=True)
+    @pytest.mark.parametrize("pool1", get_start_methods(), indirect=True)
     def test_store_returned_object(self, system, pool1):
         """Test capability to persist objects in workers' storage."""
 
@@ -104,7 +99,7 @@ class TestProcessPool:
         assert status == TaskResponseStatus.OK
         assert task.state == TaskState.FINISHED
 
-    @pytest.mark.parametrize("pool1", _get_start_methods(), indirect=True)
+    @pytest.mark.parametrize("pool1", get_start_methods(), indirect=True)
     def test_reuse_stored_object(self, system, pool1):
         """Test reuse of previously stored objects."""
 
@@ -130,7 +125,7 @@ class TestProcessPool:
         assert status == TaskResponseStatus.OK
         assert are_same(system, data)
 
-    @pytest.mark.parametrize("pool1", _get_start_methods(), indirect=True)
+    @pytest.mark.parametrize("pool1", get_start_methods(), indirect=True)
     def test_invalid_reuse_stored_object(self, pool1):
         """Test reuse of previously stored objects."""
         invalid_object_id = 0
@@ -146,7 +141,7 @@ class TestProcessPool:
         assert status == TaskResponseStatus.MISSING_STORED_OBJECT
         assert isinstance(data, KeyError)
 
-    @pytest.mark.parametrize("pool1", _get_start_methods(), indirect=True)
+    @pytest.mark.parametrize("pool1", get_start_methods(), indirect=True)
     def test_function_call_invalid_signature(self, pool1):
         """Test function call with invalid signature."""
         reuse = pool1.run_task(
@@ -160,7 +155,7 @@ class TestProcessPool:
         assert status == TaskResponseStatus.FUNCTION_CALL_RAISED
         assert isinstance(data, TypeError)
 
-    @pytest.mark.parametrize("pool1", _get_start_methods(), indirect=True)
+    @pytest.mark.parametrize("pool1", get_start_methods(), indirect=True)
     def test_function_call_bad_arguments(self, pool1):
         """Test function call with invalid signature."""
         reuse = pool1.run_task(
@@ -174,7 +169,7 @@ class TestProcessPool:
         assert status == TaskResponseStatus.FUNCTION_CALL_RAISED
         assert isinstance(data, AttributeError)
 
-    @pytest.mark.parametrize("pool1", _get_start_methods(), indirect=True)
+    @pytest.mark.parametrize("pool1", get_start_methods(), indirect=True)
     def test_function_store_and_return(self, pool1):
         """Test function call with stored and returned policy."""
         ref_obj = 12.1
@@ -191,7 +186,7 @@ class TestProcessPool:
         assert isinstance(storage_id, int)
         assert returned_obj == ref_obj
 
-    @pytest.mark.parametrize("pool2", _get_start_methods(), indirect=True)
+    @pytest.mark.parametrize("pool2", get_start_methods(), indirect=True)
     def test_worker_affinity(self, system, pool2):
         """Test worker affinity on a task ran multiple times."""
         task = Task(
@@ -210,7 +205,7 @@ class TestProcessPool:
         assert task._uid == worker_initial_task_count + 1
         assert worker.task_count == worker_initial_task_count + 2
 
-    @pytest.mark.parametrize("pool1", _get_start_methods(), indirect=True)
+    @pytest.mark.parametrize("pool1", get_start_methods(), indirect=True)
     def test_chained_jobs(self, pool1):
         """Test dispatch of a `Job` with chained tasks."""
         ref_obj = 12.1
@@ -240,7 +235,7 @@ class TestProcessPool:
         assert isinstance(data, float)
         assert data == ref_obj
 
-    @pytest.mark.parametrize("pool1", _get_start_methods(), indirect=True)
+    @pytest.mark.parametrize("pool1", get_start_methods(), indirect=True)
     def test_chained_jobs_with_partial_args(self, pool1):
         """Test dispatch of a `Job` with chained tasks and partial args."""
         ref_obj = 12.1
@@ -270,7 +265,7 @@ class TestProcessPool:
         assert isinstance(data, float)
         assert data == ref_obj + 10.0
 
-    @pytest.mark.parametrize("pool2", _get_start_methods(), indirect=True)
+    @pytest.mark.parametrize("pool2", get_start_methods(), indirect=True)
     def test_run_batch(self, pool2):
         """Test dispatch of a 2 `Job`s as a batch."""
         ref_obj1 = [12.1]
@@ -325,7 +320,7 @@ class TestProcessPool:
         assert data == ref_obj2
         assert task2.execution_count == 2
 
-    @pytest.mark.parametrize("pool2", _get_start_methods(), indirect=True)
+    @pytest.mark.parametrize("pool2", get_start_methods(), indirect=True)
     def test_run_batch_min_block_size(self, pool2):
         """Test dispatch of a 2 `Job`s as a batch on a pool of 2 workers, with
         minimum block size."""
@@ -363,7 +358,7 @@ class TestProcessPool:
         assert isinstance(data, float)
         assert data == ref_obj2
 
-    @pytest.mark.parametrize("pool1", _get_start_methods(), indirect=True)
+    @pytest.mark.parametrize("pool1", get_start_methods(), indirect=True)
     def test_run_batch_small_pool(self, pool1):
         """Test dispatch of a 2 `Job`s as a batch on a pool of 1 worker."""
         ref_obj1 = 12.1
@@ -399,7 +394,7 @@ class TestProcessPool:
         assert isinstance(data, float)
         assert data == ref_obj2
 
-    @pytest.mark.parametrize("pool1", _get_start_methods(), indirect=True)
+    @pytest.mark.parametrize("pool1", get_start_methods(), indirect=True)
     def test_run_batch_invalid_state(self, pool1):
         """Test dispatch of a batch with inconsistent states."""
         t1 = Task(

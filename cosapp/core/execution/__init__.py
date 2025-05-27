@@ -1,4 +1,10 @@
-from .pool import ExecutionPolicy, ExecutionType, Pool, WorkerStartMethod
+from .pool import (
+    ExecutionPolicy,
+    ExecutionType,
+    Pool,
+    WorkerStartMethod,
+    get_start_methods,
+)
 from .task import (
     Batch, Job, Task,
     FunctionCallBehavior,
@@ -13,6 +19,7 @@ __all__ = [
     "ExecutionType",
     "ExecutionPolicy",
     "WorkerStartMethod",
+    "get_start_methods",
     "TaskAction",
     "FunctionCallBehavior",
     "Task",

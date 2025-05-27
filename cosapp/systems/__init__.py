@@ -6,6 +6,7 @@ from cosapp.systems.systemfamily import SystemFamily
 from cosapp.systems.metamodels import MetaSystem
 from cosapp.systems.externalsystem import TCPSystem
 from cosapp.systems.processsystem import ProcessSystem
+from cosapp.systems.batch import batch_run
 
 from cosapp.utils.surrogate_models import (
     FloatKrigingSurrogate,
@@ -27,4 +28,5 @@ __all__ = [
     "ConversionType",
     "ProcessSystem",
     "TCPSystem",
+    "batch_run",
 ]

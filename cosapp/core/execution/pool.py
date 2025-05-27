@@ -41,12 +41,12 @@ class WorkerStartMethod(Enum):
             context_type=mp.context.ForkContext,
             worker_type=ForkWorker,
         )
-
         FORKSERVER = WorkerStartMethodDetails(
             context_type=mp.context.ForkServerContext,
             worker_type=ForkServerWorker,
         )
         AUTO = FORK
+
     else:
         AUTO = SPAWN
 
@@ -68,6 +68,14 @@ class WorkerStartMethod(Enum):
             return {"value": "AUTO"}
 
         raise ValueError("`WorkerStartMethod` enum value is not handled")
+
+
+def get_start_methods() -> tuple[WorkerStartMethod, ...]:
+    """Get the available worker start methods based on the platform."""
+    if is_fork_available():
+        return (WorkerStartMethod.FORK, WorkerStartMethod.SPAWN)
+    else:
+        return (WorkerStartMethod.SPAWN,)
 
 
 @dataclass
@@ -117,9 +125,8 @@ class Pool:
         self._tasks_count = 0
 
     @staticmethod
-    def from_policy(
-        policy: ExecutionPolicy
-    ) -> Pool:
+    def from_policy(policy: ExecutionPolicy) -> Pool:
+        """Create a Pool instance from an execution policy"""
         return Pool(policy.workers_count, policy.execution_type, policy.start_method)
 
     def _set_worker_type_and_context(self):
