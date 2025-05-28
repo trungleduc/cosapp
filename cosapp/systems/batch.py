@@ -1,4 +1,5 @@
 from __future__ import annotations
+import warnings
 import pandas
 from typing import TYPE_CHECKING, Optional, Union, Sequence
 
@@ -130,7 +131,15 @@ class BatchRunner:
         system = self.__system
         output_varnames = self.__output_varnames
 
-        if policy.is_sequential():
+        if not output_varnames and not inputs.empty:
+            warnings.warn(
+                "No output variable names defined for batch run. "
+                "Use `find_outputs` to set output variable names.",
+                UserWarning,
+            )
+            outputs = {}
+
+        elif policy.is_sequential() or inputs.empty:
             outputs = self._compute_outputs(system, inputs, output_varnames)
 
         else:
@@ -217,7 +226,7 @@ def batch_run(
     system: System,
     inputs: pandas.DataFrame,
     output_varnames: Sequence[str],
-    execution_policy: Optional[ExecutionPolicy],
+    execution_policy: Optional[ExecutionPolicy] = None,
 ) -> dict[str, list]:
     """Convenience function to run a batch execution on a system.
 
