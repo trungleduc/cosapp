@@ -2,8 +2,9 @@ import pytest
 import numpy as np
 import pandas as pd
 import itertools
+from unittest import mock
 
-from cosapp.systems.batch import BatchRunner
+from cosapp.systems.batch import BatchRunner, batch_run
 from cosapp.core.execution import ExecutionPolicy, ExecutionType, get_start_methods
 from cosapp.tests.library.systems import Resistor, Node, Ground
 from cosapp.systems import System
@@ -16,10 +17,12 @@ class DummySystem(System):
         self.add_inward("x", 0.0)
         self.add_outward("y", 0.0)
         self.add_outward("z", 0.0)
+        self.add_outward("vector", np.zeros(2))
 
     def compute(self):
         self.y = self.x * 2
         self.z = self.x ** 2 - self.a
+        self.vector = np.array([self.x, self.a]) * 0.5
 
 
 class Circuit(System):
@@ -101,14 +104,16 @@ def test_BatchRunner_output_varnames(batch_runner):
 
 @pytest.mark.parametrize("includes, excludes, expected", [
     ([], [], ()),
+    (["*"], ["*"], ()),
     ("y", [], ("y",)),
     (["y"], [], ("y",)),
     (["y", "z"], [], ("y", "z")),
     (["y", "z"], ["z"], ("y",)),
-    (["*"], [], ("y", "z")),
+    (["*"], [], ("vector", "y", "z")),
+    (["*"], ["a"], ("vector", "y", "z")),
+    (["*"], ["x"], ("vector", "y", "z")),
+    (["*"], ["z"], ("vector", "y")),
     (["?"], [], ("y", "z")),
-    (["*"], ["x"], ("y", "z")),
-    (["*"], ["a"], ("y", "z")),
 ])
 def test_BatchRunner_find_outputs(dummy, includes, excludes, expected):
     """Test methods `find_outputs` and `from_output_pattern`."""
@@ -160,6 +165,17 @@ def test_BatchRunner_empty_dataset(varnames, expected):
             ["z"],
             {"z": [1.25, 3.6, 0.35, 0.11]},
         ),
+        (
+            pd.DataFrame({"x": [0.5, 2.0, 0.5, 0.1], "a": [-1.0, 0.4, -0.1, -0.1]}),
+            ["z", "vector"],
+            {"z": [1.25, 3.6, 0.35, 0.11], "vector": [[0.25, -0.5], [1.0, 0.2], [0.25, -0.05], [0.05, -0.05]]},
+        ),
+        (
+            pd.DataFrame(), ["z"], {"z": []},  # empty inputs
+        ),
+        (
+            pd.DataFrame(), [], {},  # empty inputs & no outputs
+        ),
     ]
 )
 def test_BatchRunner_run(dummy, inputs, n_procs, start_method, output_varnames, expected):
@@ -171,8 +187,42 @@ def test_BatchRunner_run(dummy, inputs, n_procs, start_method, output_varnames, 
     assert set(results.keys()) == set(output_varnames)
     assert set(results.keys()) == set(runner.output_varnames)
 
-    for varname in results:
-        assert results[varname] == pytest.approx(expected[varname], rel=1e-12), f"Mismatch for {varname=!r}"
+    for varname, values in results.items():
+        assert np.allclose(values, expected[varname], rtol=1e-12), f"Mismatch for {varname=!r}"
+
+
+@pytest.mark.parametrize(
+    "inputs, output_varnames, expected", [
+        (
+            pd.DataFrame({"x": [0.5, 2.0, 0.5, 0.1], "a": [-1.0, 0.4, -0.1, -0.1]}),
+            ["y", "z"],
+            {"y": [1.0, 4.0, 1.0, 0.2], "z": [1.25, 3.6, 0.35, 0.11]},
+        ),
+        (
+            pd.DataFrame({"x": [0.5, 2.0, 0.5, 0.1], "a": [-1.0, 0.4, -0.1, -0.1]}),
+            ["z"],
+            {"z": [1.25, 3.6, 0.35, 0.11]},
+        ),
+        (
+            pd.DataFrame({"x": [0.5, 2.0, 0.5, 0.1], "a": [-1.0, 0.4, -0.1, -0.1]}),
+            ["z", "vector"],
+            {"z": [1.25, 3.6, 0.35, 0.11], "vector": [[0.25, -0.5], [1.0, 0.2], [0.25, -0.05], [0.05, -0.05]]},
+        ),
+        (
+            pd.DataFrame(), ["z"], {"z": []},  # empty inputs
+        ),
+        (
+            pd.DataFrame(), [], {},  # empty inputs & no outputs
+        ),
+    ]
+)
+def test_batch_run(dummy, inputs, output_varnames, expected):
+    results = batch_run(dummy, inputs, output_varnames)
+
+    assert set(results.keys()) == set(output_varnames)
+
+    for varname, values in results.items():
+        assert np.allclose(values, expected[varname], rtol=1e-12), f"Mismatch for {varname=!r}"
 
 
 @pytest.mark.parametrize("n_procs", [2, 3])    
@@ -212,3 +262,18 @@ def test_BatchRunner_run_with_driver(circuit, n_procs, start_method):
 
     assert len(R2) == len(inputs)
     assert R2 == pytest.approx(k / (1 - k) * R1 - R3)
+
+
+@mock.patch.object(BatchRunner, "_compute_outputs")
+def test_BatchRunner_no_outputs(mock_compute_outputs, dummy):
+    """Test that BatchRunner can run without output variables."""
+    runner = BatchRunner(dummy, [])
+    inputs = pd.DataFrame({"x": [1.0, 2.0], "a": [0.0, 1.0]})
+
+    assert runner.output_varnames == ()  # No output variable names set
+
+    with pytest.warns(UserWarning, match="No output variable names defined for batch run"):
+        results = runner.run(inputs)    
+    
+    assert results == {}  # No outputs should be returned
+    assert mock_compute_outputs.call_count == 0  # No computation should be performed
