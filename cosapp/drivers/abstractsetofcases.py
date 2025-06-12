@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import abc
 import copy
-from typing import Any, Iterable, Optional, Dict, Tuple
+from typing import Any, Iterable, Optional
 
 from cosapp.drivers.driver import Driver, System
 from cosapp.utils.logging import logging
@@ -142,50 +142,50 @@ class AbstractSetOfCases(Driver):
 
     @staticmethod
     def _prepare_recorders(
-        driver: AbstractSetOfCases, exec_type: ExecutionType, chunk_id: int
+        driver: AbstractSetOfCases,
+        exec_type: ExecutionType,
+        chunk_id: int,
     ) -> AbstractSetOfCases:
         for d in driver.tree():
-            rec = d.recorder
-            if rec:
-                rec._enable_parallel_execution(exec_type, chunk_id)
-                rec.clear()
+            if (recorder := d.recorder):
+                recorder._enable_parallel_execution(exec_type, chunk_id)
+                recorder.clear()
 
         return driver
     
     @staticmethod
-    def _modify_cases(driver: AbstractSetOfCases, rng) -> None:
-        lrng = list(rng)
-        start, stop = lrng[0], lrng[-1] + 1
+    def _modify_cases(driver: AbstractSetOfCases, rng: range) -> None:
+        indices = list(rng)
+        start, stop = indices[0], indices[-1] + 1
         driver.cases = driver.cases[start:stop]
         return driver
 
     @staticmethod
-    def _get_recorders_raw_data(driver: AbstractSetOfCases) -> Dict[str, Any]:
+    def _get_recorders_raw_data(driver: AbstractSetOfCases) -> dict[str, Any]:
         """Gets recorders raw data.
         
         Returns
         -------
-        Dict[str, Any]
+        dict[str, Any]
             Recorders raw data dict, where keys are the drivers' names and values
             are their recorders' raw data 
         """
-        def make_items(driver: Driver) -> Tuple[str, Any]:
+        def make_items(driver: Driver) -> tuple[str, Any]:
             if (recorder := driver.recorder):
-                value = recorder._raw_data
+                raw_data = recorder._raw_data
             else:
-                value = None
-            return (driver.name, value)
+                raw_data = None
+            return (driver.name, raw_data)
 
         return dict(map(make_items, driver.tree(downwards=True)))
 
-
     @staticmethod
-    def _compute_and_return_results(driver: AbstractSetOfCases) -> Dict[str, Any]:
+    def _compute_and_return_results(driver: AbstractSetOfCases) -> dict[str, Any]:
         """Computes the driver and returns recorders raw data.
         
         Returns
         -------
-        Dict[str, Any]
+        dict[str, Any]
             Recorders raw data dict, where keys are the drivers' names and values
             are their recorders' raw data 
         """
@@ -205,13 +205,14 @@ class AbstractSetOfCases(Driver):
         Optional[Exception]
             Exceptions raised workers' side if any
         """
-        mc_tree = list(self.tree(downwards=True))
+        driver_tree = list(self.tree(downwards=True))
+
         for job in batch.jobs:
             status, data = job.tasks[-1].result
             if status != TaskResponseStatus.OK:
                 return data
 
-            for driver in mc_tree:
+            for driver in driver_tree:
                 rec_data = data.get(driver.name, None)
                 if rec_data:
                     driver.recorder._batch_record(rec_data)
@@ -221,14 +222,14 @@ class AbstractSetOfCases(Driver):
         exec_policy = self._execution_policy
         pool = Pool.from_policy(exec_policy)
 
-        def create_job(id_and_range: Tuple[int, range]):
+        def create_job(id_and_range: tuple[int, range]):
             worker_id, index_range = id_and_range
             store_system = Task(
                 TaskAction.FUNC_CALL,
                 FunctionCallBehavior.STORE_RETURNED_OBJECT,
                 (ops.return_arg, (self._owner,)),
             )
-            get_mc = Task(
+            get_driver = Task(
                 TaskAction.FUNC_CALL,
                 FunctionCallBehavior.CHAINED,
                 (self._get_driver, (self.name,)),
@@ -248,7 +249,7 @@ class AbstractSetOfCases(Driver):
                 FunctionCallBehavior.CHAINED | FunctionCallBehavior.RETURN_OBJECT,
                 (self._compute_and_return_results, ()),
             )
-            return Job([store_system, get_mc, prepare_recorders, modify_cases, compute_and_return_results])
+            return Job([store_system, get_driver, prepare_recorders, modify_cases, compute_and_return_results])
         
         blocks = Batch.compute_blocks(len(self.cases), exec_policy.workers_count)
         batch = Batch(map(create_job, enumerate(blocks)))

@@ -5,7 +5,7 @@ import os
 import inspect
 import numpy
 from numbers import Number
-from typing import Any, Callable, Iterable, Type, Union, Tuple
+from typing import Any, Callable, Iterable, Union
 from collections.abc import Collection
 
 
@@ -38,8 +38,8 @@ def is_numerical(value: Any) -> bool:
         return True
     if isinstance(value, numpy.ndarray):
         return numpy.issubdtype(value.dtype, numpy.number)
-    if isinstance(value, Collection) and len(value) > 0:
-        return all(is_numerical(v) for v in value)
+    if isinstance(value, Collection):
+        return len(value) > 0 and all(map(is_numerical, value))
     return False
 
 
@@ -73,7 +73,7 @@ def is_number(value: Any) -> bool:
     return False
 
 
-def get_typename(dtype: Union[Type, Tuple[Type]], multiformat="({})") -> str:
+def get_typename(dtype: Union[type, tuple[type]], multiformat="({})") -> str:
         if inspect.isclass(dtype):
             return dtype.__qualname__
         return multiformat.format(", ".join(set(t.__qualname__ for t in dtype)))
@@ -82,7 +82,7 @@ def get_typename(dtype: Union[Type, Tuple[Type]], multiformat="({})") -> str:
 def check_arg(
     arg: Any,
     argname: str,
-    dtype: Union[Type, Iterable[Type]],
+    dtype: Union[type, tuple[type]],
     value_ok: Callable[[Any], bool] = None,
     stack_shift: int = 0,
 ):
@@ -118,13 +118,19 @@ def check_arg(
     if not isinstance(arg, dtype):
         valid = get_typename(dtype, multiformat="one of ({})")
         caller = get_caller()
-        raise TypeError("argument '{}' should be {}; got {} {!r}\nIn {}, line #{}: \n{}".format(
-            argname, valid, type(arg).__qualname__, arg, *get_context(caller)))
+        raise TypeError(
+            "argument {!r} should be {}; got {} {!r}\nIn {}, line #{}: \n{}".format(
+                argname, valid, type(arg).__qualname__, arg, *get_context(caller),
+            )
+        )
     # Check value
     if isinstance(value_ok, Callable) and not value_ok(arg):
         caller = get_caller()
-        raise ValueError("argument {!r} was given invalid value {!r}\nIn {}, line #{}: \n{}".format(
-            argname, arg, *get_context(caller)))
+        raise ValueError(
+            "argument {!r} was given invalid value {!r}\nIn {}, line #{}: \n{}".format(
+                argname, arg, *get_context(caller),
+            )
+        )
 
 
 def partition(iterable: Iterable[Any], predicate: Callable[[Any], bool]):

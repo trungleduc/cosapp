@@ -81,6 +81,7 @@ class Driver(Module, HasCompositeOptions):
         super().__init__(name)
         HasCompositeOptions.__init__(self)
 
+        self.parent: Optional[Driver] = None
         self.children: dict[str, Driver] = {}
         self._owner: System = None
         self._recorder: Optional[BaseRecorder] = None

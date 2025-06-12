@@ -72,7 +72,7 @@ class Module(LoggerContext, VisitedComponent, metaclass=abc.ABCMeta):
 
     _name_check = NameChecker(excluded=CommonPorts.names())
 
-    def __init__(self: ModuleType, name: str):
+    def __init__(self, name: str):
         """`Module` constructor
 
         Parameters
@@ -82,8 +82,8 @@ class Module(LoggerContext, VisitedComponent, metaclass=abc.ABCMeta):
         """
         self._name = self._name_check(name)
         self._desc = ""
-        self.children: dict[str, ModuleType] = OrderedDict()
-        self.parent: Optional[ModuleType] = None
+        self.children: dict[str, Module] = OrderedDict()
+        self.parent: Optional[Module] = None
         self._active: bool = True
         self._compute_calls: int = 0
 
