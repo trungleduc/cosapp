@@ -23,7 +23,6 @@ class SpecialColumns(NamedTuple):
     reference: str
 
 
-
 def is_cosapp_object(obj: Any) -> bool:
     """Returns `True` if `obj` is either a port,
     a system or a driver; `False` otherwise."""
@@ -105,7 +104,8 @@ class BaseRecorder(abc.ABC):
         reference="Reference",
     )
 
-    def __init__(self,
+    def __init__(
+        self,
         includes: SearchPattern = "*",
         excludes: Optional[SearchPattern] = None,
         # metadata: Optional[SearchPattern] = None,  # TODO?
@@ -115,8 +115,8 @@ class BaseRecorder(abc.ABC):
         hold = False,
         raw_output = False,
     ):
-        check_arg(raw_output, 'raw_output', bool)
-        check_arg(numerical_only, 'numerical_only', bool)
+        check_arg(raw_output, "raw_output", bool)
+        check_arg(numerical_only, "numerical_only", bool)
 
         self.__includes = make_wishlist(includes, "includes")
         self.__excludes = make_wishlist(excludes, "excludes")
@@ -129,7 +129,7 @@ class BaseRecorder(abc.ABC):
         self.__precision = 9
         self.precision = precision
         self._raw_output = raw_output
-        self.__variables: Optional[list[str]] = None
+        self.__variables: list[str] = []
         self.__expressions: EvalString = None
         self._watch_object: System = None
         self._owner: Optional[str] = None
@@ -229,7 +229,7 @@ class BaseRecorder(abc.ABC):
         is_new = module is not self._watch_object
         
         if self._watch_object is None or is_new:
-            self.__variables = None
+            self.__variables = []
             self.__expressions = None
             self._watch_object = module
 
@@ -267,7 +267,7 @@ class BaseRecorder(abc.ABC):
 
     @section.setter
     def section(self, section: str):
-        check_arg(section, 'section', str)
+        check_arg(section, "section", str)
         self.__section = section
 
     @property
@@ -277,7 +277,7 @@ class BaseRecorder(abc.ABC):
 
     @hold.setter
     def hold(self, value: bool):
-        check_arg(value, 'hold', bool)
+        check_arg(value, "hold", bool)
         self.__hold = value
 
     @property
@@ -287,7 +287,7 @@ class BaseRecorder(abc.ABC):
 
     @precision.setter
     def precision(self, value: int):
-        check_arg(value, 'precision', int, lambda n: n > 0)
+        check_arg(value, "precision", int, lambda n: n > 0)
         self.__precision = value
 
     def field_names(self) -> list[str]:
@@ -301,9 +301,9 @@ class BaseRecorder(abc.ABC):
         .. note::
             Inward and outward variables will appear without the prefix `inwards.` or `outwards.`.
         """
-        if self.__variables is None and self.watched_object is not None:
+        if not self.__variables and self.watched_object:
             self.__update_varlist()
-        return self.__variables or list()
+        return self.__variables
 
     def __contains__(self, field: str) -> bool:
         return field in self.field_names()
@@ -481,7 +481,7 @@ class BaseRecorder(abc.ABC):
         index : int
             Index of the record as iloc in the Pandas DataFrame
         """
-        check_arg(index, 'index', int)
+        check_arg(index, "index", int)
 
         data = self._raw_data
         if index < 0 or index > len(data) - 1:

@@ -3,7 +3,7 @@ import weakref
 from enum import IntEnum
 from typing import (
     TYPE_CHECKING,
-    Any, List, Tuple, Optional, Sequence,
+    Any, Optional, Sequence,
     Union, Iterator, Generator,
 )
 
@@ -70,7 +70,7 @@ class Task:
         "_execution_count",
     )
 
-    def __init__(self, action: TaskAction, options: int = 0, data: Any = ()):
+    def __init__(self, action: TaskAction, options: int=0, data: Any=()):
         """Initializes an instance of a `Task`.
 
         Parameters
@@ -85,7 +85,7 @@ class Task:
         self._uid: Optional[int] = None
         self._action: TaskAction = action
         self._options: int = options
-        self._data: List[Any] = data
+        self._data: list[Any] = data
         self._result: Optional[Any] = None
         self._state: TaskState = TaskState.CREATED
         self._worker: weakref.ReferenceType[BaseWorker] = weakref.ref(lambda: None)
@@ -147,11 +147,9 @@ class Task:
         Any
             Task result
         """
-        if self._state == TaskState.FINISHED:
-            return self._result
-
-        worker = self._check_worker()
-        worker.wait_for_results(self._uid)
+        if self._state != TaskState.FINISHED:
+            worker = self._check_worker()
+            worker.wait_for_results(self._uid)
 
         return self._result
 
@@ -201,7 +199,7 @@ class Task:
         self._uid = value
 
     @property
-    def active(self) -> int:
+    def active(self) -> bool:
         """Gets whether the task is active or not."""
         return self._active
 
@@ -315,7 +313,7 @@ class Batch:
         return Batch(jobs)
 
     @staticmethod
-    def _make_jobs(jobs: Union[Sequence[Job], Job]) -> Tuple[Job]:
+    def _make_jobs(jobs: Union[Sequence[Job], Job]) -> tuple[Job]:
         if isinstance(jobs, Job):
             return (jobs,)
         else:

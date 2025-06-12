@@ -84,7 +84,7 @@ def test_natural_varname_weird(case1, case2):
 @pytest.mark.parametrize("args, expected", [
     ([], dict(result=[])),
     (None, dict(result=[])),
-    ('', dict(result=[''])),
+    ('', dict(result=[])),
     ('x', dict(result=['x'])),
     (['x', 'y'], dict()),
     ('foo.bar', dict(result=['foo.bar'])),

@@ -1,7 +1,7 @@
 import multiprocessing as mp
 import signal
 from queue import Queue
-from typing import Any, Collection
+from typing import Any, Collection, Optional
 
 from cosapp.utils.state_io import object__getstate__
 
@@ -120,7 +120,7 @@ class BaseWorker:
                 else:
                     if store:
                         if isinstance(result, Collection):
-                            result_ids = [id(res) for res in result]
+                            result_ids = tuple(map(id, result))
                             for res in result:
                                 self._storage[id(res)] = res
                         else:
@@ -153,7 +153,7 @@ class BaseWorker:
         """Marks a task as done."""
         self._comms.task_done()
 
-    def add_result(self, status, data: Any = None):
+    def add_result(self, status: TaskResponseStatus, data: Optional[Any]=None):
         """Pushes a new result to the parent process."""
         self._comms.add_result((status, data))
 

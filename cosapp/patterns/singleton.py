@@ -1,6 +1,10 @@
 class Singleton(type):
     """
-    Define an instance operation that lets clients access its unique instance.
+    Metaclass for singleton pattern.
+
+    Reference
+    ---------
+    https://refactoring.guru/design-patterns/singleton
 
     Examples
     --------
@@ -12,7 +16,7 @@ class Singleton(type):
     >>> m2 = MyClass()
     >>> assert m1 is m2
     """
-    def __init__(cls, name, bases, attrs, **kwargs):
+    def __init__(cls, name, bases, attrs):
         super().__init__(name, bases, attrs)
         cls.__instance = None
 

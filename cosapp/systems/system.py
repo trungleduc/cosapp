@@ -248,7 +248,7 @@ class System(Module, TimeObserver):
         self._math = self.new_problem(name)
         self._time_pb = TimeProblem(name, self)
         self.__loop_problem = self.new_problem("loop")
-        self.parent: System = None
+        self.parent: Optional[System] = None
         self.children: dict[str, System] = OrderedDict()
         self.drivers: dict[str, Driver] = OrderedDict()
         self.design_methods: dict[str, MathematicalProblem] = dict()
