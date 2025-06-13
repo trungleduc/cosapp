@@ -42,6 +42,7 @@ Modules
    cosapp.systems.processsystem
    cosapp.systems.externalsystem
    cosapp.systems.metamodels
+   cosapp.systems.batch
 
    cosapp.multimode.event
    cosapp.multimode.zeroCrossing
