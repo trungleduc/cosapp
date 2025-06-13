@@ -1,6 +1,27 @@
 # History
 
 
+## 1.2.0 (2025-06-13)
+
+### New features & API changes
+
+- New function `cosapp.systems.batch_run` and support class `BatchRunner` to obtain the response surface of a system over a set of test points, with multiprocessing support (MRs [#423](https://gitlab.com/cosapp/cosapp/-/merge_requests/423), [#424](https://gitlab.com/cosapp/cosapp/-/merge_requests/424)).
+- Support of multiprocessing for `System.make_surrogate` (MR [#422](https://gitlab.com/cosapp/cosapp/-/merge_requests/422)).
+- Removed deprecated property `data` for recorders (MR [#421](https://gitlab.com/cosapp/cosapp/-/merge_requests/421)).
+- New method `System.get_variable` to obtain a variable object (containing unit, description and so on) from its contextual name in a system (MR [#417](https://gitlab.com/cosapp/cosapp/-/merge_requests/417)).
+- Deprecation of function `BasePort.get_details`, replaced by methods `get_variable` and `variable_dict` (MR [#420](https://gitlab.com/cosapp/cosapp/-/merge_requests/420)).
+- Expose protected property `System.problem` in the scope of method `setup_run` (MR [#419](https://gitlab.com/cosapp/cosapp/-/merge_requests/419)).
+
+### Bug fixes & Code improvements
+
+- Modified call sequence in `System.call_setup_run`, to make sure that the system tree is setup before drivers are (MR [#418](https://gitlab.com/cosapp/cosapp/-/merge_requests/418)).
+- Improved type hints and general refactoring pass (MR [#425](https://gitlab.com/cosapp/cosapp/-/merge_requests/425)).
+
+### Documentation
+
+- Updated tutorial on multi-point design (MR [#426](https://gitlab.com/cosapp/cosapp/-/merge_requests/426)).
+
+
 ## 1.1.0 (2025-04-28)
 
 ### New features & API changes
