@@ -51,7 +51,7 @@ class BaseVariable(abc.ABC):
     #   another advantage is that the metadata can be change/shared without providing
     #     a way to change the value no passing through the Port (which is bad for the
     #     clean dirty logic).
-    #   Disadvantage : the logic to store the details and the value is a bit messy in
+    #   Disadvantage: the logic to store the details and the value is a bit messy in
     #     BasePort.add_variable
 
     __slots__ = (
@@ -157,43 +157,51 @@ class BaseVariable(abc.ABC):
 
     @classmethod
     def name_check(cls, name: str):
+        """Check if the variable name is valid."""
         return cls.__name_check(name)
 
     @property
+    def port(self) -> BasePort:
+        """BasePort: Port to which variable belongs"""
+        return self._port
+
+    @property
     def full_name(self) -> str:
+        """str: Full variable name, including port contextual name"""
         return f"{self._port.contextual_name}.{self.name}"
 
     @property
     def name(self) -> str:
-        """str : Variable name"""
+        """str: Variable name"""
         return self._name
 
     @property
     def value(self) -> Any:
+        """Any: Variable value"""
         return getattr(self._port, self._name)
 
-    # @value.setter
-    # def value(self, value) -> None:
-    #     setattr(self._port, self._name, value)
+    @value.setter
+    def value(self, value) -> None:
+        setattr(self._port, self._name, value)
 
     @property
     def unit(self) -> str:
-        """str : Variable unit; empty string means dimensionless"""
+        """str: Variable unit; empty string means dimensionless"""
         return self._unit
 
     @property
     def dtype(self) -> Optional[Types]:
-        """Type[Any] or tuple of Type[Any] or None : Type of the variable; default None (i.e. type of default value is set)"""
+        """Type[Any] or tuple of Type[Any] or None: Type of the variable; default None (i.e. type of default value is set)"""
         return self._dtype
 
     @property
     def description(self) -> str:
-        """str : Variable description"""
+        """str: Variable description"""
         return self._desc
 
     @property
     def scope(self) -> Scope:
-        """Scope : Scope of variable visibility"""
+        """Scope: Scope of variable visibility"""
         return self._scope
 
     def __str__(self) -> str:
@@ -230,10 +238,10 @@ class BaseVariable(abc.ABC):
             The dictionary representing this variable.
         """
         return {
-            "value" : self.value,
+            "value": self.value,
             "unit": self.unit or None,
             "dtype": str(self._dtype) or None,
-            "desc" : self.description or None,
+            "desc": self.description or None,
         }
 
     def to_dict(self) -> dict:
@@ -314,14 +322,6 @@ class Variable(BaseVariable):
         # Additional value check
         value, dtype = self._process_value(value, dtype)
 
-        # TODO: better handle of this possible misunderstanding for users at numpy array instantiation
-        if isinstance(value, numpy.ndarray):
-            if issubclass(value.dtype.type, numpy.integer):
-                logger.warning(
-                    f"Variable {name!r} instantiates a numpy array with integer dtype."
-                    " This may lead to unpredictible consequences."
-                )
-
         # Check validation ranges are compatible and meaningful for this type of data
         limits, valid_range = self._check_range(limits, valid_range, value)
 
@@ -349,7 +349,7 @@ class Variable(BaseVariable):
 
         Parameters
         ----------
-        variable : Any
+        variable: Any
             Variable of interest
 
         Returns
@@ -369,7 +369,7 @@ class Variable(BaseVariable):
         
         Parameters
         ----------
-        value : Any
+        value: Any
             value need to be checked
 
         Returns
@@ -385,7 +385,7 @@ class Variable(BaseVariable):
                 "Validity or limit range must be a tuple with format comparable to value"
             )
         if value is not None:
-            for bound in value :
+            for bound in value:
                 if isinstance(bound, (tuple,list)):
                     value_check = False
                 elif isinstance(bound, Number) or bound is None: 
@@ -393,7 +393,7 @@ class Variable(BaseVariable):
                 else:
                     value_check = False
                     tuple_check = False        
-        else :
+        else:
             return RangeType.NONE
         if value_check and not tuple_check:
             if len(value) != 2:
@@ -418,11 +418,11 @@ class Variable(BaseVariable):
 
         Parameters
         ----------
-        limits : tuple[Any, Any] or tuple[tuple] or None
+        limits: tuple[Any, Any] or tuple[tuple] or None
             (lower, upper) limits
-        valid_range : tuple[Any, Any] tuple[tuple] or None
+        valid_range: tuple[Any, Any] tuple[tuple] or None
             (lower, upper) validation range
-        value : Any
+        value: Any
 
         Returns
         -------
@@ -577,7 +577,7 @@ class Variable(BaseVariable):
 
     @property
     def valid_range(self) -> Optional[RangeValue]:
-        """tuple[Any, Any] or None : alidity range of the variable and optional comment if unvalid"""
+        """tuple[Any, Any] or None: validity range of the variable and optional comment if unvalid"""
         return self._valid_range
 
     @valid_range.setter
@@ -588,7 +588,7 @@ class Variable(BaseVariable):
         default = self._get_limits_from_type(value)
 
         if default is not None:
-            if range_type == RangeType.VALUE :
+            if range_type == RangeType.VALUE:
                 if len(new_range) != 2:
                     raise TypeError(
                         "Validity range must be a size 2 tuple with type comparable to value."
@@ -623,7 +623,7 @@ class Variable(BaseVariable):
 
     @property
     def invalid_comment(self) -> str:
-        """str : Comment explaining the reasons of the validity range"""
+        """str: Comment explaining the reasons of the validity range"""
         return self._invalid_comment
 
     @invalid_comment.setter
@@ -634,7 +634,7 @@ class Variable(BaseVariable):
 
     @property
     def limits(self) -> Optional[RangeValue]:
-        """tuple[Any, Any] or None : Variable limits and optional comment if unvalid"""
+        """tuple[Any, Any] or None: Variable limits and optional comment if unvalid"""
         return self._limits
 
     @limits.setter
@@ -646,7 +646,7 @@ class Variable(BaseVariable):
         default = self._get_limits_from_type(value)
 
         if default is not None:
-            if limits_type == RangeType.VALUE :
+            if limits_type == RangeType.VALUE:
                 if len(new_limits) != 2:
                     raise TypeError(
                         "Limits must be a size 2 tuple with type comparable to value."
@@ -699,7 +699,7 @@ class Variable(BaseVariable):
 
     @property
     def out_of_limits_comment(self) -> str:
-        """str : Comment explaining the reasons of the limits"""
+        """str: Comment explaining the reasons of the limits"""
         return self._out_of_limits_comment
 
     @out_of_limits_comment.setter
@@ -710,7 +710,7 @@ class Variable(BaseVariable):
 
     @property
     def distribution(self) -> Optional[Distribution]:
-        """Optional[Distribution] : Random distribution of the variable."""
+        """Optional[Distribution]: Random distribution of the variable."""
         return self._distribution
 
     @distribution.setter
@@ -798,7 +798,7 @@ class Variable(BaseVariable):
 
         Parameters
         ----------
-        status : Validity.{OK, WARNING, ERROR}
+        status: Validity.{OK, WARNING, ERROR}
             Validity status for which the reasons are looked for.
 
         Returns

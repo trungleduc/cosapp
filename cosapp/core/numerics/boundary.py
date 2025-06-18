@@ -1,13 +1,16 @@
 from __future__ import annotations
-from numbers import Number
-from typing import (
-    Any, Dict, Optional, Collection,
-    Union, Tuple, Type, NamedTuple, T,
-    MutableSequence, TYPE_CHECKING,
-)
+
 import abc
 import copy
 import numpy
+import warnings
+
+from numbers import Number
+from typing import (
+    Any, Union, Optional,
+    Collection, NamedTuple, T,
+    MutableSequence, TYPE_CHECKING,
+)
 
 from cosapp.core.eval_str import EvalString
 from cosapp.core.variableref import VariableReference
@@ -35,16 +38,17 @@ class AttrRef:
     key: str
         Name of the boundary
     """
-    def __init__(self, obj: System, key: str) -> None:
+    def __init__(self, context: System, key: str) -> None:
         self._obj: Union[BasePort, Any]
 
         name = key
         try:
             base, key = key.rsplit(".", maxsplit=1)
         except ValueError:
+            obj = context
             base = ""
         else:
-            obj = eval(f"__obj__.{base}", {"__obj__": obj})
+            obj = eval(f"context.{base}", {"context": context})
 
         from cosapp.systems import System
         if isinstance(obj, System):
@@ -76,7 +80,7 @@ class AttrRef:
         except:
             return False
     
-    def __getstate__(self) -> Dict[str, Any]:
+    def __getstate__(self) -> dict[str, Any]:
         """Creates a state of the object.
 
         The state type does NOT match type specified in
@@ -85,22 +89,23 @@ class AttrRef:
 
         Returns
         -------
-        Dict[str, Any]:
+        dict[str, Any]:
             state
         """
         return object__getstate__(self)
 
-    def __json__(self) -> Dict[str, Any]:
+    def __json__(self) -> dict[str, Any]:
         """Creates a JSONable dictionary representation of the object.
 
         Returns
         -------
-        Dict[str, Any]
+        dict[str, Any]
             The dictionary
         """
         state = self.__getstate__().copy()
         # state.pop[""]
         return state
+
 
 class MaskedAttrRef(AttrRef):
     """Masked Attribute Reference for MutableSequence-like object.
@@ -265,7 +270,7 @@ class Boundary:
         name: str,
         mask: Optional[numpy.ndarray] = None,
         default: Union[Number, numpy.ndarray, None] = None,
-        inputs_only: bool = True,
+        inputs_only=True,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)  # for collaborative inheritance
@@ -294,7 +299,7 @@ class Boundary:
         boundary._ref = self._ref.__copy__()
         return boundary
 
-    def __getstate__(self) -> Union[Dict[str, Any], tuple[Optional[Dict[str, Any]], Dict[str, Any]]]:
+    def __getstate__(self) -> Union[dict[str, Any], tuple[Optional[dict[str, Any]], dict[str, Any]]]:
         """Creates a state of the object.
 
         The state may take various forms depending on the object, see
@@ -303,17 +308,17 @@ class Boundary:
         
         Returns
         -------
-        Union[Dict[str, Any], tuple[Optional[Dict[str, Any]], Dict[str, Any]]]:
+        Union[dict[str, Any], tuple[Optional[dict[str, Any]], dict[str, Any]]]:
             state
         """
         return object__getstate__(self)
 
-    def __json__(self) -> Dict[str, Any]:
+    def __json__(self) -> dict[str, Any]:
         """Creates a JSONable dictionary representation of the object.
 
         Returns
         -------
-        Dict[str, Any]
+        dict[str, Any]
             The dictionary
         """
         qualname = f"{self.__module__}.{self.__class__.__qualname__}"
@@ -356,7 +361,7 @@ class Boundary:
         basename: str,
         selector: str,
         mask: Optional[numpy.ndarray] = None,
-    ) -> Tuple[Optional[Union[Number, Collection]], Optional[numpy.ndarray]]:
+    ) -> tuple[Optional[Union[Number, Collection]], Optional[numpy.ndarray]]:
         """Evaluate the basename expression within its context 
         and generate a mask if a selector is specified in the fullname expression.
 
@@ -431,8 +436,8 @@ class Boundary:
     @staticmethod
     def is_mutable_sequence(value: Any) -> bool:
         """Determine if an object is MutableSequence-like."""
-        mandatory_attrs = ["__getitem__", "__setitem__", "__len__"]
-        return all([hasattr(value, attr) for attr in mandatory_attrs])
+        mandatory_attrs = ("__getitem__", "__setitem__", "__len__")
+        return all(hasattr(value, attr) for attr in mandatory_attrs)
 
     @staticmethod
     def create_attr_ref(
@@ -440,7 +445,7 @@ class Boundary:
         basename: str,
         value: Optional[Union[Number, Collection]],
         mask: Optional[numpy.ndarray] = None
-    ) -> Tuple[Union[AttrRef, NumpyMaskedAttrRef, MaskedAttrRef], AbstractBoundaryImpl, bool]:
+    ) -> tuple[Union[AttrRef, NumpyMaskedAttrRef, MaskedAttrRef], AbstractBoundaryImpl, bool]:
         """
         Returns an `AttrRef`, `MaskedAttrRef`, or ǸumpyMaskedAttrRef` object from a name and its evaluation context.
         The `NumpyMaskedAttrRef` derives from `AttrRef` if the context variable refers to a numpy.array and
@@ -469,20 +474,23 @@ class Boundary:
         """
         if mask is None:
             if isinstance(value, Number):
-                return AttrRef(context, basename), ScalarBoundaryImpl(), True
+                impl = ScalarBoundaryImpl()
             elif value is None:
-                return AttrRef(context, basename), UndefinedBoundaryImpl(), True
+                impl = UndefinedBoundaryImpl()
             else:
-                return AttrRef(context, basename), GenericBoundaryImpl(), True
-        else:
-            if isinstance(value, numpy.ndarray):
-                return NumpyMaskedAttrRef(context, basename, mask), NumpyBoundaryImpl(), False
-            elif Boundary.is_mutable_sequence(value):
-                return MaskedAttrRef(context, basename, mask), MutableSeqBoundaryImpl(), False
-        
-        raise TypeError("Type of evaluated expression is incompatible as Boundary object handled type.")
+                impl = GenericBoundaryImpl()
 
-    def find_port(self, inputs_only: bool = False) -> None:
+            return AttrRef(context, basename), impl, True
+
+        elif isinstance(value, numpy.ndarray):
+            return NumpyMaskedAttrRef(context, basename, mask), NumpyBoundaryImpl(), False
+
+        elif Boundary.is_mutable_sequence(value):
+            return MaskedAttrRef(context, basename, mask), MutableSeqBoundaryImpl(), False
+        
+        raise TypeError("type of evaluated expression is incompatible as Boundary object handled type.")
+
+    def find_port(self, inputs_only=False) -> None:
         """
         Find port associated to its `AttrRef`.
         In the case of a complex object, the port containing it is retrieved and checks.
@@ -614,7 +622,7 @@ class Boundary:
     def value(self) -> Union[Number, numpy.ndarray]:
         return self._ref.value
 
-    def update_value(self, new: Union[Number, MutableSequence, numpy.ndarray], checks: bool = True) -> None:
+    def update_value(self, new: Union[Number, MutableSequence, numpy.ndarray], checks=True) -> None:
         if new is not None:
             if self._boundary_impl.update_value(self._ref.value, new, checks):
                 self._ref.value = new
@@ -628,7 +636,12 @@ class Boundary:
     def default_value(self) -> Union[Number, numpy.ndarray]:
         return self._default_value
 
-    def update_default_value(self, new: Union[Number, MutableSequence, numpy.ndarray], mask: Optional[numpy.ndarray] = None, checks: bool = True) -> None:
+    def update_default_value(
+        self,
+        new: Union[Number, MutableSequence, numpy.ndarray],
+        mask: Optional[numpy.ndarray] = None,
+        checks: bool = True,
+    ) -> None:
         if new is not None:
             if mask is not None:
                 self.mask = mask
@@ -648,7 +661,7 @@ class AbstractBoundaryImpl(abc.ABC):
     def check_new_value(value: T, new: T) -> None: ...
 
     @abc.abstractmethod
-    def update_value(ref_value: T, new: T, checks: bool = True) -> bool: ...
+    def update_value(ref_value: T, new: T, checks=True) -> bool: ...
 
     @abc.abstractmethod
     def size(value: T) -> int: ...
@@ -662,7 +675,7 @@ class UndefinedBoundaryImpl(AbstractBoundaryImpl):
         raise NotImplementedError
 
     @staticmethod
-    def update_value(ref_value: T, new: T, checks: bool = True) -> bool:
+    def update_value(ref_value: T, new: T, checks=True) -> bool:
         raise NotImplementedError
 
     @staticmethod
@@ -674,15 +687,16 @@ class ScalarBoundaryImpl(AbstractBoundaryImpl):
     """Specific methods for Number Boundary."""
 
     @staticmethod
-    def check_new_value(value: Number, new: Number) -> None:
+    def check_new_value(ref: Number, new: Number) -> None:
+        """Check that reference and new values are compatible."""
         if not isinstance(new, Number):
             raise TypeError(
                 f"Value to set is incompatible with the boundary value type"
-                f"; got {type(new)} mismatching {type(value)}."
+                f"; got {type(new)} mismatching {type(ref)}."
             )
 
     @staticmethod
-    def update_value(ref_value: Number, new: Number, checks: bool = True) -> bool:
+    def update_value(ref_value: Number, new: Number, checks=True) -> bool:
         if checks:
             ScalarBoundaryImpl.check_new_value(ref_value, new)
         return ref_value != new
@@ -697,15 +711,20 @@ class MutableSeqBoundaryImpl(AbstractBoundaryImpl):
 
     @staticmethod
     def check_new_value(value: MutableSequence, new: MutableSequence) -> None:
+        """Check that reference and new values are compatible."""
         if not Boundary.is_mutable_sequence(new):
-            raise TypeError(f"Value to set is incompatible with the boundary value type; got {type(new)} \
-                            mismatching {type(value)}.")
+            raise TypeError(
+                f"Value to set is incompatible with the boundary value type"
+                f"; got {type(new)} mismatching {type(value)}."
+            )
         if value is not None and len(new) != len(value):
-            raise ValueError(f"Value to set does not fit the current boundary value; got {len(new)} \
-                            mismatching {len(value)}.")
+            raise ValueError(
+                f"Value to set does not fit the current boundary value"
+                f"; got {len(new)} mismatching {len(value)}."
+            )
 
     @staticmethod
-    def update_value(ref_value: MutableSequence, new: MutableSequence, checks: bool = True) -> bool:
+    def update_value(ref_value: MutableSequence, new: MutableSequence, checks=True) -> bool:
         if checks:
             MutableSeqBoundaryImpl.check_new_value(ref_value, new)
         return not numpy.array_equal(ref_value, new)
@@ -719,14 +738,18 @@ class NumpyBoundaryImpl(AbstractBoundaryImpl):
     """Specific methods for numpy.ndarray Boundary."""
 
     @staticmethod
-    def check_new_value(value: numpy.ndarray, new: numpy.ndarray) -> None:
-        if value is not None and not numpy.isscalar(new):
-            if value.shape != numpy.asarray(new).shape:
-                raise ValueError(f"Value to set does not fit the current boundary value; got {numpy.asarray(new).shape!r} \
-                            mismatching {value.shape}.")
+    def check_new_value(ref: numpy.ndarray, new: numpy.ndarray) -> None:
+        """Check that reference and new value shapes are compatible."""
+        if ref is not None and not numpy.isscalar(new):
+            new_shape = numpy.shape(new)
+            if ref.shape != new_shape:
+                raise ValueError(
+                    f"Value to set does not fit the current boundary shape"
+                    f"; got {new_shape!r} mismatching {ref.shape}."
+                )
 
     @staticmethod
-    def update_value(ref_value: numpy.ndarray, new: numpy.ndarray, checks: bool = True) -> bool:
+    def update_value(ref_value: numpy.ndarray, new: numpy.ndarray, checks=True) -> bool:
         if checks:
             NumpyBoundaryImpl.check_new_value(ref_value, new)
         return not numpy.array_equal(ref_value, new)
@@ -740,16 +763,17 @@ class GenericBoundaryImpl(AbstractBoundaryImpl):
     """Class handling undefined Boundary."""
 
     @staticmethod
-    def check_new_value(value: T, new: T) -> None:
-        if None not in (value, new):
-            if not isinstance(type(new), type(value)):
+    def check_new_value(ref: T, new: T) -> None:
+        """Check that reference and new values are compatible."""
+        if None not in (ref, new):
+            if not isinstance(type(new), type(ref)):
                 raise TypeError(
                     f"Value to set is incompatible with the boundary value type"
-                    f"; got {type(new)} mismatching {type(value)}."
+                    f"; got {type(new)} mismatching {type(ref)}."
                 )
 
     @staticmethod
-    def update_value(ref_value: T, new: T, checks: bool = True) -> bool:
+    def update_value(ref_value: T, new: T, checks=True) -> bool:
         if checks:
             GenericBoundaryImpl.check_new_value(ref_value, new)
         return ref_value != new
@@ -757,7 +781,7 @@ class GenericBoundaryImpl(AbstractBoundaryImpl):
     @staticmethod
     def size(value: T) -> int:
         raise NotImplementedError
-    
+
 
 class Unknown(Boundary):
     """Numerical solver unknown.
@@ -835,12 +859,34 @@ class Unknown(Boundary):
             return str(self.value)
         except KeyError:  # boundary does not exist in the current context
             return str(self.default_value)
-    
-    def check_numerical_type(self):
-        if not isinstance(self.ref.value, (Number, numpy.ndarray, type(None))):
-            if not Boundary.is_mutable_sequence(self.ref.value):
+
+    def check_numerical_type(self) -> None:
+        """Check if the unknown is suitable for a solver.
+        
+        Raises
+        ------
+        `TypeError`
+            If the unknown is neither a numerical variable nor a mutable sequence.
+        
+        Warnings
+        --------
+        `UserWarning`
+            If the unknown is declared as an array of integers.
+        """
+        value = self._ref.value
+
+        if isinstance(value, numpy.ndarray):
+            if issubclass(value.dtype.type, numpy.integer):
+                warnings.warn(
+                    f"Unknown {self.name!r} appears to be an array of integers,"
+                    f" but solvers only manipulate floating point values."
+                )
+
+        elif not isinstance(value, (Number, type(None))):
+            if not Boundary.is_mutable_sequence(value):
                 raise TypeError(
-                    f"Only numerical variables can be used in mathematical algorithms; got {self.portname!r} in {self.context.name!r}"
+                    f"Only numerical variables can be used in mathematical algorithms"
+                    f"; got {self.portname!r} in {self.context.name!r}"
                 )
 
     def copy(self) -> Unknown:
@@ -870,15 +916,14 @@ class Unknown(Boundary):
             upper_bound=self.upper_bound,
             mask=self.mask.copy() if not self._is_scalar else None
         )
-
         return new
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Returns a JSONable representation of the unknown.
         
         Returns
         -------
-        Dict[str, Any]
+        dict[str, Any]
             JSONable representation
         """
         return {
@@ -1068,7 +1113,7 @@ class TimeUnknown(Boundary, AbstractTimeUnknown):
         return TimeUnknown(self.context, self.name, self.der, self.max_time_step_expr)
 
     @staticmethod
-    def der_type(expression: Any, context: System) -> Tuple[EvalString, Any, Type]:
+    def der_type(expression: Any, context: System) -> tuple[EvalString, Any, type]:
         """Static method to evaluate the type and default value of an expression used as time derivative"""
         if isinstance(expression, EvalString):
             eval_string = expression
@@ -1098,12 +1143,12 @@ class TimeUnknown(Boundary, AbstractTimeUnknown):
     def value(self, new: Union[Number, numpy.ndarray]) -> None:
         self.update_value(new)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Returns a JSONable representation of the transient unknown.
         
         Returns
         -------
-        Dict[str, Any]
+        dict[str, Any]
             JSONable representation
         """
         return {
@@ -1156,7 +1201,7 @@ class TimeDerivative(Boundary):
             self.__shape = (len(value), )
             self._is_scalar = False
         else:
-            raise TypeError("Type of boundary value is not handle.")
+            raise TypeError("type of boundary value is not handle.")
 
         # Set source & initial value
         self.source = source
@@ -1241,7 +1286,7 @@ class TimeDerivative(Boundary):
         raise RuntimeError("Time derivatives are computed, and cannot be explicitly set")
 
     @staticmethod
-    def source_type(expression: Any, context: System) -> Tuple:
+    def source_type(expression: Any, context: System) -> tuple:
         """Static method to evaluate the type and default value of an expression used as rate source"""
         eval_string, value, dtype = TimeUnknown.der_type(expression, context)
         if dtype is numpy.ndarray:
@@ -1259,12 +1304,12 @@ class TimeDerivative(Boundary):
             raise ValueError(f"Expression '{expression!s}' should be an array of shape {self.__shape}")
         return eval_string
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Returns a JSONable representation of the time derivative.
         
         Returns
         -------
-        Dict[str, Any]
+        dict[str, Any]
             JSONable representation
         """
         return {

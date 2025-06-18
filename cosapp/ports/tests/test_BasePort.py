@@ -549,15 +549,12 @@ def test_BasePort_add_variable(direction, caplog):
         port.add_variable("var4", scope="PRIVATE")
 
 
+    # Integer array variable
     port = BasePort("myPort", direction)
     caplog.clear()
     with caplog.at_level(logging.WARNING):
         port.add_variable("var1", np.array([1, 2]))
-        assert len(caplog.records) == 1
-        assert re.match(
-            "Variable .* instantiates a numpy array with integer dtype. "
-            "This may lead to unpredictible consequences.",
-            caplog.messages[-1])
+        assert len(caplog.records) == 0  # no warning issued
 
     # Variable with a distribution
     d = Uniform(-1, 2, 0.2)

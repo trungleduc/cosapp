@@ -121,6 +121,9 @@ def test_Variable___init__(port, caplog):
         scope=Scope.PUBLIC,
         distribution=Uniform(1.0, 4.0, 0.2),
     )
+    
+    assert w.port is port
+
     for a, b in (
         {
             "name": name,
@@ -471,19 +474,12 @@ def test_Variable___init__(port, caplog):
 
     port = mock.Mock(spec=BasePort)
     name = "var1"
-    value = np.r_[1]
+    value = np.r_[1]  # array of integers
     setattr(port, name, value)
     caplog.clear()
     with caplog.at_level(logging.WARNING):
         Variable(name, port, value)
-    assert len(caplog.records) == 1
-    record = caplog.records[0]
-    assert record.levelno == logging.WARNING
-    expected_msg = (
-        r"Variable '\w+' instantiates a numpy array with integer dtype. "
-        r"This may lead to unpredictible consequences."
-    )
-    assert re.match(expected_msg, record.message)
+    assert len(caplog.records) == 0  # no warning issued
 
     port = mock.Mock(spec=BasePort)
     name = "var1"

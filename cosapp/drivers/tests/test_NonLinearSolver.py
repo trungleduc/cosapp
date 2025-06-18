@@ -2063,7 +2063,6 @@ class TestNonLinearSolverParallelExecution:
         def compute(self):
             self.y = self.x**2 - self.K
 
-    @pytest.mark.skip()
     @pytest.mark.parametrize(argnames="pool_size", argvalues=[2, 3, 4])
     def test_parallel_ffd_jac(self, pool_size):
         """Tests sparse linear solver and forward finite-difference Jacobian."""
@@ -2220,3 +2219,57 @@ class TestNonLinearSolverPickling:
         s_copy.run_drivers()
         data = rec_copy.export_data()
         assert len(data) == 2 if hold else 1
+
+
+@pytest.mark.filterwarnings("ignore:.*Unknown 'x' was declared as an array of integers")
+@pytest.mark.filterwarnings("ignore:.*Singular matrix")
+@pytest.mark.parametrize(
+    "declared_type, assigned_type, ok", [
+        (int, float, True),
+        (int, int, False),
+        (float, int, False),
+        (np.int32, np.int64, False),
+        (np.float32, np.float64, True),
+    ],
+)
+def test_NonLinearSolver_unknown_integer_array(caplog, declared_type, assigned_type, ok):
+    """Check that declaring an integer array as unknown issues a warning for the user.
+    """
+    class Model(System):
+        def setup(self):
+            self.add_inward("x", np.zeros(2, dtype=declared_type))
+            self.add_outward("y", self.x.copy())
+
+        def compute(self):
+            self.y = self.x**2 - 5
+    
+    model = Model("model")
+    model.x = np.array([2, 3], dtype=assigned_type)
+    
+    solver = model.add_driver(NonLinearSolver("solver"))
+
+    if ok:
+        solver.add_unknown("x").add_equation("y == 0")
+        model.run_drivers()
+
+        assert solver.results.success
+        assert model.x[0] == pytest.approx(np.sqrt(5))
+        assert model.x[1] == pytest.approx(np.sqrt(5))
+        assert model.y[0] == pytest.approx(0)
+        assert model.y[1] == pytest.approx(0)
+
+    else:
+        with pytest.warns(UserWarning, match="Unknown 'x' appears to be an array of integers"):
+            solver.add_unknown("x").add_equation("y == 0")
+
+        caplog.clear()
+        with caplog.at_level(logging.ERROR, NonLinearSolver.__name__):
+            model.run_drivers()
+        
+        assert solver.results.success == False
+        assert len(caplog.records) == 1
+        assert re.match(
+            r".* no influence: \['x\[0\]', 'x\[1\]'\].*",
+            caplog.records[0].msg,
+            flags=re.DOTALL,  # match "\n" with "."
+        )
