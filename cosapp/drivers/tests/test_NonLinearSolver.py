@@ -1195,6 +1195,47 @@ def test_NonLinearSolver_add_target_multipoint_3():
     assert f.x == pytest.approx(np.sqrt(0.5 * 0.8))
 
 
+def test_NonLinearSolver_add_problem():
+    """Test method `add_problem` and the deprecation of method `extend`."""
+    class QuadFunction(System):
+        def setup(self):
+            self.add_inward("x", 1.0)
+            self.add_outward("y", 1.0)
+
+            design = self.add_design_method("x")
+            design.add_unknown("x").add_equation("y == 0")
+
+        def compute(self):
+            self.y = self.x**2 - 2.0
+
+    system = QuadFunction("system")
+
+    offdesign = system.assembled_problem()
+    assert offdesign.is_empty()
+
+    solver = system.add_driver(NonLinearSolver("solver"))
+    solver.add_problem(system.design("x"))
+
+    system.x = 1.0
+    system.run_drivers()
+
+    assert system.x == pytest.approx(np.sqrt(2.0))
+    assert system.y == pytest.approx(0.0)
+
+    # Test with `extend` method
+    system.drivers.clear()
+    solver = system.add_driver(NonLinearSolver("solver"))
+
+    with pytest.warns(DeprecationWarning, match="use `add_problem` instead"):
+        solver.extend(system.design("x"))
+
+    system.x = 1.0
+    system.run_drivers()
+
+    assert system.x == pytest.approx(np.sqrt(2.0))
+    assert system.y == pytest.approx(0.0)
+
+
 def test_NonLinearSolver_vector1d_system():
     s = System("hat")
     one = s.add_child(Strait1dLine("one"), pulling="in_")
