@@ -1,5 +1,5 @@
 import numpy
-from typing import Any, Iterable, Dict, Optional, Union, List, Set
+from typing import Any, Iterable, Optional, Union
 
 from cosapp.core.eval_str import AssignString
 from cosapp.core.numerics.basics import MathematicalProblem
@@ -13,7 +13,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def get_target_varnames(problem: MathematicalProblem) -> Set[str]:
+def get_target_varnames(problem: MathematicalProblem) -> set[str]:
     """Extract the names of all variables involved in targets within `problem`.
 
     Parameters:
@@ -26,21 +26,21 @@ def get_target_varnames(problem: MathematicalProblem) -> Set[str]:
     """
     varnames = set()
     for residue in problem.deferred_residues.values():
-        varnames |= residue.variables
+        varnames.update(residue.variables)
     return varnames
 
 
 class RunSingleCase(IterativeCase):
-    """Set new boundary conditions and equations on the system.
+    """set new boundary conditions and equations on the system.
 
     By default, it has a :py:class:`~cosapp.drivers.runonce.RunOnce` driver as child to run the system.
 
     Attributes
     ----------
-    case_values : List[AssignString]
-        List of requested variable assignments to set up the case
-    initial_values : Dict[str, Tuple[Any, Optional[numpy.ndarray]]]
-        List of variables to set with the values to set and associated indices selection
+    case_values : list[AssignString]
+        list of requested variable assignments to set up the case
+    initial_values : dict[str, Tuple[Any, Optional[numpy.ndarray]]]
+        list of variables to set with the values to set and associated indices selection
 
     Parameters
     ----------
@@ -68,14 +68,12 @@ class RunSingleCase(IterativeCase):
             Name of the `Module`
         owner: System, optional
             :py:class:`~cosapp.systems.system.System` to which driver belongs; defaults to `None`
-        **kwargs : Dict[str, Any]
+        **kwargs : dict[str, Any]
             Optional keywords arguments formwarded to base class.
         """
         super().__init__(name, owner, **kwargs)
-        self.__case_values = []  # type: List[AssignString]
-            # desc="List of assignments 'lhs <- rhs' to perform in the present case.")
-        self.problem = None # type: Optional[MathematicalProblem]
-            # desc='Full mathematical problem to be solved on this case.'
+        self.__case_values: list[AssignString] = []
+        self.problem: MathematicalProblem = None
         self.__raw_problem = DesignProblemHandler(owner)
         self.__processed = DesignProblemHandler(owner)
         self.owner = owner
@@ -111,7 +109,7 @@ class RunSingleCase(IterativeCase):
             *map(get_target_varnames, self.__processed.problems)
         )
         if target_names:
-            # Set init values corresponding to targetted variables
+            # set init values corresponding to targetted variables
             for boundary in self.initial_values.values():
                 if boundary.basename in target_names:
                     boundary.set_to_default()
@@ -172,10 +170,10 @@ class RunSingleCase(IterativeCase):
         """
         super()._precompute()
 
-        # Set boundary conditions
+        # set boundary conditions
         self.apply_values()
 
-        # Set offdesign variables
+        # set offdesign variables
         design_unknowns = set(self.design.unknowns)
         for name, unknown in self.problem.unknowns.items():
             if name in design_unknowns:
@@ -209,7 +207,7 @@ class RunSingleCase(IterativeCase):
             self._assemble_problem()
         return self.problem
 
-    def set_values(self, modifications: Dict[str, Any]) -> None:
+    def set_values(self, modifications: dict[str, Any]) -> None:
         """Enter the set of variables defining the case, from a dictionary of the kind {'variable1': value1, ...}
         Note: will erase all previously defined values. Use 'add_values' to append new case values.
 
@@ -218,7 +216,7 @@ class RunSingleCase(IterativeCase):
 
         Parameters
         ----------
-        modifications : Dict[str, Any]
+        modifications : dict[str, Any]
             Dictionary of (variable name, value)
 
         Examples
@@ -228,7 +226,7 @@ class RunSingleCase(IterativeCase):
         self.clear_values()
         self.add_values(modifications)
 
-    def add_values(self, modifications: Dict[str, Any]) -> None:
+    def add_values(self, modifications: dict[str, Any]) -> None:
         """Add a set of variables to the list of case values, from a dictionary of the kind {'variable1': value1, ...}
 
         The variable can be contextual `child1.port2.var`. The only rule is that it should belong to
@@ -236,7 +234,7 @@ class RunSingleCase(IterativeCase):
 
         Parameters
         ----------
-        modifications : Dict[str, Any]
+        modifications : dict[str, Any]
             Dictionary of (variable name, value)
 
         Examples
@@ -293,7 +291,7 @@ class RunSingleCase(IterativeCase):
         self.__case_values.clear()
 
     @property
-    def case_values(self) -> List[AssignString]:
+    def case_values(self) -> list[AssignString]:
         return self.__case_values
 
     def extend(self, problem: MathematicalProblem) -> MathematicalProblem:
@@ -375,3 +373,21 @@ class RunSingleCase(IterativeCase):
             The modified mathematical problem
         """
         return self.offdesign.add_target(expression, *args, **kwargs)
+
+    def add_problem(self, problem: MathematicalProblem, *args, **kwargs) -> MathematicalProblem:
+        """Extend the local off-design problem with a given problem.
+        Shortcut to `self.offdesign.extend(problem, *args, **kwargs)`.
+
+        Parameters
+        ----------
+        - problem [MathematicalProblem]:
+            Source mathematical problem.
+        - *args, **kwargs:
+            Additional arguments forwarded to `MathematicalProblem.extend`.
+
+        Returns
+        -------
+        - MathematicalProblem:
+            The extended mathematical problem.
+        """
+        return self.offdesign.extend(problem, *args, **kwargs)

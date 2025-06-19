@@ -5,8 +5,8 @@ from pathlib import Path
 from typing import Type
 
 import cosapp.tests as test
+from cosapp.base import System, Driver
 from cosapp.utils.distributions import Uniform
-from cosapp.systems import System
 from cosapp.tests.library.ports import XPort
 from cosapp.tests.library.systems.vectors import Strait1dLine
 
@@ -69,20 +69,22 @@ def ExtendedMultiply() -> Type[Multiply2]:
     return ExtendedMultiply
 
 
+class Hat(System):
+    def setup(self):
+        one = self.add_child(Strait1dLine("one"), pulling="in_")
+        two = self.add_child(Strait1dLine("two"), pulling="out")
+        self.connect(one.out, two.in_)
+
+
 @pytest.fixture(scope="function")
 def hat():
-    s = System("hat")
-    one = s.add_child(Strait1dLine("one"), pulling="in_")
-    two = s.add_child(Strait1dLine("two"), pulling="out")
-    s.connect(two.in_, one.out)
-    return s
+    return Hat("hat")
 
 
 @pytest.fixture(scope="function")
-def hat_case(hat):
-    def factory(CaseDriver):
-        case = CaseDriver("case")
-        hat.add_driver(case)
+def hat_case(hat: System):
+    def factory(CaseDriver: type[Driver]):
+        case = hat.add_driver(CaseDriver("case"))
         return hat, case
 
     return factory

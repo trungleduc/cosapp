@@ -21,6 +21,7 @@ from cosapp.drivers.runsinglecase import RunSingleCase
 from cosapp.drivers.utils import DesignProblemHandler
 from cosapp.utils.logging import LogFormat, LogLevel, HandlerWithContextFilters
 from cosapp.utils.options_dictionary import HasOptions
+from cosapp.utils.deprecation import deprecated
 
 from cosapp.core.numerics.solve import (
     AbstractNonLinearSolver,
@@ -104,7 +105,7 @@ class NonLinearSolver(AbstractSolver):
         name: str,
         owner: Optional[System] = None,
         method: Union[
-            NonLinearMethods, type[AbstractNonLinearSolver]
+            str, NonLinearMethods, type[AbstractNonLinearSolver]
         ] = NonLinearMethods.NR,
         **options,
     ) -> None:
@@ -116,10 +117,13 @@ class NonLinearSolver(AbstractSolver):
             Name of the `Driver`.
         owner: System, optional
             :py:class:`~cosapp.systems.system.System` to which this driver belong; defaults to `None`.
-        method : Union[NonLinearMethods, type[AbstractNonLinearSolver]]
-            Resolution method to use
-        **kwargs:
-            Additional keywords arguments forwarded to base class.
+        method: str | NonLinearMethods | type[AbstractNonLinearSolver]
+            Requested resolution method. If a string is provided, it must be one of the
+            `NonLinearMethods` enum values. If a class is provided, it must be a specialization of
+            `AbstractNonLinearSolver`. Defaults to `NonLinearMethods.NR` (Newton-Raphson method).
+        **options: dict[str, Any]
+            Additional options for the solver. These can include solver-specific parameters such as
+            `tol`, `max_iter`, `verbose`, etc. See the documentation of the specific solver for details.
         """
         if isinstance(method, str):
             method = NonLinearMethods[method]
@@ -543,8 +547,8 @@ class NonLinearSolver(AbstractSolver):
         super()._declare_options()
         self.__option_aliases = dict()
 
-    def extend(self, problem: MathematicalProblem, *args, **kwargs) -> MathematicalProblem:
-        """Extend solver inner problem.
+    def add_problem(self, problem: MathematicalProblem, *args, **kwargs) -> MathematicalProblem:
+        """Merge a mathematical problem into the solver problem.
 
         Parameters
         ----------
@@ -559,6 +563,10 @@ class NonLinearSolver(AbstractSolver):
             The extended problem.
         """
         return self._raw_problem.extend(problem, *args, **kwargs)
+
+    @deprecated(redirect=add_problem)
+    def extend(self, problem: MathematicalProblem, *args, **kwargs) -> MathematicalProblem:
+        ...
 
     def add_unknown(
         self,

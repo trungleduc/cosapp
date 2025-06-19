@@ -1,6 +1,7 @@
 import pytest
 import numpy as np
 import logging
+from typing import Callable
 
 from cosapp.systems import System
 from cosapp.drivers import runonce
@@ -9,7 +10,15 @@ from cosapp.recorders import DataFrameRecorder
 from cosapp.core.numerics.basics import MathematicalProblem
 from cosapp.core.numerics.boundary import Boundary
 from cosapp.core.numerics.residues import Residue
-from cosapp.utils.testing import DummySystemFactory, get_args, assert_keys, assert_all_type, pickle_roundtrip, are_same, has_keys
+from cosapp.utils.testing import (
+    get_args,
+    are_same,
+    has_keys,
+    assert_keys,
+    assert_all_type,
+    pickle_roundtrip,
+    DummySystemFactory,
+)
 
 
 # TODO unit tests for vectors
@@ -175,7 +184,10 @@ def test_RunSingleCase__precompute_equations(ExtendedMultiply):
     assert set(d.problem.unknowns) == {"mult.K1"}
 
 
-def test_RunSingleCase_set_values(ExtendedMultiply, hat_case):
+def test_RunSingleCase_set_values(
+    ExtendedMultiply,
+    hat_case: Callable[[type[RunSingleCase]], tuple[System, RunSingleCase]],
+):
     def Dummy(name):
         return ExtendedMultiply(name, unknown=["K2"])
 
@@ -306,7 +318,10 @@ def test_RunSingleCase_owner():
     assert case.design.shape == (0, 0)
 
 
-def test_RunSingleCase_add_working_equations(ExtendedMultiply, hat_case):
+def test_RunSingleCase_add_working_equations(
+    ExtendedMultiply,
+    hat_case: Callable[[type[RunSingleCase]], tuple[System, RunSingleCase]],
+):
     # TODO Fred test partial couple - only variable or only equation
     s = System("compute")
     s.add_child(ExtendedMultiply("mult"))
@@ -385,7 +400,32 @@ def test_RunSingleCase_add_working_equations(ExtendedMultiply, hat_case):
     assert np.array_equal(unknown.mask, [False, True, False])
 
 
-def test_RunSingleCase_add_design_equations(ExtendedMultiply, hat_case):
+def test_RunSingleCase_add_problem():
+    """Test method `RunSingleCase.add_problem`."""
+    Dummy = DummySystemFactory(
+        classname="Dummy",
+        inwards=get_args("x", 0.0),
+        outwards=get_args("y", np.ones(2)),
+    )
+
+    dummy = Dummy("dummy")
+    case = dummy.add_driver(RunSingleCase("case"))
+
+    problem = dummy.new_problem()
+    problem.add_unknown("x").add_equation("y == 0")
+
+    case.add_problem(problem)
+
+    check_problem(case.design, 0, 0)
+    check_problem(case.offdesign, 1, 2)
+    assert set(case.offdesign.unknowns) == {"x"}
+    assert set(case.offdesign.residues) == {"y == 0"}
+
+
+def test_RunSingleCase_add_design_equations(
+    ExtendedMultiply,
+    hat_case: Callable[[type[RunSingleCase]], tuple[System, RunSingleCase]],
+):
     # TODO Fred test partial couple - only variable or only equation
     s = System("compute")
     s.add_child(ExtendedMultiply("mult"))
