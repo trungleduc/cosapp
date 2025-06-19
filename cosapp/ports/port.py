@@ -21,6 +21,7 @@ from cosapp.utils.distributions import Distribution
 from cosapp.utils.helpers import check_arg
 from cosapp.utils.naming import NameChecker
 from cosapp.utils.json import jsonify
+from cosapp.utils.deprecation import deprecated
 
 if TYPE_CHECKING:
     from cosapp.systems import System
@@ -508,16 +509,13 @@ class BasePort(visitor.Component, metaclass=abc.ABCMeta):
         """
         return self.__out_of_scope(name)
 
+    @deprecated("use `get_variable(varname)` or `variable_dict()` instead")
     def get_details(self, varname: Optional[str]=None) -> Union[dict[str, BaseVariable], BaseVariable]:
         """Return the variable named `varname` (if prescribed),
         or an immutable variable dictionary of the kind {varname: variable}.
 
         Deprecated: use `get_variable(varname)` or `variable_dict()` instead.
         """
-        warnings.warn(
-            "Deprecated method; use `get_variable(varname)` or `variable_dict()` instead.",
-            category=DeprecationWarning,
-        )
         if varname is None:
             return self.variable_dict()
         else:
