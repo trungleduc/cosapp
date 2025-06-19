@@ -38,6 +38,7 @@ from cosapp.ports.variable import RangeValue, Types, Variable
 from cosapp.ports.mode_variable import ModeVariable
 from cosapp.ports.connectors import BaseConnector, Connector, ConnectorError
 from cosapp.utils.distributions import Distribution
+from cosapp.utils.deprecation import deprecated
 from cosapp.utils.context import ContextLock
 from cosapp.utils.helpers import check_arg, is_number, is_numerical
 from cosapp.utils.json import (
@@ -1686,21 +1687,9 @@ class System(Module, TimeObserver):
 
         return problem
 
+    @deprecated(redirect=assembled_problem)
     def get_unsolved_problem(self) -> MathematicalProblem:
-        """Returns the consolidated mathematical problem, assembled from
-        entire system tree, and accounting for cyclic dependency loops.
-
-        Deprecated; use `assembled_problem` instead.
-
-        Returns
-        -------
-        MathematicalProblem
-            The assembled mathematical problem.
-        """
-        warnings.warn(
-            "Method `get_unsolved_problem` is deprecated; use `assembled_problem` instead."
-        )
-        return self.assembled_problem()
+        ...
 
     def _add_child(self,
         child: AnySystem,
