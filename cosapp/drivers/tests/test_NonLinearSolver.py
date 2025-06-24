@@ -1897,7 +1897,7 @@ def test_NonLinearSolver_monitor(monitor):
 
     f.a = 2.0
     f.k = 1.0
-    f.x = 1.0
+    f.x = x0 = 1.0
     f.run_drivers()
 
     # Check solution
@@ -1908,6 +1908,8 @@ def test_NonLinearSolver_monitor(monitor):
 
     if monitor:
         assert len(data) > 1
+        assert data['Reference'].values[0] == "iter 0"
+        assert data['x'].values[0] == x0
     else:
         assert len(data) == 1
 
@@ -1937,18 +1939,23 @@ def test_NonLinearSolver_monitor_multipoint(monitor):
     solver.add_recorder(DataFrameRecorder())
     solver.options['history'] = monitor
 
-    f.a = 0.0
-    f.x = 1.0
+    f.a = a0 = 0.1
+    f.x = x0 = 1.0
     f.run_drivers()
 
     # Check solution
     assert f.a == pytest.approx(0.8)
     assert f.x == pytest.approx(np.sqrt(0.5 * 0.8))
 
+    # Check recorded data
     data = solver.recorder.export_data()
 
     if monitor:
         assert len(data) > 2
+        assert data['Reference'].values[0] == "point1 (iter 0)"
+        assert data['Reference'].values[1] == "point2 (iter 0)"
+        assert data['a'].values[:2] == pytest.approx(a0, abs=0)
+        assert data['x'].values[:2] == pytest.approx(x0, abs=0)
     else:
         assert len(data) == 2
 
