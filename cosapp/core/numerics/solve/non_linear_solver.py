@@ -368,12 +368,6 @@ class NewtonRaphsonSolver(GradientNLS):
             desc="Tolerance level for partial Jacobian matrix update, based on nonlinearity estimation.",
         )
         options.declare(
-            "recorder",
-            None,
-            allow_none=True,
-            desc="A recorder to store solver intermediate results.",
-        )
-        options.declare(
             "lower_bound",
             None,
             dtype=(list, tuple, np.ndarray),
@@ -606,6 +600,9 @@ class NewtonRaphsonSolver(GradientNLS):
                 [f"iter #{it_solver}", f"{tol = :.2e}", f"|R| = {r_norm}", f"{x = }"]
             ),
         )
+        if callback:
+            callback(x, r)
+
         broyden_only = False
         res_index_to_update = set()
         jac_stats: JacobianStats = self._jac.get_stats()
