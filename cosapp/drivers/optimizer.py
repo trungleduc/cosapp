@@ -15,10 +15,10 @@ from collections.abc import Collection
 from cosapp.core.eval_str import EvalString
 from cosapp.core.numerics.basics import SolverResults
 from cosapp.core.numerics.boundary import Unknown
+from cosapp.drivers.driver import AnyRecorder
 from cosapp.drivers.abstractsolver import AbstractSolver, System
 from cosapp.drivers.optionaldriver import OptionalDriver
 from cosapp.drivers.utils import ConstraintParser, dealias_problem
-from cosapp.recorders.recorder import BaseRecorder
 from cosapp.utils.options_dictionary import OptionsDictionary
 from cosapp.utils.helpers import check_arg
 
@@ -468,9 +468,17 @@ class Optimizer(AbstractSolver):
         constraints = tuple(map(format_constraint, self._constraints))
 
         if len(self.initial_values) > 0:
-            monitored = self.options['monitor']
-            recorder = self._recorder
-            if recorder:
+
+            monitored = self.options["monitor"]
+            if monitored is not None:
+                warnings.warn(
+                    "Option 'monitor' is deprecated; use 'history' instead.",
+                    category=DeprecationWarning,
+                )
+            else:
+                monitored = self.options["history"]
+            
+            if (recorder := self._recorder):
                 recorder.paused = not monitored
 
             if monitored:
@@ -487,12 +495,12 @@ class Optimizer(AbstractSolver):
                 constraints = constraints,
                 options = options,
             )
-
             if not results.success:
                 self.status = 'ERROR'
                 self.error_code = '9'
                 self.solution = {}
                 logger.error(f"The solver failed: {results.message}")
+
             else:
                 self.solution = dict(
                     (key, unknown.default_value)
@@ -506,6 +514,28 @@ class Optimizer(AbstractSolver):
 
         else:
             logger.warning('No design variable has been specified for the optimization.')
+
+    def add_recorder(self, recorder: AnyRecorder, history: Optional[bool] = None) -> AnyRecorder:
+        """Add an internal recorder storing the time evolution of values of interest.
+
+        Parameters
+        ----------
+        - recorder [BaseRecorder]:
+            The recorder to be added.
+        - history [bool, optional]:
+            Recording period. If `None` (default), data are recorded at all time steps.
+        """
+        # Note: the whole function is a workaround for the fact that
+        # option `monitor` is deprecated, but we still want to
+        # support it for backward compatibility.
+        # It must be removed in the future, together with option `monitor`.
+        try:
+            super().add_recorder(recorder, history=history)
+        except:
+            raise
+        finally:
+            if isinstance(history, bool):
+                self.options["monitor"] = None
 
     def _record_data(self) -> None:
         """Record data into recorder, if any."""
@@ -583,6 +613,6 @@ class Optimizer(AbstractSolver):
             desc='Maximum number of iterations.',
         )
         self.options.declare(
-            'monitor', False, dtype=bool, allow_none=False,
-            desc="Defines if intermediate system state should be recorded.",
+            'monitor', False, dtype=bool, allow_none=True,
+            desc="Deprecated: use option 'history' instead.",
         )

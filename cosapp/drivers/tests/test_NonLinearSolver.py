@@ -1979,16 +1979,17 @@ def test_NonLinearSolver_custom_solver():
 
     with pytest.raises(
         TypeError,
-        match="Argument 'method' must be either a `NonLinearMethods` or a derived class of `AbstractNonLinearSolver`"
+        match="Argument 'method' must be either a `NonLinearMethods` or a derived class of `AbstractNonLinearSolver`",
     ):
         system.add_driver(NonLinearSolver("nls", method=InvalidCustomNLS))
 
     with pytest.raises(RuntimeError, match=r"Unknown option\(s\) \['tol', 'max_iter'\]"):
         system.add_driver(
-        NonLinearSolver("nls", method=CustomNLS, tol=1e-8, max_iter=25))
-
+            NonLinearSolver("nls", method=CustomNLS, tol=1e-8, max_iter=25)
+        )
+    
     nls = system.add_driver(NonLinearSolver("nls", method=CustomNLS))
-    assert has_keys(nls.options, "verbose") 
+    assert has_keys(nls.options, "verbose", "history") 
 
 
 class TestSparseNonLinearSolver:

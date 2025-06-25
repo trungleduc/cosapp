@@ -90,14 +90,14 @@ class NonLinearSolver(AbstractSolver):
     """
 
     __slots__ = (
+        "compute_jacobian",
+        "_backend_solver",
         "__method",
         "__option_aliases",
         "__trace",
         "__results",
         "__design_unknowns",
-        "compute_jacobian",
         "__builder",
-        "_solver",
     )
 
     def __init__(
@@ -130,12 +130,12 @@ class NonLinearSolver(AbstractSolver):
 
         if isinstance(method, NonLinearMethods):
             if method == NonLinearMethods.NR:
-                self._solver = NewtonRaphsonSolver()
+                self._backend_solver = NewtonRaphsonSolver()
             else:
-                self._solver = ScipyRootSolver(method=method)
+                self._backend_solver = ScipyRootSolver(method=method)
 
         elif inspect.isclass(method) and issubclass(method, AbstractNonLinearSolver):
-            self._solver = method()
+            self._backend_solver = method()
 
         else:
             raise TypeError(
@@ -155,7 +155,7 @@ class NonLinearSolver(AbstractSolver):
 
     def _get_nested_objects_with_options(self) -> Iterable[HasOptions]:
         """Gets nested objects having options."""
-        return (self._solver, )
+        return (self._backend_solver, )
 
     @classmethod
     def _slots_not_jsonified(cls) -> tuple[str]:
@@ -172,11 +172,11 @@ class NonLinearSolver(AbstractSolver):
 
     @property
     def non_linear_solver(self) -> Any:
-        return self._solver
+        return self._backend_solver
 
     @property
     def linear_solver(self) -> Any:
-        return self._solver._linear_solver
+        return self._backend_solver._linear_solver
 
     @property
     def jac(self) -> Any:
@@ -252,12 +252,12 @@ class NonLinearSolver(AbstractSolver):
     ) -> SolverResults:
         """Solves the mathematical problem with a non linear method."""
 
-        self._solver.set_options()  # required if options were changed after instantiation
-        self._solver.log_level = (
+        self._backend_solver.set_options()  # required if options were changed after instantiation
+        self._backend_solver.log_level = (
             LogLevel.INFO if self.options.verbose else LogLevel.DEBUG
         )
 
-        results = self._solver.solve(fresidues, x0, args, callback=callback)
+        results = self._backend_solver.solve(fresidues, x0, args, callback=callback)
 
         if results.success:
             self.compute_jacobian = False

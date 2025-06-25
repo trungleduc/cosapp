@@ -296,7 +296,7 @@ class NewtonRaphsonSolver(GradientNLS):
         jac_update_tol=0.01,
         jac: Optional[FfdJacobianEvaluation] = None,
         linear_solver: Optional[DenseLUSolver] = None,
-        history=False,
+        full_trace=False,
         tol_update_period=4,
         tol_to_noise_ratio=16,
         abs_step=np.inf,
@@ -312,7 +312,7 @@ class NewtonRaphsonSolver(GradientNLS):
         self._jac_update_tol = jac_update_tol
         self._jac = jac
         self._linear_solver = linear_solver
-        self._history = history
+        self._full_trace = full_trace
         self._tol_update_period = tol_update_period
         self._tol_to_noise_ratio = tol_to_noise_ratio
         self._abs_step = abs_step
@@ -396,11 +396,11 @@ class NewtonRaphsonSolver(GradientNLS):
             desc="Max relative step for parameters iterated by solver.",
         )
         options.declare(
-            "history",
+            "full_trace",
             False,
             dtype=bool,
             allow_none=False,
-            desc="Request saving the resolution trace.",
+            desc="Request to save the resolution trace (unknown, residue, tolerance).",
         )
         options.declare(
             "tol_update_period",
@@ -533,7 +533,7 @@ class NewtonRaphsonSolver(GradientNLS):
         """
         jac_update_tol = self._jac_update_tol
         factor_ref = factor = self._factor
-        history = self._history
+        full_trace = self._full_trace
         tol = self._tol
 
         logger.debug("NR - Reference call")
@@ -578,7 +578,7 @@ class NewtonRaphsonSolver(GradientNLS):
             reuse_jac = True
 
         results.trace = trace = list()
-        if history:
+        if full_trace:
             record = {
                 "x": x.copy(),
                 "residues": r.copy(),
@@ -678,7 +678,7 @@ class NewtonRaphsonSolver(GradientNLS):
 
                 r, dr = new_r, new_r - r
 
-                if history:
+                if full_trace:
                     record = {
                         "x": x.copy(),
                         "residues": r.copy(),
