@@ -6,13 +6,13 @@ import re
 from copy import copy
 from numbers import Number
 from typing import (
-    Any, AnyStr, Dict, List,
+    Any, AnyStr,
     Callable, Optional,
-    Sequence, Tuple, Union,
+    Sequence, Union,
 )
 
 from cosapp.core.numerics.basics import MathematicalProblem, SolverResults
-from cosapp.drivers.driver import Driver, System
+from cosapp.drivers.driver import Driver, System, AnyRecorder
 from cosapp.drivers.runonce import RunOnce
 from cosapp.utils.options_dictionary import OptionsDictionary
 
@@ -59,7 +59,7 @@ class AbstractSolver(Driver):
 
         self.problem: MathematicalProblem = None
         self.initial_values = numpy.empty(0, dtype=float)
-        self.solution: Dict[str, float] = {}
+        self.solution: dict[str, float] = {}
         self.reset_problem()
 
     def _set_owner(self, system: Optional[System]) -> bool:
@@ -82,7 +82,14 @@ class AbstractSolver(Driver):
         """Reset mathematical problem"""
         self._raw_problem = MathematicalProblem(self.name, self.owner)
 
-    def _filter_options(self, aliases: Dict[str, str] = {}) -> Dict[str, Any]:
+    def _declare_options(self) -> None:
+        super()._declare_options()
+        self.options.declare(
+            "history", False, dtype=bool, allow_none=False,
+            desc="Should the recorder (if any) capture data at each iteration, or just at the last one?",
+        )
+
+    def _filter_options(self, aliases: dict[str, str] = {}) -> dict[str, Any]:
         """
         Translate option names into self.options using an alias dictionary, to handle cases where
         a common option name, such as 'tol', is passed to a specific solver/function with a different name.
@@ -100,7 +107,7 @@ class AbstractSolver(Driver):
 
         return options
 
-    def _get_solver_limits(self) -> Dict[str, numpy.ndarray]:
+    def _get_solver_limits(self) -> dict[str, numpy.ndarray]:
         """Returns the step limitations for all iteratives.
 
         There are 4 types of limits defined:
@@ -111,7 +118,7 @@ class AbstractSolver(Driver):
 
         Returns
         -------
-        Dict[str, numpy.ndarray]
+        dict[str, numpy.ndarray]
             Dictionary with the limits for all iteratives.
         """
         mapping = {
@@ -184,6 +191,28 @@ class AbstractSolver(Driver):
         super()._precompute()
         self.touch_unknowns()
 
+    def add_recorder(self, recorder: AnyRecorder, history: Optional[bool]=None) -> AnyRecorder:
+        """Add an internal recorder storing the time evolution of values of interest.
+
+        Parameters
+        ----------
+        - recorder [BaseRecorder]:
+            The recorder to be added.
+        - history [bool, optional]:
+            Shortcut to modify the `history` option of the solver, if specified. Defaults to `None`.
+            If the history option is set to `True`, the recorder will store the owner system's state
+            at each solver iteration. If set to `False`, the recorder will only store the final state.
+        """
+        try:
+            return super().add_recorder(recorder)
+        except:
+            raise
+        finally:
+            if isinstance(history, bool):
+                key = "history"
+                self.options[key] = history
+                logger.info(f"{self.full_name()!r}.options[{key!r}] set to {history}.")
+
     def touch_unknowns(self):
         for unknown in self.problem.unknowns.values():
             unknown.touch()
@@ -196,7 +225,7 @@ class AbstractSolver(Driver):
     def resolution_method(self,
         fresidues: Callable[[Sequence[float], Union[float, str], bool], numpy.ndarray],
         x0: Sequence[float],
-        args: Tuple[Union[float, str]] = (),
+        args: tuple[Union[float, str]] = (),
         options: Optional[OptionsDictionary] = None,
     ) -> SolverResults:
         """Function call to cancel the residues.
@@ -207,7 +236,7 @@ class AbstractSolver(Driver):
             Residues function taking two parameters (evaluation vector, time/ref) and returning the residues
         x0 : Sequence[float]
             The initial values vector to converge to the solution
-        args : Tuple[Union[float, str], bool], optional
+        args : tuple[Union[float, str], bool], optional
             A tuple of additional argument for fresidues starting with the time/ref parameter and the need to update
             residues reference
         options : OptionsDictionary, optional
@@ -229,7 +258,7 @@ class AbstractSolver(Driver):
     #         k += n
     #     super()._postcompute()
 
-    def save_solution(self, file: Optional[str] = None) -> Dict[str, Union[Number, List[Number]]]:
+    def save_solution(self, file: Optional[str] = None) -> dict[str, Union[Number, list[Number]]]:
         """Save the latest solver solution.
 
         If `file` is specified, the solution will be saved in it in JSON format.
@@ -241,7 +270,7 @@ class AbstractSolver(Driver):
 
         Returns
         -------
-        Dict[str, Union[Number, List[Number]]]
+        dict[str, Union[Number, list[Number]]]
             Dictionary of the latest solution
         """
         latest_answer = dict()
@@ -258,7 +287,7 @@ class AbstractSolver(Driver):
         return latest_answer
 
     def load_solution(self,
-        solution: Union[Dict[str, Union[Number, numpy.ndarray]], AnyStr],
+        solution: Union[dict[str, Union[Number, numpy.ndarray]], AnyStr],
         case: Optional[str] = None,
     ):
         """Load the provided solution to initialize the solver.
@@ -267,7 +296,7 @@ class AbstractSolver(Driver):
 
         Parameters
         ----------
-        solution : Dict[str, Union[Number, numpy.ndarray]] or str
+        solution : dict[str, Union[Number, numpy.ndarray]] or str
             Dictionary of the latest solution to load or the filename in JSON format to read from.
         case : str, optional
             Case to initialize with the solution; default None (i.e. will be guessed from variable name)

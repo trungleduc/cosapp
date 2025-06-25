@@ -2106,9 +2106,7 @@ def test_System_loop_residue_reference():
     s.close_loops()
 
     # Solve problem
-    solver = s.add_driver(
-        NonLinearSolver('solver', tol=1e-15, history=True)
-    )
+    solver = s.add_driver(NonLinearSolver('solver', tol=1e-15, full_trace=True))
     s.a.x = 5.0
     s.run_drivers()
     # Check that both ends of loop connector are nil
