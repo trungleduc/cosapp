@@ -1966,6 +1966,7 @@ def test_NonLinearSolver_monitor_multipoint(monitor):
     assert data['y'].values[-2:] == pytest.approx([0.0, -1.0])
 
 
+@pytest.mark.filterwarnings("ignore:Variable 'x' is a scalar numpy array.*")
 def test_NonLinearSolver_0D_array():
     """Test solver with a 0D array as unknown.
     Related to https://gitlab.com/cosapp/cosapp/-/issues/191
@@ -1976,7 +1977,13 @@ def test_NonLinearSolver_0D_array():
     f.k = 2.0
 
     solver = f.add_driver(NonLinearSolver("solver"))
-    solver.add_unknown("x").add_equation("y == 0")
+
+    with pytest.warns(
+        UserWarning,
+        match="Variable 'x' is a scalar numpy array, which is not recommended",
+    ):
+        # This should raise a warning, but still work
+        solver.add_unknown("x").add_equation("y == 0")
 
     f.run_drivers()
     

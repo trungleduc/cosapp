@@ -358,7 +358,7 @@ class Boundary:
     @staticmethod
     def create_mask(
         system: System,
-        basename: str,
+        varname: str,
         selector: str,
         mask: Optional[numpy.ndarray] = None,
     ) -> tuple[Optional[Union[Number, Collection]], Optional[numpy.ndarray]]:
@@ -385,13 +385,23 @@ class Boundary:
         """
         # evaluate expression without mask if any
         try:
-            value = eval(f"s.{basename}", {}, {"s": system})
+            value = eval(f"s.{varname}", {}, {"s": system})
         except AttributeError as error:
-            error.args = (f"{basename!r} is not known in {system.name}",)
+            error.args = (f"{varname!r} is not known in {system.name}",)
             raise
         except Exception as error:
-            error.args = (f"Can't evaluate {basename!r} in {system.name}",)
+            error.args = (f"Can't evaluate {varname!r} in {system.name}",)
             raise
+
+        # Check if the value is a scalar numpy array
+        if isinstance(value, numpy.ndarray) and value.ndim == 0:
+            warnings.warn(
+                f"Variable {varname!r} is a scalar numpy array"
+                ", which is not recommended. Use a scalar value instead."
+                " If used in a mathematical algorithm, the value will be treated as a scalar.",
+                category=UserWarning,
+            )
+            value = value.item()
 
         # get or create mask
         if mask is not None:
@@ -422,7 +432,7 @@ class Boundary:
             try:
                 exec(f"mask{selector} = True", {}, {"mask": mask})
             except (SyntaxError, IndexError) as error:
-                varname = f"{system.name}.{basename}"
+                varname = f"{system.name}.{varname}"
                 error.args = (
                     f"Invalid selector {selector!r} for variable {varname!r}: {error!s}",
                 )
@@ -473,7 +483,7 @@ class Boundary:
             Specify if the boundary value is a scalar.
         """
         if mask is None:
-            if isinstance(value, Number):
+            if isinstance(value, Number) or (isinstance(value, numpy.ndarray) and value.ndim == 0):
                 impl = ScalarBoundaryImpl()
             elif value is None:
                 impl = UndefinedBoundaryImpl()

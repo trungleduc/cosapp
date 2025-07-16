@@ -290,6 +290,7 @@ def test_Boundary_ref(a, name, cls):
     assert isinstance(x._ref, AttrRef)
 
 
+@pytest.mark.filterwarnings("ignore:Variable 'x' is a scalar numpy array.*")
 def test_Boundary_0D_array(a):
     """Test that a 0D numpy array is correctly handled as a scalar.
     Related to https://gitlab.com/cosapp/cosapp/-/issues/191
@@ -304,7 +305,11 @@ def test_Boundary_0D_array(a):
     assert a.x.shape == ()
     assert a.x == pytest.approx(0.5, abs=0)
 
-    x = Boundary(a, 'x')
+    with pytest.warns(
+        UserWarning,
+        match="Variable 'x' is a scalar numpy array, which is not recommended",
+    ):
+        x = Boundary(a, 'x')
     assert isinstance(x._ref, AttrRef)
     assert not isinstance(x._ref, NumpyMaskedAttrRef)
     assert x.value == pytest.approx(0.5, abs=0)
