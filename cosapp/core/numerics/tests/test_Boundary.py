@@ -9,6 +9,7 @@ from contextlib import nullcontext as does_not_raise
 from cosapp.tests.library.systems import Multiply2, Strait1dLine
 from typing import Dict, Any, Optional, Tuple
 
+
 class APort(Port):
     def setup(self):
         self.add_variable('m')
@@ -287,6 +288,31 @@ def test_Boundary_ref(a, name, cls):
     x = Boundary(a, name)
     assert isinstance(x._ref, cls)
     assert isinstance(x._ref, AttrRef)
+
+
+@pytest.mark.filterwarnings("ignore:Variable 'x' is a scalar numpy array.*")
+def test_Boundary_0D_array(a):
+    """Test that a 0D numpy array is correctly handled as a scalar.
+    Related to https://gitlab.com/cosapp/cosapp/-/issues/191
+    """
+    from numbers import Number
+
+    a.x = np.array(0.5)
+    assert isinstance(a.x, np.ndarray)
+    assert not isinstance(a.x, Number)
+    assert not np.isscalar(a.x)
+    assert a.x.ndim == 0
+    assert a.x.shape == ()
+    assert a.x == pytest.approx(0.5, abs=0)
+
+    with pytest.warns(
+        UserWarning,
+        match="Variable 'x' is a scalar numpy array, which is not recommended",
+    ):
+        x = Boundary(a, 'x')
+    assert isinstance(x._ref, AttrRef)
+    assert not isinstance(x._ref, NumpyMaskedAttrRef)
+    assert x.value == pytest.approx(0.5, abs=0)
 
 
 @pytest.mark.parametrize("name", [

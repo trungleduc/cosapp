@@ -1966,6 +1966,32 @@ def test_NonLinearSolver_monitor_multipoint(monitor):
     assert data['y'].values[-2:] == pytest.approx([0.0, -1.0])
 
 
+@pytest.mark.filterwarnings("ignore:Variable 'x' is a scalar numpy array.*")
+def test_NonLinearSolver_0D_array():
+    """Test solver with a 0D array as unknown.
+    Related to https://gitlab.com/cosapp/cosapp/-/issues/191
+    """
+    f = QuadraticFunction("f")
+    f.x = np.array(1.0)  # 0D array
+    f.a = 1.0
+    f.k = 2.0
+
+    solver = f.add_driver(NonLinearSolver("solver"))
+
+    with pytest.warns(
+        UserWarning,
+        match="Variable 'x' is a scalar numpy array, which is not recommended",
+    ):
+        # This should raise a warning, but still work
+        solver.add_unknown("x").add_equation("y == 0")
+
+    f.run_drivers()
+    
+    # Check solution
+    assert f.x == pytest.approx(np.sqrt(f.a / f.k), rel=1e-14)
+    assert isinstance(f.x, float)
+
+
 def test_NonLinearSolver_custom_solver():
     """Tests custom solver class."""
     class CustomNLS(AbstractNonLinearSolver):
