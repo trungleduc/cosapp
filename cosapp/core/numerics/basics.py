@@ -8,7 +8,6 @@ from numbers import Number
 from dataclasses import dataclass, field
 from typing import (
     Any, Union, Iterable, Optional,
-    Dict, Tuple, List, Set,
     Callable, NamedTuple,
     TYPE_CHECKING, TypeVar,
 )
@@ -16,7 +15,7 @@ if TYPE_CHECKING:
     from cosapp.systems import System
 
 from cosapp.core.variableref import VariableReference
-from cosapp.core.numerics.boundary import Boundary, Unknown, TimeUnknown, TimeDerivative
+from cosapp.core.numerics.boundary import Unknown, TimeUnknown, TimeDerivative
 from cosapp.core.numerics.residues import Residue, DeferredResidue
 from cosapp.core.numerics.utils import TransferHelper
 from cosapp.utils.naming import natural_varname
@@ -74,18 +73,18 @@ class SolverResults:
     message: str = ''
     tol: float = numpy.nan
     jac: Optional[numpy.ndarray] = None
-    jac_lup: Optional[Tuple[numpy.ndarray, numpy.ndarray]] = (None, None)
+    jac_lup: Optional[tuple[numpy.ndarray, numpy.ndarray]] = (None, None)
     jac_calls: int = 0
     fres_calls: int = 0
     jac_errors: dict = field(default_factory=dict)
-    trace: List[Dict[str, Any]] = field(default_factory=list)
+    trace: list[dict[str, Any]] = field(default_factory=list)
 
-    def __json__(self) -> Dict[str, Any]:
+    def __json__(self) -> dict[str, Any]:
         """Creates a JSONable dictionary representation of the object.
 
         Returns
         -------
-        Dict[str, Any]
+        dict[str, Any]
             The dictionary
         """
         return object__getstate__(self).copy()
@@ -106,8 +105,8 @@ class WeakDeferredResidue(NamedTuple):
         return self.deferred.context
 
     @property
-    def variables(self) -> Set[str]:
-        """Set[str]: names of variables involved in residue"""
+    def variables(self):
+        """set[str]: names of variables involved in residue"""
         return self.deferred.variables
 
     def target_value(self) -> Any:
@@ -136,10 +135,10 @@ class BaseProblem(abc.ABC):
     def __init__(self, name: str, context: Optional[System]) -> None:
         from cosapp.systems import System
         check_arg(context, 'context', (System, type(None)))
-        self._name = name  # type: str
+        self._name = name
         self._context: System = context
 
-    def __getstate__(self) -> Dict[str, Any]:
+    def __getstate__(self) -> dict[str, Any]:
         """Creates a state of the object.
 
         The state type depend on the object, see
@@ -148,7 +147,7 @@ class BaseProblem(abc.ABC):
 
         Returns
         -------
-        Dict[str, Any]:
+        dict[str, Any]:
             state
         """
         return object__getstate__(self)
@@ -163,12 +162,12 @@ class BaseProblem(abc.ABC):
         """
         self.__dict__.update(state)
 
-    def __json__(self) -> Dict[str, Any]:
+    def __json__(self) -> dict[str, Any]:
         """Creates a JSONable dictionary representation of the object.
 
         Returns
         -------
-        Dict[str, Any]
+        dict[str, Any]
             The dictionary
         """
         state = self.__getstate__().copy()
@@ -247,7 +246,7 @@ class BaseProblem(abc.ABC):
         return new
 
     @abc.abstractmethod
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Returns a JSONable representation of the problem.
         
         Returns
@@ -270,15 +269,14 @@ class MathematicalProblem(BaseProblem):
     """
     def __init__(self, name: str, context: Optional[System]) -> None:
         super().__init__(name, context)
-        # TODO add point label to associate set of equations with Single Case
-        self._unknowns = OrderedDict()  # type: Dict[str, Unknown]
-        self._residues = OrderedDict()  # type: Dict[str, Residue]
-        self._targets = OrderedDict()  # type: Dict[str, WeakDeferredResidue]
+        self._unknowns = OrderedDict()  # type: dict[str, Unknown]
+        self._residues = OrderedDict()  # type: dict[str, Residue]
+        self._targets = OrderedDict()  # type: dict[str, WeakDeferredResidue]
 
     def __repr__(self) -> str:
         lines = []
         indent = "  "
-        def format_unknown(items: Tuple[str, Unknown]) -> str:
+        def format_unknown(items: tuple[str, Unknown]) -> str:
             key, unknown = items
             value = unknown.default_value
             if value is None:
@@ -312,13 +310,13 @@ class MathematicalProblem(BaseProblem):
             return False
 
     @property
-    def residues(self) -> Dict[str, Residue]:
-        """Dict[str, Residue]: Residue dictionary defined in problem."""
+    def residues(self) -> dict[str, Residue]:
+        """dict[str, Residue]: Residue dictionary defined in problem."""
         return self._residues
 
     @property
-    def unknowns(self) -> Dict[str, Unknown]:
-        """Dict[str, Unknown]: Unknown dictionary defined in problem."""
+    def unknowns(self) -> dict[str, Unknown]:
+        """dict[str, Unknown]: Unknown dictionary defined in problem."""
         return self._unknowns
 
     def update_residues(self) -> None:
@@ -340,8 +338,8 @@ class MathematicalProblem(BaseProblem):
         )
         return numpy.concatenate(values) if values else numpy.empty(0)
 
-    def residue_names(self) -> Tuple[str]:
-        """Tuple[str]: Names of residues, flattened to have the same size as `residue_vector()`."""
+    def residue_names(self) -> tuple[str]:
+        """tuple[str]: Names of residues, flattened to have the same size as `residue_vector()`."""
         names = []
         for name, residue in self.residues.items():
             n_values = numpy.size(residue.value)
@@ -351,8 +349,8 @@ class MathematicalProblem(BaseProblem):
                 names.append(name)
         return tuple(names)
 
-    def unknown_names(self) -> Tuple[str]:
-        """Tuple[str]: Names of unknowns flatten to have the same size as `unknown_vector()`."""
+    def unknown_names(self) -> tuple[str]:
+        """tuple[str]: Names of unknowns flatten to have the same size as `unknown_vector()`."""
         names = []
         for unknown in self.unknowns.values():
             if unknown.is_scalar:
@@ -384,7 +382,7 @@ class MathematicalProblem(BaseProblem):
         return n_equations
 
     @property
-    def shape(self) -> Tuple[int, int]:
+    def shape(self) -> tuple[int, int]:
         """(int, int) : Number of unknowns and equations."""
         return (self.n_unknowns, self.n_equations)
 
@@ -488,7 +486,7 @@ class MathematicalProblem(BaseProblem):
         return self
 
     def add_equation(self,
-        equation: Union[str, Iterable[Union[dict, str, Tuple[str, str]]]],
+        equation: Union[str, Iterable[Union[dict, str, tuple[str, str]]]],
         name: Optional[str] = None,
         reference: Union[Number, numpy.ndarray, str] = 1,
     ) -> MathematicalProblem:
@@ -575,10 +573,10 @@ class MathematicalProblem(BaseProblem):
 
         return self
 
-    def get_target_equations(self) -> List[str]:
+    def get_target_equations(self) -> list[str]:
         return [deferred.equation() for deferred in self._targets.values()]
 
-    def get_target_residues(self) -> Dict[str, Residue]:
+    def get_target_residues(self) -> dict[str, Residue]:
         return dict(
             (key, deferred.make_residue())
             for key, deferred in self._targets.items()
@@ -603,8 +601,8 @@ class MathematicalProblem(BaseProblem):
         return f"{target} (target)"
 
     @property
-    def deferred_residues(self) -> Dict[str, WeakDeferredResidue]:
-        """Dict[str, WeakDeferredResidue]: Dict of deferred residues defined for this system."""
+    def deferred_residues(self) -> dict[str, WeakDeferredResidue]:
+        """dict[str, WeakDeferredResidue]: dict of deferred residues defined for this system."""
         return self._targets
 
     def extend(self,
@@ -706,7 +704,7 @@ class MathematicalProblem(BaseProblem):
                                 f"Target on {original!r} will be based on {name!r} in the context of {context.full_name()!r}"
                             )
                             break
-                self.add_target(name, weak=deferred.weak)
+                self.add_target(name, deferred.deferred.reference, weak=deferred.weak)
 
         return self
 
@@ -729,7 +727,7 @@ class MathematicalProblem(BaseProblem):
             new.activate_targets()
         return new
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Returns a JSONable representation of the mathematical problem.
         
         Returns
@@ -776,8 +774,8 @@ class TimeProblem(BaseProblem):
     """
     def __init__(self, name: str, context: Optional[System]) -> None:
         super().__init__(name, context)
-        self._transients = OrderedDict()  # type: Dict[str, TimeUnknown]
-        self._rates = OrderedDict()  # type: Dict[str, TimeDerivative]
+        self._transients = OrderedDict()  # type: dict[str, TimeUnknown]
+        self._rates = OrderedDict()  # type: dict[str, TimeDerivative]
 
     def __repr__(self) -> str:
         lines = []
@@ -797,8 +795,8 @@ class TimeProblem(BaseProblem):
         return "\n".join(lines) if lines else "empty time problem"
 
     @property
-    def transients(self) -> Dict[str, TimeUnknown]:
-        """Dict[str, TimeUnknown] : Unknown time-dependent numerical features defined for this system."""
+    def transients(self) -> dict[str, TimeUnknown]:
+        """dict[str, TimeUnknown] : Unknown time-dependent numerical features defined for this system."""
         return self._transients
 
     def is_empty(self) -> bool:
@@ -849,8 +847,8 @@ class TimeProblem(BaseProblem):
         return self
 
     @property
-    def rates(self) -> Dict[str, TimeDerivative]:
-        """Dict[str, TimeDerivative] : Time derivatives computed during system evolution."""
+    def rates(self) -> dict[str, TimeDerivative]:
+        """dict[str, TimeDerivative] : Time derivatives computed during system evolution."""
         return self._rates
 
     def add_rate(self, name: str, source: Any, initial_value: Any = None) -> TimeProblem:
@@ -919,8 +917,8 @@ class TimeProblem(BaseProblem):
 
         def transfer_unknowns(attr_name: str):
             """Transfer unknowns from other time problem"""
-            source: Dict[str, TimeVar] = getattr(other, attr_name)
-            unknowns: Dict[str, TimeVar] = getattr(self, attr_name)
+            source: dict[str, TimeVar] = getattr(other, attr_name)
+            unknowns: dict[str, TimeVar] = getattr(self, attr_name)
             transferred_unknowns = helper.transfer_unknowns(source.values(), copy=copy)
             if not overwrite:
                 common = set(unknowns).intersection(transferred_unknowns)
@@ -938,12 +936,12 @@ class TimeProblem(BaseProblem):
         self._transients.clear()
         self._rates.clear()
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Returns a JSONable representation of the mathematical problem.
         
         Returns
         -------
-        Dict[str, Any]
+        dict[str, Any]
             JSONable representation
         """
         def value_to_dict(items: tuple[str, TimeVar]):
