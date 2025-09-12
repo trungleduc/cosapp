@@ -503,14 +503,14 @@ def test_MathematicalProblem_extend():
             dict(equation="g == 0"),
             dict(equation="h == array([22., 4.2])", name="h equation", reference=24.)
         ])
-        mr.add_target("i")
+        mr.add_target("i", reference=2.0)
         mr.add_unknown([
             dict(name="a", max_rel_step=1e-5),
             dict(name="c", max_abs_step=1e-2),
         ])
         # Define mathematical problem 'ms'
         ms.add_equation("v == 0").add_unknown("y")
-        ms.add_target("u")
+        ms.add_target("u", reference=10.0)
 
         return r, s, mr, ms
 
@@ -519,6 +519,8 @@ def test_MathematicalProblem_extend():
     assert list(mr.unknowns) == ['a', 'c']
     assert list(mr.residues) == ['g == 0', 'h equation']
     assert [deferred.target for deferred in mr.deferred_residues.values()] == ['i']
+    deferred = next(iter(mr.deferred_residues.values()))
+    assert deferred.deferred.reference == 2.0
 
     with no_exception():
         extended = mr.extend(mr, copy=False)
@@ -537,6 +539,8 @@ def test_MathematicalProblem_extend():
     assert list(mr.unknowns) == ['a', 'c']
     assert list(mr.residues) == ['g == 0', 'h equation']
     assert [deferred.target for deferred in mr.deferred_residues.values()] == ['i']
+    deferred = next(iter(mr.deferred_residues.values()))
+    assert deferred.deferred.reference == 2.0
 
     with pytest.raises(ValueError, match=r".* is not a child of .*\."):
         mr.extend(ms)
@@ -553,6 +557,9 @@ def test_MathematicalProblem_extend():
         for obj in mr.deferred_residues.values()
     )
     assert [deferred.target for deferred in mr.deferred_residues.values()] == ['i', 's.u']
+    deferred = list(mr.deferred_residues.values())
+    assert deferred[0].deferred.reference == 2.0
+    assert deferred[1].deferred.reference == 10.0
 
     assert mr.unknowns['s.y'] is not ms.unknowns['y']
     assert mr.residues['s: v == 0'] is not ms.residues['v == 0']
@@ -572,6 +579,9 @@ def test_MathematicalProblem_extend():
         for obj in mr.deferred_residues.values()
     )
     assert [deferred.target for deferred in mr.deferred_residues.values()] == ['i', 'u']
+    deferred = list(mr.deferred_residues.values())
+    assert deferred[0].deferred.reference == 2.0
+    assert deferred[1].deferred.reference == 10.0
 
     assert mr.unknowns['s.y'] is not ms.unknowns['y']
     assert mr.residues['s: v == 0'] is not ms.residues['v == 0']
@@ -591,6 +601,9 @@ def test_MathematicalProblem_extend():
         for obj in mr.deferred_residues.values()
     )
     assert [deferred.target for deferred in mr.deferred_residues.values()] == ['i', 's.u']
+    deferred = list(mr.deferred_residues.values())
+    assert deferred[0].deferred.reference == 2.0
+    assert deferred[1].deferred.reference == 10.0
 
     assert mr.unknowns['s.y'] is ms.unknowns['y']
     assert mr.residues['s: v == 0'] is ms.residues['v == 0']
