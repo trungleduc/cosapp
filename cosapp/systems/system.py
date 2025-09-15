@@ -1550,7 +1550,7 @@ class System(Module, TimeObserver):
 
         # Make shallow copy of `self._math` properties
         for name in ('residues', 'deferred_residues', 'unknowns'):
-            attr = getattr(problem, name)
+            attr: dict = getattr(problem, name)
             attr.update(getattr(self._math, name))
 
         def transfer_unknown(unknown: Unknown, new_name: str):
@@ -1561,6 +1561,7 @@ class System(Module, TimeObserver):
             problem.add_unknown(new_name, **options)
 
         children = self.children.values()
+        popped_targets = []
 
         for child in children:
 
@@ -1605,11 +1606,15 @@ class System(Module, TimeObserver):
                         and name in connector.source_variables()
                     )
                     if connected:
-                        # Remove deferred equation
+                        # Mark deferred equation for removal
                         key = MathematicalProblem.target_key(f"{origin.name}.{targetted}")
-                        problem.deferred_residues.pop(key)
+                        popped_targets.append(key)
 
             problem.extend(child_problem, copy=False)
+
+        # Remove connected weak targets
+        for key in popped_targets:
+            problem.deferred_residues.pop(key)
 
         return problem.extend(self.__loop_problem)
 

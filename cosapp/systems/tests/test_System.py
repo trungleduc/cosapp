@@ -2812,7 +2812,11 @@ def test_System_add_target_pulled_output_2():
 @pytest.mark.parametrize("exec_order", [('a', 'b'), ('b', 'a')])
 @pytest.mark.parametrize("weak", [True, False])
 def test_System_add_target_weak(weak, exec_order):
-    """Use of `add_target` with `weak` option"""
+    """Use of `add_target` with `weak` option.
+
+    The effect of execution order is related to:
+    https://gitlab.com/cosapp/cosapp/-/issues/195
+    """
     class SystemA(System):
         def setup(self):
             self.add_inward('x', 1.0)
