@@ -2809,8 +2809,9 @@ def test_System_add_target_pulled_output_2():
     assert top.b.y == pytest.approx(target)
 
 
+@pytest.mark.parametrize("exec_order", [('a', 'b'), ('b', 'a')])
 @pytest.mark.parametrize("weak", [True, False])
-def test_System_add_target_weak(weak):
+def test_System_add_target_weak(weak, exec_order):
     """Use of `add_target` with `weak` option"""
     class SystemA(System):
         def setup(self):
@@ -2836,7 +2837,8 @@ def test_System_add_target_weak(weak):
             a = self.add_child(SystemA('a'))
             b = self.add_child(SystemB('b'))
 
-            self.connect(a.outwards, b.inwards, {'z': 'u'})
+            self.connect(a, b, {'z': 'u'})
+            self.exec_order = exec_order
 
     top = TopSystem('top')
 
@@ -2863,8 +2865,14 @@ def test_System_add_target_weak(weak):
         assert top.a.x == 0.5
         assert top.a.y == pytest.approx(2)
         assert top.a.z == pytest.approx(2)
-        assert top.b.u == top.a.z
-        assert solver.problem.shape == (1, 1)
+
+        if exec_order == ('a', 'b'):
+            assert solver.problem.shape == (1, 1)
+            assert top.b.u == top.a.z  # connection: strict equality
+        else:
+            # Additional loop equation when b runs before a
+            assert solver.problem.shape == (2, 2)
+            assert top.b.u == pytest.approx(top.a.z)  # from solver, not strict equality
 
 
 # @pytest.mark.parametrize("weak", [True, False])
