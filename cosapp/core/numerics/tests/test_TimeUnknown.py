@@ -97,10 +97,7 @@ def test_TimeUnknown___init__(ctor_data, state, expected):
         assert u.name == expected['name']
         assert u.d_dt == expected['d_dt']
         assert isinstance(u.value, expected.get('dtype', Number))
-        if isinstance(u.value, Number):
-            assert not hasattr(u, "mask")
-        else:
-            assert np.array_equal(u.mask, np.ones_like(u.value, dtype=bool))
+        assert u.mask is None
         assert u.max_time_step == expected.get('max_time_step', np.inf)
         assert u.max_abs_step == expected.get('max_abs_step', np.inf)
 

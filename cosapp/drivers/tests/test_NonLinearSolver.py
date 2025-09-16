@@ -34,6 +34,7 @@ from cosapp.tests.library.systems import (
     MultiplyVector2,
     Splitter1d,
     Strait1dLine,
+    Strait2dLine,
 )
 from cosapp.utils.testing import pickle_roundtrip, are_same, has_keys
 
@@ -1256,14 +1257,15 @@ def test_NonLinearSolver_vector1d_system():
     assert one.a == pytest.approx([1, 7, 1])
 
     s.drivers.clear()
-    solver = s.add_driver(NonLinearSolver("solver", method=NonLinearMethods.POWELL))
-    solver.add_unknown(["one.a[1]", "two.a"]).add_equation(
-        [
-            {"equation": "one.out.x[1] == 9"},
-            {"equation": "out.x == array([5., 1., 3.])"},
-        ]
-    )
+    solver = s.add_driver(NonLinearSolver("solver"))
+    solver.add_unknown(["one.a[1]", "two.a"])
+    solver.add_equation([
+        "one.out.x[1] == 9",
+        "out.x == [5, 1, 3]",
+    ])
     s.run_drivers()
+    assert s.out.x == pytest.approx([5, 1, 3])
+    assert s.one.out.x[1] == pytest.approx(9)
     assert one.a == pytest.approx([1, 1.5, 1])
     assert two.a == pytest.approx([5 / 3, 1 / 9, 1 / 3])
 
@@ -1303,6 +1305,53 @@ def test_NonLinearSolver_vector1d_system():
     s.run_drivers()
     assert one.out.x == pytest.approx(s.in_.x / two.s)
     assert s.out.x == pytest.approx(s.in_.x)
+
+
+def test_NonLinearSolver_vector2d_system():
+    s = System("s")
+    one = s.add_child(Strait2dLine("one"), pulling="in_")
+    two = s.add_child(Strait2dLine("two"), pulling="out")
+    s.connect(two.in_, one.out)
+
+    # Initialize system
+    s.in_.x = np.tile([1., 3., 2.], (3, 1)).T
+    s.one.a.fill(1.0)
+    s.one.b.fill(0.5)
+    s.two.a.fill(2.0)
+    s.two.b.fill(4.0)
+
+    s.run_drivers()
+
+    assert np.allclose(s.in_.x, [[1, 1, 1], [3, 3, 3], [2, 2, 2]], rtol=1e-14)
+    assert np.allclose(s.out.x, [[7, 7, 7], [11, 11, 11], [9, 9, 9]], rtol=1e-14)
+
+    # Test design and offdesign vector variables
+    s.drivers.clear()
+    solver = s.add_driver(NonLinearSolver("solver"))
+    solver.add_unknown("one.a[1]").add_equation("out.x[1] == [11, 20, 2]")
+
+    s.run_drivers()
+
+    assert s.one.a[1] == pytest.approx([1., 2.5, -0.5], rel=1e-14)
+    assert s.out.x[1] == pytest.approx([11., 20., 2.0], rel=1e-14)
+
+    # Check that only row 1 has changed
+    assert np.allclose(s.one.a, [[1., 1., 1.], [1., 2.5, -0.5], [1., 1., 1.]], rtol=1e-14)
+    assert np.allclose(s.out.x, [[7., 7., 7.], [11., 20., 2.0], [9., 9., 9.]], rtol=1e-14)
+
+    # Reset problem, and add new constraintsm with 2D mask
+    solver.reset_problem()
+    solver.add_unknown("one.a[::2, 0]").add_equation("out.x[::2, 0] == [-1, 5]")
+
+    s.one.a[::2, 0] = [2.0, 4.0]
+    s.run_drivers()
+
+    assert s.one.a[::2, 0] == pytest.approx([-3.0, 0.0], rel=1e-14)
+    assert s.out.x[::2, 0] == pytest.approx([-1.0, 5.0], rel=1e-14)
+
+    # Check that only indices [0, 0] and [2, 0] have changed
+    assert np.allclose(s.one.a, [[-3., 1., 1.], [1., 2.5, -0.5], [0., 1., 1.]], rtol=1e-14)
+    assert np.allclose(s.out.x, [[-1., 7., 7.], [11., 20., 2.0], [5., 9., 9.]], rtol=1e-14)
 
 
 @patch.object(NonLinearSolver, "_postcompute")
@@ -2158,7 +2207,6 @@ class TestNonLinearSolverParallelExecution:
         system.run_drivers()
         assert np.allclose(system.x, np.sqrt(system.K), atol=1e-14)
 
-    @pytest.mark.skip()
     @pytest.mark.parametrize(argnames="pool_size", argvalues=[2, 3, 4])
     def test_parallel_ffd_jac_multipoints(self, pool_size):
         """Tests sparse linear solver and forward finite-difference Jacobian for 
@@ -2296,7 +2344,7 @@ class TestNonLinearSolverPickling:
         assert len(data) == 2 if hold else 1
 
 
-@pytest.mark.filterwarnings("ignore:.*Unknown 'x' was declared as an array of integers")
+@pytest.mark.filterwarnings("ignore:.*array of integers")
 @pytest.mark.filterwarnings("ignore:.*Singular matrix")
 @pytest.mark.parametrize(
     "declared_type, assigned_type, ok", [

@@ -357,7 +357,11 @@ class MathematicalProblem(BaseProblem):
                 names.append(unknown.name)
             else:
                 basename = unknown.basename
-                names.extend(f"{basename}[{i}]" for i in unknown.ref._mask_idx)
+                format_indices = lambda indices: ", ".join(map(str, indices))
+                names.extend(
+                    f"{basename}[{format_indices(indices)}]"
+                    for indices in unknown.mask_indices()
+                )
         return tuple(names)
 
     @property

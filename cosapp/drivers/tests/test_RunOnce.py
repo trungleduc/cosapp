@@ -99,16 +99,15 @@ def test_RunOnce_get_init(ExtendedMultiply):
 
 
 def test_RunOnce_set_init(ExtendedMultiply, hat_case):
-    s = ExtendedMultiply('mult')
-    d = RunOnce('compute')
-    s.add_driver(d)
+    s: System = ExtendedMultiply('mult')
+    d = s.add_driver(RunOnce('compute'))
 
     d.set_init({'K1': 11.5})
     assert_keys(d.initial_values, 'K1')
     assert_all_type(d.initial_values, Boundary)
     value = d.initial_values['K1']
     assert value.default_value == 11.5
-    assert not hasattr(value, "mask")
+    assert value.mask is None
 
     s.run_drivers()
     assert s.K1 == 11.5
@@ -137,8 +136,8 @@ def test_RunOnce_set_init(ExtendedMultiply, hat_case):
     case.set_init({'in_.x': np.r_[-1., -2., -3.]})
     assert_keys(case.initial_values, 'in_.x')
     boundary = case.initial_values['in_.x']
+    assert boundary.mask is None
     assert np.array_equal(boundary.value, [-1, -2, -3])
-    assert np.array_equal(boundary.mask, [True, True, True])
     assert np.array_equal(s.in_.x, [-1, -2, -3])
 
     s, case = hat_case(RunOnce)

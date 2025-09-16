@@ -378,7 +378,7 @@ def test_RunSingleCase_add_working_equations(
     assert_keys(case.problem.unknowns, "one.a")
     assert_keys(case.problem.residues, "out.x == [20, -2, 10]")
     unknown = case.problem.unknowns["one.a"]
-    assert np.array_equal(unknown.mask, [True, True, True])
+    assert unknown.mask is None
 
     # Test vector variable with mask
     s, case = hat_case(RunSingleCase)

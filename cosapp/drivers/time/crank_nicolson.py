@@ -21,6 +21,6 @@ class CrankNicolson(ImplicitTimeDriver):
         time_problem = self._var_manager.problem
         residues = []
         for transient in time_problem.transients.values():
-            r = transient.value + half_dt * numpy.ravel(transient.d_dt)
+            r = transient.value + half_dt * transient.d_dt
             residues.extend(numpy.ravel(r))
         return numpy.array(residues)

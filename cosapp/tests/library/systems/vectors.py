@@ -1,11 +1,10 @@
-from typing import Union
 import numpy as np
 from cosapp.systems import System
 from cosapp.tests.library.ports import V1dPort, V2dPort
 
 
 class Strait1dLine(System):
-    def setup(self, **kwargs):
+    def setup(self):
         self.add_input(V1dPort, "in_")
         self.add_inward("a", np.ones(3))
         self.add_inward("b", np.zeros(3))
@@ -16,10 +15,10 @@ class Strait1dLine(System):
 
 
 class Strait2dLine(System):
-    def setup(self, **kwargs):
+    def setup(self):
         self.add_input(V2dPort, "in_")
-        self.add_inward("a", np.ones(3, 3))
-        self.add_inward("b", np.zeros(3, 3))
+        self.add_inward("a", np.ones((3, 3)))
+        self.add_inward("b", np.zeros((3, 3)))
         self.add_output(V2dPort, "out")
 
     def compute(self):
@@ -27,7 +26,7 @@ class Strait2dLine(System):
 
 
 class Splitter1d(System):
-    def setup(self, **kwargs):
+    def setup(self):
         self.add_input(V1dPort, "in_")
         self.add_inward("s", 0.1 * np.ones(3))
         self.add_output(V1dPort, "out1")
@@ -39,7 +38,7 @@ class Splitter1d(System):
 
 
 class Merger1d(System):
-    def setup(self, **kwargs):
+    def setup(self):
         self.add_input(V1dPort, "in1")
         self.add_input(V1dPort, "in2")
         self.add_output(V1dPort, "out")
@@ -49,7 +48,7 @@ class Merger1d(System):
 
 
 class AllTypesSystem(System):
-    def setup(self, **kwargs):
+    def setup(self):
         dim = 3
         self.add_property("n", dim)
         self.add_input(V1dPort, "in_")
@@ -66,7 +65,6 @@ class AllTypesSystem(System):
 
 
 class BooleanSystem(System):
-    def setup(self, **kwargs):
+    def setup(self):
         self.add_input(V1dPort, "in_")
         self.add_inward("a", True)
-

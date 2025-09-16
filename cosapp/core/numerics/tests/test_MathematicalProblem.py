@@ -10,7 +10,7 @@ from cosapp.base import System, Port
 from cosapp.core.numerics.basics import MathematicalProblem
 from cosapp.core.numerics.boundary import Unknown, TimeUnknown
 from cosapp.core.numerics.residues import DeferredResidue, Residue
-from cosapp.utils.testing import get_args, no_exception, ArgsKwargs
+from cosapp.utils.testing import ArgsKwargs, get_args, no_exception, DummySystemFactory
 
 
 class BogusPort(Port):
@@ -388,14 +388,14 @@ def test_MathematicalProblem_add_target(
         get_args('c'),
         {
             'unknown_names': tuple(f"c[{i}]" for i in range(4)),
-            'c': dict(mask=[True, True, True, True]),
+            'c': dict(mask=None),
         }
     ),
     (
         get_args('c[:]'),
         {
             'unknown_names': tuple(f"c[{i}]" for i in range(4)),
-            'c[:]': dict(mask=[True, True, True, True]),
+            'c[:]': dict(mask=None),
         }
     ),
     (
@@ -466,8 +466,9 @@ def test_MathematicalProblem_add_unknown(
         assert unknown.lower_bound == properties.get('lower_bound', -np.inf), message
         assert unknown.upper_bound == properties.get('upper_bound', np.inf), message
         mask = properties.get('mask', None)
+        assert np.array_equal(unknown.mask, mask)
         if mask is None:
-            assert not hasattr(unknown, "mask"), message
+            assert unknown.mask is None, message
         else:
             assert tuple(unknown.mask) == tuple(mask), message
 
@@ -1003,3 +1004,58 @@ def test_MathematicalProblem_pickling():
     r = new_m.residues["g == 0"]
     r.update()
     assert r.value == 3.5
+
+
+@pytest.mark.parametrize("unknowns, expected", [
+    (
+        ["x", "v", "m"], (
+            "x",
+            "v[0]", "v[1]", "v[2]",
+            "m[0, 0]", "m[0, 1]", "m[1, 0]", "m[1, 1]",
+        ),
+    ),
+    (
+        ["x", "v[:]", "m"], (
+            "x",
+            "v[0]", "v[1]", "v[2]",
+            "m[0, 0]", "m[0, 1]", "m[1, 0]", "m[1, 1]",
+        ),
+    ),
+    (
+        ["x", "v[::2]", "m"], (
+            "x",
+            "v[0]", "v[2]",
+            "m[0, 0]", "m[0, 1]", "m[1, 0]", "m[1, 1]",
+        ),
+    ),
+    (
+        ["v[:-1]", "m[:, 0]"], (
+            "v[0]", "v[1]",
+            "m[0, 0]", "m[1, 0]",
+        ),
+    ),
+    (
+        ["v[:-1]", "m[1]"], (
+            "v[0]", "v[1]",
+            "m[1, 0]", "m[1, 1]",
+        ),
+    ),
+    (
+        ["m[1][0]"], ("m[1, 0]",),
+    ),
+])
+def test_MathematicalProblem_unknown_names(unknowns, expected):
+    """Test unknown names."""
+    Dummy = DummySystemFactory(
+        "dummy",
+        inwards=[
+            get_args("x", 0.0),
+            get_args("v", np.zeros(3)),
+            get_args("m", np.zeros((2, 2))),
+        ],
+    )
+    dummy = Dummy("dummy")
+    problem = MathematicalProblem("test", dummy)
+    problem.add_unknown(unknowns)
+
+    assert problem.unknown_names() == expected
