@@ -1,4 +1,5 @@
 import numpy
+from copy import copy
 from numbers import Number
 from typing import Optional
 
@@ -70,7 +71,10 @@ class RungeKutta(AbstractTimeDriver):
 
     def _make_buffer(self):
         nstages = len(self.__coefs)
-        return {name : [x.value] * (nstages + 1) for name, x in self._transients.items()}
+        return {
+            name : [copy(x.value)] * (nstages + 1)
+            for name, x in self._transients.items()
+        }
 
     def _update_transients(self, dt: Number) -> None:
         """
@@ -86,7 +90,7 @@ class RungeKutta(AbstractTimeDriver):
 
         # Store unknown at t = tn
         for name, x in transients.items():
-            buffer[name][-1] = x.value
+            buffer[name][-1] = copy(x.value)
         
         # Compute sub-step stages
         for stage, dts in enumerate(steps):

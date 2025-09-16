@@ -132,7 +132,7 @@ def test_TimeDerivative___init__(bogus, ctor_data, state, expected):
             assert der.value == pytest.approx(value, rel=1e-14)
             assert der.initial_value == pytest.approx(value, rel=1e-14)
         if der._is_scalar:
-            assert not hasattr(der, "mask") 
+            assert der.mask is None
 
     else:  # erroneous case
         with pytest.raises(error, match=expected.get('match', None)):

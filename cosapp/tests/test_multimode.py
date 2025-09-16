@@ -6,6 +6,7 @@ import numpy
 
 from cosapp.base import Port, System
 from cosapp.drivers import EulerExplicit, RungeKutta, NonLinearSolver
+from cosapp.drivers.time.tests.conftest import MultiPointMass
 from cosapp.recorders import DataFrameRecorder
 from cosapp.multimode import PeriodicTrigger
 from cosapp.utils import swap_system
@@ -937,3 +938,50 @@ def test_MultimodeSystem_new_transients_2():
     exact_z = 1.0 + xe * (t - te) - 0.125 * (t - te)**2
     assert system.sub.x == pytest.approx(exact_x, rel=1e-14)
     assert system.sub.z == pytest.approx(exact_z, rel=1e-14)
+
+
+@pytest.mark.parametrize("t_event", [0.237, 8.237])
+def test_MultimodeSystem_arrays(t_event ):
+    """Test multimode system with array variables and events.
+
+    In this test, we simply solve a point dynamics ODE, with multiple points
+    at once, that is array valued (x, v, a). Friction and gravity are nil, so
+    the solution is a series of straight lines x = x0 + v*t.
+    A bogus event `t > t_event` is added to make sure that transitions (in
+    particular, cubic interpolation) are correctly handled.
+    The final state of the system should be independent of `t_event`.
+    Thus, two values are tested: `t_event < t_max` and `t_event > t_max`.
+    """
+    class MultimodePointMass(MultiPointMass):
+        def setup(self, npoints=1):
+            super().setup(npoints=npoints)
+            self.add_event("tada")
+            self.add_outward_modevar("phase", init=0)
+
+        def transition(self):
+            if self.tada.present:
+                self.phase += 1
+
+    s = MultimodePointMass("s", npoints=2)
+    s.tada.trigger = f"t > {t_event}"
+
+    driver = s.add_driver(RungeKutta(order=2, time_interval=[0, 0.5], dt=0.1))
+    driver.set_scenario(
+        init={
+            "x": [
+                [0.0, 0.0, 0.0],
+                [0.0, 0.0, 0.0],
+            ],
+            "v": [
+                [1.0, 0.0, 2.0],
+                [0.0, 1.0, 3.0],
+            ],
+        },
+        values={
+            "k": 0.0,
+            "g": numpy.zeros(3),
+        },
+    )
+    s.run_drivers()
+
+    assert s.x == pytest.approx(s.v * s.time, rel=1e-14)

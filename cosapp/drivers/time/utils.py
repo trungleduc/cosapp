@@ -8,6 +8,7 @@ from typing import (
     TYPE_CHECKING,
 )
 import numpy
+from numpy.typing import ArrayLike
 
 from cosapp.core.eval_str import EvalString
 from cosapp.core.variableref import VariableReference
@@ -97,14 +98,13 @@ class TimeUnknownStack(AbstractTimeUnknown):
         def get_attribute_expr(attr):
             args = ", ".join([str(getattr(u, attr)) for u in self.__transients])
             if attr == "der":
-                return EvalString(f"asarray([{args}]).ravel()", self.__context)
+                return EvalString(f"asarray([{args}])", self.__context)
             else:
                 return EvalString(f"min([{args}])", self.__context)
 
         self.__der = get_attribute_expr("der")
         self.__max_dt = get_attribute_expr("max_time_step_expr")
         self.__max_dx = get_attribute_expr("max_abs_step_expr")
-        self.__var_size = size
 
     @property
     def value(self) -> numpy.ndarray:
@@ -113,18 +113,15 @@ class TimeUnknownStack(AbstractTimeUnknown):
 
     @value.setter
     def value(self, new: Union[list[float], numpy.ndarray]) -> None:
-        if numpy.shape(new) != self.__value.shape:
-            raise ValueError("Incompatible array shapes")
         self.__value = numpy.array(new)
         # Update original system variables
-        size = self.__var_size
         for i, unknown in enumerate(self.__transients):
-            value = self.__value[i] if size == 1 else self.__value[i * size: size * (i+1)]
+            value = self.__value[i]
             unknown.update_value(value, checks=False)
 
     def reset(self) -> None:
         """Reset stack value from original system variables"""
-        self.__value = numpy.ravel([var.value for var in self.__transients])
+        self.__value = numpy.asarray([var.value for var in self.__transients])
         self.touch()
 
     def touch(self) -> None:
@@ -346,7 +343,7 @@ class TimeVarManager:
         ders = dict()
         reference2name = dict()
         for name, unknown in context_transients.items():
-            unknown.update_mask()
+            unknown.update_shape()
             reference = unknown.pulled_from or unknown.context.name2variable[unknown.name]
             reference2name[reference] = name
             der_context = unknown.der.eval_context
@@ -518,7 +515,7 @@ class Polynomial:
     """Polynomial function that accepts array coefficients,
     in order to fit array quantities over a one-dimensional interval.
     """
-    def __init__(self, coefs: Sequence[float], shift=0.0):
+    def __init__(self, coefs: ArrayLike, shift=0.0):
         self._coefs = numpy.array(coefs)
         self._shift = shift
 
@@ -535,10 +532,7 @@ class Polynomial:
 
     def deriv(self) -> Polynomial:
         """Derivative of the polynomial"""
-        der_coefs = [
-            (n + 1) * coef
-            for (n, coef) in enumerate(self._coefs[1:])
-        ]
+        der_coefs = [n * cn for (n, cn) in enumerate(self._coefs[1:], start=1)]
         return Polynomial(der_coefs, self._shift)
 
 

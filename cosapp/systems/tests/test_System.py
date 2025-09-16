@@ -2022,7 +2022,7 @@ def test_System_loops_control_array_unknowns():
     unknown = problem.unknowns['a.x']
     assert unknown.max_abs_step == np.inf
     assert unknown.max_rel_step == 0.5
-    assert np.array_equal(unknown.mask, [True] * s.ndim)
+    assert unknown.mask is None
     s.close_loops()
     assert s.assembled_problem().is_empty()
     # Solve problem
@@ -2042,7 +2042,7 @@ def test_System_loops_control_array_unknowns():
     unknown = problem.unknowns['b.u']
     assert unknown.max_abs_step == 0.1
     assert unknown.max_rel_step == np.inf
-    assert np.array_equal(unknown.mask, [True] * s.ndim)
+    assert unknown.mask is None
     s.close_loops()
     assert s.assembled_problem().is_empty()
     # Solve problem
@@ -2270,7 +2270,7 @@ def test_System_add_unknowns(DummyFactory):
     assert unknown.max_abs_step == np.inf
     assert unknown.lower_bound == -10
     assert unknown.upper_bound == np.inf
-    assert not hasattr(unknown, "mask")
+    assert unknown.mask is None
 
     m: System = DummyFactory(
         name="m",
@@ -2291,7 +2291,7 @@ def test_System_add_unknowns(DummyFactory):
     assert unknown.max_abs_step == 1e6
     assert unknown.lower_bound == 0
     assert unknown.upper_bound == 1e8
-    assert not hasattr(unknown, "mask")
+    assert unknown.mask is None
 
     with pytest.raises(ValueError, match="Only variables in input ports can be used as boundaries"):
         DummyFactory("dummy", base=Multiply1, unknowns=get_args("p_out.x"))
@@ -2303,7 +2303,7 @@ def test_System_add_unknowns(DummyFactory):
     v: System = DummyFactory("v", base=Strait1dLine, unknowns=get_args("a"))
     
     unknown = v.assembled_problem().unknowns["a"]
-    assert np.array_equal(unknown.mask, [True, True, True])
+    assert unknown.mask is None
 
     v: System = DummyFactory("v", base=Strait1dLine, unknowns=get_args("a[::2]"))
     

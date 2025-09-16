@@ -30,8 +30,8 @@ class TestUnknown:
         ('x', dict(), dict(port='inwards', name='x')),
         ('x', dict(upper_bound=10, max_rel_step=0.05), dict(port='inwards', name='x')),
         ('y', dict(lower_bound=-30, max_abs_step=1.2), dict(port='inwards', name='y')),
-        ('v', dict(), dict(port='inwards', name='v', basename='v', mask=[True, True, True])),
-        ('v', dict(lower_bound=0), dict(port='inwards', name='v', mask=[True, True, True], lower_bound=0)),
+        ('v', dict(), dict(port='inwards', name='v', basename='v', mask=None)),
+        ('v', dict(lower_bound=0), dict(port='inwards', name='v', mask=None, lower_bound=0)),
         ('v[::2]', dict(), dict(port='inwards', name='v[::2]', variable='v', basename='v', mask=[True, False, True])),
         ('v[:-1]', dict(), dict(port='inwards', name='v[:-1]', variable='v', basename='v', mask=[True, True, False])),
         ('inwards.v[:-1]', dict(), dict(port='inwards', name='v[:-1]', variable='v', basename='v', mask=[True, True, False])),
@@ -69,8 +69,7 @@ class TestUnknown:
             assert unknown.upper_bound == get_expected('upper_bound', np.inf)
             assert unknown.max_abs_step == get_expected('max_abs_step', np.inf)
             assert unknown.max_rel_step == get_expected('max_rel_step', np.inf)
-            if expected.get('mask', None) is None:
-                assert not hasattr(unknown, "mask")
+            assert np.array_equal(unknown.mask, expected.get('mask', None))
         
         else:
             pattern = expected.get('match', None)

@@ -254,7 +254,7 @@ class PointMass(System):
 
         self.add_transient('v', der='a', desc='Velocity')
         self.add_transient('x', der='v', desc='Position', max_time_step='0.1 * norm(a)')
-   
+
     def compute(self):
         self.a = self.g - (self.k / self.mass) * self.v
 
@@ -325,6 +325,23 @@ def point_mass_solution():
     def _test_objects(system, v0, x0=np.zeros(3)):
         return PointMassSolution(system, v0, x0)
     return _test_objects
+
+# <codecell>
+
+class MultiPointMass(System):
+    """Free fall of several point masses, with vectorial expressions"""
+    def setup(self, npoints=1):
+        self.add_inward('mass', np.full(npoints, 1.0), desc='Mass')
+        self.add_inward('k', 0.1, desc='Friction coefficient')
+        self.add_inward('g', np.r_[0, 0, -9.81], desc='Uniform acceleration field')
+
+        self.add_outward('a', np.zeros((npoints, 3)), desc='Acceleration')
+
+        self.add_transient('v', der='a', desc='Velocity')
+        self.add_transient('x', der='v', desc='Position')
+
+    def compute(self):
+        self.a = (-self.k / self.mass)[:, None,] * self.v + self.g
 
 # <codecell>
 

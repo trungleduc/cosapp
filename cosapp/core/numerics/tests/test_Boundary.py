@@ -2,38 +2,31 @@ import pytest
 import numpy as np
 
 from cosapp.systems import System
-from cosapp.core.numerics.boundary import Boundary, MaskedVarInfo, AttrRef, MaskedAttrRef, NumpyMaskedAttrRef
+from cosapp.core.numerics.boundary import (
+    Boundary,
+    MaskedVarInfo,
+    AttrRef,
+    MaskedAttrRef,
+    NumpyArrayAttrRef,
+    NumpyMaskedAttrRef,
+    AbstractBoundaryImpl,
+    ScalarBoundaryImpl,
+    NumpyBoundaryImpl,
+    GenericBoundaryImpl,
+    MutableSeqBoundaryImpl,
+)
 from cosapp.ports.port import Port, PortType
-from cosapp.utils.testing import get_args
+from cosapp.utils.testing import get_args, DummySystemFactory
 from contextlib import nullcontext as does_not_raise
 from cosapp.tests.library.systems import Multiply2, Strait1dLine
 from typing import Dict, Any, Optional, Tuple
 
 
-class APort(Port):
+class MnPort(Port):
     def setup(self):
         self.add_variable('m')
         self.add_variable('n', np.array([3., 4.]))
 
-
-class BSyst(System):
-    def setup(self, **kwargs):
-        self.add_inward('cc', CustomClass())
-        self.add_inward('z', 2.)
-        self.add_inward('a', np.reshape(np.arange(12, dtype=float), (3, 4)))
-
-class ASyst(System):
-    def setup(self, **kwargs):
-        self.add_input(APort, 'in_')
-        self.add_inward('x')
-        self.add_inward('y', np.array([1., 2.]))
-        self.add_inward('u', np.zeros(5))
-        self.add_inward('cc', CustomClass())
-        self.add_inward('tuple', (5., 8., 10.))
-        self.add_inward('dict', {"a": 5.})
-        self.add_inward('string', "str_value")
-        self.add_child(BSyst("b"))
-        self.add_outward('v')
 
 class MimicSeq:
     def __init__(self):
@@ -68,15 +61,38 @@ class CustomClass:
         return self.g
 
 
+class SystemB(System):
+    def setup(self):
+        self.add_inward('cc', CustomClass())
+        self.add_inward('z', 2.)
+        self.add_inward('a', np.arange(12, dtype=float).reshape((3, 4)))
+
+
+class SystemA(System):
+    def setup(self):
+        self.add_child(SystemB("b"))
+        self.add_input(MnPort, 'in_')
+        self.add_inward('x')
+        self.add_inward('y', np.array([1., 2.]))
+        self.add_inward('u', np.zeros(5))
+        self.add_inward('m', np.zeros((2, 5, 3)))
+        self.add_inward('cc', CustomClass())
+        self.add_inward('tuple', (5., 8., 10.))
+        self.add_inward('dict', {"a": 5.})
+        self.add_inward('string', "str_value")
+        self.add_outward('v')
+
+
 @pytest.fixture
 def a():
-    return ASyst('a')
+    return SystemA("a")
 
 
 def get_indices(context: System, name: str, mask: Optional[np.ndarray] = None) -> Tuple:
     basename, selector = Boundary.parse_expression(name)
     _, mask = Boundary.create_mask(context, basename, selector, mask)
     return (basename, selector, mask)
+
 
 def test_Boundary_parse_scalar():
     s = Multiply2("mult")
@@ -116,20 +132,23 @@ def test_Boundary_parse_error(name, expected: Dict[str, Any]):
     with pytest.raises(error, match=expected.get('match', None)):
         get_indices(top, name)
 
-@pytest.mark.parametrize("name, expected", [
-    ("hat.a", dict(mask=[True, True, True], basename="hat.a", selector="")),
-    ("hat.one.a", dict(mask=[True, True, True], basename="hat.one.a", selector="")),
-    ("hat.one.a[0]", dict(mask=[True, False, False], basename="hat.one.a", selector="[0]")),
-    ("hat.one.a[1:]", dict(mask=[False, True, True], basename="hat.one.a", selector="[1:]")),
-    ("hat.one.a[[0, 2]]", dict(mask=[True, False, True], basename="hat.one.a", selector="[[0, 2]]")),
-    ("hat.one.a[[True, False, True]]", dict(mask=[True, False, True], basename="hat.one.a", selector="[[True, False, True]]")),
-    ("hat['one'].a", dict(mask=[True, True, True], basename="hat['one'].a", selector="")),
-    ("hat['one'].a[1:]", dict(mask=[False, True, True], basename="hat['one'].a", selector="[1:]")),
-    # TODO: ideally, cases below should work (basename is reformatted into `x.y.z`) - OK for now
-    # ("hat['one'].a", dict(mask=[True, True, True], basename="hat.one.a", selector="")),
-    # ("hat['one'].a[1:]", dict(mask=[False, True, True], basename="hat.one.a", selector="[1:]")),
-    # ("hat['one.a'][1:]", dict(mask=[False, True, True], basename="hat.one.a", selector="[1:]")),
-])
+
+@pytest.mark.parametrize(
+    "name, expected", [
+        ("hat.a", dict(mask=None, basename="hat.a", selector="")),
+        ("hat.one.a", dict(mask=None, basename="hat.one.a", selector="")),
+        ("hat.one.a[0]", dict(mask=[True, False, False], basename="hat.one.a", selector="[0]")),
+        ("hat.one.a[1:]", dict(mask=[False, True, True], basename="hat.one.a", selector="[1:]")),
+        ("hat.one.a[[0, 2]]", dict(mask=[True, False, True], basename="hat.one.a", selector="[[0, 2]]")),
+        ("hat.one.a[[True, False, True]]", dict(mask=[True, False, True], basename="hat.one.a", selector="[[True, False, True]]")),
+        ("hat['one'].a", dict(mask=None, basename="hat['one'].a", selector="")),
+        ("hat['one'].a[1:]", dict(mask=[False, True, True], basename="hat['one'].a", selector="[1:]")),
+        # TODO: ideally, cases below should work (basename is reformatted into `x.y.z`) - OK for now
+        # ("hat['one'].a", dict(mask=[True, True, True], basename="hat.one.a", selector="")),
+        # ("hat['one'].a[1:]", dict(mask=[False, True, True], basename="hat.one.a", selector="[1:]")),
+        # ("hat['one.a'][1:]", dict(mask=[False, True, True], basename="hat.one.a", selector="[1:]")),
+    ],
+)
 def test_Boundary_parse_array_1D(name, expected: Dict[str, Any]):
     """Test `get_indices` with vector variables"""
     hat = System("hat")
@@ -142,12 +161,13 @@ def test_Boundary_parse_array_1D(name, expected: Dict[str, Any]):
     basename, selector, mask = get_indices(top, name)
     assert basename == expected.get('basename', name)
     assert selector == expected.get('selector', '')
-    assert isinstance(mask, np.ndarray)
-    assert np.array_equal(mask, expected['mask'])
+    assert isinstance(mask, (type(None), np.ndarray))
+    assert np.array_equal(mask, expected.get('mask', None))
 
-@pytest.mark.parametrize("selector, expected", [
-    ("", np.full((3, 4), True)),
-    ("[:]", np.full((3, 4), True)),
+
+@pytest.mark.parametrize("selector, expected_mask", [
+    ("", None),
+    ("[:]", None),
     ("[0]", [[True] * 4, [False] * 4, [False] * 4]),
     ("[0][1]", [[False, True, False, False], [False] * 4, [False] * 4]),
     ("[::2]", [[True] * 4, [False] * 4, [True] * 4]),
@@ -156,16 +176,16 @@ def test_Boundary_parse_array_1D(name, expected: Dict[str, Any]):
     ("[:, 1:]", [[False, True, True, True]] * 3),
     ("[:, 1::2]", [[False, True, False, True]] * 3),
 ])
-def test_Boundary_parse_array_2D(selector, expected):
+def test_Boundary_parse_array_2D(selector, expected_mask):
     top = System('top')
-    sub = top.add_child(BSyst('sub'))
+    top.add_child(SystemB('sub'))
 
     basename, selector, mask = get_indices(top, f"sub.a{selector}")
     r = MaskedVarInfo(basename, selector, mask)
     assert r.basename == "sub.a"
     assert r.selector == selector
     assert r.fullname == f"sub.a{selector.strip()}"
-    assert np.array_equal(r.mask, expected)
+    assert np.array_equal(r.mask, expected_mask)
 
 
 @pytest.mark.parametrize("name, expected", [
@@ -198,34 +218,86 @@ def test_Boundary__init__names(a, name, expected):
     assert x.portname == expected["portname"]
 
 
-@pytest.mark.parametrize("name, mask", [
-    ('x', None),
-    ('y', [True, True]),
-    ('y[0]', [True, False]),
-    ('y[1]', [False, True]),
-    ('y[:]', [True, True]),
-    ('y[1:]', [False, True]),
-    ('y[:-1]', [True, False]),
-    ('u[::2]',  [True, False, True, False, True]),
-    ('cc.r[:2]', [True, True, False]),
-    ('b.cc.r', [True, True, True]),
-    ('cc.get_g().x',  [True, True, True]),
-    ('cc.get_g().x[1]', [False, True, False]),
-    ('cc.w',  [True, True, True]),
-    ('cc.w[:2]', [True, True, False]),
-    ('cc.seq', [True, True, True]),
-    ('cc.seq[1]', [False, True, False]),
-    ('cc.h[1].seq2[1]', [False, True, False]),
-])
-def test_Boundary__init__mask(a, name, mask):
+@pytest.mark.parametrize(
+    "name, expected_mask", [
+        ("x", None),
+        ("y", None),
+        ("y[0]", [True, False]),
+        ("y[1]", [False, True]),
+        ("y[:]", None),
+        ("y[1:]", [False, True]),
+        ("y[:-1]", [True, False]),
+        ("u[::2]",  [True, False, True, False, True]),
+        ("cc.r[:2]", [True, True, False]),
+        ("b.cc.r", None),
+        ("cc.get_g().x",  None),
+        ("cc.get_g().x[1]", [False, True, False]),
+        ("cc.w",  None),
+        ("cc.w[:2]", [True, True, False]),
+        ("cc.seq", None),
+        ("cc.seq[1]", [False, True, False]),
+        ("cc.h[1].seq2[1]", [False, True, False]),
+        ("m[1]", [
+            [
+                [False, False, False],
+                [False, False, False],
+                [False, False, False],
+                [False, False, False],
+                [False, False, False],
+            ],
+            [
+                [True, True, True],
+                [True, True, True],
+                [True, True, True],
+                [True, True, True],
+                [True, True, True],
+            ],
+        ]),
+        ("m[:, ::2]", [
+            [
+                [True, True, True],
+                [False, False, False],
+                [True, True, True],
+                [False, False, False],
+                [True, True, True],
+            ],
+            [
+                [True, True, True],
+                [False, False, False],
+                [True, True, True],
+                [False, False, False],
+                [True, True, True],
+            ],
+        ]),
+        ("m[:, ::2, -1]", [
+            [
+                [False, False, True],
+                [False, False, False],
+                [False, False, True],
+                [False, False, False],
+                [False, False, True],
+            ],
+            [
+                [False, False, True],
+                [False, False, False],
+                [False, False, True],
+                [False, False, False],
+                [False, False, True],
+            ],
+        ]),
+    ]
+)
+def test_Boundary__init__mask(a, name, expected_mask):
     x = Boundary(a, name)
 
     # Test object attributes:
-    if mask is None:
-        assert not hasattr(x._ref, "mask")
+    if expected_mask is None:
+        assert x.mask is None
+
     else:
+        print(x.mask)
         assert isinstance(x.mask, np.ndarray)
-        assert np.all(x.mask == np.asarray(mask))
+        assert np.array_equal(x.mask, expected_mask)
 
 
 @pytest.mark.parametrize("name, init_mask, final_mask", [
@@ -267,27 +339,34 @@ def test_Boundary__init__default_value(a, name, value):
     assert x.default_value == pytest.approx(value, abs=0)
 
 
-@pytest.mark.parametrize("name, cls", [
-    ('in_.m', AttrRef),
-    ('x', AttrRef),
-    ('inwards.x', AttrRef),
-    ('y', NumpyMaskedAttrRef),
-    ('y[0]', NumpyMaskedAttrRef),
-    ('cc.g.d', AttrRef),
-    ('cc.r[:2]', NumpyMaskedAttrRef),
-    ('b.cc.r', NumpyMaskedAttrRef),
-    ('cc.get_g().x', NumpyMaskedAttrRef),
-    ('cc.get_g().x[1]', NumpyMaskedAttrRef),
-    ('cc.w[:2]', MaskedAttrRef),
-    ('cc.seq', MaskedAttrRef),
-    ('cc.seq[1]', MaskedAttrRef),
-    ('cc.h', MaskedAttrRef),
-    ('cc.h[1].seq2', MaskedAttrRef),
-])
-def test_Boundary_ref(a, name, cls):
+@pytest.mark.parametrize(
+    "name, expected", [
+        ('in_.m', dict(ref_cls=AttrRef, impl_cls=ScalarBoundaryImpl)),
+        ('x', dict(ref_cls=AttrRef, impl_cls=ScalarBoundaryImpl)),
+        ('inwards.x', dict(ref_cls=AttrRef, impl_cls=ScalarBoundaryImpl)),
+        ('y', dict(ref_cls=NumpyArrayAttrRef, impl_cls=NumpyBoundaryImpl)),
+        ('y[0]', dict(ref_cls=NumpyMaskedAttrRef, impl_cls=NumpyBoundaryImpl, mask=[True, False])),
+        ('cc.g.d', dict(ref_cls=AttrRef, impl_cls=ScalarBoundaryImpl)),
+        ('cc.r[:2]', dict(ref_cls=NumpyMaskedAttrRef, impl_cls=NumpyBoundaryImpl, mask=[True, True, False])),
+        ('cc.r[::2]', dict(ref_cls=NumpyMaskedAttrRef, impl_cls=NumpyBoundaryImpl, mask=[True, False, True])),
+        ('b.cc.r', dict(ref_cls=NumpyArrayAttrRef, impl_cls=NumpyBoundaryImpl)),
+        ('cc.get_g().x', dict(ref_cls=NumpyArrayAttrRef, impl_cls=NumpyBoundaryImpl)),
+        ('cc.get_g().x[1]', dict(ref_cls=NumpyMaskedAttrRef, impl_cls=NumpyBoundaryImpl, mask=[False, True, False])),
+        ('cc.w[:2]', dict(ref_cls=MaskedAttrRef, impl_cls=MutableSeqBoundaryImpl, mask=[True, True, False])),
+        ('cc.seq', dict(ref_cls=AttrRef, impl_cls=MutableSeqBoundaryImpl)),
+        ('cc.seq[1]', dict(ref_cls=MaskedAttrRef, impl_cls=MutableSeqBoundaryImpl, mask=[False, True, False])),
+        ('cc.h', dict(ref_cls=AttrRef, impl_cls=MutableSeqBoundaryImpl)),
+        ('cc.h[1].seq2', dict(ref_cls=AttrRef, impl_cls=MutableSeqBoundaryImpl, mask=None)),
+    ],
+)
+def test_Boundary_ref_impl(a, name, expected):
     x = Boundary(a, name)
-    assert isinstance(x._ref, cls)
+
     assert isinstance(x._ref, AttrRef)
+    assert isinstance(x._ref, expected['ref_cls'])
+    assert isinstance(x._boundary_impl, AbstractBoundaryImpl)
+    assert isinstance(x._boundary_impl, expected['impl_cls'])
+    assert np.array_equal(x.mask, expected.get('mask', None))
 
 
 @pytest.mark.filterwarnings("ignore:Variable 'x' is a scalar numpy array.*")
@@ -343,9 +422,9 @@ def test_Boundary_equality(a, name):
 
 @pytest.mark.parametrize("name, kwargs, expected", [
     ('_', dict(), pytest.raises(AttributeError)),
-    ('foo', dict(), pytest.raises(AttributeError)),
-    ('in_.x', dict(), pytest.raises(AttributeError)),
-    ('inwards.m', dict(), pytest.raises(AttributeError)),
+    ('foo', dict(), pytest.raises(AttributeError, match="not known in 'a'")),
+    ('in_.x', dict(), pytest.raises(AttributeError, match="not known in 'a'")),
+    ('inwards.K', dict(), pytest.raises(AttributeError, match="not known in 'a'")),
     ('v', dict(inputs_only=False), does_not_raise()),
     ('v', dict(), pytest.raises(ValueError, match="Only variables in input ports")),
     ('outwards.v', dict(), pytest.raises(ValueError, match="Only variables in input ports")),
@@ -354,12 +433,13 @@ def test_Boundary_equality(a, name):
     ('y', dict(mask=0), pytest.raises(TypeError, match="mask")),
     ('x', dict(inputs_only=True), does_not_raise()),
     ('x', dict(inputs_only=False), does_not_raise()),
-    ('in_', dict(), pytest.raises(ValueError)),
-    ('inwards', dict(), pytest.raises(ValueError)),
+    ('v', dict(inputs_only=False), does_not_raise()),
+    ('in_', dict(), pytest.raises(ValueError, match="Only variables can be used")),
+    ('inwards', dict(), pytest.raises(ValueError, match="Only variables can be used")),
     ('outwards', dict(), pytest.raises(ValueError)),
     ('y[', dict(), pytest.raises(SyntaxError)),
     ('y(', dict(), pytest.raises(SyntaxError)),  # TODO remove this test since tuple not allowed anymore
-    ('cc.h[0].seq2[1]', dict(), pytest.raises(AttributeError)),
+    ('cc.h[0].seq2[1]', dict(), pytest.raises(AttributeError, match="not known in 'a'")),
 ])
 def test_Boundary___init__error(a, name, kwargs, expected):
     with expected:
@@ -367,7 +447,7 @@ def test_Boundary___init__error(a, name, kwargs, expected):
 
 
 @pytest.mark.parametrize("attr, value", [
-    ('context', ASyst('B')),
+    ('context', SystemA('B')),
     ('port', 'outwards'),
     ('name', 'blade_runner'),
     ('variable', 'y'),
@@ -378,53 +458,34 @@ def test_Boundary_setattr_error(a, attr, value):
         setattr(x, attr, value)
 
 
-def test_Boundary_update_default_value_full_array(a):
-    x = Boundary(a, 'u')
-
-    x.mask = np.r_[True, False, True, False, True]
-    x.update_default_value(np.r_[-3.14, 0.1, 0.2])
-
-    assert np.all(x.mask == [True, False, True, False, True])
-    assert x.default_value == pytest.approx([-3.14, 0.1, 0.2], abs=0)
-
-    x.set_to_default()
-    assert x.context[x.basename] == pytest.approx([-3.14, 0., 0.1, 0., 0.2], abs=0)
-
-
-@pytest.mark.parametrize("name, mask, value", [
-    ('x', None, 5),
-    ('x', None, None),
-    ('y', None, np.r_[0., 0.]),
-    ('y', None, np.r_[1., 2.]),
-    ('y', np.r_[True, False], np.r_[-3.14]),
-    ('y', np.r_[False, True], np.r_[5.85]),
-    ('y[1]', None, np.r_[-2.3]),
-    ('y[1]', np.r_[False, True], np.r_[22]),
-    ('y[1]', np.r_[True, False], np.r_[42.]),
-    ('y[1]', None, -2.3),
-    ('y[1]', np.r_[False, True], 22.),
-    ('y[1]', np.r_[True, True], 42.),
-    ('y[:]', None, np.r_[-2., -1.]),
-    ('y[:]', np.r_[True, False], np.r_[-3.]),
-    ('cc.r[:2]', np.r_[True, False, False], np.r_[-3.]),
-    ('cc.g.d', None, 5.),
-    ('b.cc.r', np.r_[True, False, True], np.r_[-3., 15.]),
-    ('cc.get_g().x', None, np.r_[5., 6., 7.]),
-    ('cc.get_g().x[1]', None, np.r_[2.]),
-    ('cc.w', None, [4., 5., 6.]),
-    ('cc.w[:2]', None, [10., 20.]),
-    ('cc.w[:2]', np.r_[False, True, False], [10.]),
-    ('cc.seq', None, [4., 5., 6.]),
-    ('cc.seq[1]', None, [50.]),
-    ('cc.h[1].seq2[1]', None, [50.]),
+@pytest.mark.parametrize("name, value", [
+    ('x', 5),
+    ('x', None),
+    ('u', np.arange(5, dtype=float)),
+    ('u[::2]', np.arange(3, dtype=float)),
+    ('y', np.r_[1., 2.]),
+    ('y[1]', np.r_[-2.3]),
+    ('y[:]', np.r_[-2., -1.]),
+    ('cc.r[:2]', np.r_[-3.]),
+    ('cc.g.d', 5.),
+    ('b.cc.r', np.r_[-3., 15.]),
+    ('cc.get_g().x', np.r_[5., 6., 7.]),
+    ('cc.get_g().x[1]', np.r_[2.]),
+    ('cc.w', [4., 5., 6.]),
+    ('cc.w[:2]', [10., 20.]),
+    ('cc.w[:2]', [10.]),
+    ('cc.seq', [4., 5., 6.]),
+    ('cc.seq[1]', [50.]),
+    ('cc.h[1].seq2[1]', [50.]),
 ])
-def test_Boundary_update_default_value(a, name, mask, value):
+def test_Boundary_update_default_value(a, name, value):
     x = Boundary(a, name)
-    x.update_default_value(value, mask=mask)
+    x_value = x.value
 
-    if mask is not None:
-        assert np.all(x.mask == mask)
-    assert x.default_value == pytest.approx(value, abs=0)
+    x.update_default_value(value)
+
+    assert np.array_equal(x.value, x_value)
+    assert np.array_equal(x.default_value, value)
 
 
 @pytest.mark.parametrize("name, value, context_value", [
@@ -453,7 +514,7 @@ def test_Boundary_set_to_default(a, name, value, context_value):
     x.set_to_default()
 
     ref_value = getattr(x.ref._obj, x.ref._key)
-    if not isinstance(ref_value, np.ndarray) and Boundary.is_mutable_sequence(ref_value):
+    if not isinstance(ref_value, (list, np.ndarray)) and Boundary.is_mutable_sequence(ref_value):
         ref_value = [ref_value.__getitem__(i) for i in range(x.ref._ref_size)]
 
     assert x.value == pytest.approx(value, rel=1e-14)
@@ -493,6 +554,7 @@ def test_Boundary_clean_value(a, name, value, clean):
     assert x.value == pytest.approx(value)
     assert a.is_clean(PortType.IN) == clean
 
+
 @pytest.mark.parametrize("name, value, error", [
     ("x", [], TypeError),
     ("x", '0', TypeError),
@@ -512,19 +574,6 @@ def test_Boundary_error_value(a, name, value, error):
         x.update_value(value)
     assert a.is_clean(PortType.IN)
 
-@pytest.mark.parametrize("name, mask, error", [
-    ("y", [True], ValueError),
-    ("y[1]", [True, True], ValueError),
-    ("y[1]", [False, True, False], ValueError),
-    ('cc.r[:2]', [False], ValueError),
-    ('cc.r', [False], ValueError),
-    ('cc.seq', [False], ValueError),
-])
-def test_Boundary_error_mask(a, name, mask, error):
-    x = Boundary(a, name)
-    x.update_default_value(x.value)
-    with pytest.raises(error):
-        x.mask = mask
 
 @pytest.mark.parametrize("name", ["x", "y", "cc.seq", "cc.w"])
 def test_Boundary_None_value(a, name):
@@ -538,6 +587,7 @@ def test_Boundary_None_value(a, name):
 
     assert x.value == pytest.approx(init_value)
     assert x.default_value == pytest.approx(init_value)
+
 
 @pytest.mark.parametrize("ctor_data", [
     (get_args('in_.m')),
@@ -582,11 +632,26 @@ def test_Boundary_copy(a, ctor_data):
     assert new._ref is not old._ref 
     assert new._ref._obj is old._ref._obj
     assert new._ref._key is old._ref._key
-    if not old._is_scalar:
-        assert np.array_equiv(new.mask, old.mask)
+    assert np.array_equiv(new.mask, old.mask)
+    if old.mask is not None:
         assert new.mask is not old.mask
     if isinstance(old.default_value, np.ndarray):
         assert new.default_value is not old.default_value
     if isinstance(old.value, np.ndarray):
         assert new.value is not old.value
 
+
+@pytest.mark.parametrize("x, expected", [
+    (0.0, []),
+    (np.zeros(3), [(0,), (1,), (2,)]),
+    (np.zeros((3, 2)), [(0, 0), (0, 1), (1, 0), (1, 1), (2, 0), (2, 1)]),
+    (np.zeros((2, 3)), [(0, 0), (0, 1), (0, 2), (1, 0), (1, 1), (1, 2)]),
+    (np.zeros((2, 1, 2)), [(0, 0, 0), (0, 0, 1), (1, 0, 0), (1, 0, 1)]),
+])
+def test_Boundary_mask_indices(x, expected):
+    Dummy = DummySystemFactory(
+        "dummy",
+        inwards=get_args("x", x),
+    )
+    b = Boundary(Dummy("dummy"), "x")
+    assert list(b.mask_indices()) == expected

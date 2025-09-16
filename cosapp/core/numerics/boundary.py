@@ -4,8 +4,10 @@ import abc
 import copy
 import numpy
 import warnings
+from numpy.typing import ArrayLike
 
 from numbers import Number
+from collections.abc import MutableSequence
 from typing import (
     Any, Union, Optional,
     Collection, NamedTuple, T,
@@ -62,6 +64,9 @@ class AttrRef:
         self._key: str = key
         self._base: str = base
         self._name: str = natural_varname(name)
+
+    def update_shape(self) -> None:
+        pass
 
     @property
     def value(self) -> Number:
@@ -127,7 +132,7 @@ class MaskedAttrRef(AttrRef):
 
     def set_attributes(self, mask: numpy.ndarray) -> None:
         self._mask = numpy.atleast_1d(mask)
-        self._mask_idx = self._mask.nonzero()[0]
+        self._mask_nonzeros = self._mask.nonzero()
 
         array = getattr(self._obj, self._key)
         self._ref_shape = (len(array),)
@@ -136,17 +141,17 @@ class MaskedAttrRef(AttrRef):
     @property
     def value(self) -> MutableSequence:
         obj = getattr(self._obj, self._key)
-        return list(map(obj.__getitem__, self._mask_idx))
+        return list(map(obj.__getitem__, self._mask_nonzeros[0]))
 
     @value.setter
     def value(self, val: MutableSequence):
         obj = getattr(self._obj, self._key)
-        for i, new in zip(self._mask_idx, val):
+        for i, new in zip(self._mask_nonzeros[0], val):
             obj.__setitem__(i, new)
 
     def set_mask(self, mask: numpy.ndarray) -> None:
         self._mask[:] = mask
-        self._mask_idx = mask.nonzero()[0]
+        self._mask_nonzeros = (mask.nonzero()[0],)
 
     def __copy__(self) -> MaskedAttrRef:
         return MaskedAttrRef(self._obj, self._key, self._mask.copy())
@@ -172,6 +177,42 @@ class MaskedAttrRef(AttrRef):
         return mask_ref
 
 
+class NumpyArrayAttrRef(AttrRef):
+    """Attribute Reference for unmasked numpy arrays.
+
+    Parameters
+    ----------
+    obj: cosapp.systems.System
+        System in which the boundary name is defined.
+    key: str
+        Name of the boundary
+    """
+    def __init__(self, obj: System, key: str) -> None:
+        super().__init__(obj, key)
+        array: numpy.ndarray = self.value
+        self._ref_shape = array.shape
+        self._ref_size = array.size
+        self._mask_nonzeros = numpy.ones_like(array).nonzero()
+
+    @property
+    def value(self):
+        array = getattr(self._obj, self._key)
+        return array.view()
+
+    @value.setter
+    def value(self, val: ArrayLike):
+        array = getattr(self._obj, self._key)
+        array.ravel()[:] = numpy.ravel(val)
+
+    def update_shape(self) -> None:
+        array: numpy.ndarray = getattr(self._obj, self._key)
+        self._ref_shape = array.shape
+        self._ref_size = array.size
+
+    def __copy__(self) -> NumpyArrayAttrRef:
+        return NumpyArrayAttrRef(self._obj, self._key)
+
+
 class NumpyMaskedAttrRef(AttrRef):
     """ Masked Attribute Reference for numpy arrays.
 
@@ -192,7 +233,7 @@ class NumpyMaskedAttrRef(AttrRef):
 
     def set_attributes(self, mask: numpy.ndarray) -> None:
         self._mask = numpy.asarray(mask)
-        self._mask_idx = self._mask.nonzero()[0]
+        self._mask_nonzeros = self._mask.nonzero()
 
         array: numpy.ndarray = getattr(self._obj, self._key)
         self._ref_shape = array.shape
@@ -205,7 +246,16 @@ class NumpyMaskedAttrRef(AttrRef):
     @value.setter
     def value(self, val: Union[numpy.ndarray, MutableSequence]):
         getattr(self._obj, self._key)[self._mask] = numpy.asarray(val)
-    
+
+    def update_shape(self) -> None:
+        array: numpy.ndarray = getattr(self._obj, self._key)
+        if array.shape != self._ref_shape:
+            raise ValueError(
+                f"The shape of masked unknown {self._name!r} has changed"
+                f" from {self._ref_shape} to {array.shape};"
+                f" the original mask cannot be applied anymore."
+            )
+
     def set_mask(self, mask: numpy.ndarray) -> None:
         self._mask[:] = mask
 
@@ -387,10 +437,10 @@ class Boundary:
         try:
             value = eval(f"s.{varname}", {}, {"s": system})
         except AttributeError as error:
-            error.args = (f"{varname!r} is not known in {system.name}",)
+            error.args = (f"{varname!r} is not known in {system.name!r}",)
             raise
         except Exception as error:
-            error.args = (f"Can't evaluate {varname!r} in {system.name}",)
+            error.args = (f"Can't evaluate {varname!r} in {system.name!r}",)
             raise
 
         # Check if the value is a scalar numpy array
@@ -409,23 +459,23 @@ class Boundary:
                 raise TypeError("A mask cannot be applied on a scalar.")
             check_arg(mask, "mask", (list, tuple, numpy.ndarray))
 
-            return value, numpy.asarray(mask)
+            return value, numpy.asarray(mask, dtype=bool)
 
         if selector:
             # Check value is an array
             if isinstance(value, numpy.ndarray) or Boundary.is_mutable_sequence(value):
                 if isinstance(value, numpy.ndarray) and not (numpy.issubdtype(value.dtype, numpy.number) or value.size > 1):
                     raise ValueError(
-                            f"Only non-empty numpy arrays can be partially selected; got {value}."
-                        )
+                        f"Only non-empty numpy arrays can be partially selected; got {value}."
+                    )
                 elif Boundary.is_mutable_sequence(value) and not len(value) > 1:
                     raise ValueError(
-                            f"Only non-empty MutableSequence-like arrays can be partially selected; got {value}."
-                        )
+                        f"Only non-empty MutableSequence-like arrays can be partially selected; got {value}."
+                    )
             else:
                 raise TypeError(
-                        f"Only non-empty arrays can be partially selected; got {type(value)}."
-                    )
+                    f"Only non-empty arrays can be partially selected; got {type(value)}."
+                )
 
             # Set mask from selector string
             mask = numpy.zeros_like(value, dtype=bool)
@@ -441,6 +491,9 @@ class Boundary:
         elif isinstance(value, numpy.ndarray) or Boundary.is_mutable_sequence(value):
             mask = numpy.ones_like(value, dtype=bool)
 
+        if isinstance(mask, numpy.ndarray) and mask.all():
+            mask = None
+
         return value, mask
 
     @staticmethod
@@ -449,8 +502,9 @@ class Boundary:
         mandatory_attrs = ("__getitem__", "__setitem__", "__len__")
         return all(hasattr(value, attr) for attr in mandatory_attrs)
 
-    @staticmethod
+    @classmethod
     def create_attr_ref(
+        cls,
         context: System,
         basename: str,
         value: Optional[Union[Number, Collection]],
@@ -483,21 +537,39 @@ class Boundary:
             Specify if the boundary value is a scalar.
         """
         if mask is None:
-            if isinstance(value, Number) or (isinstance(value, numpy.ndarray) and value.ndim == 0):
-                impl = ScalarBoundaryImpl()
-            elif value is None:
-                impl = UndefinedBoundaryImpl()
-            else:
-                impl = GenericBoundaryImpl()
 
-            return AttrRef(context, basename), impl, True
+            is_scalar = True
+            ref_cls = AttrRef
+
+            if isinstance(value, Number):
+                impl_cls = ScalarBoundaryImpl
+
+            elif isinstance(value, numpy.ndarray):
+                if value.ndim > 0:
+                    ref_cls = NumpyArrayAttrRef
+                    impl_cls = NumpyBoundaryImpl
+                    is_scalar = False
+                else:
+                    impl_cls = ScalarBoundaryImpl
+
+            elif cls.is_mutable_sequence(value):
+                impl_cls = MutableSeqBoundaryImpl
+                is_scalar = False
+
+            elif value is None:
+                impl_cls = UndefinedBoundaryImpl
+
+            else:
+                impl_cls = GenericBoundaryImpl
+
+            return ref_cls(context, basename), impl_cls(), is_scalar
 
         elif isinstance(value, numpy.ndarray):
             return NumpyMaskedAttrRef(context, basename, mask), NumpyBoundaryImpl(), False
 
-        elif Boundary.is_mutable_sequence(value):
+        elif cls.is_mutable_sequence(value):
             return MaskedAttrRef(context, basename, mask), MutableSeqBoundaryImpl(), False
-        
+
         raise TypeError("type of evaluated expression is incompatible as Boundary object handled type.")
 
     def find_port(self, inputs_only=False) -> None:
@@ -608,7 +680,7 @@ class Boundary:
     @property
     def mask(self) -> Optional[numpy.ndarray]:
         """numpy.ndarray or None : Mask of the values in the vector boundary."""
-        return self._ref._mask
+        return getattr(self._ref, "_mask", None)
 
     @mask.setter
     def mask(self, mask: Optional[numpy.ndarray]) -> None:
@@ -627,6 +699,11 @@ class Boundary:
                         f"; got {numpy.count_nonzero(mask)!r} mismatching {default_size}."
                     )
             self._ref.set_mask(mask)
+
+    def mask_indices(self):
+        """Iterator over index tuples of the mask (if any)."""
+        nonzeros: tuple[numpy.ndarray, ...] = getattr(self._ref, "_mask_nonzeros", tuple())
+        return zip(*nonzeros)
 
     @property
     def value(self) -> Union[Number, numpy.ndarray]:
@@ -649,12 +726,9 @@ class Boundary:
     def update_default_value(
         self,
         new: Union[Number, MutableSequence, numpy.ndarray],
-        mask: Optional[numpy.ndarray] = None,
         checks: bool = True,
     ) -> None:
         if new is not None:
-            if mask is not None:
-                self.mask = mask
             if checks:
                 self._boundary_impl.check_new_value(self._default_value, new)
             self._default_value = new
@@ -776,7 +850,7 @@ class GenericBoundaryImpl(AbstractBoundaryImpl):
     def check_new_value(ref: T, new: T) -> None:
         """Check that reference and new values are compatible."""
         if None not in (ref, new):
-            if not isinstance(type(new), type(ref)):
+            if not isinstance(new, type(ref)):
                 raise TypeError(
                     f"Value to set is incompatible with the boundary value type"
                     f"; got {type(new)} mismatching {type(ref)}."
@@ -828,7 +902,6 @@ class Unknown(Boundary):
     -----
     The dimensionality of the variable should be taken into account in the bounding process.
     """
-
     def __init__(self,
         context: System,
         name: str,
@@ -924,7 +997,7 @@ class Unknown(Boundary):
             max_rel_step=self.max_rel_step,
             lower_bound=self.lower_bound,
             upper_bound=self.upper_bound,
-            mask=self.mask.copy() if not self._is_scalar else None
+            mask=copy.copy(self.mask),
         )
         return new
 
@@ -936,6 +1009,7 @@ class Unknown(Boundary):
         dict[str, Any]
             JSONable representation
         """
+        mask = self.mask
         return {
             "context": self.context.contextual_name,
             "name": self.name,
@@ -944,7 +1018,7 @@ class Unknown(Boundary):
             "max_rel_step": self.max_rel_step,
             "lower_bound": self.lower_bound,
             "upper_bound": self.upper_bound,
-            "mask": None if not hasattr(self, "mask") else self.mask.tolist()
+            "mask": mask.tolist() if isinstance(mask, numpy.ndarray) else None
         }
 
 
@@ -1051,9 +1125,8 @@ class TimeUnknown(Boundary, AbstractTimeUnknown):
         self.max_time_step = max_time_step
         self.max_abs_step = max_abs_step
 
-    def update_mask(self) -> None:
-        ref = self._ref
-        self._mask = ref._mask = numpy.ones_like(getattr(ref._obj, ref._key), dtype=bool)
+    def update_shape(self) -> None:
+        self._ref.update_shape()
 
     def __str__(self) -> str:
         try:
