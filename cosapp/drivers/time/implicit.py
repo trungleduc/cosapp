@@ -1,10 +1,11 @@
 import abc
 import numpy
+from typing import Optional, Iterable, Any
+
 from cosapp.drivers.time.base import AbstractTimeDriver, System
 from cosapp.core import MathematicalProblem
 from cosapp.core.numerics.solve import NewtonRaphsonSolver
 from cosapp.utils.options_dictionary import HasOptions
-from typing import Optional, Iterable, Any
 
 
 class ImplicitTimeDriver(AbstractTimeDriver):
@@ -34,7 +35,7 @@ class ImplicitTimeDriver(AbstractTimeDriver):
         self._prev_x = numpy.empty(0)
         self._curr_res = numpy.empty(0)
         super().__init__(name, owner, time_interval, dt, record_dt, **options)
-    
+
     @property
     def problem(self):
         """Mathematical problem handled by the driver, gathering the
@@ -50,12 +51,12 @@ class ImplicitTimeDriver(AbstractTimeDriver):
     def _reset_time_problem(self) -> None:
         # Get intrinsic problem of owner system
         context = self._owner
-        self._intrinsic_problem = context.assembled_problem()
-        self._has_intrinsic_problem = not self._intrinsic_problem.is_empty()
+        self._intrinsic_problem = initial_problem = context.assembled_problem()
+        self._has_intrinsic_problem = not initial_problem.is_empty()
 
         # Add transient variables as unknowns of the time-dependent problem
         self._transient_problem = problem = context.new_problem()
-        problem.extend(self._intrinsic_problem, copy=False)
+        problem.extend(initial_problem, copy=False)
         transients = self._var_manager.problem.transients.values()
         for transient in transients:
             path = context.get_path_to_child(transient.context)
@@ -71,14 +72,21 @@ class ImplicitTimeDriver(AbstractTimeDriver):
         # Equilibrate system @ t=0 (if necessary)
         initial_problem = self._intrinsic_problem
         initial_problem.validate()
-        x0 = initial_problem.unknown_vector()
-        self._has_intrinsic_problem = (x0.size > 0)
-        if self._has_intrinsic_problem:
-            self._solver.solve(self._fresidues_init, x0=x0)
-        
+        initial_problem.activate_targets()
+        self._solve_intrinsic_problem()
+
         # Initialize the unknown vector
-        self._transient_problem.update_residues()
+        transient_problem = self._transient_problem
+        transient_problem.activate_targets()
+        transient_problem.update_residues()
         self._prev_x = self._transient_problem.unknown_vector()
+
+    def _solve_intrinsic_problem(self, x0: Optional[numpy.ndarray]=None) -> None:
+        """Solve the intrinsic problem of the owner system."""
+        if self._has_intrinsic_problem:
+            if x0 is None:
+                x0 = self._intrinsic_problem.unknown_vector()
+            self._solver.solve(self._fresidues_init, x0=x0)
 
     @abc.abstractmethod
     def _time_residues(self, dt: float, current: bool) -> numpy.ndarray:
@@ -202,6 +210,4 @@ class ImplicitTimeDriver(AbstractTimeDriver):
         """Solve intrinsic problem (if any) during transitions
         before calling method `_update_system`.
         """
-        if self._has_intrinsic_problem:
-            x0 = self._intrinsic_problem.unknown_vector()
-            self._solver.solve(self._fresidues_init, x0=x0)
+        self._solve_intrinsic_problem()
