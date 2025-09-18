@@ -260,8 +260,8 @@ def test_RungeKutta_vector_ode(vector_ode_case, settings, tol):
     # Retrieve recorded data and check accuracy
     data = driver.recorder.export_data()
     time = np.asarray(data['time'])
+    result = np.asarray(data['v'])
     solution = lambda t, x0: np.array([t**2, np.log(1 + t), 1 - np.exp(-t)]) + x0
-    result = np.asarray([value for value in data['v']])
     error = np.zeros_like(ode.v)
     for i, t in enumerate(time):
         exact = solution(t, x0)

@@ -1,6 +1,6 @@
 import numpy
 from copy import deepcopy
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from cosapp.core.numerics.basics import MathematicalProblem
 from cosapp.core.numerics.boundary import Boundary
@@ -44,10 +44,10 @@ class RunOnce(Driver):
         """
         super().__init__(name, owner, **options)
         
-        self.initial_values: Dict[str, Boundary] = dict()  # Initial guess for the iteratives
-        self.solution: Dict[str, float] = dict()  # Dictionary (name, value) of the latest solution reached
+        self.initial_values: dict[str, Boundary] = dict()  # Initial guess for the iteratives
+        self.solution: dict[str, float] = dict()  # Dictionary (name, value) of the latest solution reached
 
-    def set_init(self, modifications: Dict[str, Any]) -> None:
+    def set_init(self, modifications: dict[str, Any]) -> None:
         """Define initial values for one or more variables.
 
         The variable can be contextual `child1.port2.var`. The only rule is that it should belong to
@@ -55,7 +55,7 @@ class RunOnce(Driver):
 
         Parameters
         ----------
-        modifications : Dict[str, Any]
+        modifications : dict[str, Any]
             Dictionary of (variable name, value)
 
         Examples

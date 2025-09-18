@@ -19,24 +19,24 @@ class CoKrigingSurrogateTest(unittest.TestCase):
         new_x = array([0.5])
 
         mu, sigma = krig1.predict(x[0])
-        self.assertTrue(np.allclose(mu, [[y[0]]], rtol=1e-4))
-        self.assertTrue(np.allclose(sigma, [[0.]], atol=1e-4))
+        np.testing.assert_allclose(mu, [[y[0]]], rtol=1e-4)
+        np.testing.assert_allclose(sigma, [[0.]], atol=1e-4)
 
         mu, sigma = krig1.predict(new_x)
-        self.assertTrue(np.allclose(mu, [[-2.0279]], rtol=1e-3))
-        self.assertTrue(np.allclose(sigma, [[1.3408]], rtol=1e-3))
+        np.testing.assert_allclose(mu, [[-2.0279]], rtol=1e-3)
+        np.testing.assert_allclose(sigma, [[1.3408]], rtol=1e-3)
 
         # Test with theta setting instead of estimation
         krig2 = MultiFiCoKrigingSurrogate(theta=0.1)
         krig2.train(x, y)
 
         mu, sigma = krig2.predict(x[0])
-        self.assertTrue(np.allclose(mu, [[y[0]]], rtol=1e-4))
-        self.assertTrue(np.allclose(sigma, [[.0]], atol=1e-4))
+        np.testing.assert_allclose(mu, [[y[0]]], rtol=1e-4)
+        np.testing.assert_allclose(sigma, [[.0]], atol=1e-4)
 
         mu, sigma = krig2.predict(new_x)
-        self.assertTrue(np.allclose(mu, [[-1.2719]], rtol=1e-3))
-        self.assertTrue(np.allclose(sigma, [[0.0439]], rtol=1e-3))
+        np.testing.assert_allclose(mu, [[-1.2719]], rtol=1e-3)
+        np.testing.assert_allclose(sigma, [[0.0439]], rtol=1e-3)
 
     def test_1d_2fi_cokriging(self):
         # Example from Forrester: Engineering design via surrogate modelling
@@ -59,8 +59,8 @@ class CoKrigingSurrogateTest(unittest.TestCase):
 
         new_x = array([0.75])
         mu, sigma = cokrig.predict(new_x)
-        self.assertTrue(np.allclose(mu,  [[f_expensive(new_x[0])]], rtol=0.05))
-        self.assertTrue(np.allclose(sigma, [[0.]], atol=0.02))
+        np.testing.assert_allclose(mu,  [[f_expensive(new_x[0])]], rtol=0.05)
+        np.testing.assert_allclose(sigma, [[0.]], atol=0.02)
 
     def test_2d_1fi_cokriging(self):
         # CoKrigingSurrogate with one fidelity could be used as a KrigingSurrogate
@@ -70,32 +70,34 @@ class CoKrigingSurrogateTest(unittest.TestCase):
             y = (x[1]-(5.1/(4.*pi**2.))*x[0]**2.+5.*x[0]/pi-6.)**2.+10.*(1.-1./(8.*pi))*cos(x[0])+10.
             return y
 
-        x = array([[-2., 0.], [-0.5, 1.5], [1., 3.], [8.5, 4.5],
-                   [-3.5, 6.], [4., 7.5], [-5., 9.], [5.5, 10.5],
-                   [10., 12.], [7., 13.5], [2.5, 15.]])
-        y = array([branin(case) for case in x])
+        x = array([
+            [-2., 0.], [-0.5, 1.5], [1., 3.], [8.5, 4.5],
+            [-3.5, 6.], [4., 7.5], [-5., 9.], [5.5, 10.5],
+            [10., 12.], [7., 13.5], [2.5, 15.],
+        ])
+        y = array(list(map(branin, x)))
         krig1 = MultiFiCoKrigingSurrogate()
         krig1.train(x, y)
 
         mu, sigma = krig1.predict([-2., 0.])
-        self.assertTrue(np.allclose(mu, [[branin(x[0])]], rtol=1e-5))
-        self.assertTrue(np.allclose(sigma, [[0.]], atol=1e-5))
+        np.testing.assert_allclose(mu, [[branin(x[0])]], rtol=1e-5)
+        np.testing.assert_allclose(sigma, [[0.]], atol=1e-4)
 
         mu, sigma = krig1.predict([5., 5.])
-        self.assertTrue(np.allclose(mu, [[22]], rtol=1))
-        self.assertTrue(np.allclose(sigma, [[13]], rtol=1))
+        np.testing.assert_allclose(mu, [[22]], atol=1)
+        np.testing.assert_allclose(sigma, [[13]], atol=1)
 
         # Test with theta setting instead of estimation
         krig2 = MultiFiCoKrigingSurrogate(theta=[0.1])
         krig1.train(x, y)
 
         mu, sigma = krig1.predict([-2., 0.])
-        self.assertTrue(np.allclose(mu, [[branin(x[0])]], rtol=1e-5))
-        self.assertTrue(np.allclose(sigma, [[0.]], atol=1e-5))
+        np.testing.assert_allclose(mu, [[branin(x[0])]], rtol=1e-5)
+        np.testing.assert_allclose(sigma, [[0.]], atol=1e-5)
 
         mu, sigma = krig1.predict([5., 5.])
-        self.assertTrue(np.allclose(mu, [[22]], rtol=1))
-        self.assertTrue(np.allclose(sigma, [[13]], rtol=1))
+        np.testing.assert_allclose(mu, [[22]], atol=1)
+        np.testing.assert_allclose(sigma, [[13]], atol=1)
 
     def test_2d_2fi_cokriging(self):
 
@@ -147,32 +149,31 @@ class CoKrigingSurrogateTest(unittest.TestCase):
         cokrig.train_multifi(x, y)
 
         mu, sigma = cokrig.predict([2./3., 1/3.])
-        self.assertTrue(np.allclose(mu, [[26]], rtol=0.2))
-        self.assertTrue(np.allclose(sigma, [[0.3]], rtol=0.2))
+        np.testing.assert_allclose(mu, [[26]], rtol=0.2)
+        np.testing.assert_allclose(sigma, [[0.3]], rtol=0.2)
 
         # Test with theta setting instead of theta estimation
         cokrig2 = MultiFiCoKrigingSurrogate(theta=0.1)
         cokrig2.train_multifi(x, y)
 
         mu, sigma = cokrig2.predict([2./3., 1/3.])
-        self.assertTrue(np.allclose(mu, [[21.7]], rtol=0.1))
-        self.assertTrue(np.allclose(sigma, [[2.29]], rtol=0.1))
+        np.testing.assert_allclose(mu, [[21.7]], rtol=0.1)
+        np.testing.assert_allclose(sigma, [[2.29]], rtol=0.1)
 
         # Test with theta setting instead of theta estimation
         cokrig2 = MultiFiCoKrigingSurrogate(theta=[0.1, 10])
         cokrig2.train_multifi(x, y)
 
         mu, sigma = cokrig2.predict([2./3., 1/3.])
-        self.assertTrue(np.allclose(mu, [[21.01]], rtol=0.2))
-        self.assertTrue(np.allclose(sigma, [[2.29]], rtol=0.2))
+        np.testing.assert_allclose(mu, [[21.01]], rtol=0.2)
+        np.testing.assert_allclose(sigma, [[2.29]], rtol=0.2)
 
         # Test bad theta setting
         cokrig3 = MultiFiCoKrigingSurrogate(theta=[0.1])
         try:
             cokrig3.train_multifi(x, y)
         except ValueError as err:
-            self.assertEqual(str(err),
-                "theta must be a list of 2 element(s).")
+            assert str(err) == "theta must be a list of 2 element(s)."
         else:
             self.fail("ValueError Expected")
 

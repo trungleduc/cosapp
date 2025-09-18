@@ -591,15 +591,22 @@ def test_BaseConnector_remove_variables(ConnectorFactory, settings, removed, exp
 @pytest.mark.parametrize("settings, expected", [
     (
         dict(
-            port1 = XYPort('p1', PortType.IN, {'x': 1, 'y': 2}),
-            port2 = P('p2', PortType.OUT, {'v': 2, 'w': 4}),
+            port1 = XYPort('p1', PortType.IN),
+            port2 = XYPort('p2', PortType.OUT),
+        ),
+        ('fake.p1', 'fake.p2')
+    ),
+    (
+        dict(
+            port1 = XYPort('p1', PortType.IN),
+            port2 = P('p2', PortType.OUT),
         ),
         ('fake.p1', 'fake.p2', {'x': 'v', 'y': 'w'})
     ),
     (
         dict(
-            port1 = Q('p1', PortType.IN, {'x': 1, 'y': 2, 'z': 3}),
-            port2 = R('p2', PortType.OUT, {'v': 2, 'w': 4, 'z': 3}),
+            port1 = Q('p1', PortType.IN),
+            port2 = R('p2', PortType.OUT),
             mapping = lambda p1, p2: 'z',
         ),
         ('fake.p1', 'fake.p2', {'z': 'z'})

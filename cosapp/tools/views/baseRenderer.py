@@ -1,6 +1,5 @@
 import io
 import abc
-from typing import Dict
 from jinja2.environment import Template
 
 from cosapp.systems import System
@@ -8,8 +7,7 @@ from cosapp.utils.helpers import check_arg
 
 
 class BaseRenderer(metaclass=abc.ABCMeta):
-    """
-    Base class to export a system as HTML.
+    """Base class to export a system as HTML.
 
     Parameters
     ----------
@@ -24,20 +22,18 @@ class BaseRenderer(metaclass=abc.ABCMeta):
         self.embeddable = embeddable
 
     @abc.abstractmethod
-    def get_data(self, **kwarg) -> Dict:
-        """Convert  `self.system` into a dictionary used to build the HTML page.
+    def get_data(self, **kwarg) -> dict:
+        """Convert `self.system` into a dictionary used to build the HTML page.
 
         Returns
         -------
-        Dict
-            Dictionary containing elements to create HTML page
+        dict
+            Dictionary containing elements to create an HTML page.
         """
-        pass
 
     @abc.abstractmethod
     def html_content(self) -> str:
         """Returns HTML content of renderer's system as a character string."""
-        pass
 
     def dump(self, fstream: io.RawIOBase) -> None:
         """Dump HTML content into writable fstream"""
@@ -50,7 +46,7 @@ class BaseRenderer(metaclass=abc.ABCMeta):
             self.dump(fp)
 
     @classmethod
-    def html_tags(cls) -> Dict[str, str]:
+    def html_tags(cls) -> dict[str, str]:
         html_begin_tags = """<!DOCTYPE html>
             <html>
             <head>
@@ -69,23 +65,17 @@ class BaseRenderer(metaclass=abc.ABCMeta):
         }
 
     @classmethod
-    @abc.abstractclassmethod
-    def html_resources(cls) -> Dict[str, str]:
-        """
-        Return the necessary resources to render Jinja template.
-        """
-        pass
+    @abc.abstractmethod
+    def html_resources(cls) -> dict[str, str]:
+        """Return the necessary resources to render a Jinja template."""
 
     @classmethod
-    @abc.abstractclassmethod
+    @abc.abstractmethod
     def html_template(cls) -> Template:
-        """
-        Return the Jinja template used to create HTML file.
-        """
-        pass
+        """Return the Jinja template used to create an HTML file."""
 
     @classmethod
-    def get_globals(cls) -> Dict:
+    def get_globals(cls) -> dict:
         """Returns a dict containing class-wide environment and HTML data"""
         return dict(
             template=cls.html_template(),
