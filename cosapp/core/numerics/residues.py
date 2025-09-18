@@ -1,7 +1,7 @@
 from __future__ import annotations
 from abc import abstractmethod
 from numbers import Number
-from typing import Any, Dict, Iterable, Optional, Tuple, FrozenSet, Union, TYPE_CHECKING
+from typing import Any, Iterable, Optional, Union, TYPE_CHECKING
 from collections.abc import Collection
 
 import numpy
@@ -34,7 +34,7 @@ class AbstractResidue:
         self._name = natural_varname(name)  # type: str
         super().__init__()
 
-    def __getstate__(self) -> Union[Dict[str, Any], tuple[Optional[Dict[str, Any]], Dict[str, Any]]]:
+    def __getstate__(self) -> Union[dict[str, Any], tuple[Optional[dict[str, Any]], dict[str, Any]]]:
         """Creates a state of the object.
 
         The state may take various forms depending on the object, see
@@ -43,7 +43,7 @@ class AbstractResidue:
         
         Returns
         -------
-        Union[Dict[str, Any], tuple[Optional[Dict[str, Any]], Dict[str, Any]]]:
+        Union[dict[str, Any], tuple[Optional[dict[str, Any]], dict[str, Any]]]:
             state
         """
         return object__getstate__(self)
@@ -273,7 +273,7 @@ class Residue(AbstractResidue):
         self.reference = reference
         self.update()
 
-    def __json__(self) -> Dict[str, Any]:
+    def __json__(self) -> dict[str, Any]:
         """Creates a JSONable dictionary representation of the object.
         
         Break circular dependency with the System by removing
@@ -281,7 +281,7 @@ class Residue(AbstractResidue):
 
         Returns
         -------
-        Dict[str, Any]
+        dict[str, Any]
             The dictionary
         """
         state = self.__getstate__().copy()
@@ -300,7 +300,7 @@ class Residue(AbstractResidue):
         return self.__varnames
 
     @staticmethod
-    def split_equation(equation: str) -> Tuple[str, str]:
+    def split_equation(equation: str) -> tuple[str, str]:
         """Parses and splits an equation of the kind 'lhs == rhs'.
         Returns string tuple (lhs, rhs).
         """
@@ -352,7 +352,7 @@ class Residue(AbstractResidue):
         except:
             return False
 
-    def eval_sides(self) -> Tuple[Any, Any]:
+    def eval_sides(self) -> tuple[Any, Any]:
         """Evaluate and return left- and right-hand sides as a tuple"""
         return self.__sides.eval()
 
@@ -380,12 +380,12 @@ class Residue(AbstractResidue):
             self.context, self.__equation, self.name, reference=self.reference
         )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Returns a JSONable representation of the equation.
         
         Returns
         -------
-        Dict[str, Any]
+        dict[str, Any]
             JSONable representation
         """
         ref = self.reference
@@ -444,8 +444,8 @@ class DeferredResidue:
         self.__vars = lhs.variables
 
     @property
-    def variables(self) -> FrozenSet[str]:
-        """FrozenSet[str]: names of variables involved in residue"""
+    def variables(self) -> frozenset[str]:
+        """frozenset[str]: names of variables involved in residue"""
         return self.__vars
 
     def target_value(self) -> Any:

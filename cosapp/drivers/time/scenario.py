@@ -3,16 +3,17 @@ import numpy, scipy.interpolate
 import enum
 import logging
 import warnings
-from typing import Any, Dict, List, Tuple, Callable
+from typing import Any, Callable, TYPE_CHECKING
 
 from cosapp.systems import System
-from cosapp.drivers.driver import Driver
 from cosapp.multimode.event import Event
 from cosapp.core.numerics.boundary import Boundary
 from cosapp.core.eval_str import AssignString
 from cosapp.utils.naming import natural_varname
 from cosapp.utils.helpers import check_arg
 from cosapp.utils.state_io import object__getstate__
+if TYPE_CHECKING:
+    from cosapp.drivers.time.base import AbstractTimeDriver
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +97,7 @@ class TimeAssignString:
         self.__str = f"{lhs} = {type(rhs).__name__}(t)"
         self.__rhs = rhs
 
-    def __getstate__(self) -> Dict[str, Any]:
+    def __getstate__(self) -> dict[str, Any]:
         """Creates a state of the object.
         
         The state type depend on the object, see
@@ -105,31 +106,30 @@ class TimeAssignString:
         
         Returns
         -------
-        Dict[str, Any]:
+        dict[str, Any]:
             state
         """
-        
         state = object__getstate__(self).copy()
         state.pop("_TimeAssignString__code")
         return state
     
-    def __setstate__(self, state: Dict[str, Any]) -> None:
+    def __setstate__(self, state: dict[str, Any]) -> None:
         """Sets the object from a provided state.
 
         Parameters
         ----------
-        state : Dict[str, Any]
+        state : dict[str, Any]
             State
         """
         self.__dict__.update(state)
         self.__code = compile(state["_assignment"], "<string>", "single")
 
-    def __json__(self) -> Dict[str, Any]:
+    def __json__(self) -> dict[str, Any]:
         """Creates a JSONable dictionary representation of the object.
 
         Returns
         -------
-        Dict[str, Any]
+        dict[str, Any]
             The dictionary
         """
         state = self.__getstate__()
@@ -189,23 +189,23 @@ class InterpolAssignString(TimeAssignString):
 class Scenario:
     """Class managing boundary and initial conditions for time simulations"""
 
-    def __init__(self, name: str, owner: Driver) -> None:
+    def __init__(self, name: str, owner: AbstractTimeDriver) -> None:
         """Initialize object
 
         Parameters
         ----------
         name: str
             Name of the `Module`
-        owner : Driver
-            :py:class:`~cosapp.drivers.driver.Driver` to which object belong
+        owner : AbstractTimeDriver
+            :py:class:`~cosapp.drivers.time.base.AbstractTimeDriver` to which object belong
         """
-        self.__case_values = []   # type: List[AssignString]
-        self.__init_values = []   # type: List[AssignString]
+        self.__case_values: list[AssignString] = []
+        self.__init_values: list[AssignString] = []
         self.__stop: Event = None
         self.name = name
         self.owner = owner
 
-    def __json__(self) -> Dict[str, Any]:
+    def __json__(self) -> dict[str, Any]:
         """Creates a JSONable dictionary representation of the object.
         
         Break circular dependency with the System by removing
@@ -213,7 +213,7 @@ class Scenario:
 
         Returns
         -------
-        Dict[str, Any]
+        dict[str, Any]
             The dictionary
         """
         state = object__getstate__(self).copy()
@@ -222,7 +222,7 @@ class Scenario:
         return state
 
     @classmethod
-    def make(cls, name: str, driver: Driver, init: Dict[str, Any], values: Dict[str, Any]) -> Scenario:
+    def make(cls, name: str, driver: AbstractTimeDriver, init: dict[str, Any], values: dict[str, Any]) -> Scenario:
         """Scenario factory"""
         scenario = cls(name, driver)
         scenario.set_init(init)
@@ -233,7 +233,6 @@ class Scenario:
         """Execute assignments corresponding to initial conditions"""
         logger.debug("Apply initial conditions")
         for assignment in self.__init_values:
-            logger.debug(f"\t{assignment}")
             assignment.exec()
 
     def update_values(self) -> None:
@@ -248,19 +247,22 @@ class Scenario:
         return self.__context
 
     @property
-    def owner(self) -> Driver:
-        """Driver: owner driver"""
+    def owner(self) -> AbstractTimeDriver:
+        """AbstractTimeDriver: owner driver"""
         return self.__owner
 
     @owner.setter
-    def owner(self, driver: Driver) -> None:
-        check_arg(driver, "owner", Driver)
+    def owner(self, driver: AbstractTimeDriver) -> None:
+        # Local import to avoid cyclic dependency
+        from cosapp.drivers.time.base import AbstractTimeDriver
+        check_arg(driver, "owner", AbstractTimeDriver)
+
         self.__owner = driver
-        self.__context = context = driver.owner  # type: System
+        self.__context = context = driver.owner
         if context is None:
             self.__stop = None
         else:
-            self.__stop = Event('stop', context, desc="Stop criterion", final=True)
+            self.__stop = Event("stop", context, desc="Stop criterion", final=True)
         self.clear_init()
         self.clear_values()
 
@@ -269,12 +271,12 @@ class Scenario:
         """Event: discrete event triggering the end of scenario"""
         return self.__stop
 
-    def add_init(self, modifications: Dict[str, Any]) -> None:
+    def add_init(self, modifications: dict[str, Any]) -> None:
         """Add a set of initial conditions, from a dictionary of the kind {'variable': value, ...}
 
         Parameters
         ----------
-        modifications : Dict[str, Any]
+        modifications : dict[str, Any]
             Dictionary of (variable name, value)
 
         Examples
@@ -285,7 +287,7 @@ class Scenario:
             lambda d: all(isinstance(key, str) for key in d.keys())
         )
         if self.owner is None:
-            raise AttributeError(f"Driver {self.name!r} must be attached to a System to set initial values.")
+            raise AttributeError(f"Driver {self.owner.full_name()!r} must be attached to a System to set initial values.")
 
         for varname, value in modifications.items():
             varname, context = self._get_alias(varname, inputs_only=False)
@@ -299,7 +301,7 @@ class Scenario:
             else:
                 self.__init_values.append(assignment)
 
-    def set_init(self, modifications: Dict[str, Any]) -> None:
+    def set_init(self, modifications: dict[str, Any]) -> None:
         """Set initial conditions, from a dictionary of the kind {'variable': value, ...}
 
         See `add_init` for further detail.
@@ -307,7 +309,7 @@ class Scenario:
         self.clear_init()
         self.add_init(modifications)
 
-    def add_values(self, modifications: Dict[str, Any]) -> None:
+    def add_values(self, modifications: dict[str, Any]) -> None:
         """Add a set of variables to the list of case values, from a dictionary of the kind {'variable': value, ...}
 
         Each variable and its value can be contextual, as in {'child1.port2.var': '2 * child2.foo'},
@@ -316,7 +318,7 @@ class Scenario:
 
         Parameters
         ----------
-        modifications : Dict[str, Any]
+        modifications : dict[str, Any]
             Dictionary of (variable name, value)
 
         Examples
@@ -327,7 +329,7 @@ class Scenario:
             lambda d: all(isinstance(key, str) for key in d.keys())
         )
         if self.owner is None:
-            raise AttributeError(f"Driver {self.name!r} must be attached to a System to set case values.")
+            raise AttributeError(f"Driver {self.owner.full_name()!r} must be attached to a System to set case values.")
 
         for varname, value in modifications.items():
             varname, context = self._get_alias(varname, inputs_only=True)
@@ -346,7 +348,7 @@ class Scenario:
             else:
                 self.__case_values.append(assignment)
 
-    def set_values(self, modifications: Dict[str, Any]) -> None:
+    def set_values(self, modifications: dict[str, Any]) -> None:
         """Set case values, from a dictionary of the kind {'variable': value, ...}
 
         See `add_values` for further detail.
@@ -363,16 +365,16 @@ class Scenario:
         self.__init_values.clear()
 
     @property
-    def case_values(self) -> List[AssignString]:
-        """List[AssignString]: list of boundary conditions"""
+    def case_values(self) -> list[AssignString]:
+        """list[AssignString]: list of boundary conditions"""
         return self.__case_values
 
     @property
-    def init_values(self) -> List[AssignString]:
-        """List[AssignString]: list of initial conditions"""
+    def init_values(self) -> list[AssignString]:
+        """list[AssignString]: list of initial conditions"""
         return self.__init_values
 
-    def _get_alias(self, lhs: str, inputs_only=True) -> Tuple[str, System]:
+    def _get_alias(self, lhs: str, inputs_only=True) -> tuple[str, System]:
         """Resolve potential aliasing for variable `lhs`, targetted
         in an initial or a boundary condition.
 
@@ -385,7 +387,7 @@ class Scenario:
 
         Returns:
         --------
-        (free_lhs, context) [Tuple[str, System]]:
+        (free_lhs, context) [tuple[str, System]]:
             Free lhs and its evaluation context, usable in `AssignString`.
         """
         context = self.__context

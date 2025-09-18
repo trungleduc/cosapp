@@ -67,8 +67,7 @@ def test_SystemInterpolator_ode_scenario():
     view.interp = {
         'f': lambda t: t,  # not the actual solution
     }
-    time = np.linspace(t0, t1, 11)
-    for t in time:
+    for t in np.linspace(t0, t1, 11):
         view.exec(t)
-        assert ode.df == 0.1 * np.exp(-t / 5)
-        assert ode.f == t
+        assert ode.f == t, f"@ {t=!s}"
+        assert ode.df == 0.1 * np.exp(-t / 5), f"@ {t=!s}"

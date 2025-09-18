@@ -2,8 +2,8 @@ import pytest
 import logging, re
 import numpy as np
 
-from cosapp.base import Port, System
-from cosapp.drivers import EulerExplicit
+from cosapp.base import Port, System, Driver
+from cosapp.drivers.time import EulerExplicit
 from cosapp.drivers.time.scenario import Scenario, Interpolator
 from cosapp.core.eval_str import AssignString
 from cosapp.multimode.event import Event
@@ -114,6 +114,8 @@ def test_Scenario__init__(case):
     assert scenario.stop.final
     with pytest.raises(TypeError):
         scenario.owner = 'foo'
+    with pytest.raises(TypeError, match="AbstractTimeDriver"):
+        scenario.owner = Driver('foo', system)
 
 
 def test_Scenario_stop(case):

@@ -9,8 +9,8 @@ import weakref
 from types import MappingProxyType
 from typing import (
     Callable, Iterable, Iterator,
-    Collection, Mapping, Dict, List, Tuple,
-    Optional, Union, Any, Type,
+    Collection, Mapping,
+    Optional, Union, Any,
     TYPE_CHECKING,
 )
 
@@ -38,8 +38,8 @@ class BaseConnector(abc.ABC):
         Name of the connector
     source : BasePort
         Port from which originate the variables
-    mapping : str or List[str] or Dict[str, str]
-        (List of) common name(s) or mapping name dictionary
+    mapping : str or list[str] or dict[str, str]
+        (list of) common name(s) or mapping name dictionary
     sink : BasePort
         Port to which the variables are transferred
     """
@@ -49,7 +49,7 @@ class BaseConnector(abc.ABC):
         name: str,
         sink: BasePort,
         source: BasePort,
-        mapping: Union[str, List[str], Dict[str, str], None] = None,
+        mapping: Union[str, list[str], dict[str, str], None] = None,
     ):
         """Connector constructor from the two `BasePort` to link and the list of variables to map.
 
@@ -66,8 +66,8 @@ class BaseConnector(abc.ABC):
             Port to which the variables are transferred.
         source : BasePort
             Port from which originate the variables.
-        mapping : str or List[str] or Dict[str, str], optional
-            (List of) common name(s) or mapping name dictionary; default None (i.e. no mapping).
+        mapping : str or list[str] or dict[str, str], optional
+            (list of) common name(s) or mapping name dictionary; default None (i.e. no mapping).
         
         Raises
         ------
@@ -88,11 +88,11 @@ class BaseConnector(abc.ABC):
             mapping = self.format_mapping(mapping)
 
         self._name = name  # type: str
-        self._mapping = mapping  # type: Dict[str, str]
+        self._mapping = mapping  # type: dict[str, str]
         self._source = self.__get_port(source, sink=False, check=False)  # type: weakref.ReferenceType[BasePort]
         self._sink = self.__get_port(sink, sink=True, check=False)  # type: weakref.ReferenceType[BasePort]
 
-    def __getstate__(self) -> Dict[str, Any]:
+    def __getstate__(self) -> dict[str, Any]:
         """Creates a state of the object.
 
         The state type depend on the object, see
@@ -101,14 +101,14 @@ class BaseConnector(abc.ABC):
 
         Returns
         -------
-        Dict[str, Any]:
+        dict[str, Any]:
             state
         """
         d = self.__dict__.copy()
         d.update({"_source": self.source, "_sink": self.sink})
         return d
 
-    def __json__(self) -> Dict[str, Any]:
+    def __json__(self) -> dict[str, Any]:
         """Creates a JSONable dictionary representation of the object.
         
         Break circular dependencies by removing some slots from the 
@@ -116,7 +116,7 @@ class BaseConnector(abc.ABC):
 
         Returns
         -------
-        Dict[str, Any]
+        dict[str, Any]
             The dictionary
         """
         d = self.__dict__.copy()
@@ -125,12 +125,12 @@ class BaseConnector(abc.ABC):
         d.update({"info": self.info()})
         return d
 
-    def __setstate__(self, state: Dict[str, Any]) -> None:
+    def __setstate__(self, state: dict[str, Any]) -> None:
         """Sets the object from a provided state.
 
         Parameters
         ----------
-        state : Dict[str, Any]
+        state : dict[str, Any]
             State
         """
         self.__dict__.update(state)
@@ -210,8 +210,8 @@ class BaseConnector(abc.ABC):
         return len(self._mapping)
 
     @property
-    def mapping(self) -> Dict[str, str]:
-        """Dict[str, str] : Variable name mapping between the sink (key) and the source (value)."""
+    def mapping(self) -> dict[str, str]:
+        """dict[str, str] : Variable name mapping between the sink (key) and the source (value)."""
         return MappingProxyType(self._mapping)
 
     def sink_variables(self) -> Iterator[str]:
@@ -288,12 +288,12 @@ class BaseConnector(abc.ABC):
             and self.preserves_names()
         )
 
-    def update_mapping(self, mapping: Dict[str, str]) -> None:
+    def update_mapping(self, mapping: dict[str, str]) -> None:
         """Extend current mapping with additional dictionary.
 
         Parameters
         ----------
-        mapping : Dict[str, str]
+        mapping : dict[str, str]
             Variable name mapping extending current mapping.
         """
         self._mapping.update(mapping)
@@ -311,7 +311,7 @@ class BaseConnector(abc.ABC):
         for variable in names:
             del self._mapping[variable]
 
-    def info(self) -> Union[Tuple[str, str], Tuple[str, str, Dict[str, str]]]:
+    def info(self) -> Union[tuple[str, str], tuple[str, str, dict[str, str]]]:
         """Returns connector information in a tuple.
 
         If the name mapping is complete, with identical names,
@@ -324,7 +324,7 @@ class BaseConnector(abc.ABC):
         Returns
         -------
         tuple
-            Tuple representing connector
+            tuple representing connector
         """
         # If the mapping is full and with the same nomenclature
         target, origin = self.port_names()
@@ -337,7 +337,7 @@ class BaseConnector(abc.ABC):
             info = (target, origin, self._mapping.copy())
         return info
 
-    def to_dict(self) -> Dict[str, Union[Tuple[str, str], Tuple[str, str, Dict[str, str]]]]:
+    def to_dict(self) -> dict[str, Union[tuple[str, str], tuple[str, str, dict[str, str]]]]:
         """Converts connector into a single-key dictionary.
         The key is the connector name; associated value
         is the tuple returned by method `info()`.
@@ -349,7 +349,7 @@ class BaseConnector(abc.ABC):
         """
         return {self.name: self.info()}
 
-    def port_names(self) -> Tuple[str, str]:
+    def port_names(self) -> tuple[str, str]:
         """Returns source and sink contextual names as a str tuple.
 
         Returns
@@ -372,7 +372,7 @@ class BaseConnector(abc.ABC):
         return target, origin
 
     @staticmethod
-    def format_mapping(mapping: Union[str, Collection[str], Dict[str, str]], /) -> Dict[str, str]:
+    def format_mapping(mapping: Union[str, Collection[str], dict[str, str]], /) -> dict[str, str]:
         """Returns suitable name mapping for connectors,
         from different kinds of argument `mapping`.
 
@@ -419,12 +419,12 @@ class Connector(BaseConnector):
         name: str,
         sink: BasePort,
         source: BasePort,
-        mapping: Union[str, List[str], Dict[str, str], None] = None,
+        mapping: Union[str, list[str], dict[str, str], None] = None,
     ):
         super().__init__(name, sink, source, mapping)
 
-        self._unit_conversions = {} # type: Dict[str, Optional[Tuple[float, float]]]
-        self._transfer_func = {}  # type: Dict[str, Callable[[Any], Any]]
+        self._unit_conversions = {} # type: dict[str, Optional[tuple[float, float]]]
+        self._transfer_func = {}  # type: dict[str, Callable[[Any], Any]]
         self.update_unit_conversion()
 
     @BaseConnector.source.setter
@@ -439,7 +439,7 @@ class Connector(BaseConnector):
         super(cls, cls).sink.__set__(self, port)
         self.update_unit_conversion()
 
-    def update_mapping(self, mapping: Dict[str, str]) -> None:
+    def update_mapping(self, mapping: dict[str, str]) -> None:
         super().update_mapping(mapping)
         self.update_unit_conversion()
 
@@ -527,7 +527,7 @@ class Connector(BaseConnector):
             setattr(sink, target, transfer(value))
 
 
-def MakeDirectConnector(classname: str, transform: Optional[Callable]=None, **kwargs) -> Type[BaseConnector]:
+def MakeDirectConnector(classname: str, transform: Optional[Callable]=None, **kwargs) -> type[BaseConnector]:
     """Connector factory using a simple transfer function, with no unit conversion.
     """
     if transform is None:

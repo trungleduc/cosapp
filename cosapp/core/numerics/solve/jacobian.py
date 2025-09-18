@@ -355,17 +355,19 @@ class FfdJacobianEvaluation(AbstractJacobianEvaluation):
         x_indices_to_update: Iterable[int],
     ) -> None:
         """Performs a Jacobian evaluation in sequential execution."""
-        x_copy = x0.copy()
+        x = x0.copy()
+        epsilon = self._eps
+        FLOOR = abs(epsilon)
 
         for j in x_indices_to_update:
-            delta = self._eps
-            if abs(x_copy[j]) >= abs(self._eps):
-                delta = x_copy[j] * self._eps
-            x_copy[j] += delta
+            delta = epsilon
+            if abs(x[j]) > FLOOR:
+                delta = x[j] * epsilon
+            x[j] += delta
             logger.debug(f"Perturb unknown {j}")
-            perturbation = self._fresidues(x_copy)
+            perturbation = self._fresidues(x)
             jac[:, j] = (perturbation - r0) * (1 / delta)
-            x_copy[j] = x0[j]
+            x[j] = x0[j]
 
     @staticmethod
     def _compute_jacobian(
