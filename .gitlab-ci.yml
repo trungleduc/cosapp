@@ -138,7 +138,7 @@ build_pkg:
     - ".linux_common_env"
     - ".job_rules"
   variables:
-    JOB_DEP: conda-build conda-verify pip setuptools jupyterlite-core jupyterlite-xeus ipywidgets jupyter_server
+    JOB_DEP: conda-build pip setuptools jupyterlite-core jupyterlite-xeus ipywidgets jupyter_server
     PYTHON_VERSION: "3.11"
   script:
     - micromamba create -y -n cosapp python=$PYTHON_VERSION
@@ -157,7 +157,7 @@ deploy:
   extends: 
     - ".deploy_env"
   variables:
-    JOB_DEP: setuptools wheel twine packaging anaconda-client conda-build conda-verify
+    JOB_DEP: setuptools wheel twine packaging anaconda-client conda-build
     TWINE_USERNAME: __token__
     TWINE_PASSWORD: $PYPI
     CONDA_USERNAME: cosapp
