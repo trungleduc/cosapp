@@ -50,6 +50,7 @@ Modules
 
    cosapp.drivers.driver
    cosapp.drivers.time.base
+   cosapp.drivers.time.implicit
    cosapp.drivers.time.euler
    cosapp.drivers.time.runge_kutta
    cosapp.drivers.time.crank_nicolson

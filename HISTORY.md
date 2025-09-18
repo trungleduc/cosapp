@@ -1,6 +1,38 @@
 # History
 
 
+## 1.3.0 (2025-09-18)
+
+### New features & API changes
+
+- Deprecation of methods `NonLinearSolver.extend` and `RunSingleCase.extend`, replaced by new methods `add_problem` (MR [#430](https://gitlab.com/cosapp/cosapp/-/merge_requests/430)).
+- Declaring integer-valued `numpy` arrays no longer raises a warning (MR [#428](https://gitlab.com/cosapp/cosapp/-/merge_requests/428)).
+- Harmonize solver option "history" between `NonLinearSolver` and `Optimizer` (MR [#432](https://gitlab.com/cosapp/cosapp/-/merge_requests/432)).
+  `Optimizer` option "monitored" is now deprecated, in favour of "history".
+  Moreover, option "history" can now be set at recorder creation:
+
+  ```python
+  solver = system.add_solver(NonLinearSolver("solver"))
+
+  solver.add_recorder(DataFrameRecorder(...), history=True)
+  ```
+
+### Bug fixes & Code improvements
+
+- Add missing initial data in solver convergence path (MR [#431](https://gitlab.com/cosapp/cosapp/-/merge_requests/431)).
+- Handle zero-sized `numpy` arrays in mathematical algorithms (MR [#433](https://gitlab.com/cosapp/cosapp/-/merge_requests/433)).
+- Fix bugs with multidimensional arrays as unknowns or transient variables (MR [#434](https://gitlab.com/cosapp/cosapp/-/merge_requests/434)).
+- Fix bug on targets during mathematical problem extension (MR [#435](https://gitlab.com/cosapp/cosapp/-/merge_requests/435)).
+- Fix bug on target detection during system problem assembly (MR [#436](https://gitlab.com/cosapp/cosapp/-/merge_requests/436)).
+- Fix target initialization issue in implicit time drivers (MR [#437](https://gitlab.com/cosapp/cosapp/-/merge_requests/437)).
+- New deprecation decorator (MR [#429](https://gitlab.com/cosapp/cosapp/-/merge_requests/429)).
+- Improved type hints and general refactoring pass (MR [#438](https://gitlab.com/cosapp/cosapp/-/merge_requests/438)).
+
+### Documentation
+
+- Updated tutorial on targets (MR [#440](https://gitlab.com/cosapp/cosapp/-/merge_requests/440)).
+
+
 ## 1.2.0 (2025-06-13)
 
 ### New features & API changes
