@@ -25,8 +25,8 @@ variables:
     - pip install . --trusted-host=files.pythonhosted.org
     - python -m pytest
 
-# default windows job parameters
-.windows_env:
+# Default windows job parameters
+.windows_test_env:
   stage: "test"
   tags:
     - saas-windows-medium-amd64
@@ -41,7 +41,7 @@ variables:
     - "if (test-path $PROFILE.CurrentUserAllHosts) {& $PROFILE.CurrentUserAllHosts}"
     - md -Path $env:USERPROFILE\.cosapp.d
 
-# default linux environment parameters
+# Default linux environment parameters
 .linux_common_env:
   image: "mambaorg/micromamba:latest"
   before_script:
@@ -52,11 +52,11 @@ variables:
     - mkdir -p $HOME/.cosapp.d
 
 # Default linux job parameters
-.linux_env:
+.linux_test_env:
   extends: 
     - ".linux_common_env"
   # tags: 
-  #   - cosapp_runner
+  #   - saas-linux-medium-amd64
   stage: test
 
 # Deployment env (runs on public runner)
@@ -67,7 +67,7 @@ variables:
 
 linux_py39:
   extends: 
-    - ".linux_env"
+    - ".linux_test_env"
     - ".job_rules"
     - ".test_script"
   variables:
@@ -75,7 +75,7 @@ linux_py39:
 
 linux_py310:
   extends: 
-    - ".linux_env"
+    - ".linux_test_env"
     - ".job_rules"
     - ".test_script"
   variables:
@@ -83,7 +83,7 @@ linux_py310:
 
 linux_py311:
   extends: 
-    - ".linux_env"
+    - ".linux_test_env"
     - ".job_rules"
   variables:
     PYTHON_VERSION: "3.11"
@@ -103,7 +103,7 @@ linux_py311:
 
 # windows_py311:
 #     extends: 
-#      - ".windows_env"
+#      - ".windows_test_env"
 #      - ".job_rules"
 #      - ".test_script"
 #     variables:
@@ -115,7 +115,7 @@ build_doc:
   stage: test_docs
   needs: []
   extends: 
-    - ".linux_env"
+    - ".linux_common_env"
     - ".job_rules"
   variables:
     BUILDDIR: _build
