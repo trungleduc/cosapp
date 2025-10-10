@@ -67,6 +67,15 @@ class BaseSolverBuilder(abc.ABC):
             if self.is_design_unknown[name]:
                 unknown.set_to_default()
 
+    def handle_system_problem(self) -> bool:
+        """Should the solver handle the intrinsic problem of the owner system?"""
+        solver = self.solver
+        for driver in solver.tree(downwards=True):
+            if driver is solver:
+                continue
+            if driver.is_standalone():
+                return False
+        return True
 
 class BaseSolverRecorder(abc.ABC):
     """Abstract interface for solver recorder"""
@@ -653,7 +662,8 @@ class StandaloneSolverBuilder(BaseSolverBuilder):
         problem = self.problem
         handler = DesignProblemHandler(system)
         handler.design.extend(solver.raw_problem)
-        handler.offdesign.extend(system.assembled_problem())
+        if self.handle_system_problem():
+            handler.offdesign.extend(system.assembled_problem())
         handler.prune()
         problem.clear()
         problem.extend(handler.merged_problem(), copy=False)
