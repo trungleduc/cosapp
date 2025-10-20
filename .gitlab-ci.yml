@@ -3,6 +3,7 @@ stages:
   - test_docs
   - test_build
   - deploy
+  - build_image
 
 variables:
   USER: "cosapp_test"
@@ -196,3 +197,16 @@ pages:
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       when: on_success
+
+
+build_image_jupyterlite:
+  image: docker:24.0.5
+  stage: build_image
+  services:
+    - docker:24.0.5-dind
+  script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login $CI_REGISTRY -u $CI_REGISTRY_USER --password-stdin
+    - docker build -t $CI_REGISTRY_IMAGE .
+    - docker push $CI_REGISTRY_IMAGE
+    - docker tag $CI_REGISTRY_IMAGE $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG
+    - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG
