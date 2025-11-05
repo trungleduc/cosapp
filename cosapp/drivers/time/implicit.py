@@ -15,6 +15,7 @@ class ImplicitTimeDriver(AbstractTimeDriver):
         "_has_intrinsic_problem",
         "_intrinsic_problem",
         "_transient_problem",
+        "_design_problem",
         "_curr_res",
         "_solver",
         "_prev_x",
@@ -31,6 +32,7 @@ class ImplicitTimeDriver(AbstractTimeDriver):
         self._has_intrinsic_problem = False
         self._intrinsic_problem: MathematicalProblem = None
         self._transient_problem: MathematicalProblem = None
+        self._design_problem: MathematicalProblem = None
         self._solver = NewtonRaphsonSolver()
         self._prev_x = numpy.empty(0)
         self._curr_res = numpy.empty(0)
@@ -52,6 +54,11 @@ class ImplicitTimeDriver(AbstractTimeDriver):
         # Get intrinsic problem of owner system
         context = self._owner
         self._intrinsic_problem = initial_problem = context.assembled_problem()
+
+        # Extend the intrinsic problem with the design problem of the driver
+        design_problem = self.__get_design_problem()
+        initial_problem.extend(design_problem, copy=False)
+
         self._has_intrinsic_problem = not initial_problem.is_empty()
 
         # Add transient variables as unknowns of the time-dependent problem
@@ -211,3 +218,79 @@ class ImplicitTimeDriver(AbstractTimeDriver):
         before calling method `_update_system`.
         """
         self._solve_intrinsic_problem()
+
+    def add_unknown(self, name: str, *args, **kwargs):
+        """Add an unknown variable to the design problem.
+
+        Parameters
+        ----------
+        name: str
+            Name of the unknown variable to add.
+        *args, **kwargs:
+            Additional arguments forwarded to the unknown.
+
+        Returns
+        -------
+        `MathematicalProblem`: design problem of the driver.
+        """
+        design_problem = self.__get_design_problem()
+        return design_problem.add_unknown(name, *args, **kwargs)
+
+    def add_equation(self, equation: str, *args, **kwargs):
+        """Add an equation to the design problem.
+
+        Parameters
+        ----------
+        equation: str
+            Equation of the kind `lhs == rhs`.
+        *args, **kwargs:
+            Additional arguments forwarded to the equation.
+        Returns
+        -------
+        `MathematicalProblem`: design problem of the driver.
+        """
+        design_problem = self.__get_design_problem()
+        return design_problem.add_equation(equation, *args, **kwargs)
+
+    def add_problem(self, problem: MathematicalProblem, copy=False):
+        """Add a mathematical problem to the design problem.
+
+        Parameters
+        ----------
+        problem: MathematicalProblem
+            Problem to add.
+        copy: bool
+            If `True`, the problem is copied before being added.
+
+        Returns
+        -------
+        `MathematicalProblem`: design problem of the driver.
+        """
+        design_problem = self.__get_design_problem()
+        design_problem.extend(problem, copy=copy)
+        return design_problem
+
+    def clear_problem(self) -> None:
+        """Clear the design problem associated to the driver (if any)."""
+        problem = self._design_problem
+        if problem is not None:
+            problem.clear()
+
+    def __get_design_problem(self) -> MathematicalProblem:
+        """Get the design problem associated to the driver.
+        Creates it if it does not exist.
+
+        Returns
+        -------
+        `MathematicalProblem`: Design problem of the driver.
+
+        Raises
+        ------
+        `RuntimeError`: If the driver has no owner system.
+        """
+        if self._design_problem is None:
+            context = self._owner
+            if context is None:
+                raise RuntimeError("Cannot create design problem: driver has no owner system.")
+            self._design_problem = context.new_problem()
+        return self._design_problem
