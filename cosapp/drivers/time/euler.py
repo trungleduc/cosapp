@@ -71,7 +71,7 @@ class EulerImplicit(ImplicitTimeDriver):
         
         if not current:
             for transient in time_problem.transients.values():
-                r = transient.value - dt * numpy.ravel(transient.d_dt)
+                r = transient.value - dt * transient.d_dt
                 residues.extend(numpy.ravel(r))
 
         else:

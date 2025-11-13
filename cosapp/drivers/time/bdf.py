@@ -220,7 +220,7 @@ class BdfIntegrator(ImplicitTimeDriver):
             time_problem = self._var_manager.problem
             residues = []
             for transient in time_problem.transients.values():
-                r = transient.value + coeff * numpy.ravel(transient.d_dt)
+                r = transient.value + coeff * transient.d_dt
                 residues.extend(numpy.ravel(r))
 
         elif not current:  # time (n + 1)
@@ -228,7 +228,7 @@ class BdfIntegrator(ImplicitTimeDriver):
             time_problem = self._var_manager.problem
             residues = []
             for transient in time_problem.transients.values():
-                r = coeff * transient.value - dt * numpy.ravel(transient.d_dt)
+                r = coeff * transient.value - dt * transient.d_dt
                 residues.extend(numpy.ravel(r))
 
         else:  # past times n, n - 1, ...
