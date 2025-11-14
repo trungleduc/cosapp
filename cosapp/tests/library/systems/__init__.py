@@ -63,7 +63,7 @@ from .elec import (
 )
 from .dynamics import (
     PointDynamics,
-    PointFriction,
+    FrictionModel,
     PointMass,
     BouncingBall,
 )

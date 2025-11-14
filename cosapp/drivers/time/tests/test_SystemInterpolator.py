@@ -42,8 +42,8 @@ def test_SystemInterpolator_pointMass():
 
     view = SystemInterpolator(driver)
     view.interp = {
-        'x': exact.get_function('x'),
-        'v': exact.get_function('v'),
+        'x': exact.x,
+        'v': exact.v,
     }
     time = np.linspace(t0, t1, 11)
     for t in time:
