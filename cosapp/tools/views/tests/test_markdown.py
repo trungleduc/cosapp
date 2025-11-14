@@ -26,8 +26,12 @@ class DummyPortWithDesc(Port):
 
 class System2(System):
     def setup(self):
-        self.add_inward({"data1": 9.0, "data2": 11.0, "data3": 13.0})
-        self.add_outward({"local1": 7.0, "a": 14.0, "b": 21.0})
+        self.add_inward("data1", 9.0)
+        self.add_inward("data2", 11.0)
+        self.add_inward("data3", 13.0)
+        self.add_outward("local1", 7.0)
+        self.add_outward("a", 14.0)
+        self.add_outward("b", 21.0)
         self.add_output(AnotherPort, "other")
 
 
