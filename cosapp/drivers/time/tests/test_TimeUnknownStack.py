@@ -32,7 +32,7 @@ def test_TimeUnknownStack_der_1():
 
     point.x = np.zeros_like(point.x)
     point.v = np.full_like(point.v, 0.1)
-    point.k = 0.0
+    point.cf = 0.0
     point.run_once()
     # stack.value is not changed by x or v, because the object holds
     # a copy of [x, v], evaluated at construction. Should this be changed?
@@ -41,7 +41,7 @@ def test_TimeUnknownStack_der_1():
     assert np.array_equal(stack.d_dt, [[0.1, 0.1, 0.1], [0, 0, -9.81]])
     assert stack.max_time_step == pytest.approx(0.981)
 
-    point.k = 0.1
+    point.cf = 0.1
     point.mass = 1.0
     point.run_once()
     assert np.array_equal(stack.value, np.zeros((2, 3)))
@@ -57,7 +57,7 @@ def test_TimeUnknownStack_der_2():
 
     point.position.x = np.zeros_like(point.position.x)
     point.kinematics.v = np.full_like(point.kinematics.v, 0.1)
-    point.k = 0.0
+    point.cf = 0.0
     point.run_once()
     # stack.value is not changed by x or v, because the object holds
     # a copy of [x, v], evaluated at construction. Should this be changed?
@@ -66,7 +66,7 @@ def test_TimeUnknownStack_der_2():
     assert np.array_equal(stack.d_dt, [[0.1, 0.1, 0.1], [0, 0, -9.81]])
     assert stack.max_time_step == pytest.approx(0.981)
 
-    point.k = 0.1
+    point.cf = 0.1
     point.mass = 1.0
     point.run_once()
     a = point.a

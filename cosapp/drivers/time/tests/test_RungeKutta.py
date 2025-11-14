@@ -282,8 +282,8 @@ def test_RungeKutta_point_mass(point_mass_case, point_mass_solution, order, dt, 
     x0 = [-1., 0., 10]
     v0 = [8, 0, 9.5]
     driver.set_scenario(
-        init = dict(x = np.array(x0), v = np.array(v0)),
-        values = dict(mass = 1.5, k = 0.5),
+        init = {"x": np.array(x0), "v": np.array(v0)},
+        values = {"mass": 1.5, "cf": 0.5},
     )
 
     system.run_drivers()
@@ -310,7 +310,7 @@ def test_RungeKutta_point_mass_stop(point_mass_case):
     driver.set_scenario(
         init = {'x': np.array(x0), 'v': np.array(v0)},
         stop = f"x[2] == {x0[2]}",
-        values = {'mass': 1.5, 'k': 0.5},
+        values = {'mass': 1.5, 'cf': 0.5},
     )
     system.run_drivers()
 
@@ -365,7 +365,7 @@ def test_RungeKutta_point_mass_target(exec_order, case_settings: dict, expected:
     # Define a simulation scenario
     driver.set_scenario(
         init = {'x': x0, 'v': 'v0'},
-        values = {'point.mass': 1.5, 'point.k': 0.9}
+        values = {'point.mass': 1.5, 'point.cf': 0.9}
     )
 
     traj.run_drivers()
@@ -406,7 +406,7 @@ def test_RungeKutta_point_mass_target_recorder(hold):
     # Define a simulation scenario
     driver.set_scenario(
         init = {'x': x0, 'v': 'v0'},
-        values = {'point.mass': 1.5, 'point.k': 0.9}
+        values = {'point.mass': 1.5, 'point.cf': 0.9}
     )
     driver.add_recorder(
         DataFrameRecorder(includes=['x', 'v', 'a'], hold=hold),
@@ -435,7 +435,7 @@ def test_RungeKutta_point_mass_target_recorder(hold):
     # Check that current position is target point
     assert traj.x == pytest.approx(target_point, abs=1e-5)
     # Check initial velocity solution
-    assert traj.v0 == pytest.approx([8.5860, 0, 11.726], rel=1e-4)
+    assert traj.v0 == pytest.approx([8.5860, 0.0, 11.726], rel=1e-4)
 
 
 @pytest.mark.parametrize("order, dt, tol", [
@@ -453,7 +453,7 @@ def test_RungeKutta_pointMassWithPorts(pointMassWithPorts_case, point_mass_solut
     v0 = [8, 0, 9.5]
     driver.set_scenario(
         init = {"position.x": np.array(x0), "kinematics.v": np.array(v0)},
-        values = {"mass": 1.5, "k": 0.5},
+        values = {"mass": 1.5, "cf": 0.5},
     )
 
     system.run_drivers()
@@ -478,12 +478,12 @@ def test_RungeKutta_pointMassWithPorts_pulling(point_mass_solution, order, dt, t
     as a child system, with pulled variables."""
     class SuperSystem(System):
         def setup(self):
-            self.add_child(PointMassWithPorts("point"), pulling={
-                "position": "pos",
-                "kinematics": "kin",
-                "mass": "mass",
-                "k": "k",
-            })
+            self.add_child(PointMassWithPorts("point"), pulling=[              
+                "mass", "cf", {
+                    "position": "pos",
+                    "kinematics": "kin",
+                },
+            ])
 
     make_case = case_factory(SuperSystem, "test")
 
@@ -497,7 +497,7 @@ def test_RungeKutta_pointMassWithPorts_pulling(point_mass_solution, order, dt, t
     v0 = [8, 0, 9.5]
     driver.set_scenario(
         init = {"pos.x": np.array(x0), "kin.v": np.array(v0)},
-        values = {"mass": 1.5, "k": 0.5},
+        values = {"mass": 1.5, "cf": 0.5},
     )
 
     system.run_drivers()
@@ -729,7 +729,7 @@ def test_RungeKutta_point_mass_target_parallel(pool_size):
     # Define a simulation scenario
     driver.set_scenario(
         init={'x': [0, 0, 10], 'v': 'v0'},
-        values={'point.mass': 1.5, 'point.k': 0.9},
+        values={'point.mass': 1.5, 'point.cf': 0.9},
     )
 
     # Set initial guess & solve
