@@ -3,8 +3,11 @@ import inspect
 import weakref
 from typing import Dict, Any
 from cosapp.utils.state_io import object__getstate__
+
+
 class Observer(abc.ABC):
     """Generic interface for observers"""
+
     def __init__(self, subject=None):
         self._subject = None
         if subject is not None:
@@ -30,7 +33,7 @@ class Observer(abc.ABC):
     def observes(self, subject=None) -> bool:
         """Bool: does observer observe `subject`?
         If `subject` is None, returns True if observer observes anyone, False otherwise."""
-        observing = (self._subject is not None)  # does observer observe anyone?
+        observing = self._subject is not None  # does observer observe anyone?
         if subject is None:
             return observing
         return observing and (self._subject() is subject)
@@ -50,6 +53,7 @@ class Subject:
     The philosophy is that observers are responsible for signing in or out.
     Therefore, the subject should not unilaterally add or remove observers, except when it is cleared.
     """
+
     __obs_type = Observer
 
     def __new__(cls, obs_type=Observer):
@@ -77,7 +81,7 @@ class Subject:
             state
         """
         state = object__getstate__(self).copy()
-        state.update({"_observers": (self._observers.data, self._observers._pending_removals, self._observers._iterating)})
+        state["_observers"] = set(self._observers)
         return state
 
     def __setstate__(self, state: Dict[str, Any]) -> None:
@@ -88,18 +92,14 @@ class Subject:
         state : Dict[str, Any]
             State
         """
-        self.__dict__.update(state)
-        data, pending_removals, iterating = state.pop("_observers")
-        observer = weakref.WeakSet()
-        observer.data = data
-        observer._pending_removals = pending_removals
-        observer._iterating = iterating
 
-        self.__dict__.update({"_observers": observer})
+        observers_data = state.pop("_observers", set())
+        self.__dict__.update(state)
+        self._observers = weakref.WeakSet(observers_data)
 
     def __json__(self) -> Dict[str, Any]:
         """Creates a JSONable dictionary representation of the object.
-        
+
         Returns
         -------
         Dict[str, Any]
@@ -113,12 +113,12 @@ class Subject:
     def observer_type(cls) -> type:
         """Returns the type of observers allowed to observe Subject"""
         return cls.__obs_type
-    
+
     def notify(self, *args, **kwargs) -> None:
         """Notify observers that they must update"""
         for observer in self._observers:
             observer._update(*args, **kwargs)
-    
+
     def add(self, observer):
         """
         Add an observer to the list of observers.
@@ -127,7 +127,9 @@ class Subject:
         otype = self.observer_type()
         if not isinstance(observer, otype):
             cls_name = self.__class__.__name__
-            raise TypeError(f"{cls_name} can only be observed by objects of type {otype.__name__}")
+            raise TypeError(
+                f"{cls_name} can only be observed by objects of type {otype.__name__}"
+            )
         self._observers.add(observer)
 
     def remove(self, observer) -> None:
