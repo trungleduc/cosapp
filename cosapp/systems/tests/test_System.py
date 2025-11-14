@@ -18,7 +18,7 @@ from cosapp.core.signal import Slot
 from cosapp.core.numerics.basics import MathematicalProblem
 from cosapp.core.numerics.boundary import Unknown
 from cosapp.core.numerics.residues import Residue
-from cosapp.ports.port import BasePort, Port, PortType, Scope, Validity
+from cosapp.ports.port import BasePort, Port, ExtensiblePort, PortType, Scope, Validity
 from cosapp.ports.units import UnitError
 from cosapp.ports.connectors import BaseConnector, Connector, ConnectorError
 from cosapp.drivers import Driver, RunOnce, NonLinearSolver
@@ -58,14 +58,23 @@ class AnotherPort(Port):
 
 class System1(System):
     def setup(self):
-        self.add_inward({"data1": 7.0, "a": 25.0, "b": 42.0, "aaaa": 1.0})
-        self.add_outward({"local1": 11.0, "local2": 22.0, "local3": 33.0})
+        self.add_inward("data1", 7.0)
+        self.add_inward("a", 25.0)
+        self.add_inward("b", 42.0)
+        self.add_inward("aaaa", 1.0)
+        self.add_outward("local1", 11.0)
+        self.add_outward("local2", 22.0)
+        self.add_outward("local3", 33.0)
 
 
 class System2(System):
     def setup(self):
-        self.add_inward({"data1": 9.0, "data2": 11.0, "data3": 13.0})
-        self.add_outward({"local1": 7.0, "a": 14.0, "b": 21.0})
+        self.add_inward("data1", 9.0)
+        self.add_inward("data2", 11.0)
+        self.add_inward("data3", 13.0)
+        self.add_outward("local1", 7.0)
+        self.add_outward("a", 14.0)
+        self.add_outward("b", 21.0)
         self.add_output(AnotherPort, "other")
 
 
@@ -1185,40 +1194,39 @@ def test_System_add_output():
         s.add_output(VPort, "port2", {"v": 1})
 
 
-def test_System_add_data(DummyFactory):
-    # Add one inwards
-    s: System = DummyFactory("test", inwards=get_args("K", 2.0))
-    assert "K" in s
-    assert f"{System.INWARDS}.K" in s
-    assert s.K == 2.0
+@pytest.mark.parametrize("portname", [System.INWARDS, System.OUTWARDS])
+def test_System_add_variable(DummyFactory, portname):
+    data = {
+        portname: [
+            get_args("K", 2.0),
+            get_args("cool", True),
+            get_args("d", {"a": 1, "b": 2}),
+            get_args("r", value=1, scope=Scope.PUBLIC),
+        ],
+    }
+    s: System = DummyFactory("test", **data)
 
-    with pytest.raises(AttributeError):
+    port = getattr(s, portname)
+    assert isinstance(port, ExtensiblePort)
+    assert set(port) == {"K", "cool", "d", "r"}
+
+    with pytest.raises(AttributeError, match="cannot be called outside `setup`"):
         s.add_inward("K", 2.0)
+    with pytest.raises(AttributeError, match="cannot be called outside `setup`"):
+        s.add_outward("K", 2.0)
 
-    # Add multiple inwards
-    s = DummyFactory(
-        name="s",
-        inwards=get_args({
-            "K": 2.0,
-            "switch": True,
-            "r": {"value": 1, "scope": Scope.PUBLIC},
-            "q": {"a": 1, "b": 2},
-        }),
-    )
-
-    for name in ["K", "switch", "r", "q"]:
+    for name in port:
         assert name in s
-        assert f"{System.INWARDS}.{name}" in s
+        assert f"{portname}.{name}" in s
     assert s.K == 2.0
-    assert s.switch == True
+    assert s.cool == True
+    assert s.d == {"a": 1, "b": 2}
     assert s.r == 1
     assert s.get_variable("r").scope == Scope.PUBLIC
-    assert s.q == {"a": 1, "b": 2}
 
     # Test variables attributes
-    s = DummyFactory(
-        name="s",
-        inwards=get_args(
+    data = {
+        portname: get_args(
             "K", 2.0,
             unit="m",
             dtype=float,
@@ -1227,8 +1235,12 @@ def test_System_add_data(DummyFactory):
             desc="my little description.",
             scope=Scope.PRIVATE,
         ),
-    )
-    assert set(s.inwards) == {"K"}
+    }
+    s = DummyFactory(name="s", **data)
+
+    port = getattr(s, portname)
+    assert isinstance(port, ExtensiblePort)
+    assert set(port) == {"K"}
     K = s.get_variable("K")
     assert K.unit == "m"
     assert K.dtype == float
@@ -1350,7 +1362,7 @@ def test_System_existing_data(DummyFactory, kind1, kind2):
     # in values below, "io_data" key will be substituted by `data_kind`
     (
         dict(io_data = get_args(1.0)),
-        dict(error=TypeError, match="argument 'definition'")
+        dict(error=TypeError, match="argument 'name' should be str")
     ),
     (
         dict(io_data = get_args("s1", 3.14, unit=float)),
@@ -1374,73 +1386,6 @@ def test_System_inward_outward_error(DummyFactory, data_kind, case_data, expecte
     pattern = expected.get('match', None)
     with pytest.raises(error, match=pattern):
         DummyFactory("dummy", **ctor_data)
-
-
-def test_System_add_locals(DummyFactory):
-    # Add unique
-    s: System = DummyFactory("dummy", outwards=get_args("r", 42.0))
-    assert "r" in s
-    assert f"{System.OUTWARDS}.r" in s
-    assert s.r == 42
-
-    # Add multiple outwards
-    s: System = DummyFactory(
-        name="s",
-        outwards=get_args({
-            "r": 42.0,
-            "q": 12,
-            "s": {"value": 1, "scope": Scope.PUBLIC},
-            "x": {"a": 1, "b": 2},
-        }),
-    )
-    for name in ["r", "q", "s", "x"]:
-        assert name in s
-        assert f"{System.OUTWARDS}.{name}" in s
-    assert s.r == 42.0
-    assert s.q == 12
-    assert s.s == 1
-    assert s.get_variable("s").scope == Scope.PUBLIC
-    assert s.x == {"a": 1, "b": 2}
-
-    # Add multiple outwards with attributes
-    s: System = DummyFactory(
-        name="s",
-        outwards=get_args({
-            "r": {"value": 42.0, "desc": "my value"},
-            "q": 12,
-        }),
-    )
-    assert "r" in s
-    assert "q" in s
-    assert s.r == 42.0
-    assert s.q == 12
-    assert s.get_variable("q").description == ""
-    assert s.get_variable("r").description == "my value"
-    with pytest.raises(AttributeError):
-        s.add_outward("a", 10.0)
-
-    # Test outward attributes
-    s: System = DummyFactory(
-        name="s",
-        outwards=get_args(
-            "K", 2.0,
-            unit="m",
-            dtype=(int, float),
-            valid_range=(0.0, 5.0),
-            limits=(-5.0, 10.0),
-            desc="my little description.",
-            scope=Scope.PROTECTED,
-        ),
-    )
-    assert set(s.inwards) == set()
-    assert set(s.outwards) == {"K"}
-    K = s.get_variable("K")
-    assert K.unit == "m"
-    assert K.dtype == (int, float)
-    assert K.valid_range == (0.0, 5.0)
-    assert K.limits == (-5.0, 10.0)
-    assert K.description == "my little description."
-    assert K.scope == Scope.PROTECTED
 
 
 @pytest.mark.parametrize("drivers, expected", [
@@ -3355,13 +3300,21 @@ def test_System_connect_hybrid(DummyFactory):
 def test_System_connect_full():
     class System1(System):
         def setup(self):
-            self.add_inward({"test": 7.0, "a": 25.0, "b": 42.0})
-            self.add_outward({"local1": 11.0, "local2": 22.0, "local3": 33.0})
+            self.add_inward("test", 7.0)
+            self.add_inward("a", 25.0)
+            self.add_inward("b", 42.0)
+            self.add_outward("local1", 11.0)
+            self.add_outward("local2", 22.0)
+            self.add_outward("local3", 33.0)
 
     class System2(System):
         def setup(self):
-            self.add_inward({"data1": 9.0, "data2": 11.0, "data3": 13.0})
-            self.add_outward({"test": 7.0, "a": 14.0, "b": 21.0})
+            self.add_inward("data1", 9.0)
+            self.add_inward("data2", 11.0)
+            self.add_inward("data3", 13.0)
+            self.add_outward("test", 7.0)
+            self.add_outward("a", 14.0)
+            self.add_outward("b", 21.0)
 
     group = System("hat")
     group.add_child(System1("s1"))
@@ -3448,15 +3401,25 @@ def test_System_connect_partial():
 
     class System1(System):
         def setup(self):
-            self.add_inward({"data1": 3.0, "data2": 5.0, "data3": 7.0, "b": 9.0})
-            self.add_outward(
-                {"local1": 11.0, "local2": 22.0, "local3": 33.0, "a": 44}
-            )
+            self.add_inward("data1", 3.0)
+            self.add_inward("data2", 5.0)
+            self.add_inward("data3", 7.0)
+            self.add_inward("b", 9.0)
+            self.add_outward("local1", 11.0)
+            self.add_outward("local2", 22.0)
+            self.add_outward("local3", 33.0)
+            self.add_outward("a", 44)
 
     class System2(System):
         def setup(self):
-            self.add_inward({"d1": 9.0, "d2": 11.0, "d3": 13.0, "a": 17.0})
-            self.add_outward({"l1": 7.0, "l2": 14.0, "l3": 21.0, "b": 28})
+            self.add_inward("d1", 9.0)
+            self.add_inward("d2", 11.0)
+            self.add_inward("d3", 13.0)
+            self.add_inward("a", 17.0)
+            self.add_outward("l1", 7.0)
+            self.add_outward("l2", 14.0)
+            self.add_outward("l3", 21.0)
+            self.add_outward("b", 28)
 
     group = System("hat")
     group.add_child(System1("s1"))

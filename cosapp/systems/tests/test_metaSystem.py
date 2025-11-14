@@ -170,7 +170,8 @@ def test_MetaSystem_add_locals(test_data):
     class MetaE(MetaSystem):
         def setup(self):
             self.add_input(XPort, "in_")
-            self.add_outward({"K3": 1.0, "K": 0.0})
+            self.add_outward("K3", 1.0)
+            self.add_outward("K", 0.0)
 
     my_meta = MetaE("metaE", data=str(test_data / "export_doe.csv"))
     assert len(my_meta.models) == 2

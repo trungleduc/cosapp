@@ -1,8 +1,7 @@
-import numpy as np
 import pytest
+import numpy as np
 
-from cosapp.ports import Port
-from cosapp.systems import System
+from cosapp.base import Port, System
 from cosapp.drivers import MetaSystemBuilder
 
 
@@ -10,15 +9,18 @@ class XPort(Port):
     def setup(self):
         self.add_variable("x")
 
+
 class MyExp(System):
     def setup(self):
         self.add_input(XPort, "p_in")
         self.add_output(XPort, "p_out")
 
-        self.add_inward({"K1": 1.0, "K2": 1.0})
+        self.add_inward("K1", 1.0)
+        self.add_inward("K2", 1.0)
 
     def compute(self):
         self.p_out.x = self.K1 * np.exp(self.p_in.x * self.K2)
+
 
 def test_MetaSystemBuilder_add_input_var():
     s = MyExp("s")
@@ -50,6 +52,7 @@ def test_MetaSystemBuilder_add_input_var():
         d.add_input_var("myvar", 0.0, 10.0)
     with pytest.raises(AttributeError):
         d.add_input_var({"myvar": {"lower": 0.2, "upper": 20.0}})
+
 
 def test_MetaSystemBuilder_add_response():
     s = MyExp("s")

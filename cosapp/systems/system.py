@@ -228,6 +228,8 @@ class System(Module, TimeObserver):
         ----------
         - name [str]:
             System name
+        - **kwargs:
+            Additional keyword arguments forwarded to method `setup`
         """
         self._init(name, **kwargs)
 
@@ -939,7 +941,7 @@ class System(Module, TimeObserver):
         raise ValueError(f"{message}.")
 
     def add_inward(self,
-        definition: Union[str, dict[str, Any]],
+        name: str,
         value: Any = 1,
         unit = "",
         dtype: Optional[Types] = None,
@@ -964,10 +966,10 @@ class System(Module, TimeObserver):
 
         Parameters
         ----------
-        definition : str or dict[str, Any]
-            Name of the unique variable or a dictionary for multiple variables at once
+        name : str
+            Name of the inward variable
         value : Any, optional
-            Value of the variable if `definition` is a `str`; default 1
+            Variable value at construction; default 1
         unit : str, optional
             Variable unit; default empty string (i.e. dimensionless)
         dtype : type or iterable of types, optional
@@ -990,87 +992,38 @@ class System(Module, TimeObserver):
         Examples
         --------
 
-        To add one inward variable, arguments must be directly specified.
-
-        >>> system.add_inward('data', 2.)
-
-        To add multiple inward variables, a dictionary with one key per data should be provided.
-
-        >>> system.add_inward({
-        >>>     'data1': 42.,
-        >>>     'data2': False
-        >>> })
+        >>> class MyModel(System):
+        >>>     def setup(self):
+        >>>         self.add_inward('v', 1.0, unit='m/s', desc='Velocity')
         """
         self.__lock_check("add_inward")
-
-        # type validation
-        check_arg(definition, 'definition', (str, dict))
-
-        def add_unique_data(
-            name: str,
-            value: Any,
-            unit = "",
-            dtype: Optional[Types] = None,
-            valid_range: Optional[RangeValue] = None,
-            invalid_comment = "",
-            limits: Optional[RangeValue] = None,
-            out_of_limits_comment = "",
-            distribution: Optional[Distribution] = None,
-            desc = "",
-            scope = Scope.PRIVATE,
-        ) -> None:
-
-            self.__check_attr(name, f"cannot add inward {name!r}")
-
-            inputs = self.inputs
-
-            inputs[System.INWARDS].add_variable(
-                name,
-                value,
-                unit=unit,
-                dtype=dtype,
-                valid_range=valid_range,
-                invalid_comment=invalid_comment,
-                limits=limits,
-                out_of_limits_comment=out_of_limits_comment,
-                desc=desc,
-                distribution=distribution,
-                scope=scope,
-            )
-
-            reference = VariableReference(context=self, mapping=inputs[System.INWARDS], key=name)
-            self.append_name2variable(
-                [(f"{System.INWARDS}.{name}", reference), (name, reference)]
-            )
-
+        check_arg(name, "name", str)
         self.__reset_input_mapping()
+        self.__check_attr(name, f"cannot add inward {name!r}")
 
-        if isinstance(definition, dict):
-            for key, value in definition.items():
-                if isinstance(value, dict):
-                    try:
-                        add_unique_data(key, **value)
-                    except TypeError:
-                        add_unique_data(key, value)
-                else:
-                    add_unique_data(key, value)
-        else:
-            add_unique_data(
-                definition,
-                value,
-                unit=unit,
-                dtype=dtype,
-                valid_range=valid_range,
-                invalid_comment=invalid_comment,
-                limits=limits,
-                out_of_limits_comment=out_of_limits_comment,
-                desc=desc,
-                distribution=distribution,
-                scope=scope,
-            )
+        port = self.inputs[System.INWARDS]
+
+        port.add_variable(
+            name,
+            value,
+            unit=unit,
+            dtype=dtype,
+            valid_range=valid_range,
+            invalid_comment=invalid_comment,
+            limits=limits,
+            out_of_limits_comment=out_of_limits_comment,
+            desc=desc,
+            distribution=distribution,
+            scope=scope,
+        )
+
+        reference = VariableReference(context=self, mapping=port, key=name)
+        self.append_name2variable(
+            [(f"{System.INWARDS}.{name}", reference), (name, reference)]
+        )
 
     def add_outward(self,
-        definition: Union[str, dict[str, Any]],
+        name: str,
         value: Any = 1,
         unit = "",
         dtype: Optional[Types] = None,
@@ -1094,10 +1047,10 @@ class System(Module, TimeObserver):
 
         Parameters
         ----------
-        definition : str or dict[str, Any]
-            Name of the unique variable or a dictionary for multiple variables at once
+        name : str
+            Name of the outward variable
         value : Any, optional
-            Value of the variable if `definition` is a `str`; default 1
+            Variable value at construction; default 1
         unit : str, optional
             Variable unit; default empty string (i.e. dimensionless)
         dtype : type or iterable of types, optional
@@ -1118,85 +1071,41 @@ class System(Module, TimeObserver):
         Examples
         --------
 
-        To add an unique variable, arguments must be directly specified.
-
-        >>> system.add_outward('info', 2.)
-
-        To add multiple variables, a dictionary with one key per outward variable should be provided.
-
-        >>> system.add_inward({
-        >>>     'info1': 42.,
-        >>>     'info2': False
-        >>> })
+        >>> class MyModel(System):
+        >>>     def setup(self):
+        >>>         self.add_outward('a', 1.0, unit='m/s**2', desc='Acceleration')
         """
         self.__lock_check("add_outward")
+        check_arg(name, "name", str)
+        self.__check_attr(name, f"cannot add outward {name!r}")
 
-        # type validation
-        check_arg(definition, "definition", (str, dict))
+        port = self.outputs[System.OUTWARDS]
 
-        def add_local(
-            name: str,
-            value: Any,
-            unit = "",
-            dtype: Optional[Types] = None,
-            valid_range: Optional[RangeValue] = None,
-            invalid_comment = "",
-            limits: Optional[RangeValue] = None,
-            out_of_limits_comment = "",
-            desc = "",
-            scope = Scope.PUBLIC,
-        ) -> None:
-            self.__check_attr(name, f"cannot add outward {name!r}")
+        port.add_variable(
+            name,
+            value,
+            unit=unit,
+            dtype=dtype,
+            valid_range=valid_range,
+            invalid_comment=invalid_comment,
+            limits=limits,
+            out_of_limits_comment=out_of_limits_comment,
+            desc=desc,
+            scope=scope,
+        )
 
-            outputs = self.outputs
-            outputs[System.OUTWARDS].add_variable(
-                name,
-                value,
-                unit=unit,
-                dtype=dtype,
-                valid_range=valid_range,
-                invalid_comment=invalid_comment,
-                limits=limits,
-                out_of_limits_comment=out_of_limits_comment,
-                desc=desc,
-                scope=scope,
-            )
-
-            reference = VariableReference(context=self, mapping=outputs[System.OUTWARDS], key=name)
-            self.append_name2variable(
-                [(f"{System.OUTWARDS}.{name}", reference), (name, reference)]
-            )
-
-        if isinstance(definition, dict):
-            for key, value in definition.items():
-                if isinstance(value, dict):
-                    try:
-                        add_local(key, **value)
-                    except TypeError:
-                        add_local(key, value)
-                else:
-                    add_local(key, value)
-        else:
-            add_local(
-                definition,
-                value,
-                unit=unit,
-                dtype=dtype,
-                valid_range=valid_range,
-                invalid_comment=invalid_comment,
-                limits=limits,
-                out_of_limits_comment=out_of_limits_comment,
-                desc=desc,
-                scope=scope,
-            )
+        reference = VariableReference(context=self, mapping=port, key=name)
+        self.append_name2variable(
+            [(f"{System.OUTWARDS}.{name}", reference), (name, reference)]
+        )
 
     def add_transient(self,
-            name: str,
-            der: str,  # time derivative of `name`
-            desc: Optional[str] = None,
-            max_time_step: Union[Number, str] = numpy.inf,
-            max_abs_step: Union[Number, str] = numpy.inf,
-        ) -> None:
+        name: str,
+        der: str,  # time derivative of `name`
+        desc: Optional[str] = None,
+        max_time_step: Union[Number, str] = numpy.inf,
+        max_abs_step: Union[Number, str] = numpy.inf,
+    ) -> None:
         """
         Declare a transient variable, defined implicitly by the expression of its time derivative, and add
         a time-dependent unknown to the mathematical problem.
