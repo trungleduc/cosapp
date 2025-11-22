@@ -1,0 +1,11 @@
+name: cosapp
+channels:
+  - emscripten-forge
+  - conda-forge
+dependencies:
+  - cosapp
+  - numpy
+  - matplotlib
+  - plotly
+  - pandas
+  - ipywidgets
