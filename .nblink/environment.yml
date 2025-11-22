@@ -3,6 +3,7 @@ channels:
   - emscripten-forge
   - conda-forge
 dependencies:
+  - xeus-python
   - cosapp
   - numpy
   - matplotlib
